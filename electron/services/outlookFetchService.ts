@@ -292,8 +292,47 @@ class OutlookFetchService {
         const response = await axios(config);
         return response.data;
       } catch (error: unknown) {
+        // TASK-2273: Sentry breadcrumbs for Graph API errors
+        const axiosErr = error as {
+          response?: { status?: number; headers?: Record<string, string>; data?: { error?: { code?: string; message?: string } } };
+        };
+        if (axiosErr.response) {
+          const status = axiosErr.response.status;
+          if (status === 429) {
+            // Rate limit — breadcrumb only (warning, not error; retried by withRetry)
+            const retryAfter = axiosErr.response.headers?.["retry-after"] ?? "unknown";
+            Sentry.addBreadcrumb({
+              category: "email_sync.rate_limit",
+              message: `Outlook Graph API rate limited (429)`,
+              level: "warning",
+              data: {
+                provider: "outlook",
+                component: "email_sync",
+                retryAfter,
+                endpoint,
+              },
+            });
+          } else if (status && status >= 400) {
+            // Other API errors — include status + error code in Sentry extra
+            const errorCode = axiosErr.response.data?.error?.code ?? "unknown";
+            const errorMessage = axiosErr.response.data?.error?.message ?? "";
+            Sentry.addBreadcrumb({
+              category: "email_sync.api_error",
+              message: `Outlook Graph API error: ${status}`,
+              level: "error",
+              data: {
+                provider: "outlook",
+                component: "email_sync",
+                responseStatus: status,
+                errorCode,
+                errorMessage: errorMessage.substring(0, 200),
+                endpoint,
+              },
+            });
+          }
+        }
+
         // Handle token expiration with refresh
-        const axiosErr = error as { response?: { status?: number } };
         if (axiosErr.response && axiosErr.response.status === 401 && !isRetry) {
           if (this.refreshToken && this.userId) {
             logService.info(
@@ -533,7 +572,7 @@ class OutlookFetchService {
     } catch (error) {
       logService.error("Search emails failed", "OutlookFetch", { error });
       Sentry.captureException(error, {
-        tags: { service: "outlook-fetch", operation: "searchEmails" },
+        tags: { service: "outlook-fetch", operation: "searchEmails", provider: "outlook", component: "email_sync" },
       });
       throw error;
     }

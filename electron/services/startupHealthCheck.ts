@@ -17,6 +17,7 @@ import { app, dialog, safeStorage } from "electron";
 import * as fs from "fs";
 import * as os from "os";
 import checkDiskSpace from "check-disk-space";
+import { collectStartupDiagnostics } from "./diagnostics/startupDiagnosticsCollector";
 
 export interface HealthCheckResult {
   passed: boolean;
@@ -201,6 +202,13 @@ export async function runStartupHealthChecks(): Promise<HealthCheckResult> {
     safeStorageResult.passed &&
     appDirWritable.passed &&
     diskSpace.passed;
+
+  // Collect diagnostics unconditionally (fire and forget).
+  // Called even when health checks fail -- that's when diagnostics are most valuable.
+  collectStartupDiagnostics().catch((err) => {
+    // Should never throw, but safety net
+    console.error("[StartupDiagnostics] Unexpected error:", err);
+  });
 
   return {
     passed,

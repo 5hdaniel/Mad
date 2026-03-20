@@ -230,6 +230,28 @@ const mockDeviceService = new MockDeviceDetectionService();
 const mockMessagesParser = new MockMessagesParser();
 const mockContactsParser = new MockContactsParser();
 
+// Mock @sentry/electron/main before any imports
+jest.mock("@sentry/electron/main", () => ({
+  addBreadcrumb: jest.fn(),
+  captureMessage: jest.fn(),
+  captureException: jest.fn(),
+  setContext: jest.fn(),
+  setTag: jest.fn(),
+}));
+
+// Mock appleDriverService to prevent real driver checks in tests
+jest.mock("../appleDriverService", () => ({
+  checkAppleDrivers: jest.fn().mockResolvedValue({
+    isInstalled: true,
+    version: "12.0.0",
+    serviceRunning: true,
+    error: null,
+  }),
+  installAppleDrivers: jest.fn(),
+  classifyInstallFailure: jest.fn(),
+  reportInstallFailure: jest.fn(),
+}));
+
 // Mock better-sqlite3-multiple-ciphers before any imports
 jest.mock("better-sqlite3-multiple-ciphers", () => {
   return jest.fn().mockImplementation(() => ({

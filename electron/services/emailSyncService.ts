@@ -91,6 +91,41 @@ export function classifyProviderError(error: unknown): string {
   return "Could not reach your email provider. Showing cached results only.";
 }
 
+// ============================================
+// TASK-2273: Email sync failure classification for Sentry
+// ============================================
+
+/**
+ * Classifies email sync errors into structured categories for Sentry reporting.
+ * Used to tag Sentry events with actionable failure reasons.
+ */
+export type EmailSyncFailureReason =
+  | "token_expired"
+  | "rate_limited"
+  | "network_error"
+  | "storage_error"
+  | "api_error"
+  | "unknown";
+
+/**
+ * Classifies an email sync error into a structured failure reason.
+ * Uses existing isTokenExpiryError() and isNetworkError() helpers,
+ * then falls back to HTTP status and error message pattern matching.
+ */
+export function classifyEmailSyncError(error: unknown): EmailSyncFailureReason {
+  if (isTokenExpiryError(error)) return "token_expired";
+  if (isNetworkError(error)) return "network_error";
+
+  const status = (error as { response?: { status?: number } })?.response?.status;
+  if (status === 429) return "rate_limited";
+  if (status && status >= 400) return "api_error";
+
+  const message = error instanceof Error ? error.message.toLowerCase() : "";
+  if (message.includes("disk") || message.includes("space") || message.includes("enospc")) return "storage_error";
+
+  return "unknown";
+}
+
 // TASK-2060: Safety cap for sent items (per-contact email search)
 export const SENT_ITEMS_SAFETY_CAP = 200;
 
@@ -372,6 +407,18 @@ class EmailSyncService {
     transactionDetails: TransactionWithDetails;
   }): Promise<TransactionResponse> {
     const { transactionId, userId, contactAssignments, contactEmails, transactionDetails } = params;
+
+    // TASK-2273: Breadcrumb at sync orchestration start with full context
+    Sentry.addBreadcrumb({
+      category: "email_sync.start",
+      message: `Starting email sync for transaction`,
+      level: "info",
+      data: {
+        provider: "all",
+        contactCount: contactAssignments.length,
+        contactEmailCount: contactEmails.length,
+      },
+    });
 
     if (contactEmails.length === 0) {
       // No contact emails -- still run auto-link for phone-based message matching
@@ -684,6 +731,21 @@ class EmailSyncService {
         } else {
           providerWarning = "Could not reach your email provider. Showing cached results only.";
         }
+        // TASK-2273: Structured failure reporting
+        const reason = classifyEmailSyncError(gmailError);
+        Sentry.captureMessage(`Email sync failed: ${reason}`, {
+          level: reason === "rate_limited" ? "warning" : "error",
+          tags: {
+            component: "email_sync",
+            provider: "gmail",
+            failureReason: reason,
+          },
+          extra: {
+            emailsFetchedSoFar: emails.length,
+            errorMessage: gmailError instanceof Error ? gmailError.message : String(gmailError),
+            responseStatus: (gmailError as any)?.response?.status,
+          },
+        });
       }
     }
 
@@ -755,6 +817,21 @@ class EmailSyncService {
             providerWarning = "Could not reach your email provider. Showing cached results only.";
           }
         }
+        // TASK-2273: Structured failure reporting
+        const reason = classifyEmailSyncError(outlookError);
+        Sentry.captureMessage(`Email sync failed: ${reason}`, {
+          level: reason === "rate_limited" ? "warning" : "error",
+          tags: {
+            component: "email_sync",
+            provider: "outlook",
+            failureReason: reason,
+          },
+          extra: {
+            emailsFetchedSoFar: emails.length,
+            errorMessage: outlookError instanceof Error ? outlookError.message : String(outlookError),
+            responseStatus: (outlookError as any)?.response?.status,
+          },
+        });
       }
     }
 
@@ -916,15 +993,16 @@ class EmailSyncService {
     let stored = 0;
 
     Sentry.addBreadcrumb({
-      category: 'sync',
-      message: 'Outlook email fetch started',
+      category: 'email_sync.start',
+      message: 'Starting outlook email sync',
       level: 'info',
       data: {
         syncType: 'emails',
         provider: 'outlook',
         operation: 'sync-and-fetch-emails',
         transactionId,
-        contactEmailCount: contactEmails.length,
+        contactCount: contactEmails.length,
+        dateRange: { after: emailFetchSinceDate?.toISOString() },
       },
     });
 
@@ -1009,6 +1087,23 @@ class EmailSyncService {
 
       return { fetched, stored, networkError: false };
     } catch (outlookError) {
+      // TASK-2273: Structured failure reporting for all Outlook sync errors
+      const reason = classifyEmailSyncError(outlookError);
+      Sentry.captureMessage(`Email sync failed: ${reason}`, {
+        level: reason === "rate_limited" ? "warning" : "error",
+        tags: {
+          component: "email_sync",
+          provider: "outlook",
+          failureReason: reason,
+        },
+        extra: {
+          emailsFetchedSoFar: fetched,
+          expectedTotal: EMAIL_FETCH_SAFETY_CAP,
+          errorMessage: outlookError instanceof Error ? outlookError.message : String(outlookError),
+          responseStatus: (outlookError as any)?.response?.status,
+        },
+      });
+
       if (isNetworkError(outlookError)) {
         // TASK-2049: Network error after all retries exhausted
         networkResilienceService.recordPartialSync(userId, "outlook", stored);
@@ -1073,15 +1168,16 @@ class EmailSyncService {
     let stored = 0;
 
     Sentry.addBreadcrumb({
-      category: 'sync',
-      message: 'Gmail email fetch started',
+      category: 'email_sync.start',
+      message: 'Starting gmail email sync',
       level: 'info',
       data: {
         syncType: 'emails',
         provider: 'gmail',
         operation: 'sync-and-fetch-emails',
         transactionId,
-        contactEmailCount: contactEmails.length,
+        contactCount: contactEmails.length,
+        dateRange: { after: emailFetchSinceDate?.toISOString() },
       },
     });
 
@@ -1158,6 +1254,22 @@ class EmailSyncService {
       return { fetched, stored, networkError: false };
     } catch (gmailError) {
       const totalStored = currentEmailsStored + stored;
+      // TASK-2273: Structured failure reporting for all Gmail sync errors
+      const reason = classifyEmailSyncError(gmailError);
+      Sentry.captureMessage(`Email sync failed: ${reason}`, {
+        level: reason === "rate_limited" ? "warning" : "error",
+        tags: {
+          component: "email_sync",
+          provider: "gmail",
+          failureReason: reason,
+        },
+        extra: {
+          emailsFetchedSoFar: fetched,
+          expectedTotal: EMAIL_FETCH_SAFETY_CAP,
+          errorMessage: gmailError instanceof Error ? gmailError.message : String(gmailError),
+          responseStatus: (gmailError as any)?.response?.status,
+        },
+      });
       if (isNetworkError(gmailError)) {
         // TASK-2049: Network error after all retries exhausted
         networkResilienceService.recordPartialSync(userId, "gmail", totalStored);

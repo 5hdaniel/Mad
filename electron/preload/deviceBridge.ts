@@ -365,11 +365,12 @@ export const syncBridge = {
 
   /**
    * Subscribes to sync error events
-   * @param callback - Callback with error info
+   * TASK-2276: Enriched payload may include userError for structured display
+   * @param callback - Callback with error info (and optional userError)
    * @returns Cleanup function to remove listener
    */
-  onError: (callback: (error: { message: string }) => void) => {
-    const listener = (_: IpcRendererEvent, error: { message: string }) => callback(error);
+  onError: (callback: (error: { message: string; userError?: { code: string; title: string; description: string; actionSuggestion: string } }) => void) => {
+    const listener = (_: IpcRendererEvent, error: { message: string; userError?: { code: string; title: string; description: string; actionSuggestion: string } }) => callback(error);
     ipcRenderer.on("sync:error", listener);
     return () => ipcRenderer.removeListener("sync:error", listener);
   },
