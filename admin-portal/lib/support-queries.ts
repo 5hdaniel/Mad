@@ -554,3 +554,42 @@ export async function searchTicketsForLink(
   if (error) throw error;
   return (data ?? []) as unknown as TicketLinkSearchResult[];
 }
+
+// --- Diagnostics functions (TASK-2283) ---
+
+/**
+ * Fetch diagnostics data for a support ticket.
+ *
+ * Diagnostics are uploaded as JSON file attachments:
+ * - Desktop app: "diagnostics.json"
+ * - Broker portal: "browser-diagnostics.json"
+ *
+ * This function finds the diagnostics attachment, downloads the JSON
+ * content from Supabase Storage, and returns the parsed object.
+ */
+export async function getTicketDiagnostics(
+  ticketId: string,
+  attachments: SupportTicketAttachment[]
+): Promise<Record<string, unknown> | null> {
+  const diagnosticsAttachment = attachments.find(
+    (a) =>
+      (a.file_name === 'diagnostics.json' || a.file_name === 'browser-diagnostics.json') &&
+      a.file_type === 'application/json'
+  );
+
+  if (!diagnosticsAttachment) return null;
+
+  const supabase = createClient();
+  const { data, error } = await supabase.storage
+    .from('support-attachments')
+    .download(diagnosticsAttachment.storage_path);
+
+  if (error || !data) return null;
+
+  try {
+    const text = await data.text();
+    return JSON.parse(text) as Record<string, unknown>;
+  } catch {
+    return null;
+  }
+}
