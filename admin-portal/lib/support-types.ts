@@ -285,6 +285,41 @@ export const PRIORITY_COLORS: Record<TicketPriority, string> = {
   urgent: 'bg-red-100 text-red-800',
 };
 
+// --- Backlog Link types ---
+
+export type BacklogLinkType = 'fix' | 'related' | 'duplicate';
+
+export interface BacklogLink {
+  id: string;
+  ticket_id: string;
+  backlog_item_id: string;
+  link_type: BacklogLinkType;
+  created_at: string;
+  created_by: string | null;
+  // Joined from pm_backlog_items
+  item_number?: number;
+  title?: string;
+  status?: string;
+}
+
+export interface BacklogItemSearchResult {
+  id: string;
+  item_number: number;
+  title: string;
+  status: string;
+}
+
+export interface LinkedTicketFromBacklog {
+  id: string;
+  ticket_id: string;
+  ticket_number: number;
+  subject: string;
+  status: string;
+  priority: string;
+  link_type: BacklogLinkType;
+  link_row_id: string;
+}
+
 // --- Timeline types ---
 
 export type TimelineEntry =

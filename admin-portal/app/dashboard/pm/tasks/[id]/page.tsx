@@ -27,6 +27,7 @@ import { TaskCommentComposer } from '../../components/TaskCommentComposer';
 import { TaskSidebar } from '../../components/TaskSidebar';
 import { DependencyPanel } from '../../components/DependencyPanel';
 import { LinkedItemsPanel } from '../../components/LinkedItemsPanel';
+import { LinkedTicketsPanel } from '../../components/LinkedTicketsPanel';
 import { LabelPicker } from '../../components/LabelPicker';
 import { InlineEditText } from '../../components/InlineEditText';
 
@@ -297,6 +298,8 @@ function TaskDetailContent() {
               links={links}
               onUpdate={loadDetail}
             />
+
+            <LinkedTicketsPanel backlogItemId={item.id} />
           </div>
         </div>
       </div>

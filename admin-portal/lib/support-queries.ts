@@ -28,6 +28,10 @@ import type {
   TicketLinkSearchResult,
   RequesterSearchResult,
   RecentTicket,
+  BacklogLink,
+  BacklogLinkType,
+  BacklogItemSearchResult,
+  LinkedTicketFromBacklog,
 } from './support-types';
 
 // ---------------------------------------------------------------------------
@@ -553,6 +557,154 @@ export async function searchTicketsForLink(
   });
   if (error) throw error;
   return (data ?? []) as unknown as TicketLinkSearchResult[];
+}
+
+// --- Backlog Link functions (TASK-2284) ---
+
+/**
+ * Get backlog items linked to a support ticket.
+ * Joins pm_backlog_items for title, item_number, and status.
+ */
+export async function getLinkedBacklogItems(ticketId: string): Promise<BacklogLink[]> {
+  const supabase = createClient();
+  const { data, error } = await supabase
+    .from('support_ticket_backlog_links')
+    .select(`
+      id,
+      ticket_id,
+      backlog_item_id,
+      link_type,
+      created_at,
+      created_by,
+      pm_backlog_items!inner (
+        item_number,
+        title,
+        status
+      )
+    `)
+    .eq('ticket_id', ticketId)
+    .order('created_at', { ascending: false });
+
+  if (error) throw error;
+
+  return ((data ?? []) as unknown as Array<Record<string, unknown>>).map((row) => {
+    const backlogItem = row.pm_backlog_items as Record<string, unknown>;
+    return {
+      id: row.id as string,
+      ticket_id: row.ticket_id as string,
+      backlog_item_id: row.backlog_item_id as string,
+      link_type: row.link_type as BacklogLinkType,
+      created_at: row.created_at as string,
+      created_by: row.created_by as string | null,
+      item_number: backlogItem.item_number as number,
+      title: backlogItem.title as string,
+      status: backlogItem.status as string,
+    };
+  });
+}
+
+/**
+ * Link a backlog item to a support ticket.
+ */
+export async function linkBacklogItem(
+  ticketId: string,
+  backlogItemId: string,
+  linkType: BacklogLinkType
+): Promise<{ id: string }> {
+  const supabase = createClient();
+  const { data: userData } = await supabase.auth.getUser();
+  const { data, error } = await supabase
+    .from('support_ticket_backlog_links')
+    .insert({
+      ticket_id: ticketId,
+      backlog_item_id: backlogItemId,
+      link_type: linkType,
+      created_by: userData?.user?.id ?? null,
+    })
+    .select('id')
+    .single();
+
+  if (error) throw error;
+  return data as { id: string };
+}
+
+/**
+ * Remove a link between a backlog item and a support ticket.
+ */
+export async function unlinkBacklogItem(linkId: string): Promise<void> {
+  const supabase = createClient();
+  const { error } = await supabase
+    .from('support_ticket_backlog_links')
+    .delete()
+    .eq('id', linkId);
+
+  if (error) throw error;
+}
+
+/**
+ * Get support tickets linked to a specific backlog item.
+ * Used by the PM task detail page.
+ */
+export async function getLinkedTickets(backlogItemId: string): Promise<LinkedTicketFromBacklog[]> {
+  const supabase = createClient();
+  const { data, error } = await supabase
+    .from('support_ticket_backlog_links')
+    .select(`
+      id,
+      link_type,
+      ticket_id,
+      support_tickets!inner (
+        ticket_number,
+        subject,
+        status,
+        priority
+      )
+    `)
+    .eq('backlog_item_id', backlogItemId)
+    .order('created_at', { ascending: false });
+
+  if (error) throw error;
+
+  return ((data ?? []) as unknown as Array<Record<string, unknown>>).map((row) => {
+    const ticket = row.support_tickets as Record<string, unknown>;
+    return {
+      id: row.id as string,
+      ticket_id: row.ticket_id as string,
+      ticket_number: ticket.ticket_number as number,
+      subject: ticket.subject as string,
+      status: ticket.status as string,
+      priority: ticket.priority as string,
+      link_type: row.link_type as BacklogLinkType,
+      link_row_id: row.id as string,
+    };
+  });
+}
+
+/**
+ * Search backlog items by title or item_number for linking.
+ */
+export async function searchBacklogItems(query: string): Promise<BacklogItemSearchResult[]> {
+  const supabase = createClient();
+
+  const trimmed = query.trim();
+  const numericQuery = trimmed.replace(/^#/, '');
+
+  let queryBuilder = supabase
+    .from('pm_backlog_items')
+    .select('id, item_number, title, status')
+    .is('deleted_at', null)
+    .order('item_number', { ascending: false })
+    .limit(10);
+
+  if (/^\d+$/.test(numericQuery)) {
+    queryBuilder = queryBuilder.like('item_number::text', `${numericQuery}%`);
+  } else {
+    queryBuilder = queryBuilder.ilike('title', `%${trimmed}%`);
+  }
+
+  const { data, error } = await queryBuilder;
+  if (error) throw error;
+  return (data ?? []) as BacklogItemSearchResult[];
 }
 
 // --- Diagnostics functions (TASK-2283) ---

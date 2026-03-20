@@ -21,6 +21,7 @@ import { ActivityTimeline } from '../components/ActivityTimeline';
 import { ReplyComposer } from '../components/ReplyComposer';
 import { TicketSidebar } from '../components/TicketSidebar';
 import { DiagnosticsPanel } from '../components/DiagnosticsPanel';
+import { LinkedBacklogPanel } from '../components/LinkedBacklogPanel';
 
 export default function TicketDetailPage() {
   const params = useParams();
@@ -200,6 +201,10 @@ export default function TicketDetailPage() {
             ticket={ticket}
             participants={participants}
             onTicketUpdated={loadDetail}
+          />
+          <LinkedBacklogPanel
+            ticketId={ticket.id}
+            isAdmin={hasPermission(PERMISSIONS.SUPPORT_ADMIN)}
           />
           <DiagnosticsPanel diagnostics={diagnostics} />
         </div>
