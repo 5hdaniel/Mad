@@ -15,7 +15,7 @@
  */
 
 import React from "react";
-import { act, waitFor, renderHook } from "@testing-library/react";
+import { act, waitFor, renderHook, screen } from "@testing-library/react";
 
 // Mock useNetwork to prevent "useNetwork must be used within a NetworkProvider" error
 // (OfflineNotice in LoadingScreen/ErrorScreen calls useNetwork)
@@ -47,6 +47,7 @@ import {
 } from "./testUtils";
 import { useAppState } from "../useAppState";
 import { AppStateProvider } from "../AppStateContext";
+import { AuthProvider } from "../../../../contexts";
 import type { AppState, ReadyState, UserData } from "../types";
 
 // ============================================
