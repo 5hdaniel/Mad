@@ -32,6 +32,11 @@
 
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient, SupabaseClient } from "jsr:@supabase/supabase-js@2";
+import {
+  resolveRole,
+  extractGroupRoleMapping,
+  GroupRoleMapping,
+} from "../_shared/groupRoleMapper.ts";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -58,6 +63,7 @@ interface IdpConfig {
   service_account_key_encrypted: string | null;
   issuer_url: string | null;
   is_active: boolean;
+  attribute_mapping: Record<string, unknown> | null;
 }
 
 interface ProviderUser {
@@ -67,6 +73,8 @@ interface ProviderUser {
   firstName: string | null;
   lastName: string | null;
   displayName: string | null;
+  /** IdP group IDs/names the user belongs to */
+  groups: string[];
 }
 
 interface OrgMember {
@@ -76,6 +84,8 @@ interface OrgMember {
   scim_external_id: string | null;
   provisioned_by: string | null;
   license_status: string | null;
+  group_sync_enabled: boolean | null;
+  role: string | null;
 }
 
 interface SyncResult {
@@ -173,6 +183,7 @@ async function fetchAzureUsers(accessToken: string): Promise<ProviderUser[]> {
         firstName: u.givenName || null,
         lastName: u.surname || null,
         displayName: u.displayName || null,
+        groups: [], // Populated later if group sync enabled
       });
     }
 
@@ -325,6 +336,7 @@ async function fetchGoogleUsers(
         firstName: name?.givenName || null,
         lastName: name?.familyName || null,
         displayName: name?.fullName || null,
+        groups: [], // Populated later if group sync enabled
       });
     }
 
@@ -332,6 +344,110 @@ async function fetchGoogleUsers(
   } while (pageToken);
 
   return users;
+}
+
+// ---------------------------------------------------------------------------
+// Azure AD -- Group Memberships
+// ---------------------------------------------------------------------------
+
+/**
+ * Fetch group memberships for an Azure AD user via the memberOf endpoint.
+ * Returns an array of group IDs and display names.
+ */
+async function fetchAzureUserGroups(
+  accessToken: string,
+  userId: string,
+): Promise<string[]> {
+  const groups: string[] = [];
+  const url = `https://graph.microsoft.com/v1.0/users/${userId}/memberOf?$select=id,displayName,@odata.type&$top=999`;
+
+  try {
+    const resp = await fetchWithBackoff(url, {
+      headers: { Authorization: `Bearer ${accessToken}` },
+    });
+
+    if (!resp.ok) {
+      console.warn(
+        `[directory-sync] Failed to fetch groups for Azure user ${userId}: ${resp.status}`,
+      );
+      return groups;
+    }
+
+    const data = await resp.json();
+    const members = data.value as Array<Record<string, string>>;
+
+    for (const m of members) {
+      // Only include security groups and Microsoft 365 groups
+      if (
+        m["@odata.type"] === "#microsoft.graph.group"
+      ) {
+        if (m.id) groups.push(m.id);
+        if (m.displayName && m.displayName !== m.id) {
+          groups.push(m.displayName);
+        }
+      }
+    }
+  } catch (err) {
+    console.warn(
+      `[directory-sync] Error fetching groups for Azure user ${userId}: ${err}`,
+    );
+  }
+
+  return groups;
+}
+
+// ---------------------------------------------------------------------------
+// Google Workspace -- Group Memberships
+// ---------------------------------------------------------------------------
+
+/**
+ * Fetch group memberships for a Google Workspace user.
+ * Uses the Admin SDK groups endpoint to list groups the user belongs to.
+ */
+async function fetchGoogleUserGroups(
+  accessToken: string,
+  userEmail: string,
+): Promise<string[]> {
+  const groups: string[] = [];
+  let pageToken: string | null = null;
+
+  try {
+    do {
+      let url = `https://admin.googleapis.com/admin/directory/v1/groups?userKey=${encodeURIComponent(userEmail)}&maxResults=200`;
+      if (pageToken) {
+        url += `&pageToken=${encodeURIComponent(pageToken)}`;
+      }
+
+      const resp = await fetchWithBackoff(url, {
+        headers: { Authorization: `Bearer ${accessToken}` },
+      });
+
+      if (!resp.ok) {
+        console.warn(
+          `[directory-sync] Failed to fetch groups for Google user ${userEmail}: ${resp.status}`,
+        );
+        return groups;
+      }
+
+      const data = await resp.json();
+      const googleGroups = (data.groups || []) as Array<
+        Record<string, unknown>
+      >;
+
+      for (const g of googleGroups) {
+        if (g.id) groups.push(g.id as string);
+        if (g.name && g.name !== g.id) groups.push(g.name as string);
+      }
+
+      pageToken = (data.nextPageToken as string) || null;
+    } while (pageToken);
+  } catch (err) {
+    console.warn(
+      `[directory-sync] Error fetching groups for Google user ${userEmail}: ${err}`,
+    );
+  }
+
+  return groups;
 }
 
 // ---------------------------------------------------------------------------
@@ -494,10 +610,88 @@ async function syncOrganization(
       `[directory-sync] Org ${orgId}: fetched ${providerUsers.length} users from ${idp.provider_type}`,
     );
 
+    // 1b. Extract group-to-role mapping configuration
+    const groupMapping = extractGroupRoleMapping(idp.attribute_mapping);
+    const groupSyncEnabled = groupMapping.group_sync_enabled;
+
+    // 1c. If group sync is enabled, fetch group memberships for each user
+    if (groupSyncEnabled && providerUsers.length > 0) {
+      console.log(
+        `[directory-sync] Org ${orgId}: fetching group memberships (group_sync_enabled=true)`,
+      );
+
+      if (idp.provider_type === "azure_ad") {
+        // Get Azure access token (already used for fetching users)
+        let tenantId = org.microsoft_tenant_id as string | null;
+        if (!tenantId && idp.issuer_url) {
+          const match = idp.issuer_url.match(
+            /login\.microsoftonline\.com\/([^/]+)/,
+          );
+          tenantId = match?.[1] || null;
+        }
+        if (tenantId && idp.client_id && idp.client_secret_encrypted) {
+          const groupAccessToken = await getAzureAccessToken(
+            tenantId,
+            idp.client_id,
+            idp.client_secret_encrypted,
+          );
+          for (const user of providerUsers) {
+            user.groups = await fetchAzureUserGroups(
+              groupAccessToken,
+              user.externalId,
+            );
+          }
+        }
+      } else if (idp.provider_type === "google_workspace") {
+        // For Google, we need the same access token scope -- but we need
+        // admin.directory.group.readonly in addition to user.readonly.
+        // Re-create JWT with both scopes.
+        if (idp.service_account_key_encrypted) {
+          try {
+            const serviceAccountKey = JSON.parse(
+              idp.service_account_key_encrypted,
+            );
+            const serviceAccountEmail = serviceAccountKey.client_email;
+            const privateKey = serviceAccountKey.private_key;
+            const adminEmail =
+              (org.directory_sync_admin_email as string) ||
+              serviceAccountEmail;
+
+            if (serviceAccountEmail && privateKey) {
+              const groupJwt = await createServiceAccountJwt(
+                serviceAccountEmail,
+                privateKey,
+                [
+                  "https://www.googleapis.com/auth/admin.directory.user.readonly",
+                  "https://www.googleapis.com/auth/admin.directory.group.readonly",
+                ],
+                adminEmail !== serviceAccountEmail ? adminEmail : undefined,
+              );
+              const groupAccessToken = await getGoogleAccessToken(groupJwt);
+              for (const user of providerUsers) {
+                user.groups = await fetchGoogleUserGroups(
+                  groupAccessToken,
+                  user.email,
+                );
+              }
+            }
+          } catch {
+            console.warn(
+              `[directory-sync] Org ${orgId}: failed to fetch Google group memberships`,
+            );
+          }
+        }
+      }
+
+      console.log(
+        `[directory-sync] Org ${orgId}: group memberships fetched for ${providerUsers.filter((u) => u.groups.length > 0).length}/${providerUsers.length} users`,
+      );
+    }
+
     // 2. Get current org members with user details
     const { data: members, error: membersError } = await supabaseAdmin
       .from("organization_members")
-      .select("user_id, provisioned_by, license_status")
+      .select("user_id, provisioned_by, license_status, group_sync_enabled, role")
       .eq("organization_id", orgId);
 
     if (membersError) {
@@ -527,6 +721,8 @@ async function syncOrganization(
           scim_external_id: u.scim_external_id as string | null,
           provisioned_by: member?.provisioned_by as string | null,
           license_status: member?.license_status as string | null,
+          group_sync_enabled: member?.group_sync_enabled as boolean | null,
+          role: member?.role as string | null,
         };
       });
     }
@@ -560,19 +756,17 @@ async function syncOrganization(
       if (existingMember) {
         seenMemberIds.add(existingMember.user_id);
 
+        // Build member update payload
+        const memberUpdate: Record<string, unknown> = {
+          scim_synced_at: new Date().toISOString(),
+        };
+
         // If member was suspended (by directory_sync), reactivate
         if (
           existingMember.license_status === "suspended" &&
           existingMember.provisioned_by === "directory_sync"
         ) {
-          await supabaseAdmin
-            .from("organization_members")
-            .update({
-              license_status: "active",
-              scim_synced_at: new Date().toISOString(),
-            })
-            .eq("organization_id", orgId)
-            .eq("user_id", existingMember.user_id);
+          memberUpdate.license_status = "active";
 
           // Clear suspension on user record
           await supabaseAdmin
@@ -586,6 +780,32 @@ async function syncOrganization(
 
           result.reactivated++;
         }
+
+        // Update groups and resolve role if group sync is enabled
+        if (groupSyncEnabled && providerUser.groups.length > 0) {
+          memberUpdate.idp_groups = providerUser.groups;
+
+          // Check per-member group_sync_enabled override
+          const memberGroupSync = existingMember.group_sync_enabled as boolean | null;
+          if (memberGroupSync !== false) {
+            const roleResult = resolveRole(providerUser.groups, groupMapping);
+            if (roleResult.mappingApplied) {
+              const currentRole = existingMember.role as string;
+              if (currentRole !== roleResult.role) {
+                memberUpdate.role = roleResult.role;
+                console.log(
+                  `[directory-sync] User ${providerUser.email}: role changed '${currentRole}' -> '${roleResult.role}' via group '${roleResult.matchedGroup}'`,
+                );
+              }
+            }
+          }
+        }
+
+        await supabaseAdmin
+          .from("organization_members")
+          .update(memberUpdate)
+          .eq("organization_id", orgId)
+          .eq("user_id", existingMember.user_id);
 
         // Update external ID / sync timestamp on user record
         await supabaseAdmin
@@ -623,15 +843,29 @@ async function syncOrganization(
           })
           .eq("id", existingUser.id);
 
+        // Resolve role from groups if group sync is enabled
+        let memberRole = defaultRole;
+        if (groupSyncEnabled && providerUser.groups.length > 0) {
+          const roleResult = resolveRole(providerUser.groups, groupMapping);
+          if (roleResult.mappingApplied) {
+            memberRole = roleResult.role;
+            console.log(
+              `[directory-sync] New member ${providerUser.email}: role resolved to '${memberRole}' via group '${roleResult.matchedGroup}'`,
+            );
+          }
+        }
+
         await supabaseAdmin.from("organization_members").insert({
           organization_id: orgId,
           user_id: existingUser.id,
-          role: defaultRole,
+          role: memberRole,
           license_status: "active",
           provisioned_by: "directory_sync",
           provisioned_at: new Date().toISOString(),
           scim_synced_at: new Date().toISOString(),
           joined_at: new Date().toISOString(),
+          idp_groups: providerUser.groups.length > 0 ? providerUser.groups : null,
+          group_sync_enabled: groupSyncEnabled,
         });
 
         seenMemberIds.add(existingUser.id);
@@ -665,15 +899,29 @@ async function syncOrganization(
           continue;
         }
 
+        // Resolve role from groups if group sync is enabled
+        let newMemberRole = defaultRole;
+        if (groupSyncEnabled && providerUser.groups.length > 0) {
+          const roleResult = resolveRole(providerUser.groups, groupMapping);
+          if (roleResult.mappingApplied) {
+            newMemberRole = roleResult.role;
+            console.log(
+              `[directory-sync] New user ${providerUser.email}: role resolved to '${newMemberRole}' via group '${roleResult.matchedGroup}'`,
+            );
+          }
+        }
+
         await supabaseAdmin.from("organization_members").insert({
           organization_id: orgId,
           user_id: newUser.id,
-          role: defaultRole,
+          role: newMemberRole,
           license_status: "active",
           provisioned_by: "directory_sync",
           provisioned_at: new Date().toISOString(),
           scim_synced_at: new Date().toISOString(),
           joined_at: new Date().toISOString(),
+          idp_groups: providerUser.groups.length > 0 ? providerUser.groups : null,
+          group_sync_enabled: groupSyncEnabled,
         });
 
         seenMemberIds.add(newUser.id);
