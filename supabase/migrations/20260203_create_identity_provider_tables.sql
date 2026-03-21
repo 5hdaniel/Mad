@@ -13,6 +13,9 @@ CREATE TABLE IF NOT EXISTS organization_identity_providers (
 
   -- OAuth/OIDC config
   client_id TEXT,
+  -- KNOWN LIMITATION: Column is named "_encrypted" as future-proofing for KMS
+  -- integration, but currently stores plaintext. Actual encryption requires a
+  -- KMS (e.g., AWS KMS, GCP KMS, Vault) which is not yet integrated.
   client_secret_encrypted TEXT,
   issuer_url TEXT,
   authorization_url TEXT,
