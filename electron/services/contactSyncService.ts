@@ -265,8 +265,8 @@ export class ContactSyncService {
     );
 
     // Step 4: Store in external_contacts shadow table
-    // Map ExternalContactRecord to OutlookContactInput (same shape)
-    const dbContacts: externalContactDb.OutlookContactInput[] = contacts.map((c) => ({
+    // Map ExternalContactRecord to ExternalContactInput (same shape)
+    const dbContacts: externalContactDb.ExternalContactInput[] = contacts.map((c) => ({
       external_record_id: c.external_record_id,
       name: c.name,
       emails: c.emails,
@@ -274,10 +274,13 @@ export class ContactSyncService {
       company: c.company,
     }));
 
-    // Use syncOutlookContacts for now — it handles upsert + stale deletion + last_message_at
-    // The function name is Outlook-specific but the logic is source-agnostic via the source param
-    // Future: rename to syncContactsBySource or make externalContactDbService source-generic
-    const syncResult = externalContactDb.syncOutlookContacts(userId, dbContacts);
+    // TASK-2301: Use syncContactsBySource to route to correct source-specific sync
+    // This ensures each provider's contacts are stored with the correct source value
+    const syncResult = externalContactDb.syncContactsBySource(
+      userId,
+      source as externalContactDb.ExternalContactSource,
+      dbContacts,
+    );
 
     logService.info(
       `Contact sync complete for ${source}`,
@@ -305,7 +308,8 @@ export class ContactSyncService {
 
 /**
  * Default singleton instance of the contact sync service.
- * Providers are registered during app initialization.
+ * Providers are registered lazily via registerContactHandlers(),
+ * not at module load time (TASK-2301 SR review fix).
  */
 const contactSyncService = new ContactSyncService();
 
