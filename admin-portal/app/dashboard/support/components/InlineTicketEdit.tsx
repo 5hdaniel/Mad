@@ -333,7 +333,7 @@ export function InlineAssigneeEdit({ ticketId, assigneeName, onUpdated }: Inline
               autoFocus
             />
           </div>
-          <div className="max-h-48 overflow-y-auto py-1">
+          <div className="max-h-48 overflow-y-auto py-1 flex flex-col whitespace-normal">
             {agents.length === 0 ? (
               <div className="px-3 py-2 text-xs text-gray-400">Loading...</div>
             ) : filteredAgents.length === 0 ? (
@@ -431,7 +431,7 @@ export function InlineCategoryEdit({ ticketId, categoryName, categoryId, onUpdat
       )}
       {open && (
         <div className="absolute left-0 top-full mt-1 bg-white border border-gray-200 rounded-md shadow-lg z-30 w-44">
-          <div className="max-h-48 overflow-y-auto py-1">
+          <div className="max-h-48 overflow-y-auto py-1 flex flex-col whitespace-normal">
             {categories.length === 0 ? (
               <div className="px-3 py-2 text-xs text-gray-400">Loading...</div>
             ) : (
