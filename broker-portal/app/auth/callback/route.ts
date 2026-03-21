@@ -4,7 +4,7 @@
  * Handles the OAuth redirect from Supabase Auth:
  * 1. Exchanges authorization code for session
  * 2. Verifies user has broker/admin/it_admin role
- * 3. JIT-joins Azure users to their tenant's existing org
+ * 3. JIT-joins Azure AD / Google Workspace users to their tenant's existing org
  * 4. Redirects to dashboard or login with error
  */
 
@@ -134,15 +134,18 @@ export async function GET(request: Request) {
         }
       }
 
-      // No membership and no pending invite - check if Azure user can JIT-join an existing org
+      // No membership and no pending invite - attempt JIT provisioning
+      // Supports Azure AD (by tenant ID) and Google Workspace (by hosted domain)
       const provider = user.app_metadata?.provider;
 
+      // --- Azure AD JIT ---
       if (provider === 'azure') {
         const customClaims = user.user_metadata?.custom_claims as { tid?: string } | undefined;
         const tenantId = customClaims?.tid;
         if (tenantId) {
           const { data: jitResult, error: jitError } = await supabase.rpc('jit_join_organization', {
-            p_tenant_id: tenantId,
+            p_provider_type: 'azure_ad',
+            p_identifier: tenantId,
           });
           if (jitResult?.success) {
             if (process.env.NODE_ENV === 'development') {
@@ -150,13 +153,54 @@ export async function GET(request: Request) {
             }
             return NextResponse.redirect(`${origin}${next}`);
           }
+          // JIT failure is non-fatal — user falls through to "not authorized"
           if (jitError) {
-            console.error('JIT join RPC failed:', jitError);
+            console.error('Azure AD JIT join RPC error:', jitError);
+          } else if (process.env.NODE_ENV === 'development' && jitResult?.error) {
+            console.log(`Azure AD JIT not applicable: ${jitResult.error}`);
           }
-          // Determine appropriate error for user
-          const jitErrorCode = jitResult?.error === 'jit_disabled' ? 'jit_disabled' : 'org_not_setup';
-          await supabase.auth.signOut();
-          return NextResponse.redirect(`${origin}/login?error=${jitErrorCode}`);
+        }
+      }
+
+      // --- Google Workspace JIT ---
+      if (provider === 'google') {
+        // Primary: use the "hd" (hosted domain) claim from Google
+        // This claim is present for managed Google Workspace accounts
+        const hd = user.user_metadata?.hd as string | undefined;
+
+        // Fallback: if hd is not present (some admin configs omit it),
+        // extract the domain from the user's email. Consumer Gmail addresses
+        // (gmail.com, googlemail.com) are excluded — only Workspace domains trigger JIT.
+        const CONSUMER_GMAIL_DOMAINS = ['gmail.com', 'googlemail.com'];
+        let workspaceDomain = hd;
+
+        if (!workspaceDomain) {
+          const jitEmail = extractEmail(user);
+          if (jitEmail) {
+            const emailDomain = jitEmail.split('@')[1];
+            if (emailDomain && !CONSUMER_GMAIL_DOMAINS.includes(emailDomain)) {
+              workspaceDomain = emailDomain;
+            }
+          }
+        }
+
+        if (workspaceDomain) {
+          const { data: jitResult, error: jitError } = await supabase.rpc('jit_join_organization', {
+            p_provider_type: 'google_workspace',
+            p_identifier: workspaceDomain,
+          });
+          if (jitResult?.success) {
+            if (process.env.NODE_ENV === 'development') {
+              console.log(`JIT joined org ${jitResult.organization_id} with role ${jitResult.role}`);
+            }
+            return NextResponse.redirect(`${origin}${next}`);
+          }
+          // JIT failure is non-fatal — user falls through to "not authorized"
+          if (jitError) {
+            console.error('Google Workspace JIT join RPC error:', jitError);
+          } else if (process.env.NODE_ENV === 'development' && jitResult?.error) {
+            console.log(`Google Workspace JIT not applicable: ${jitResult.error}`);
+          }
         }
       }
 
