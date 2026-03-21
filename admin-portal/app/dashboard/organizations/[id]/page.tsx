@@ -1,7 +1,7 @@
 import { getAuthenticatedUser } from '@/lib/supabase/server';
 import { redirect, notFound } from 'next/navigation';
 import Link from 'next/link';
-import { ArrowLeft, Building2 } from 'lucide-react';
+import { ArrowLeft, Building2, Shield } from 'lucide-react';
 import { MembersTable, type MemberRow } from './components/MembersTable';
 import { PlanAssignment } from './components/PlanAssignment';
 import { formatDate } from '@/lib/format';
@@ -126,6 +126,17 @@ export default async function OrganizationDetailPage({
             <dd className="mt-1 text-sm text-gray-900">{formatDate(org.created_at)}</dd>
           </div>
         </div>
+      </div>
+
+      {/* Sub-navigation links */}
+      <div className="flex items-center gap-3">
+        <Link
+          href={`/dashboard/organizations/${org.id}/identity-providers`}
+          className="inline-flex items-center gap-2 rounded-md bg-white border border-gray-200 shadow-sm px-4 py-2.5 text-sm font-medium text-gray-700 hover:bg-gray-50 hover:border-gray-300 transition-colors"
+        >
+          <Shield className="h-4 w-4 text-gray-500" />
+          Identity Providers
+        </Link>
       </div>
 
       {/* Plan assignment */}
