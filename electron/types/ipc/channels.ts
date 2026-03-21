@@ -148,6 +148,10 @@ export interface IpcChannels {
     request: { userId: string };
     response: { success: boolean; count?: number; reconnectRequired?: boolean; error?: string };
   };
+  "contacts:syncGoogleContacts": {
+    request: { userId: string };
+    response: { success: boolean; count?: number; reconnectRequired?: boolean; error?: string };
+  };
 
   // ============================================
   // COMMUNICATION CHANNELS

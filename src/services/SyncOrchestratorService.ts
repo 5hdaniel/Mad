@@ -115,11 +115,11 @@ class SyncOrchestratorServiceClass {
    */
   private async getContactsSyncPreferences(userId: string): Promise<{
     importSource: ImportSource;
-    contactSources: { macosContacts: boolean; outlookContacts: boolean };
+    contactSources: { macosContacts: boolean; outlookContacts: boolean; googleContacts: boolean };
   }> {
     const defaults = {
       importSource: 'macos-native' as ImportSource,
-      contactSources: { macosContacts: true, outlookContacts: true },
+      contactSources: { macosContacts: true, outlookContacts: true, googleContacts: true },
     };
 
     try {
@@ -135,6 +135,7 @@ class SyncOrchestratorServiceClass {
       const contactSources = {
         macosContacts: typeof direct?.macosContacts === 'boolean' ? direct.macosContacts : true,
         outlookContacts: typeof direct?.outlookContacts === 'boolean' ? direct.outlookContacts : true,
+        googleContacts: typeof direct?.googleContacts === 'boolean' ? direct.googleContacts : true,
       };
 
       return { importSource, contactSources };
@@ -226,6 +227,40 @@ class SyncOrchestratorServiceClass {
             data: {
               syncType: 'contacts',
               provider: 'outlook',
+              error: err instanceof Error ? err.message : String(err),
+            },
+          });
+        }
+      }
+
+      if (signal?.aborted) return;
+
+      // Phase 3: Google contacts sync (all platforms, non-fatal, skip if source disabled)
+      // TASK-2303: Google contacts sync via People API
+      if (!sourcePrefs.googleContacts) {
+        logger.info('[SyncOrchestrator] Skipping Google contacts (disabled by user preference)');
+      } else {
+        try {
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          const contactsApi = window.api.contacts as any;
+          const googleResult = await contactsApi.syncGoogleContacts(userId);
+          if (googleResult.success) {
+            logger.info('[SyncOrchestrator] Google contacts synced:', googleResult.count);
+          } else if (googleResult.reconnectRequired) {
+            logger.warn('[SyncOrchestrator] Google contacts need reconnection (contacts.readonly scope missing)');
+          } else {
+            logger.warn('[SyncOrchestrator] Google contacts sync returned error:', googleResult.error);
+          }
+        } catch (err) {
+          // Don't fail the whole contacts sync if Google fails
+          logger.warn('[SyncOrchestrator] Google contacts sync failed (non-fatal):', err);
+          Sentry.addBreadcrumb({
+            category: 'sync',
+            message: 'Google contacts sync failed (non-fatal)',
+            level: 'warning',
+            data: {
+              syncType: 'contacts',
+              provider: 'google',
               error: err instanceof Error ? err.message : String(err),
             },
           });

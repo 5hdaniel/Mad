@@ -94,6 +94,13 @@ export interface WindowApiContacts {
     reconnectRequired?: boolean;
     error?: string;
   }>;
+  /** Sync Google contacts to external_contacts table (TASK-2303) */
+  syncGoogleContacts: (userId: string) => Promise<{
+    success: boolean;
+    count?: number;
+    reconnectRequired?: boolean;
+    error?: string;
+  }>;
   /** Force re-import: wipe ALL external contacts then return */
   forceReimport: (userId: string) => Promise<{
     success: boolean;
