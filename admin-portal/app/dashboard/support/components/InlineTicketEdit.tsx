@@ -20,6 +20,7 @@
 
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { Check, Loader2 } from 'lucide-react';
+import { useClickOutside } from '@/hooks/useClickOutside';
 import type { TicketStatus, TicketPriority, SupportCategory } from '@/lib/support-types';
 import {
   STATUS_LABELS,
@@ -37,25 +38,6 @@ import {
   getCategories,
 } from '@/lib/support-queries';
 import type { AssignableAgent } from '@/lib/support-queries';
-
-// ---------------------------------------------------------------------------
-// Shared hook for click-outside-to-close
-// ---------------------------------------------------------------------------
-
-function useDropdownClose(
-  ref: React.RefObject<HTMLDivElement | null>,
-  open: boolean,
-  onClose: () => void
-) {
-  useEffect(() => {
-    if (!open) return;
-    const handler = (e: MouseEvent) => {
-      if (ref.current && !ref.current.contains(e.target as Node)) onClose();
-    };
-    document.addEventListener('mousedown', handler);
-    return () => document.removeEventListener('mousedown', handler);
-  }, [open, ref, onClose]);
-}
 
 // ---------------------------------------------------------------------------
 // Shared cache for agents and categories (fetched once, shared across cells)
@@ -112,7 +94,7 @@ export function InlineStatusEdit({ ticketId, status, onUpdated }: InlineStatusEd
   const ref = useRef<HTMLDivElement>(null);
 
   const close = useCallback(() => setOpen(false), []);
-  useDropdownClose(ref, open, close);
+  useClickOutside(ref, close, open);
 
   const validTransitions = ALLOWED_TRANSITIONS[status] || [];
 
@@ -202,7 +184,7 @@ export function InlinePriorityEdit({ ticketId, priority, onUpdated }: InlinePrio
   const ref = useRef<HTMLDivElement>(null);
 
   const close = useCallback(() => setOpen(false), []);
-  useDropdownClose(ref, open, close);
+  useClickOutside(ref, close, open);
 
   async function handleSelect(newPriority: TicketPriority) {
     setOpen(false);
@@ -287,7 +269,7 @@ export function InlineAssigneeEdit({ ticketId, assigneeName, onUpdated }: Inline
     setOpen(false);
     setSearch('');
   }, []);
-  useDropdownClose(ref, open, close);
+  useClickOutside(ref, close, open);
 
   useEffect(() => {
     if (!open) return;
@@ -398,7 +380,7 @@ export function InlineCategoryEdit({ ticketId, categoryName, categoryId, onUpdat
   const ref = useRef<HTMLDivElement>(null);
 
   const close = useCallback(() => setOpen(false), []);
-  useDropdownClose(ref, open, close);
+  useClickOutside(ref, close, open);
 
   useEffect(() => {
     if (!open) return;

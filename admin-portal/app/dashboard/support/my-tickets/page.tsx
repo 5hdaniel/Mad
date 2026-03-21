@@ -8,24 +8,18 @@
  * but pre-filters all queries by the current user's assignee_id.
  */
 
-import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import dynamic from 'next/dynamic';
 import { Inbox, CheckCircle2, Clock } from 'lucide-react';
 import { useAuth } from '@/components/providers/AuthProvider';
 import { listTickets } from '@/lib/support-queries';
-import type {
-  SupportTicket,
-  TicketStatus,
-  TicketPriority,
-  SortColumn,
-  SortDirection,
-} from '@/lib/support-types';
+import type { SupportTicket } from '@/lib/support-types';
 import { TicketFilters } from '../components/TicketFilters';
 import { SearchBar } from '../components/SearchBar';
 import { BulkActionBar } from '../components/BulkActionBar';
-import { ColumnSelector, loadColumnPreferences, saveColumnPreferences } from '../components/ColumnSelector';
-import type { ColumnKey } from '../components/ColumnSelector';
+import { ColumnSelector } from '../components/ColumnSelector';
 import { SavedViewSelector } from '../components/SavedViewSelector';
+import { useTicketTableState } from '../hooks/useTicketTableState';
 
 const TicketTable = dynamic(() => import('../components/TicketTable').then(m => m.TicketTable), { ssr: false });
 
@@ -33,7 +27,6 @@ export default function MyTicketsPage() {
   const { user } = useAuth();
   const [tickets, setTickets] = useState<SupportTicket[]>([]);
   const [totalCount, setTotalCount] = useState(0);
-  const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
   const [loading, setLoading] = useState(true);
 
@@ -43,45 +36,21 @@ export default function MyTicketsPage() {
   const [myResolved, setMyResolved] = useState(0);
   const [statsLoading, setStatsLoading] = useState(true);
 
-  // Filters
-  const [statusFilter, setStatusFilter] = useState<TicketStatus | null>(null);
-  const [priorityFilter, setPriorityFilter] = useState<TicketPriority | null>(null);
-  const [categoryFilter, setCategoryFilter] = useState<string | null>(null);
-  const [searchQuery, setSearchQuery] = useState('');
+  const {
+    sortColumn, sortDirection, handleSort,
+    selectedIds, toggleSelect, toggleSelectAll, clearSelection,
+    visibleColumns, handleColumnsChange,
+    statusFilter, priorityFilter, categoryFilter, searchQuery,
+    handleStatusChange, handlePriorityChange, handleCategoryChange, handleSearch,
+    currentFilters, handleLoadView,
+    page, setPage,
+  } = useTicketTableState(tickets);
 
-  // Sort
-  const [sortColumn, setSortColumn] = useState<SortColumn>('created_at');
-  const [sortDirection, setSortDirection] = useState<SortDirection>('desc');
+  const pageSize = 20;
 
-  // Bulk selection (TASK-2292)
-  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
-
-  // Column visibility
-  const [visibleColumns, setVisibleColumns] = useState<ColumnKey[]>(loadColumnPreferences);
-
-  const handleColumnsChange = useCallback((columns: ColumnKey[]) => {
-    setVisibleColumns(columns);
-    saveColumnPreferences(columns);
-  }, []);
-
-  const clearSelection = useCallback(() => setSelectedIds(new Set()), []);
-
-  const toggleSelect = useCallback((id: string) => {
-    setSelectedIds((prev) => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
-      return next;
-    });
-  }, []);
-
-  const toggleSelectAll = useCallback(() => {
-    setSelectedIds((prev) => {
-      const allIds = tickets.map(t => t.id);
-      const allSelected = allIds.length > 0 && allIds.every(id => prev.has(id));
-      return allSelected ? new Set() : new Set(allIds);
-    });
-  }, [tickets]);
+  // Refs to allow handleBulkComplete to call functions without circular deps
+  const loadTicketsRef = useRef<() => void>(() => {});
+  const loadMyStatsRef = useRef<() => void>(() => {});
 
   const handleBulkComplete = useCallback(() => {
     clearSelection();
@@ -93,12 +62,6 @@ export default function MyTicketsPage() {
     loadTicketsRef.current();
     loadMyStatsRef.current();
   }, []);
-
-  const pageSize = 20;
-
-  // Refs to allow handleBulkComplete to call functions without circular deps
-  const loadTicketsRef = useRef<() => void>(() => {});
-  const loadMyStatsRef = useRef<() => void>(() => {});
 
   const loadTickets = useCallback(async () => {
     if (!user?.id) return;
@@ -125,7 +88,6 @@ export default function MyTicketsPage() {
     }
   }, [user?.id, statusFilter, priorityFilter, categoryFilter, searchQuery, page, sortColumn, sortDirection]);
 
-  // Load agent-specific stats by querying filtered counts
   const loadMyStats = useCallback(async () => {
     if (!user?.id) return;
     setStatsLoading(true);
@@ -155,67 +117,6 @@ export default function MyTicketsPage() {
   useEffect(() => {
     loadMyStats();
   }, [loadMyStats]);
-
-  // Clear selection when filters, page, or sort change
-  useEffect(() => {
-    clearSelection();
-  }, [statusFilter, priorityFilter, categoryFilter, searchQuery, page, sortColumn, sortDirection, clearSelection]);
-
-  function handleStatusChange(status: TicketStatus | null) {
-    setStatusFilter(status);
-    setPage(1);
-  }
-
-  function handlePriorityChange(priority: TicketPriority | null) {
-    setPriorityFilter(priority);
-    setPage(1);
-  }
-
-  function handleCategoryChange(categoryId: string | null) {
-    setCategoryFilter(categoryId);
-    setPage(1);
-  }
-
-  const handleSearch = useCallback((query: string) => {
-    setSearchQuery(query);
-    setPage(1);
-  }, []);
-
-  // Saved views: capture current filters
-  const currentFilters = useMemo(() => ({
-    status: statusFilter,
-    priority: priorityFilter,
-    category_id: categoryFilter,
-    sort_column: sortColumn,
-    sort_direction: sortDirection,
-    visible_columns: visibleColumns,
-  }), [statusFilter, priorityFilter, categoryFilter, sortColumn, sortDirection, visibleColumns]);
-
-  const handleLoadView = useCallback((filters: Record<string, unknown>) => {
-    setStatusFilter((filters.status as TicketStatus | null) ?? null);
-    setPriorityFilter((filters.priority as TicketPriority | null) ?? null);
-    setCategoryFilter((filters.category_id as string | null) ?? null);
-    if (filters.sort_column) setSortColumn(filters.sort_column as SortColumn);
-    if (filters.sort_direction) setSortDirection(filters.sort_direction as SortDirection);
-    if (Array.isArray(filters.visible_columns)) {
-      const cols = filters.visible_columns as ColumnKey[];
-      setVisibleColumns(cols);
-      saveColumnPreferences(cols);
-    }
-    setPage(1);
-  }, []);
-
-  const handleSort = useCallback((column: SortColumn) => {
-    setSortColumn((prev) => {
-      if (prev === column) {
-        setSortDirection((dir) => (dir === 'asc' ? 'desc' : 'asc'));
-        return prev;
-      }
-      setSortDirection(column === 'created_at' ? 'desc' : 'asc');
-      return column;
-    });
-    setPage(1);
-  }, []);
 
   const statCards = [
     { label: 'My In Progress', value: myOpen, icon: Inbox, color: 'text-blue-600 bg-blue-50' },
