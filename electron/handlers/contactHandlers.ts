@@ -1690,4 +1690,63 @@ export function registerContactHandlers(mainWindow: BrowserWindow): void {
     },
   );
 
+  // TASK-2303: Sync Google contacts to external_contacts table
+  // Mirrors syncOutlookContacts pattern, delegates to contactSyncService
+  ipcMain.handle(
+    "contacts:syncGoogleContacts",
+    async (
+      _event: IpcMainInvokeEvent,
+      userId: string,
+    ): Promise<{
+      success: boolean;
+      count?: number;
+      reconnectRequired?: boolean;
+      error?: string;
+    }> => {
+      try {
+        logService.info("[Main] Google contacts sync requested", "Contacts", { userId });
+
+        // Validate user ID
+        const validatedUserId = await getValidUserId(userId, "Contacts");
+        if (!validatedUserId) {
+          return { success: false, error: "No valid user found in database" };
+        }
+
+        // Delegate to contactSyncService (GoogleContactProvider registered in TASK-2301)
+        const result = await contactSyncService.syncProvider(validatedUserId, 'google_contacts');
+
+        if (!result.success) {
+          return {
+            success: false,
+            error: result.error || "Failed to sync Google contacts",
+            reconnectRequired: result.reconnectRequired,
+          };
+        }
+
+        logService.info("[Main] Google contacts sync complete", "Contacts", {
+          userId: validatedUserId,
+          count: result.count,
+        });
+
+        return {
+          success: true,
+          count: result.count,
+        };
+      } catch (error) {
+        logService.error("[Main] Google contacts sync failed", "Contacts", {
+          error: error instanceof Error ? error.message : "Unknown error",
+        });
+        // Log failure for offline diagnostics
+        failureLogService.logFailure(
+          "google_contacts_sync",
+          error instanceof Error ? error.message : "Unknown error"
+        );
+        return {
+          success: false,
+          error: error instanceof Error ? error.message : "Unknown error",
+        };
+      }
+    },
+  );
+
 }
