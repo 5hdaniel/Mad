@@ -335,6 +335,352 @@ async function syncOrgColumns(
 }
 
 // ---------------------------------------------------------------------------
+// SCIM Token Management
+// ---------------------------------------------------------------------------
+
+export interface ScimTokenInfo {
+  id: string;
+  description: string | null;
+  last_used_at: string | null;
+  request_count: number;
+  expires_at: string | null;
+  created_at: string;
+}
+
+/**
+ * Get the active (non-revoked) SCIM token for an organization.
+ * Returns the most recently created token.
+ */
+export async function getActiveScimToken(
+  organizationId: string
+): Promise<{ data: ScimTokenInfo | null; error: string | null }> {
+  const supabase = createServiceClient();
+
+  const { data, error } = await supabase
+    .from('scim_tokens')
+    .select('id, description, last_used_at, request_count, expires_at, created_at')
+    .eq('organization_id', organizationId)
+    .is('revoked_at', null)
+    .order('created_at', { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  if (error) {
+    return { data: null, error: error.message };
+  }
+
+  return { data: data as ScimTokenInfo | null, error: null };
+}
+
+/**
+ * Generate a new SCIM bearer token for an organization.
+ *
+ * Returns the plaintext token exactly ONCE. The token is stored as a
+ * SHA-256 hash in the scim_tokens table.
+ */
+export async function generateScimToken(
+  organizationId: string,
+  description: string
+): Promise<{ token: string; tokenInfo: ScimTokenInfo; error: string | null }> {
+  const supabase = createServiceClient();
+
+  // Generate a cryptographically random token
+  const randomBytes = new Uint8Array(32);
+  crypto.getRandomValues(randomBytes);
+  const plainToken = Array.from(randomBytes)
+    .map((b) => b.toString(16).padStart(2, '0'))
+    .join('');
+
+  // Hash the token for storage
+  const encoder = new TextEncoder();
+  const hashBuffer = await crypto.subtle.digest('SHA-256', encoder.encode(plainToken));
+  const tokenHash = Array.from(new Uint8Array(hashBuffer))
+    .map((b) => b.toString(16).padStart(2, '0'))
+    .join('');
+
+  const { data, error } = await supabase
+    .from('scim_tokens')
+    .insert({
+      organization_id: organizationId,
+      token_hash: tokenHash,
+      description,
+    })
+    .select('id, description, last_used_at, request_count, expires_at, created_at')
+    .single();
+
+  if (error) {
+    return { token: '', tokenInfo: {} as ScimTokenInfo, error: error.message };
+  }
+
+  return {
+    token: plainToken,
+    tokenInfo: data as ScimTokenInfo,
+    error: null,
+  };
+}
+
+/**
+ * Revoke a SCIM token by setting its revoked_at timestamp.
+ */
+export async function revokeScimToken(
+  tokenId: string
+): Promise<{ error: string | null }> {
+  const supabase = createServiceClient();
+
+  const { error } = await supabase
+    .from('scim_tokens')
+    .update({ revoked_at: new Date().toISOString() })
+    .eq('id', tokenId);
+
+  if (error) {
+    return { error: error.message };
+  }
+
+  return { error: null };
+}
+
+// ---------------------------------------------------------------------------
+// Directory Sync Status
+// ---------------------------------------------------------------------------
+
+export interface DirectorySyncStatus {
+  directory_sync_enabled: boolean;
+  directory_sync_last_at: string | null;
+  directory_sync_error: string | null;
+}
+
+/**
+ * Get the directory sync status for an organization.
+ */
+export async function getDirectorySyncStatus(
+  organizationId: string
+): Promise<{ data: DirectorySyncStatus | null; error: string | null }> {
+  const supabase = createServiceClient();
+
+  const { data, error } = await supabase
+    .from('organizations')
+    .select('directory_sync_enabled, directory_sync_last_at, directory_sync_error')
+    .eq('id', organizationId)
+    .single();
+
+  if (error) {
+    return { data: null, error: error.message };
+  }
+
+  return {
+    data: {
+      directory_sync_enabled: data.directory_sync_enabled ?? false,
+      directory_sync_last_at: data.directory_sync_last_at ?? null,
+      directory_sync_error: data.directory_sync_error ?? null,
+    },
+    error: null,
+  };
+}
+
+/**
+ * Toggle directory sync enabled/disabled for an organization.
+ */
+export async function toggleDirectorySync(
+  organizationId: string,
+  enabled: boolean
+): Promise<{ error: string | null }> {
+  const supabase = createServiceClient();
+
+  const { error } = await supabase
+    .from('organizations')
+    .update({ directory_sync_enabled: enabled })
+    .eq('id', organizationId);
+
+  if (error) {
+    return { error: error.message };
+  }
+
+  return { error: null };
+}
+
+/**
+ * Trigger a manual directory sync by calling the Edge Function.
+ */
+export async function triggerDirectorySync(
+  organizationId: string
+): Promise<{ success: boolean; error?: string }> {
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+
+  if (!supabaseUrl || !serviceRoleKey) {
+    return { success: false, error: 'Server configuration error.' };
+  }
+
+  try {
+    const response = await fetch(
+      `${supabaseUrl}/functions/v1/directory-sync?org_id=${organizationId}`,
+      {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${serviceRoleKey}`,
+          'Content-Type': 'application/json',
+        },
+      }
+    );
+
+    if (!response.ok) {
+      const body = await response.text();
+      return { success: false, error: `Sync failed (${response.status}): ${body}` };
+    }
+
+    return { success: true };
+  } catch (err) {
+    return {
+      success: false,
+      error: err instanceof Error ? err.message : 'Network error during sync.',
+    };
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Group Role Mapping CRUD
+// ---------------------------------------------------------------------------
+
+export interface GroupRoleMappingConfig {
+  group_role_mapping: Record<string, string>;
+  default_role: string;
+  group_sync_enabled: boolean;
+}
+
+/**
+ * Get the group role mapping configuration from an IdP's attribute_mapping.
+ */
+export function extractGroupRoleMapping(
+  attributeMapping: Record<string, string> | null
+): GroupRoleMappingConfig {
+  const mapping = attributeMapping as Record<string, unknown> | null;
+  if (!mapping) {
+    return {
+      group_role_mapping: {},
+      default_role: 'agent',
+      group_sync_enabled: false,
+    };
+  }
+
+  return {
+    group_role_mapping:
+      (mapping.group_role_mapping as Record<string, string>) || {},
+    default_role: (mapping.default_role as string) || 'agent',
+    group_sync_enabled: mapping.group_sync_enabled === true,
+  };
+}
+
+/**
+ * Save group role mapping configuration to an IdP's attribute_mapping JSONB.
+ * Merges with existing attribute_mapping to preserve other fields.
+ */
+export async function saveGroupRoleMapping(
+  idpId: string,
+  config: GroupRoleMappingConfig
+): Promise<{ error: string | null }> {
+  const supabase = createServiceClient();
+
+  // First read the current attribute_mapping to preserve other fields
+  const { data: existing, error: readError } = await supabase
+    .from('organization_identity_providers')
+    .select('attribute_mapping')
+    .eq('id', idpId)
+    .single();
+
+  if (readError) {
+    return { error: readError.message };
+  }
+
+  const currentMapping = (existing?.attribute_mapping as Record<string, unknown>) || {};
+  const updatedMapping = {
+    ...currentMapping,
+    group_role_mapping: config.group_role_mapping,
+    default_role: config.default_role,
+    group_sync_enabled: config.group_sync_enabled,
+  };
+
+  const { error } = await supabase
+    .from('organization_identity_providers')
+    .update({
+      attribute_mapping: updatedMapping,
+      updated_at: new Date().toISOString(),
+    })
+    .eq('id', idpId);
+
+  if (error) {
+    return { error: error.message };
+  }
+
+  return { error: null };
+}
+
+// ---------------------------------------------------------------------------
+// Sync History (scim_sync_log)
+// ---------------------------------------------------------------------------
+
+export interface SyncLogEntry {
+  id: string;
+  operation: string;
+  resource_type: string;
+  resource_id: string | null;
+  external_id: string | null;
+  response_status: number | null;
+  error_message: string | null;
+  created_at: string;
+}
+
+/**
+ * Fetch recent sync log entries for an organization.
+ */
+export async function getSyncHistory(
+  organizationId: string,
+  limit = 20,
+  offset = 0
+): Promise<{ data: SyncLogEntry[]; total: number; error: string | null }> {
+  const supabase = createServiceClient();
+
+  // Get total count
+  const { count, error: countError } = await supabase
+    .from('scim_sync_log')
+    .select('id', { count: 'exact', head: true })
+    .eq('organization_id', organizationId);
+
+  if (countError) {
+    return { data: [], total: 0, error: countError.message };
+  }
+
+  // Get paginated entries
+  const { data, error } = await supabase
+    .from('scim_sync_log')
+    .select('id, operation, resource_type, resource_id, external_id, response_status, error_message, created_at')
+    .eq('organization_id', organizationId)
+    .order('created_at', { ascending: false })
+    .range(offset, offset + limit - 1);
+
+  if (error) {
+    return { data: [], total: 0, error: error.message };
+  }
+
+  return {
+    data: (data ?? []) as SyncLogEntry[],
+    total: count ?? 0,
+    error: null,
+  };
+}
+
+// ---------------------------------------------------------------------------
+// SCIM Endpoint URL Helper
+// ---------------------------------------------------------------------------
+
+/**
+ * Build the SCIM endpoint URL for an organization.
+ */
+export function getScimEndpointUrl(): string {
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL ?? '';
+  return `${supabaseUrl}/functions/v1/scim/v2`;
+}
+
+// ---------------------------------------------------------------------------
 // Display helpers (pure, no DB access)
 // ---------------------------------------------------------------------------
 
