@@ -39,6 +39,7 @@ import { isContactSourceEnabled } from "../utils/preferenceHelper";
 import outlookFetchService from "../services/outlookFetchService";
 import contactSyncService from "../services/contactSyncService";
 import { OutlookContactProvider } from "../services/providers/outlookContactProvider";
+import { GoogleContactProvider } from "../services/providers/googleContactProvider";
 
 // Import handler types
 import type {
@@ -133,7 +134,9 @@ export function registerContactHandlers(mainWindow: BrowserWindow): void {
   _mainWindow = mainWindow;
 
   // TASK-2300: Register contact sync providers
+  // TASK-2301: Both providers registered here (not at module load) to avoid side effects during import
   contactSyncService.registerProvider(new OutlookContactProvider());
+  contactSyncService.registerProvider(new GoogleContactProvider());
 
   // Get all imported contacts for a user (local database only)
   ipcMain.handle(

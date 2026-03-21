@@ -4,7 +4,7 @@
  * Handles the OAuth redirect from Supabase Auth:
  * 1. Exchanges authorization code for session
  * 2. Verifies user has broker/admin/it_admin role
- * 3. JIT-joins Azure users to their tenant's existing org
+ * 3. JIT-joins users to their existing org (Azure AD by tenant, Google by domain)
  * 4. Redirects to dashboard or login with error
  */
 
@@ -134,30 +134,49 @@ export async function GET(request: Request) {
         }
       }
 
-      // No membership and no pending invite - check if Azure user can JIT-join an existing org
+      // No membership and no pending invite - check if user can JIT-join an existing org
+      // Supports Azure AD (by tenant ID) and Google Workspace (by domain)
       const provider = user.app_metadata?.provider;
+
+      let jitProviderType: string | null = null;
+      let jitIdentifier: string | null = null;
 
       if (provider === 'azure') {
         const customClaims = user.user_metadata?.custom_claims as { tid?: string } | undefined;
         const tenantId = customClaims?.tid;
         if (tenantId) {
-          const { data: jitResult, error: jitError } = await supabase.rpc('jit_join_organization', {
-            p_tenant_id: tenantId,
-          });
-          if (jitResult?.success) {
-            if (process.env.NODE_ENV === 'development') {
-              console.log(`JIT joined org ${jitResult.organization_id} with role ${jitResult.role}`);
-            }
-            return NextResponse.redirect(`${origin}${next}`);
-          }
-          if (jitError) {
-            console.error('JIT join RPC failed:', jitError);
-          }
-          // Determine appropriate error for user
-          const jitErrorCode = jitResult?.error === 'jit_disabled' ? 'jit_disabled' : 'org_not_setup';
-          await supabase.auth.signOut();
-          return NextResponse.redirect(`${origin}/login?error=${jitErrorCode}`);
+          jitProviderType = 'azure_ad';
+          jitIdentifier = tenantId;
         }
+      } else if (provider === 'google') {
+        const email = extractEmail(user);
+        if (email) {
+          const domain = email.split('@')[1];
+          if (domain) {
+            jitProviderType = 'google_workspace';
+            jitIdentifier = domain;
+          }
+        }
+      }
+
+      if (jitProviderType && jitIdentifier) {
+        const { data: jitResult, error: jitError } = await supabase.rpc('jit_join_organization', {
+          p_provider_type: jitProviderType,
+          p_identifier: jitIdentifier,
+        });
+        if (jitResult?.success) {
+          if (process.env.NODE_ENV === 'development') {
+            console.log(`JIT joined org ${jitResult.organization_id} with role ${jitResult.role}`);
+          }
+          return NextResponse.redirect(`${origin}${next}`);
+        }
+        if (jitError) {
+          console.error('JIT join RPC failed:', jitError);
+        }
+        // Determine appropriate error for user
+        const jitErrorCode = jitResult?.error === 'jit_disabled' ? 'jit_disabled' : 'org_not_setup';
+        await supabase.auth.signOut();
+        return NextResponse.redirect(`${origin}/login?error=${jitErrorCode}`);
       }
 
       // User not authorized - sign them out
