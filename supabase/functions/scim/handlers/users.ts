@@ -22,6 +22,97 @@ import {
 } from "../shared/types.ts";
 import { scimError } from "../shared/errors.ts";
 import { logScimOperation } from "../shared/auth.ts";
+import {
+  resolveRole,
+  extractGroupRoleMapping,
+} from "../../_shared/groupRoleMapper.ts";
+
+// ---------------------------------------------------------------------------
+// Helpers: Group Extraction & Role Resolution
+// ---------------------------------------------------------------------------
+
+/**
+ * Extract group IDs/names from a SCIM User payload.
+ *
+ * SCIM payloads may include groups via:
+ *  - `groups` array with `{ value, display }` entries
+ *  - Enterprise extension `urn:ietf:params:scim:schemas:extension:enterprise:2.0:User`
+ *
+ * Accepts both group UUIDs (value) and display names (display).
+ */
+function extractGroupsFromScimPayload(
+  body: Record<string, unknown>,
+): string[] {
+  const groups: string[] = [];
+
+  // Direct groups array (SCIM core schema)
+  const scimGroups = body.groups as
+    | Array<{ value?: string; display?: string }>
+    | undefined;
+
+  if (Array.isArray(scimGroups)) {
+    for (const g of scimGroups) {
+      if (g.value) groups.push(g.value);
+      if (g.display && g.display !== g.value) groups.push(g.display);
+    }
+  }
+
+  // Enterprise extension groups
+  const enterprise = body[
+    "urn:ietf:params:scim:schemas:extension:enterprise:2.0:User"
+  ] as Record<string, unknown> | undefined;
+
+  if (enterprise?.groups && Array.isArray(enterprise.groups)) {
+    for (const g of enterprise.groups as Array<{
+      value?: string;
+      display?: string;
+    }>) {
+      if (g.value && !groups.includes(g.value)) groups.push(g.value);
+      if (g.display && g.display !== g.value && !groups.includes(g.display)) {
+        groups.push(g.display);
+      }
+    }
+  }
+
+  return groups;
+}
+
+/**
+ * Fetch the IdP config's attribute_mapping for an organization and resolve
+ * the user's role from their groups. If group sync is disabled or no IdP
+ * config exists, returns null (caller should use default role).
+ */
+async function resolveRoleFromGroups(
+  supabaseAdmin: SupabaseClient,
+  orgId: string,
+  userGroups: string[],
+  memberGroupSyncEnabled?: boolean,
+): Promise<{ role: string; matchedGroup: string | null } | null> {
+  // If the per-member group_sync_enabled is explicitly false, skip
+  if (memberGroupSyncEnabled === false) {
+    return null;
+  }
+
+  // Fetch IdP config for this org
+  const { data: idp } = await supabaseAdmin
+    .from("organization_identity_providers")
+    .select("attribute_mapping")
+    .eq("organization_id", orgId)
+    .eq("is_active", true)
+    .maybeSingle();
+
+  if (!idp) return null;
+
+  const mapping = extractGroupRoleMapping(
+    idp.attribute_mapping as Record<string, unknown> | null,
+  );
+
+  // If org-level group sync is disabled, skip
+  if (!mapping.group_sync_enabled) return null;
+
+  const result = resolveRole(userGroups, mapping);
+  return { role: result.role, matchedGroup: result.matchedGroup };
+}
 
 // ---------------------------------------------------------------------------
 // POST /scim/v2/Users -- Create a new user
@@ -149,7 +240,21 @@ export async function handleCreateUser(
       .eq("id", auth.orgId)
       .single();
 
-    const role = org?.default_member_role || "agent";
+    let role = org?.default_member_role || "agent";
+
+    // Extract groups from SCIM payload and resolve role via group mapping
+    const scimGroups = extractGroupsFromScimPayload(body);
+    const groupRoleResult = await resolveRoleFromGroups(
+      supabaseAdmin,
+      auth.orgId,
+      scimGroups,
+    );
+    if (groupRoleResult) {
+      role = groupRoleResult.role;
+      console.log(
+        `[scim] User ${email}: role resolved to '${role}' via group '${groupRoleResult.matchedGroup}'`,
+      );
+    }
 
     await supabaseAdmin.from("organization_members").insert({
       organization_id: auth.orgId,
@@ -160,6 +265,8 @@ export async function handleCreateUser(
       provisioned_at: new Date().toISOString(),
       scim_synced_at: new Date().toISOString(),
       joined_at: new Date().toISOString(),
+      idp_groups: scimGroups.length > 0 ? scimGroups : null,
+      group_sync_enabled: groupRoleResult !== null,
     });
 
     // Fetch the updated user
@@ -227,24 +334,40 @@ export async function handleCreateUser(
   }
 
   // Get org's default role
-  const { data: org } = await supabaseAdmin
+  const { data: org2 } = await supabaseAdmin
     .from("organizations")
     .select("default_member_role")
     .eq("id", auth.orgId)
     .single();
 
-  const role = org?.default_member_role || "agent";
+  let newUserRole = org2?.default_member_role || "agent";
+
+  // Extract groups from SCIM payload and resolve role via group mapping
+  const newUserGroups = extractGroupsFromScimPayload(body);
+  const newUserGroupResult = await resolveRoleFromGroups(
+    supabaseAdmin,
+    auth.orgId,
+    newUserGroups,
+  );
+  if (newUserGroupResult) {
+    newUserRole = newUserGroupResult.role;
+    console.log(
+      `[scim] New user ${email}: role resolved to '${newUserRole}' via group '${newUserGroupResult.matchedGroup}'`,
+    );
+  }
 
   // Create org membership
   await supabaseAdmin.from("organization_members").insert({
     organization_id: auth.orgId,
     user_id: newUser.id,
-    role,
+    role: newUserRole,
     license_status: "active",
     provisioned_by: "scim",
     provisioned_at: new Date().toISOString(),
     scim_synced_at: new Date().toISOString(),
     joined_at: new Date().toISOString(),
+    idp_groups: newUserGroups.length > 0 ? newUserGroups : null,
+    group_sync_enabled: newUserGroupResult !== null,
   });
 
   await logScimOperation(supabaseAdmin, {
@@ -449,10 +572,10 @@ export async function handlePatchUser(
     return scimError(400, "Invalid JSON request body");
   }
 
-  // Verify user belongs to this org
+  // Verify user belongs to this org (include group_sync_enabled + role for audit)
   const { data: member } = await supabaseAdmin
     .from("organization_members")
-    .select("user_id")
+    .select("user_id, group_sync_enabled, role")
     .eq("organization_id", auth.orgId)
     .eq("user_id", userId)
     .maybeSingle();
@@ -564,6 +687,29 @@ export async function handlePatchUser(
     }
     if (path === "externalid") {
       userUpdates.scim_external_id = op.value as string;
+    }
+  }
+
+  // Extract groups from the PatchOp body and resolve role
+  const patchGroups = extractGroupsFromScimPayload(body);
+  if (patchGroups.length > 0) {
+    memberUpdates.idp_groups = patchGroups;
+
+    // Resolve role from groups (respects per-member group_sync_enabled)
+    const patchGroupResult = await resolveRoleFromGroups(
+      supabaseAdmin,
+      auth.orgId,
+      patchGroups,
+      member.group_sync_enabled as boolean | undefined,
+    );
+    if (patchGroupResult) {
+      const oldRole = member.role as string;
+      if (oldRole !== patchGroupResult.role) {
+        memberUpdates.role = patchGroupResult.role;
+        console.log(
+          `[scim] User ${userId}: role changed '${oldRole}' -> '${patchGroupResult.role}' via group '${patchGroupResult.matchedGroup}'`,
+        );
+      }
     }
   }
 
