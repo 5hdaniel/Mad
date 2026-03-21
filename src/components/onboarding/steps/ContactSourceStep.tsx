@@ -117,7 +117,6 @@ const SOURCE_OPTIONS: SourceConfig[] = [
     selectedBorder: "border-green-400",
     selectedBg: "bg-green-50",
     authProvider: "google",
-    comingSoon: true,
   },
 ];
 
