@@ -164,25 +164,17 @@ export async function GET(request: Request) {
 
       // --- Google Workspace JIT ---
       if (provider === 'google') {
-        // Primary: use the "hd" (hosted domain) claim from Google
-        // This claim is present for managed Google Workspace accounts
+        // Only Google Workspace accounts with a corporate "hd" (hosted domain) claim
+        // can JIT-join. Consumer Gmail accounts are excluded:
+        //   - No hd claim        -> consumer Gmail (personal @gmail.com)
+        //   - hd = gmail.com     -> consumer with domain display
+        //   - hd = googlemail.com -> consumer alias domain
+        // Only proceed with JIT if hd is present and is a real corporate domain.
         const hd = user.user_metadata?.hd as string | undefined;
-
-        // Fallback: if hd is not present (some admin configs omit it),
-        // extract the domain from the user's email. Consumer Gmail addresses
-        // (gmail.com, googlemail.com) are excluded — only Workspace domains trigger JIT.
         const CONSUMER_GMAIL_DOMAINS = ['gmail.com', 'googlemail.com'];
-        let workspaceDomain = hd;
-
-        if (!workspaceDomain) {
-          const jitEmail = extractEmail(user);
-          if (jitEmail) {
-            const emailDomain = jitEmail.split('@')[1];
-            if (emailDomain && !CONSUMER_GMAIL_DOMAINS.includes(emailDomain)) {
-              workspaceDomain = emailDomain;
-            }
-          }
-        }
+        const workspaceDomain = hd && !CONSUMER_GMAIL_DOMAINS.includes(hd.toLowerCase())
+          ? hd.toLowerCase()
+          : undefined;
 
         if (workspaceDomain) {
           const { data: jitResult, error: jitError } = await supabase.rpc('jit_join_organization', {
