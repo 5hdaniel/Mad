@@ -17,6 +17,12 @@ import logService from '../logService';
 import { queryContacts, isPoolReady } from '../../workers/contactWorkerPool';
 
 /**
+ * Valid external contact source types
+ * TASK-2301: Extracted as type alias; added google_contacts
+ */
+export type ExternalContactSource = 'macos' | 'iphone' | 'outlook' | 'google_contacts';
+
+/**
  * External contact as stored in database
  */
 export interface ExternalContact {
@@ -28,7 +34,7 @@ export interface ExternalContact {
   company: string | null;
   last_message_at: string | null;
   external_record_id: string;  // Renamed from macos_record_id (Migration 27)
-  source: 'macos' | 'iphone' | 'outlook';  // Source of contact (Migration 27, TASK-1920: added outlook)
+  source: ExternalContactSource;  // Source of contact (Migration 27, TASK-1920: added outlook, TASK-2301: added google_contacts)
   synced_at: string;
 }
 
@@ -83,6 +89,18 @@ export interface OutlookContactInput {
 }
 
 /**
+ * Generic external contact input for upsert operations (TASK-2301)
+ * Used by both Outlook and Google contacts (and future sources)
+ */
+export interface ExternalContactInput {
+  external_record_id: string;
+  name: string | null;
+  emails: string[];
+  phones: string[];
+  company: string | null;
+}
+
+/**
  * Sync result statistics
  */
 export interface SyncResult {
@@ -121,7 +139,7 @@ export function getAllForUser(userId: string): ExternalContact[] {
     company: row.company,
     last_message_at: row.last_message_at,
     external_record_id: row.external_record_id,
-    source: row.source as 'macos' | 'iphone' | 'outlook',
+    source: row.source as ExternalContactSource,
     synced_at: row.synced_at,
   }));
 }
@@ -156,7 +174,7 @@ export async function getAllForUserAsync(
     company: row.company,
     last_message_at: row.last_message_at,
     external_record_id: row.external_record_id,
-    source: row.source as 'macos' | 'iphone' | 'outlook',
+    source: row.source as ExternalContactSource,
     synced_at: row.synced_at,
   }));
 }
@@ -206,7 +224,7 @@ export function getContactSourceStats(userId: string): Record<string, number> {
     `SELECT source, COUNT(*) as count FROM external_contacts WHERE user_id = ? GROUP BY source`,
     [userId]
   );
-  const stats: Record<string, number> = { macos: 0, iphone: 0, outlook: 0 };
+  const stats: Record<string, number> = { macos: 0, iphone: 0, outlook: 0, google_contacts: 0 };
   for (const row of rows) {
     stats[row.source] = row.count;
   }
@@ -328,15 +346,23 @@ export function deleteBySessionId(userId: string, sessionId: string): number {
 }
 
 /**
- * Upsert contacts from Outlook via Microsoft Graph API (TASK-1921)
- * Returns count of contacts processed
+ * Generic upsert for external contacts with explicit source (TASK-2301)
+ * Used by Outlook and Google contacts (and future sources).
+ * Returns count of contacts processed.
+ *
+ * CRITICAL: The source parameter is passed as a SQL value in the INSERT,
+ * so contacts are correctly attributed to their origin.
  */
-export function upsertFromOutlook(userId: string, contacts: OutlookContactInput[]): number {
+export function upsertExternalContacts(
+  userId: string,
+  source: ExternalContactSource,
+  contacts: ExternalContactInput[],
+): number {
   const now = new Date().toISOString();
 
   const stmt = `
     INSERT INTO external_contacts (id, user_id, name, phones_json, emails_json, company, source, external_record_id, synced_at)
-    VALUES (?, ?, ?, ?, ?, ?, 'outlook', ?, ?)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
     ON CONFLICT(user_id, source, external_record_id) DO UPDATE SET
       name = excluded.name,
       phones_json = excluded.phones_json,
@@ -356,6 +382,7 @@ export function upsertFromOutlook(userId: string, contacts: OutlookContactInput[
         JSON.stringify(contact.phones || []),
         JSON.stringify(contact.emails || []),
         contact.company || null,
+        source,
         contact.external_record_id,
         now,
       ]);
@@ -363,9 +390,19 @@ export function upsertFromOutlook(userId: string, contacts: OutlookContactInput[
     }
   });
 
-  logService.info(`Upserted ${count} external contacts from Outlook`, 'ExternalContactDbService', { userId });
+  logService.info(`Upserted ${count} external contacts from ${source}`, 'ExternalContactDbService', { userId });
 
   return count;
+}
+
+/**
+ * Upsert contacts from Outlook via Microsoft Graph API (TASK-1921)
+ * Returns count of contacts processed
+ *
+ * TASK-2301: Now delegates to generic upsertExternalContacts with source='outlook'
+ */
+export function upsertFromOutlook(userId: string, contacts: OutlookContactInput[]): number {
+  return upsertExternalContacts(userId, 'outlook', contacts);
 }
 
 /**
@@ -401,6 +438,82 @@ export function syncOutlookContacts(userId: string, outlookContacts: OutlookCont
   });
 
   return result;
+}
+
+/**
+ * Full sync from Google contacts via People API (TASK-2301)
+ * - Upserts all contacts from Google with source='google_contacts'
+ * - Deletes Google contacts that no longer exist (only source='google_contacts')
+ * - Updates last_message_at from phone_last_message lookup
+ *
+ * CRITICAL: Does NOT touch macos/iphone/outlook contacts -- only manages 'google_contacts' source
+ */
+export function syncGoogleContacts(userId: string, googleContacts: ExternalContactInput[]): SyncResult {
+  const syncStartTime = new Date().toISOString();
+
+  // Step 1: Upsert all Google contacts with correct source
+  const upsertCount = upsertExternalContacts(userId, 'google_contacts', googleContacts);
+
+  // Step 2: Delete stale Google contacts only (synced_at < syncStartTime, source='google_contacts')
+  const deleteCount = deleteStaleContactsBySource(userId, 'google_contacts', syncStartTime);
+
+  // Step 3: Update last_message_at from phone_last_message lookup table
+  updateLastMessageAtFromLookupTable(userId);
+
+  const result: SyncResult = {
+    inserted: upsertCount,
+    updated: 0,
+    deleted: deleteCount,
+    total: getCount(userId),
+  };
+
+  logService.info('Google contacts sync complete', 'ExternalContactDbService', {
+    userId,
+    ...result,
+  });
+
+  return result;
+}
+
+/**
+ * Generic sync for any contact source (TASK-2301)
+ * Routes to the appropriate source-specific sync function.
+ *
+ * This is the preferred entry point for the contactSyncService
+ * to ensure each source uses the correct sync pipeline.
+ */
+export function syncContactsBySource(
+  userId: string,
+  source: ExternalContactSource,
+  contacts: ExternalContactInput[],
+): SyncResult {
+  switch (source) {
+    case 'outlook':
+      return syncOutlookContacts(userId, contacts);
+    case 'google_contacts':
+      return syncGoogleContacts(userId, contacts);
+    default: {
+      // For other sources, use generic upsert + stale deletion
+      const syncStartTime = new Date().toISOString();
+      const upsertCount = upsertExternalContacts(userId, source, contacts);
+      const deleteCount = deleteStaleContactsBySource(userId, source, syncStartTime);
+      updateLastMessageAtFromLookupTable(userId);
+
+      const result: SyncResult = {
+        inserted: upsertCount,
+        updated: 0,
+        deleted: deleteCount,
+        total: getCount(userId),
+      };
+
+      logService.info(`${source} contacts sync complete`, 'ExternalContactDbService', {
+        userId,
+        ...result,
+      });
+
+      return result;
+    }
+  }
 }
 
 /**
@@ -481,7 +594,7 @@ export function deleteStaleContacts(userId: string, currentSyncTime: string): nu
  * Delete stale contacts by source that were not updated in the current sync
  * Used during full sync to remove contacts that no longer exist in source system
  */
-export function deleteStaleContactsBySource(userId: string, source: 'macos' | 'iphone' | 'outlook', currentSyncTime: string): number {
+export function deleteStaleContactsBySource(userId: string, source: ExternalContactSource, currentSyncTime: string): number {
   const result = dbRun(
     `DELETE FROM external_contacts WHERE user_id = ? AND source = ? AND synced_at < ?`,
     [userId, source, currentSyncTime]
@@ -601,7 +714,7 @@ export function search(userId: string, query: string, limit: number = 50): Exter
     company: row.company,
     last_message_at: row.last_message_at,
     external_record_id: row.external_record_id,
-    source: row.source as 'macos' | 'iphone' | 'outlook',
+    source: row.source as ExternalContactSource,
     synced_at: row.synced_at,
   }));
 }
