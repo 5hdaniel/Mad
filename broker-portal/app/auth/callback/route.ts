@@ -4,7 +4,7 @@
  * Handles the OAuth redirect from Supabase Auth:
  * 1. Exchanges authorization code for session
  * 2. Verifies user has broker/admin/it_admin role
- * 3. JIT-joins Azure AD / Google Workspace users to their tenant's existing org
+ * 3. JIT-joins users to their existing org (Azure AD by tenant, Google by domain)
  * 4. Redirects to dashboard or login with error
  */
 
@@ -134,36 +134,21 @@ export async function GET(request: Request) {
         }
       }
 
-      // No membership and no pending invite - attempt JIT provisioning
+      // No membership and no pending invite - check if user can JIT-join an existing org
       // Supports Azure AD (by tenant ID) and Google Workspace (by hosted domain)
       const provider = user.app_metadata?.provider;
 
-      // --- Azure AD JIT ---
+      let jitProviderType: string | null = null;
+      let jitIdentifier: string | null = null;
+
       if (provider === 'azure') {
         const customClaims = user.user_metadata?.custom_claims as { tid?: string } | undefined;
         const tenantId = customClaims?.tid;
         if (tenantId) {
-          const { data: jitResult, error: jitError } = await supabase.rpc('jit_join_organization', {
-            p_provider_type: 'azure_ad',
-            p_identifier: tenantId,
-          });
-          if (jitResult?.success) {
-            if (process.env.NODE_ENV === 'development') {
-              console.log(`JIT joined org ${jitResult.organization_id} with role ${jitResult.role}`);
-            }
-            return NextResponse.redirect(`${origin}${next}`);
-          }
-          // JIT failure is non-fatal — user falls through to "not authorized"
-          if (jitError) {
-            console.error('Azure AD JIT join RPC error:', jitError);
-          } else if (process.env.NODE_ENV === 'development' && jitResult?.error) {
-            console.log(`Azure AD JIT not applicable: ${jitResult.error}`);
-          }
+          jitProviderType = 'azure_ad';
+          jitIdentifier = tenantId;
         }
-      }
-
-      // --- Google Workspace JIT ---
-      if (provider === 'google') {
+      } else if (provider === 'google') {
         // Only Google Workspace accounts with a corporate "hd" (hosted domain) claim
         // can JIT-join. Consumer Gmail accounts are excluded:
         //   - No hd claim        -> consumer Gmail (personal @gmail.com)
@@ -177,23 +162,29 @@ export async function GET(request: Request) {
           : undefined;
 
         if (workspaceDomain) {
-          const { data: jitResult, error: jitError } = await supabase.rpc('jit_join_organization', {
-            p_provider_type: 'google_workspace',
-            p_identifier: workspaceDomain,
-          });
-          if (jitResult?.success) {
-            if (process.env.NODE_ENV === 'development') {
-              console.log(`JIT joined org ${jitResult.organization_id} with role ${jitResult.role}`);
-            }
-            return NextResponse.redirect(`${origin}${next}`);
-          }
-          // JIT failure is non-fatal — user falls through to "not authorized"
-          if (jitError) {
-            console.error('Google Workspace JIT join RPC error:', jitError);
-          } else if (process.env.NODE_ENV === 'development' && jitResult?.error) {
-            console.log(`Google Workspace JIT not applicable: ${jitResult.error}`);
-          }
+          jitProviderType = 'google_workspace';
+          jitIdentifier = workspaceDomain;
         }
+      }
+
+      if (jitProviderType && jitIdentifier) {
+        const { data: jitResult, error: jitError } = await supabase.rpc('jit_join_organization', {
+          p_provider_type: jitProviderType,
+          p_identifier: jitIdentifier,
+        });
+        if (jitResult?.success) {
+          if (process.env.NODE_ENV === 'development') {
+            console.log(`JIT joined org ${jitResult.organization_id} with role ${jitResult.role}`);
+          }
+          return NextResponse.redirect(`${origin}${next}`);
+        }
+        if (jitError) {
+          console.error('JIT join RPC failed:', jitError);
+        }
+        // Determine appropriate error for user
+        const jitErrorCode = jitResult?.error === 'jit_disabled' ? 'jit_disabled' : 'org_not_setup';
+        await supabase.auth.signOut();
+        return NextResponse.redirect(`${origin}/login?error=${jitErrorCode}`);
       }
 
       // User not authorized - sign them out
