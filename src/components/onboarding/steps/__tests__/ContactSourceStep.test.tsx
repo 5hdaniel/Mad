@@ -184,7 +184,7 @@ describe("ContactSourceStep", () => {
       expect(screen.queryByText("iPhone Contacts")).not.toBeInTheDocument();
     });
 
-    it("renders Google Contacts as coming soon for Google auth users", () => {
+    it("renders Google Contacts as selectable for Google auth users (TASK-2303)", () => {
       (usePlatform as jest.Mock).mockReturnValue({ isMacOS: false });
 
       render(
@@ -195,7 +195,8 @@ describe("ContactSourceStep", () => {
       );
 
       expect(screen.getByText("Google Contacts")).toBeInTheDocument();
-      expect(screen.getByText("Coming Soon")).toBeInTheDocument();
+      // TASK-2303: Google Contacts is no longer "Coming Soon" — it's a selectable source
+      expect(screen.queryByText("Coming Soon")).not.toBeInTheDocument();
     });
 
     it("does not render Google Contacts for Microsoft auth users", () => {

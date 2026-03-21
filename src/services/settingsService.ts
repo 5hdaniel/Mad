@@ -39,6 +39,7 @@ export interface AuditPreferences {
 export interface ContactSourceDirectPreferences {
   macosContacts?: boolean;
   outlookContacts?: boolean;
+  googleContacts?: boolean;
 }
 
 /**

@@ -30,6 +30,8 @@ interface ContactsImportSettingsProps {
   outlookContactsEnabled: boolean;
   macosContactsEnabled: boolean;
   gmailContactsEnabled: boolean;
+  /** TASK-2303: Google Contacts toggle (People API) */
+  googleContactsEnabled: boolean;
   outlookEmailsInferred: boolean;
   gmailEmailsInferred: boolean;
   messagesInferred: boolean;
@@ -49,6 +51,7 @@ export function ContactsImportSettings({
   outlookContactsEnabled,
   macosContactsEnabled,
   gmailContactsEnabled,
+  googleContactsEnabled,
   outlookEmailsInferred,
   gmailEmailsInferred,
   messagesInferred,
@@ -86,6 +89,15 @@ export function ContactsImportSettings({
   const [outlookSyncing, setOutlookSyncing] = useState(false);
   const [outlookReconnectRequired, setOutlookReconnectRequired] = useState(false);
   const [outlookLastResult, setOutlookLastResult] = useState<{
+    success: boolean;
+    count?: number;
+    error?: string;
+  } | null>(null);
+
+  // TASK-2303: Google Contacts-specific state
+  const [googleSyncing, setGoogleSyncing] = useState(false);
+  const [googleReconnectRequired, setGoogleReconnectRequired] = useState(false);
+  const [googleLastResult, setGoogleLastResult] = useState<{
     success: boolean;
     count?: number;
     error?: string;
@@ -176,6 +188,36 @@ export function ContactsImportSettings({
     }
   }, [userId, outlookSyncing, isSyncing, isOtherSyncRunning, isOnline]);
 
+  // TASK-2303: Google contacts sync handler (mirrors Outlook pattern)
+  const handleGoogleSync = useCallback(async () => {
+    if (!userId || googleSyncing || isSyncing || isOtherSyncRunning || !isOnline) return;
+
+    setGoogleSyncing(true);
+    setGoogleLastResult(null);
+    setGoogleReconnectRequired(false);
+
+    try {
+      const result = await window.api.contacts.syncGoogleContacts(userId);
+
+      if (result.success) {
+        setGoogleLastResult({ success: true, count: result.count });
+        loadSourceStats();
+      } else if (result.reconnectRequired) {
+        setGoogleReconnectRequired(true);
+        setGoogleLastResult(null);
+      } else {
+        setGoogleLastResult({ success: false, error: result.error });
+      }
+    } catch (error) {
+      setGoogleLastResult({
+        success: false,
+        error: error instanceof Error ? error.message : "Google contacts sync failed",
+      });
+    } finally {
+      setGoogleSyncing(false);
+    }
+  }, [userId, googleSyncing, isSyncing, isOtherSyncRunning, isOnline]);
+
   // Format the last sync time for display
   const formatLastSync = (lastSyncAt: string | null | undefined): string => {
     if (!lastSyncAt) return "Never synced";
@@ -196,7 +238,8 @@ export function ContactsImportSettings({
 
   const hasMacOS = isMacOS;
   const hasOutlook = isMicrosoftConnected;
-  const hasAnySources = hasMacOS || hasOutlook;
+  const hasGoogle = isGoogleConnected;
+  const hasAnySources = hasMacOS || hasOutlook || hasGoogle;
 
   // Render nothing useful if no sources are available
   if (!hasAnySources) {
@@ -219,13 +262,13 @@ export function ContactsImportSettings({
           <h4 className="text-sm font-medium text-gray-900">Contacts</h4>
         </div>
         <p className="text-xs text-gray-500">
-          Connect a Microsoft account or use macOS to import contacts.
+          Connect a Microsoft or Google account, or use macOS to import contacts.
         </p>
       </div>
     );
   }
 
-  const anySyncing = isSyncing || outlookSyncing;
+  const anySyncing = isSyncing || outlookSyncing || googleSyncing;
 
   // Unified import: triggers only user-selected sources
   // Fire-and-forget by design — each sync has its own loading/error state
@@ -237,7 +280,8 @@ export function ContactsImportSettings({
       window.api.contacts.syncExternal(userId).then(() => loadSourceStats());
     }
     if (hasOutlook && outlookContactsEnabled) handleOutlookSync();
-  }, [anySyncing, isOtherSyncRunning, hasMacOS, hasOutlook, macosContactsEnabled, outlookContactsEnabled, handleSync, handleOutlookSync, userId]);
+    if (hasGoogle && googleContactsEnabled) handleGoogleSync();
+  }, [anySyncing, isOtherSyncRunning, hasMacOS, hasOutlook, hasGoogle, macosContactsEnabled, outlookContactsEnabled, googleContactsEnabled, handleSync, handleOutlookSync, handleGoogleSync, userId]);
 
   // Force re-import: TASK-2150 -- route through orchestrator with forceReimport option.
   // The contacts sync function handles the wipe + re-sync flow internally.
@@ -258,7 +302,7 @@ export function ContactsImportSettings({
 
   const [showInfoTooltip, setShowInfoTooltip] = useState(false);
 
-  const noSourcesSelected = (!hasMacOS || !macosContactsEnabled) && (!hasOutlook || !outlookContactsEnabled);
+  const noSourcesSelected = (!hasMacOS || !macosContactsEnabled) && (!hasOutlook || !outlookContactsEnabled) && (!hasGoogle || !googleContactsEnabled);
 
   return (
     <div className="p-4 bg-gray-50 rounded-lg border border-gray-200">
@@ -315,22 +359,27 @@ export function ContactsImportSettings({
             </button>
           </div>
 
-          {/* Gmail Contacts toggle - Coming soon */}
-          <div className="flex items-center justify-between py-1 opacity-50">
+          {/* TASK-2303: Google Contacts toggle */}
+          <div className="flex items-center justify-between py-1">
             <div className="flex items-center gap-2">
-              <span className="text-sm text-gray-700">Gmail Contacts</span>
-              <span className="text-xs text-gray-400">Coming soon</span>
+              <span className="text-sm text-gray-700">Google Contacts</span>
+              {!isGoogleConnected && (
+                <span className="text-xs text-gray-400">(not connected)</span>
+              )}
             </div>
             <button
-              disabled
-              className="ml-4 relative inline-flex h-6 w-11 items-center rounded-full bg-gray-300 cursor-not-allowed"
+              onClick={() => onToggleSource("direct", "googleContacts", googleContactsEnabled)}
+              disabled={loadingPreferences || !isGoogleConnected}
+              className={`ml-4 relative inline-flex h-6 w-11 items-center rounded-full transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${
+                googleContactsEnabled ? "bg-blue-500" : "bg-gray-300"
+              }`}
               role="switch"
-              aria-checked={gmailContactsEnabled}
-              aria-label="Gmail Contacts import"
+              aria-checked={googleContactsEnabled}
+              aria-label="Google Contacts import"
             >
               <span
                 className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
-                  gmailContactsEnabled ? "translate-x-6" : "translate-x-1"
+                  googleContactsEnabled ? "translate-x-6" : "translate-x-1"
                 }`}
               />
             </button>
@@ -495,6 +544,18 @@ export function ContactsImportSettings({
             <div className={`text-xs ${outlookContactsEnabled ? "text-indigo-600" : "text-gray-400"}`}>Outlook</div>
           </div>
         )}
+        {isGoogleConnected && (
+          <div className={`p-2 rounded border ${
+            googleContactsEnabled
+              ? "bg-green-50 border-green-200"
+              : "bg-gray-50 border-gray-200 opacity-50"
+          }`}>
+            <div className={`text-lg font-semibold ${googleContactsEnabled ? "text-green-700" : "text-gray-400"}`}>
+              {sourceStats?.google_contacts?.toLocaleString() ?? "—"}
+            </div>
+            <div className={`text-xs ${googleContactsEnabled ? "text-green-600" : "text-gray-400"}`}>Google</div>
+          </div>
+        )}
       </div>
 
       {/* Offline warning for Outlook contacts */}
@@ -504,10 +565,24 @@ export function ContactsImportSettings({
         </div>
       )}
 
+      {/* Offline warning for Google contacts */}
+      {!isOnline && hasGoogle && googleContactsEnabled && (
+        <div className="mb-3 p-2 rounded text-xs bg-yellow-50 text-yellow-700 border border-yellow-200">
+          You are offline. Google contacts sync is unavailable.
+        </div>
+      )}
+
       {/* Reconnect required warning (Outlook) */}
       {outlookReconnectRequired && (
         <div className="mb-3 p-2 rounded text-xs bg-yellow-50 text-yellow-700 border border-yellow-200">
           Please disconnect and reconnect your Microsoft mailbox to grant contact access.
+        </div>
+      )}
+
+      {/* TASK-2303: Reconnect required warning (Google) */}
+      {googleReconnectRequired && (
+        <div className="mb-3 p-2 rounded text-xs bg-yellow-50 text-yellow-700 border border-yellow-200">
+          Please disconnect and reconnect your Google mailbox to grant contacts access. The contacts.readonly scope is required.
         </div>
       )}
 
@@ -580,6 +655,29 @@ export function ContactsImportSettings({
         </div>
       )}
 
+      {/* TASK-2303: Google sync result */}
+      {googleLastResult && !googleSyncing && (
+        <div
+          className={`mb-3 p-2 rounded text-xs ${
+            googleLastResult.success
+              ? "bg-green-50 text-green-700 border border-green-200"
+              : "bg-red-50 text-red-700 border border-red-200"
+          }`}
+        >
+          {googleLastResult.success ? (
+            <>
+              Google contacts synced.{" "}
+              {googleLastResult.count !== undefined && (
+                <strong>{googleLastResult.count.toLocaleString()}</strong>
+              )}{" "}
+              contacts imported.
+            </>
+          ) : (
+            <>Google sync failed: {googleLastResult.error}</>
+          )}
+        </div>
+      )}
+
       {/* Action buttons */}
       <div className="flex gap-2 items-center">
         <button
@@ -635,6 +733,12 @@ export function ContactsImportSettings({
         <div className="mt-3 flex items-center gap-2 text-sm text-gray-500">
           <div className="w-4 h-4 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin" />
           Syncing contacts from Outlook...
+        </div>
+      )}
+      {googleSyncing && (
+        <div className="mt-3 flex items-center gap-2 text-sm text-gray-500">
+          <div className="w-4 h-4 border-2 border-green-500 border-t-transparent rounded-full animate-spin" />
+          Syncing contacts from Google...
         </div>
       )}
     </div>

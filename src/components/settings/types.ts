@@ -43,6 +43,7 @@ export interface PreferencesResult {
       direct?: {
         outlookContacts?: boolean;
         gmailContacts?: boolean;
+        googleContacts?: boolean;
         macosContacts?: boolean;
       };
       inferred?: {
@@ -70,6 +71,7 @@ export interface ConnectionResult {
 // TASK-2058: Human-readable labels for failure log operations
 export const OPERATION_LABELS: Record<string, string> = {
   outlook_contacts_sync: "Outlook Contacts Sync",
+  google_contacts_sync: "Google Contacts Sync",
   gmail_email_fetch: "Gmail Email Fetch",
   outlook_email_fetch: "Outlook Email Fetch",
   preferences_sync: "Preferences Sync",

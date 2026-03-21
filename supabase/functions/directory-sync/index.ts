@@ -18,6 +18,11 @@
  *   6. Suspend removed members (license_status = 'suspended')
  *   7. Update directory_sync_last_at / directory_sync_error
  *
+ * Authentication:
+ *   - Requires Authorization header with Bearer token matching the
+ *     SUPABASE_SERVICE_ROLE_KEY. This restricts invocation to internal
+ *     callers (cron jobs, admin scripts) that possess the service role key.
+ *
  * Design decisions:
  *   - One org at a time to limit blast radius
  *   - Idempotent: running twice produces the same result
@@ -42,7 +47,19 @@ interface IdpConfig {
   organization_id: string;
   provider_type: string;
   client_id: string | null;
+  /**
+   * KNOWN LIMITATION: Despite the "_encrypted" suffix, this column currently
+   * stores plaintext. The column name is intentionally future-proofed for when
+   * a KMS (Key Management Service) integration is added to provide actual
+   * at-rest encryption. Do NOT assume this value is encrypted when reading it.
+   */
   client_secret_encrypted: string | null;
+  /**
+   * KNOWN LIMITATION: Despite the "_encrypted" suffix, this column currently
+   * stores the raw Google service account JSON key in plaintext. Same rationale
+   * as client_secret_encrypted -- the name is future-proofed for KMS
+   * integration. Do NOT assume this value is encrypted when reading it.
+   */
   service_account_key_encrypted: string | null;
   issuer_url: string | null;
   is_active: boolean;
@@ -499,10 +516,12 @@ async function fetchProviderUsers(
       throw new Error("Azure AD IdP missing tenant ID");
     }
 
+    // NOTE: client_secret_encrypted is currently plaintext (no KMS yet).
+    // When KMS is integrated, decrypt here before passing to the Azure API.
     const accessToken = await getAzureAccessToken(
       tenantId,
       idp.client_id,
-      idp.client_secret_encrypted, // In production, this would be decrypted
+      idp.client_secret_encrypted,
     );
 
     return await fetchAzureUsers(accessToken);
@@ -520,7 +539,9 @@ async function fetchProviderUsers(
       throw new Error("Organization missing google_workspace_domain");
     }
 
-    // Parse the service account key JSON
+    // Parse the service account key JSON.
+    // NOTE: service_account_key_encrypted is currently plaintext (no KMS yet).
+    // When KMS is integrated, decrypt here before parsing.
     let serviceAccountKey: Record<string, string>;
     try {
       serviceAccountKey = JSON.parse(idp.service_account_key_encrypted);
@@ -997,6 +1018,33 @@ Deno.serve(async (req: Request) => {
         JSON.stringify({ error: "Server configuration error" }),
         {
           status: 500,
+          headers: { ...CORS_HEADERS, "Content-Type": "application/json" },
+        },
+      );
+    }
+
+    // -----------------------------------------------------------------------
+    // Authentication: verify the caller has the service role key.
+    // This function is internal -- invoked by cron jobs or admin scripts,
+    // not by end users. The service role key acts as a shared secret.
+    // -----------------------------------------------------------------------
+    const authHeader = req.headers.get("Authorization");
+    if (!authHeader?.startsWith("Bearer ")) {
+      return new Response(
+        JSON.stringify({ error: "Missing or invalid Authorization header" }),
+        {
+          status: 401,
+          headers: { ...CORS_HEADERS, "Content-Type": "application/json" },
+        },
+      );
+    }
+
+    const bearerToken = authHeader.substring(7);
+    if (bearerToken !== supabaseServiceKey) {
+      return new Response(
+        JSON.stringify({ error: "Unauthorized" }),
+        {
+          status: 403,
           headers: { ...CORS_HEADERS, "Content-Type": "application/json" },
         },
       );

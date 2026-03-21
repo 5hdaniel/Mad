@@ -135,7 +135,7 @@ export async function GET(request: Request) {
       }
 
       // No membership and no pending invite - check if user can JIT-join an existing org
-      // Supports Azure AD (by tenant ID) and Google Workspace (by domain)
+      // Supports Azure AD (by tenant ID) and Google Workspace (by hosted domain)
       const provider = user.app_metadata?.provider;
 
       let jitProviderType: string | null = null;
@@ -149,13 +149,21 @@ export async function GET(request: Request) {
           jitIdentifier = tenantId;
         }
       } else if (provider === 'google') {
-        const email = extractEmail(user);
-        if (email) {
-          const domain = email.split('@')[1];
-          if (domain) {
-            jitProviderType = 'google_workspace';
-            jitIdentifier = domain;
-          }
+        // Only Google Workspace accounts with a corporate "hd" (hosted domain) claim
+        // can JIT-join. Consumer Gmail accounts are excluded:
+        //   - No hd claim        -> consumer Gmail (personal @gmail.com)
+        //   - hd = gmail.com     -> consumer with domain display
+        //   - hd = googlemail.com -> consumer alias domain
+        // Only proceed with JIT if hd is present and is a real corporate domain.
+        const hd = user.user_metadata?.hd as string | undefined;
+        const CONSUMER_GMAIL_DOMAINS = ['gmail.com', 'googlemail.com'];
+        const workspaceDomain = hd && !CONSUMER_GMAIL_DOMAINS.includes(hd.toLowerCase())
+          ? hd.toLowerCase()
+          : undefined;
+
+        if (workspaceDomain) {
+          jitProviderType = 'google_workspace';
+          jitIdentifier = workspaceDomain;
         }
       }
 
