@@ -23,6 +23,13 @@ jest.mock('../services/logService', () => ({
 }));
 
 jest.mock('../services/db/externalContactDbService', () => ({
+  syncContactsBySource: jest.fn().mockReturnValue({
+    inserted: 3,
+    updated: 0,
+    deleted: 1,
+    total: 5,
+  }),
+  // Keep syncOutlookContacts mock for backward compat tests
   syncOutlookContacts: jest.fn().mockReturnValue({
     inserted: 3,
     updated: 0,
@@ -197,8 +204,9 @@ describe('ContactSyncService', () => {
       service.registerProvider(provider);
       await service.syncAll(TEST_USER_ID);
 
-      expect(externalContactDb.syncOutlookContacts).toHaveBeenCalledWith(
+      expect(externalContactDb.syncContactsBySource).toHaveBeenCalledWith(
         TEST_USER_ID,
+        'outlook',
         contacts.map((c) => ({
           external_record_id: c.external_record_id,
           name: c.name,
@@ -223,7 +231,7 @@ describe('ContactSyncService', () => {
 
       expect(result.source).toBe('outlook');
       expect(result.success).toBe(true);
-      expect(result.count).toBe(3); // From mock syncOutlookContacts
+      expect(result.count).toBe(3); // From mock syncContactsBySource
       expect(provider.fetchContacts).toHaveBeenCalledWith(TEST_USER_ID);
     });
 
