@@ -1,0 +1,920 @@
+/**
+ * Supabase Edge Function: Directory Sync
+ *
+ * Periodically pulls users from configured identity providers (Azure AD,
+ * Google Workspace) for organizations with directory_sync_enabled = true.
+ *
+ * Invocation:
+ *   POST /functions/v1/directory-sync           -- sync all enabled orgs
+ *   POST /functions/v1/directory-sync?org_id=X  -- sync a single org
+ *
+ * Flow per organization:
+ *   1. Read IdP config from organization_identity_providers
+ *   2. Obtain an access token via client credentials (Azure) or service
+ *      account JWT (Google)
+ *   3. Fetch all users from the provider API (with pagination)
+ *   4. Compare with existing organization_members
+ *   5. Upsert new members (provisioned_by = 'directory_sync')
+ *   6. Suspend removed members (license_status = 'suspended')
+ *   7. Update directory_sync_last_at / directory_sync_error
+ *
+ * Authentication:
+ *   - Requires Authorization header with Bearer token matching the
+ *     SUPABASE_SERVICE_ROLE_KEY. This restricts invocation to internal
+ *     callers (cron jobs, admin scripts) that possess the service role key.
+ *
+ * Design decisions:
+ *   - One org at a time to limit blast radius
+ *   - Idempotent: running twice produces the same result
+ *   - Never deletes members -- only suspends (audit data preservation)
+ *   - Exponential backoff on API rate limits
+ */
+
+import "jsr:@supabase/functions-js/edge-runtime.d.ts";
+import { createClient, SupabaseClient } from "jsr:@supabase/supabase-js@2";
+
+// ---------------------------------------------------------------------------
+// Types
+// ---------------------------------------------------------------------------
+
+interface IdpConfig {
+  id: string;
+  organization_id: string;
+  provider_type: string;
+  client_id: string | null;
+  /**
+   * KNOWN LIMITATION: Despite the "_encrypted" suffix, this column currently
+   * stores plaintext. The column name is intentionally future-proofed for when
+   * a KMS (Key Management Service) integration is added to provide actual
+   * at-rest encryption. Do NOT assume this value is encrypted when reading it.
+   */
+  client_secret_encrypted: string | null;
+  /**
+   * KNOWN LIMITATION: Despite the "_encrypted" suffix, this column currently
+   * stores the raw Google service account JSON key in plaintext. Same rationale
+   * as client_secret_encrypted -- the name is future-proofed for KMS
+   * integration. Do NOT assume this value is encrypted when reading it.
+   */
+  service_account_key_encrypted: string | null;
+  issuer_url: string | null;
+  is_active: boolean;
+}
+
+interface ProviderUser {
+  /** Provider-side unique ID (Azure objectId / Google user id) */
+  externalId: string;
+  email: string;
+  firstName: string | null;
+  lastName: string | null;
+  displayName: string | null;
+}
+
+interface OrgMember {
+  user_id: string;
+  email: string;
+  oauth_id: string | null;
+  scim_external_id: string | null;
+  provisioned_by: string | null;
+  license_status: string | null;
+}
+
+interface SyncResult {
+  orgId: string;
+  added: number;
+  suspended: number;
+  reactivated: number;
+  error: string | null;
+}
+
+// ---------------------------------------------------------------------------
+// Constants
+// ---------------------------------------------------------------------------
+
+const CORS_HEADERS: Record<string, string> = {
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Headers":
+    "authorization, content-type, x-client-info, apikey",
+  "Access-Control-Allow-Methods": "POST, OPTIONS",
+};
+
+/** Maximum retries for rate-limited API requests */
+const MAX_RETRIES = 3;
+
+/** Base delay in ms for exponential backoff */
+const BASE_BACKOFF_MS = 1000;
+
+// ---------------------------------------------------------------------------
+// Azure AD -- Microsoft Graph API
+// ---------------------------------------------------------------------------
+
+/**
+ * Obtain an access token from Azure AD using the client credentials flow.
+ *
+ * POST https://login.microsoftonline.com/{tenantId}/oauth2/v2.0/token
+ */
+async function getAzureAccessToken(
+  tenantId: string,
+  clientId: string,
+  clientSecret: string,
+): Promise<string> {
+  const tokenUrl = `https://login.microsoftonline.com/${tenantId}/oauth2/v2.0/token`;
+
+  const body = new URLSearchParams({
+    grant_type: "client_credentials",
+    client_id: clientId,
+    client_secret: clientSecret,
+    scope: "https://graph.microsoft.com/.default",
+  });
+
+  const resp = await fetch(tokenUrl, {
+    method: "POST",
+    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    body: body.toString(),
+  });
+
+  if (!resp.ok) {
+    const text = await resp.text();
+    throw new Error(`Azure token request failed (${resp.status}): ${text}`);
+  }
+
+  const data = await resp.json();
+  return data.access_token as string;
+}
+
+/**
+ * Fetch all users from Azure AD via the Microsoft Graph API.
+ * Handles pagination via @odata.nextLink.
+ */
+async function fetchAzureUsers(accessToken: string): Promise<ProviderUser[]> {
+  const users: ProviderUser[] = [];
+  let url: string | null =
+    "https://graph.microsoft.com/v1.0/users?$select=id,displayName,givenName,surname,mail,userPrincipalName&$top=999";
+
+  while (url) {
+    const resp = await fetchWithBackoff(url, {
+      headers: { Authorization: `Bearer ${accessToken}` },
+    });
+
+    if (!resp.ok) {
+      const text = await resp.text();
+      throw new Error(`Azure Graph API error (${resp.status}): ${text}`);
+    }
+
+    const data = await resp.json();
+    const value = data.value as Array<Record<string, string>>;
+
+    for (const u of value) {
+      const email = (u.mail || u.userPrincipalName || "").toLowerCase();
+      if (!email || email.includes("#EXT#")) continue; // Skip external/guest users
+
+      users.push({
+        externalId: u.id,
+        email,
+        firstName: u.givenName || null,
+        lastName: u.surname || null,
+        displayName: u.displayName || null,
+      });
+    }
+
+    url = (data["@odata.nextLink"] as string) || null;
+  }
+
+  return users;
+}
+
+// ---------------------------------------------------------------------------
+// Google Workspace -- Admin SDK
+// ---------------------------------------------------------------------------
+
+/**
+ * Create a signed JWT for Google service account authentication.
+ * Uses the RS256 algorithm with the Web Crypto API.
+ */
+async function createServiceAccountJwt(
+  serviceAccountEmail: string,
+  privateKey: string,
+  scopes: string[],
+  subject?: string,
+): Promise<string> {
+  const now = Math.floor(Date.now() / 1000);
+  const header = { alg: "RS256", typ: "JWT" };
+  const payload: Record<string, unknown> = {
+    iss: serviceAccountEmail,
+    scope: scopes.join(" "),
+    aud: "https://oauth2.googleapis.com/token",
+    iat: now,
+    exp: now + 3600,
+  };
+  if (subject) {
+    payload.sub = subject;
+  }
+
+  const encoder = new TextEncoder();
+
+  const headerB64 = base64urlEncode(encoder.encode(JSON.stringify(header)));
+  const payloadB64 = base64urlEncode(encoder.encode(JSON.stringify(payload)));
+  const signingInput = `${headerB64}.${payloadB64}`;
+
+  // Import the private key
+  const key = await importPkcs8Key(privateKey);
+
+  // Sign
+  const signature = await crypto.subtle.sign(
+    { name: "RSASSA-PKCS1-v1_5", hash: "SHA-256" },
+    key,
+    encoder.encode(signingInput),
+  );
+
+  const signatureB64 = base64urlEncode(new Uint8Array(signature));
+  return `${signingInput}.${signatureB64}`;
+}
+
+/** Import a PKCS8 PEM private key for signing. */
+async function importPkcs8Key(pem: string): Promise<CryptoKey> {
+  // Strip PEM headers and whitespace
+  const pemBody = pem
+    .replace(/-----BEGIN PRIVATE KEY-----/g, "")
+    .replace(/-----END PRIVATE KEY-----/g, "")
+    .replace(/\s/g, "");
+
+  const binaryStr = atob(pemBody);
+  const bytes = new Uint8Array(binaryStr.length);
+  for (let i = 0; i < binaryStr.length; i++) {
+    bytes[i] = binaryStr.charCodeAt(i);
+  }
+
+  return await crypto.subtle.importKey(
+    "pkcs8",
+    bytes.buffer,
+    { name: "RSASSA-PKCS1-v1_5", hash: "SHA-256" },
+    false,
+    ["sign"],
+  );
+}
+
+/** Base64url encode (no padding). */
+function base64urlEncode(data: Uint8Array): string {
+  let binary = "";
+  for (let i = 0; i < data.length; i++) {
+    binary += String.fromCharCode(data[i]);
+  }
+  return btoa(binary).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+}
+
+/**
+ * Exchange a service account JWT for an access token.
+ */
+async function getGoogleAccessToken(jwt: string): Promise<string> {
+  const resp = await fetch("https://oauth2.googleapis.com/token", {
+    method: "POST",
+    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    body: new URLSearchParams({
+      grant_type: "urn:ietf:params:oauth:grant-type:jwt-bearer",
+      assertion: jwt,
+    }).toString(),
+  });
+
+  if (!resp.ok) {
+    const text = await resp.text();
+    throw new Error(`Google token request failed (${resp.status}): ${text}`);
+  }
+
+  const data = await resp.json();
+  return data.access_token as string;
+}
+
+/**
+ * Fetch all users from Google Workspace via the Admin SDK.
+ * Handles pagination via nextPageToken.
+ */
+async function fetchGoogleUsers(
+  accessToken: string,
+  domain: string,
+): Promise<ProviderUser[]> {
+  const users: ProviderUser[] = [];
+  let pageToken: string | null = null;
+
+  do {
+    let url = `https://admin.googleapis.com/admin/directory/v1/users?domain=${encodeURIComponent(domain)}&maxResults=500&projection=basic`;
+    if (pageToken) {
+      url += `&pageToken=${encodeURIComponent(pageToken)}`;
+    }
+
+    const resp = await fetchWithBackoff(url, {
+      headers: { Authorization: `Bearer ${accessToken}` },
+    });
+
+    if (!resp.ok) {
+      const text = await resp.text();
+      throw new Error(`Google Admin SDK error (${resp.status}): ${text}`);
+    }
+
+    const data = await resp.json();
+    const googleUsers = (data.users || []) as Array<Record<string, unknown>>;
+
+    for (const u of googleUsers) {
+      const email = ((u.primaryEmail as string) || "").toLowerCase();
+      if (!email) continue;
+      // Skip suspended users in Google -- they should not be provisioned
+      if (u.suspended === true) continue;
+
+      const name = u.name as Record<string, string> | undefined;
+      users.push({
+        externalId: u.id as string,
+        email,
+        firstName: name?.givenName || null,
+        lastName: name?.familyName || null,
+        displayName: name?.fullName || null,
+      });
+    }
+
+    pageToken = (data.nextPageToken as string) || null;
+  } while (pageToken);
+
+  return users;
+}
+
+// ---------------------------------------------------------------------------
+// HTTP Helpers
+// ---------------------------------------------------------------------------
+
+/**
+ * Fetch with exponential backoff for rate limit (429) responses.
+ */
+async function fetchWithBackoff(
+  url: string,
+  init: RequestInit,
+): Promise<Response> {
+  for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
+    const resp = await fetch(url, init);
+
+    if (resp.status === 429 && attempt < MAX_RETRIES) {
+      const retryAfter = resp.headers.get("Retry-After");
+      const delayMs = retryAfter
+        ? parseInt(retryAfter, 10) * 1000
+        : BASE_BACKOFF_MS * Math.pow(2, attempt);
+      console.warn(
+        `Rate limited on ${url}, retrying in ${delayMs}ms (attempt ${attempt + 1}/${MAX_RETRIES})`,
+      );
+      await sleep(delayMs);
+      continue;
+    }
+
+    return resp;
+  }
+
+  // Should not reach here, but TypeScript needs a return
+  return await fetch(url, init);
+}
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+// ---------------------------------------------------------------------------
+// Sync Logic
+// ---------------------------------------------------------------------------
+
+/**
+ * Fetch users from the appropriate provider based on IdP type.
+ */
+async function fetchProviderUsers(
+  idp: IdpConfig,
+  org: Record<string, unknown>,
+): Promise<ProviderUser[]> {
+  if (idp.provider_type === "azure_ad") {
+    if (!idp.client_id || !idp.client_secret_encrypted) {
+      throw new Error("Azure AD IdP missing client_id or client_secret");
+    }
+
+    // Extract tenant ID from issuer_url or use the org's microsoft_tenant_id
+    let tenantId = org.microsoft_tenant_id as string | null;
+    if (!tenantId && idp.issuer_url) {
+      // issuer_url is typically https://login.microsoftonline.com/{tenantId}/v2.0
+      const match = idp.issuer_url.match(
+        /login\.microsoftonline\.com\/([^/]+)/,
+      );
+      tenantId = match?.[1] || null;
+    }
+    if (!tenantId) {
+      throw new Error("Azure AD IdP missing tenant ID");
+    }
+
+    // NOTE: client_secret_encrypted is currently plaintext (no KMS yet).
+    // When KMS is integrated, decrypt here before passing to the Azure API.
+    const accessToken = await getAzureAccessToken(
+      tenantId,
+      idp.client_id,
+      idp.client_secret_encrypted,
+    );
+
+    return await fetchAzureUsers(accessToken);
+  }
+
+  if (idp.provider_type === "google_workspace") {
+    if (!idp.service_account_key_encrypted) {
+      throw new Error(
+        "Google Workspace IdP missing service_account_key",
+      );
+    }
+
+    const domain = org.google_workspace_domain as string | null;
+    if (!domain) {
+      throw new Error("Organization missing google_workspace_domain");
+    }
+
+    // Parse the service account key JSON.
+    // NOTE: service_account_key_encrypted is currently plaintext (no KMS yet).
+    // When KMS is integrated, decrypt here before parsing.
+    let serviceAccountKey: Record<string, string>;
+    try {
+      serviceAccountKey = JSON.parse(idp.service_account_key_encrypted);
+    } catch {
+      throw new Error("Invalid service account key JSON");
+    }
+
+    const serviceAccountEmail = serviceAccountKey.client_email;
+    const privateKey = serviceAccountKey.private_key;
+
+    if (!serviceAccountEmail || !privateKey) {
+      throw new Error(
+        "Service account key missing client_email or private_key",
+      );
+    }
+
+    // Create JWT with domain-wide delegation (sub = admin email)
+    // The admin email should be an admin of the Google Workspace domain
+    // For directory sync, we need to impersonate an admin
+    const adminEmail = (org.directory_sync_admin_email as string) || serviceAccountEmail;
+
+    const jwt = await createServiceAccountJwt(
+      serviceAccountEmail,
+      privateKey,
+      ["https://www.googleapis.com/auth/admin.directory.user.readonly"],
+      adminEmail !== serviceAccountEmail ? adminEmail : undefined,
+    );
+
+    const accessToken = await getGoogleAccessToken(jwt);
+    return await fetchGoogleUsers(accessToken, domain);
+  }
+
+  throw new Error(`Unsupported provider type: ${idp.provider_type}`);
+}
+
+/**
+ * Sync a single organization's directory.
+ *
+ * Steps:
+ *   1. Fetch current members from organization_members + users
+ *   2. Fetch users from the identity provider
+ *   3. Diff: find users to add and members to suspend
+ *   4. Provision new members
+ *   5. Suspend removed members
+ *   6. Reactivate previously-suspended members who reappear
+ *   7. Update sync timestamp
+ */
+async function syncOrganization(
+  supabaseAdmin: SupabaseClient,
+  orgId: string,
+  org: Record<string, unknown>,
+  idp: IdpConfig,
+): Promise<SyncResult> {
+  const result: SyncResult = {
+    orgId,
+    added: 0,
+    suspended: 0,
+    reactivated: 0,
+    error: null,
+  };
+
+  try {
+    // 1. Fetch provider users
+    const providerUsers = await fetchProviderUsers(idp, org);
+    console.log(
+      `[directory-sync] Org ${orgId}: fetched ${providerUsers.length} users from ${idp.provider_type}`,
+    );
+
+    // 2. Get current org members with user details
+    const { data: members, error: membersError } = await supabaseAdmin
+      .from("organization_members")
+      .select("user_id, provisioned_by, license_status")
+      .eq("organization_id", orgId);
+
+    if (membersError) {
+      throw new Error(`Failed to fetch org members: ${membersError.message}`);
+    }
+
+    const memberUserIds = (members || [])
+      .map((m: Record<string, unknown>) => m.user_id as string)
+      .filter(Boolean);
+
+    // Fetch user details for existing members
+    let existingUsers: OrgMember[] = [];
+    if (memberUserIds.length > 0) {
+      const { data: users } = await supabaseAdmin
+        .from("users")
+        .select("id, email, oauth_id, scim_external_id")
+        .in("id", memberUserIds);
+
+      existingUsers = (users || []).map((u: Record<string, unknown>) => {
+        const member = (members || []).find(
+          (m: Record<string, unknown>) => m.user_id === u.id,
+        );
+        return {
+          user_id: u.id as string,
+          email: (u.email as string || "").toLowerCase(),
+          oauth_id: u.oauth_id as string | null,
+          scim_external_id: u.scim_external_id as string | null,
+          provisioned_by: member?.provisioned_by as string | null,
+          license_status: member?.license_status as string | null,
+        };
+      });
+    }
+
+    // 3. Build lookup maps for efficient diffing
+    const existingByEmail = new Map<string, OrgMember>();
+    const existingByExternalId = new Map<string, OrgMember>();
+    for (const member of existingUsers) {
+      existingByEmail.set(member.email, member);
+      if (member.oauth_id) {
+        existingByExternalId.set(member.oauth_id, member);
+      }
+      if (member.scim_external_id) {
+        existingByExternalId.set(member.scim_external_id, member);
+      }
+    }
+
+    // Track which existing members are still in the provider directory
+    const seenMemberIds = new Set<string>();
+
+    // Get org's default role
+    const defaultRole = (org.default_member_role as string) || "agent";
+
+    // 4. Process provider users: add new, reactivate returned
+    for (const providerUser of providerUsers) {
+      // Try to match by external ID first, then by email
+      let existingMember =
+        existingByExternalId.get(providerUser.externalId) ||
+        existingByEmail.get(providerUser.email);
+
+      if (existingMember) {
+        seenMemberIds.add(existingMember.user_id);
+
+        // If member was suspended (by directory_sync), reactivate
+        if (
+          existingMember.license_status === "suspended" &&
+          existingMember.provisioned_by === "directory_sync"
+        ) {
+          await supabaseAdmin
+            .from("organization_members")
+            .update({
+              license_status: "active",
+              scim_synced_at: new Date().toISOString(),
+            })
+            .eq("organization_id", orgId)
+            .eq("user_id", existingMember.user_id);
+
+          // Clear suspension on user record
+          await supabaseAdmin
+            .from("users")
+            .update({
+              suspended_at: null,
+              suspension_reason: null,
+              updated_at: new Date().toISOString(),
+            })
+            .eq("id", existingMember.user_id);
+
+          result.reactivated++;
+        }
+
+        // Update external ID / sync timestamp on user record
+        await supabaseAdmin
+          .from("users")
+          .update({
+            oauth_id: providerUser.externalId,
+            first_name: providerUser.firstName || undefined,
+            last_name: providerUser.lastName || undefined,
+            display_name: providerUser.displayName || undefined,
+            updated_at: new Date().toISOString(),
+          })
+          .eq("id", existingMember.user_id);
+
+        continue;
+      }
+
+      // New user -- check if they exist in the users table by email
+      const { data: existingUser } = await supabaseAdmin
+        .from("users")
+        .select("id")
+        .eq("email", providerUser.email)
+        .maybeSingle();
+
+      if (existingUser) {
+        // User exists but not in this org -- add membership
+        await supabaseAdmin
+          .from("users")
+          .update({
+            oauth_id: providerUser.externalId,
+            first_name: providerUser.firstName || undefined,
+            last_name: providerUser.lastName || undefined,
+            display_name: providerUser.displayName || undefined,
+            is_managed: true,
+            updated_at: new Date().toISOString(),
+          })
+          .eq("id", existingUser.id);
+
+        await supabaseAdmin.from("organization_members").insert({
+          organization_id: orgId,
+          user_id: existingUser.id,
+          role: defaultRole,
+          license_status: "active",
+          provisioned_by: "directory_sync",
+          provisioned_at: new Date().toISOString(),
+          scim_synced_at: new Date().toISOString(),
+          joined_at: new Date().toISOString(),
+        });
+
+        seenMemberIds.add(existingUser.id);
+        result.added++;
+      } else {
+        // Completely new user -- create user record + membership
+        const providerName =
+          idp.provider_type === "azure_ad" ? "azure" : "google";
+
+        const { data: newUser, error: createError } = await supabaseAdmin
+          .from("users")
+          .insert({
+            email: providerUser.email,
+            first_name: providerUser.firstName || null,
+            last_name: providerUser.lastName || null,
+            display_name: providerUser.displayName || null,
+            oauth_provider: providerName,
+            oauth_id: providerUser.externalId,
+            provisioning_source: "directory_sync",
+            is_managed: true,
+            status: "active",
+            is_active: true,
+          })
+          .select("id")
+          .single();
+
+        if (createError || !newUser) {
+          console.error(
+            `[directory-sync] Failed to create user ${providerUser.email}: ${createError?.message}`,
+          );
+          continue;
+        }
+
+        await supabaseAdmin.from("organization_members").insert({
+          organization_id: orgId,
+          user_id: newUser.id,
+          role: defaultRole,
+          license_status: "active",
+          provisioned_by: "directory_sync",
+          provisioned_at: new Date().toISOString(),
+          scim_synced_at: new Date().toISOString(),
+          joined_at: new Date().toISOString(),
+        });
+
+        seenMemberIds.add(newUser.id);
+        result.added++;
+      }
+    }
+
+    // 5. Suspend members who were provisioned by directory_sync but are
+    //    no longer in the provider directory
+    for (const member of existingUsers) {
+      if (
+        member.provisioned_by === "directory_sync" &&
+        member.license_status === "active" &&
+        !seenMemberIds.has(member.user_id)
+      ) {
+        await supabaseAdmin
+          .from("organization_members")
+          .update({
+            license_status: "suspended",
+            scim_synced_at: new Date().toISOString(),
+          })
+          .eq("organization_id", orgId)
+          .eq("user_id", member.user_id);
+
+        await supabaseAdmin
+          .from("users")
+          .update({
+            suspended_at: new Date().toISOString(),
+            suspension_reason: "directory_sync_removed",
+            updated_at: new Date().toISOString(),
+          })
+          .eq("id", member.user_id);
+
+        result.suspended++;
+      }
+    }
+
+    // 6. Update sync timestamp and clear error
+    await supabaseAdmin
+      .from("organizations")
+      .update({
+        directory_sync_last_at: new Date().toISOString(),
+        directory_sync_error: null,
+      })
+      .eq("id", orgId);
+
+    console.log(
+      `[directory-sync] Org ${orgId}: added=${result.added}, suspended=${result.suspended}, reactivated=${result.reactivated}`,
+    );
+  } catch (err) {
+    const errorMessage =
+      err instanceof Error ? err.message : "Unknown sync error";
+    result.error = errorMessage;
+    console.error(`[directory-sync] Org ${orgId} error: ${errorMessage}`);
+
+    // Record error on the organization
+    await supabaseAdmin
+      .from("organizations")
+      .update({
+        directory_sync_error: errorMessage,
+      })
+      .eq("id", orgId);
+  }
+
+  return result;
+}
+
+// ---------------------------------------------------------------------------
+// Edge Function Handler
+// ---------------------------------------------------------------------------
+
+Deno.serve(async (req: Request) => {
+  // Handle CORS preflight
+  if (req.method === "OPTIONS") {
+    return new Response(null, { headers: CORS_HEADERS });
+  }
+
+  // Only accept POST
+  if (req.method !== "POST") {
+    return new Response(
+      JSON.stringify({ error: "Method not allowed. Use POST." }),
+      {
+        status: 405,
+        headers: { ...CORS_HEADERS, "Content-Type": "application/json" },
+      },
+    );
+  }
+
+  try {
+    const supabaseUrl = Deno.env.get("SUPABASE_URL");
+    const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+    if (!supabaseUrl || !supabaseServiceKey) {
+      return new Response(
+        JSON.stringify({ error: "Server configuration error" }),
+        {
+          status: 500,
+          headers: { ...CORS_HEADERS, "Content-Type": "application/json" },
+        },
+      );
+    }
+
+    // -----------------------------------------------------------------------
+    // Authentication: verify the caller has the service role key.
+    // This function is internal -- invoked by cron jobs or admin scripts,
+    // not by end users. The service role key acts as a shared secret.
+    // -----------------------------------------------------------------------
+    const authHeader = req.headers.get("Authorization");
+    if (!authHeader?.startsWith("Bearer ")) {
+      return new Response(
+        JSON.stringify({ error: "Missing or invalid Authorization header" }),
+        {
+          status: 401,
+          headers: { ...CORS_HEADERS, "Content-Type": "application/json" },
+        },
+      );
+    }
+
+    const bearerToken = authHeader.substring(7);
+    if (bearerToken !== supabaseServiceKey) {
+      return new Response(
+        JSON.stringify({ error: "Unauthorized" }),
+        {
+          status: 403,
+          headers: { ...CORS_HEADERS, "Content-Type": "application/json" },
+        },
+      );
+    }
+
+    const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey);
+
+    // Check for optional org_id query parameter
+    const url = new URL(req.url);
+    const specificOrgId = url.searchParams.get("org_id");
+
+    // Query organizations with directory sync enabled
+    let orgsQuery = supabaseAdmin
+      .from("organizations")
+      .select("*")
+      .eq("directory_sync_enabled", true);
+
+    if (specificOrgId) {
+      orgsQuery = orgsQuery.eq("id", specificOrgId);
+    }
+
+    const { data: orgs, error: orgsError } = await orgsQuery;
+
+    if (orgsError) {
+      return new Response(
+        JSON.stringify({ error: `Failed to query organizations: ${orgsError.message}` }),
+        {
+          status: 500,
+          headers: { ...CORS_HEADERS, "Content-Type": "application/json" },
+        },
+      );
+    }
+
+    if (!orgs || orgs.length === 0) {
+      return new Response(
+        JSON.stringify({
+          message: "No organizations with directory sync enabled",
+          results: [],
+        }),
+        {
+          status: 200,
+          headers: { ...CORS_HEADERS, "Content-Type": "application/json" },
+        },
+      );
+    }
+
+    // Process each organization sequentially (one at a time for blast radius)
+    const results: SyncResult[] = [];
+
+    for (const org of orgs) {
+      const orgId = org.id as string;
+
+      // Fetch the IdP config for this org
+      const { data: idps, error: idpError } = await supabaseAdmin
+        .from("organization_identity_providers")
+        .select("*")
+        .eq("organization_id", orgId)
+        .eq("is_active", true);
+
+      if (idpError || !idps || idps.length === 0) {
+        const errorMsg = idpError
+          ? `Failed to fetch IdP config: ${idpError.message}`
+          : "No active identity provider configured";
+
+        results.push({ orgId, added: 0, suspended: 0, reactivated: 0, error: errorMsg });
+
+        await supabaseAdmin
+          .from("organizations")
+          .update({ directory_sync_error: errorMsg })
+          .eq("id", orgId);
+
+        continue;
+      }
+
+      // Use the first active IdP (organizations typically have one)
+      const idp = idps[0] as unknown as IdpConfig;
+
+      // Only sync for supported provider types
+      if (
+        idp.provider_type !== "azure_ad" &&
+        idp.provider_type !== "google_workspace"
+      ) {
+        const errorMsg = `Unsupported provider type for directory sync: ${idp.provider_type}`;
+        results.push({ orgId, added: 0, suspended: 0, reactivated: 0, error: errorMsg });
+        continue;
+      }
+
+      const result = await syncOrganization(supabaseAdmin, orgId, org, idp);
+      results.push(result);
+    }
+
+    // Build response summary
+    const summary = {
+      message: `Directory sync completed for ${results.length} organization(s)`,
+      synced_at: new Date().toISOString(),
+      results: results.map((r) => ({
+        org_id: r.orgId,
+        added: r.added,
+        suspended: r.suspended,
+        reactivated: r.reactivated,
+        error: r.error,
+      })),
+    };
+
+    return new Response(JSON.stringify(summary), {
+      status: 200,
+      headers: { ...CORS_HEADERS, "Content-Type": "application/json" },
+    });
+  } catch (err) {
+    console.error("[directory-sync] Fatal error:", err);
+    return new Response(
+      JSON.stringify({
+        error: "Internal server error",
+      }),
+      {
+        status: 500,
+        headers: { ...CORS_HEADERS, "Content-Type": "application/json" },
+      },
+    );
+  }
+});
