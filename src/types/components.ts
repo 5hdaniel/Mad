@@ -103,7 +103,7 @@ export function getSourceBadge(source: ContactSource): SourceBadge {
     messages: { text: "From Messages", color: "bg-orange-100 text-orange-700" },
     inferred: { text: "Inferred", color: "bg-gray-100 text-gray-700" },
     outlook: { text: "Outlook", color: "bg-indigo-100 text-indigo-700" },
-    google: { text: "Google", color: "bg-red-100 text-red-700" },
+    google_contacts: { text: "Google Contacts", color: "bg-red-100 text-red-700" },
   };
   return badges[source] || badges.manual;
 }

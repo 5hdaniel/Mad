@@ -256,6 +256,7 @@ export function registerContactHandlers(mainWindow: BrowserWindow): void {
         // TASK-1950: Check contact source preferences
         const macosEnabled = await isContactSourceEnabled(validatedUserId, "direct", "macosContacts", true);
         const outlookEnabled = await isContactSourceEnabled(validatedUserId, "direct", "outlookContacts", true);
+        const googleContactsEnabled = await isContactSourceEnabled(validatedUserId, "direct", "googleContacts", true);
 
         // Convert Contacts app data to contact objects
         const availableContacts: AvailableContact[] = [];
@@ -530,7 +531,10 @@ export function registerContactHandlers(mainWindow: BrowserWindow): void {
           if (extContact.source === "outlook" && !outlookEnabled) {
             continue;
           }
-          if (extContact.source !== "outlook" && !macosEnabled) {
+          if (extContact.source === "google_contacts" && !googleContactsEnabled) {
+            continue;
+          }
+          if (extContact.source !== "outlook" && extContact.source !== "google_contacts" && !macosEnabled) {
             continue;
           }
 
@@ -585,7 +589,9 @@ export function registerContactHandlers(mainWindow: BrowserWindow): void {
             phone: extContact.phones?.[0] || null,
             email: extContact.emails?.[0] || null,
             company: extContact.company || null,
-            source: extContact.source === "outlook" ? "outlook" : extContact.source === "google_contacts" ? "google" : "contacts_app",
+            source: extContact.source === "outlook" ? "outlook"
+              : extContact.source === "google_contacts" ? "google_contacts"
+              : "contacts_app",
             allPhones: extContact.phones || [],
             allEmails: extContact.emails || [],
             isFromDatabase: false,
@@ -903,7 +909,7 @@ export function registerContactHandlers(mainWindow: BrowserWindow): void {
         }
 
         // Extract source from input data (falls back to "manual" if not provided)
-        const validSources: ContactSource[] = ["manual", "email", "sms", "messages", "contacts_app", "inferred"];
+        const validSources: ContactSource[] = ["manual", "email", "sms", "messages", "contacts_app", "inferred", "google_contacts"];
         const inputSource = (contactData as { source?: string })?.source;
         const source: ContactSource = validSources.includes(inputSource as ContactSource)
           ? (inputSource as ContactSource)
