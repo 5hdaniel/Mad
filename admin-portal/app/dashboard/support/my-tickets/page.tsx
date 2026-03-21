@@ -8,18 +8,18 @@
  * but pre-filters all queries by the current user's assignee_id.
  */
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import dynamic from 'next/dynamic';
 import { Inbox, CheckCircle2, Clock } from 'lucide-react';
 import { useAuth } from '@/components/providers/AuthProvider';
-import { listTickets, getTicketStats } from '@/lib/support-queries';
-import type {
-  SupportTicket,
-  TicketStatus,
-  TicketPriority,
-} from '@/lib/support-types';
+import { listTickets } from '@/lib/support-queries';
+import type { SupportTicket } from '@/lib/support-types';
 import { TicketFilters } from '../components/TicketFilters';
 import { SearchBar } from '../components/SearchBar';
+import { BulkActionBar } from '../components/BulkActionBar';
+import { ColumnSelector } from '../components/ColumnSelector';
+import { SavedViewSelector } from '../components/SavedViewSelector';
+import { useTicketTableState } from '../hooks/useTicketTableState';
 
 const TicketTable = dynamic(() => import('../components/TicketTable').then(m => m.TicketTable), { ssr: false });
 
@@ -27,7 +27,6 @@ export default function MyTicketsPage() {
   const { user } = useAuth();
   const [tickets, setTickets] = useState<SupportTicket[]>([]);
   const [totalCount, setTotalCount] = useState(0);
-  const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
   const [loading, setLoading] = useState(true);
 
@@ -37,13 +36,32 @@ export default function MyTicketsPage() {
   const [myResolved, setMyResolved] = useState(0);
   const [statsLoading, setStatsLoading] = useState(true);
 
-  // Filters
-  const [statusFilter, setStatusFilter] = useState<TicketStatus | null>(null);
-  const [priorityFilter, setPriorityFilter] = useState<TicketPriority | null>(null);
-  const [categoryFilter, setCategoryFilter] = useState<string | null>(null);
-  const [searchQuery, setSearchQuery] = useState('');
+  const {
+    sortColumn, sortDirection, handleSort,
+    selectedIds, toggleSelect, toggleSelectAll, clearSelection,
+    visibleColumns, handleColumnsChange,
+    statusFilter, priorityFilter, categoryFilter, searchQuery,
+    handleStatusChange, handlePriorityChange, handleCategoryChange, handleSearch,
+    currentFilters, handleLoadView,
+    page, setPage,
+  } = useTicketTableState(tickets);
 
   const pageSize = 20;
+
+  // Refs to allow handleBulkComplete to call functions without circular deps
+  const loadTicketsRef = useRef<() => void>(() => {});
+  const loadMyStatsRef = useRef<() => void>(() => {});
+
+  const handleBulkComplete = useCallback(() => {
+    clearSelection();
+    loadTicketsRef.current();
+    loadMyStatsRef.current();
+  }, [clearSelection]);
+
+  const handleTicketUpdated = useCallback(() => {
+    loadTicketsRef.current();
+    loadMyStatsRef.current();
+  }, []);
 
   const loadTickets = useCallback(async () => {
     if (!user?.id) return;
@@ -57,6 +75,8 @@ export default function MyTicketsPage() {
         search: searchQuery || undefined,
         page,
         page_size: pageSize,
+        sort_by: sortColumn,
+        sort_dir: sortDirection,
       });
       setTickets(data.tickets);
       setTotalCount(data.total_count);
@@ -66,9 +86,8 @@ export default function MyTicketsPage() {
     } finally {
       setLoading(false);
     }
-  }, [user?.id, statusFilter, priorityFilter, categoryFilter, searchQuery, page]);
+  }, [user?.id, statusFilter, priorityFilter, categoryFilter, searchQuery, page, sortColumn, sortDirection]);
 
-  // Load agent-specific stats by querying filtered counts
   const loadMyStats = useCallback(async () => {
     if (!user?.id) return;
     setStatsLoading(true);
@@ -88,6 +107,9 @@ export default function MyTicketsPage() {
     }
   }, [user?.id]);
 
+  loadTicketsRef.current = loadTickets;
+  loadMyStatsRef.current = loadMyStats;
+
   useEffect(() => {
     loadTickets();
   }, [loadTickets]);
@@ -95,26 +117,6 @@ export default function MyTicketsPage() {
   useEffect(() => {
     loadMyStats();
   }, [loadMyStats]);
-
-  function handleStatusChange(status: TicketStatus | null) {
-    setStatusFilter(status);
-    setPage(1);
-  }
-
-  function handlePriorityChange(priority: TicketPriority | null) {
-    setPriorityFilter(priority);
-    setPage(1);
-  }
-
-  function handleCategoryChange(categoryId: string | null) {
-    setCategoryFilter(categoryId);
-    setPage(1);
-  }
-
-  const handleSearch = useCallback((query: string) => {
-    setSearchQuery(query);
-    setPage(1);
-  }, []);
 
   const statCards = [
     { label: 'My In Progress', value: myOpen, icon: Inbox, color: 'text-blue-600 bg-blue-50' },
@@ -158,8 +160,8 @@ export default function MyTicketsPage() {
         <SearchBar onSearch={handleSearch} />
       </div>
 
-      {/* Filters */}
-      <div className="mb-4">
+      {/* Filters + Column Selector */}
+      <div className="mb-4 flex items-start justify-between gap-4">
         <TicketFilters
           status={statusFilter}
           priority={priorityFilter}
@@ -168,6 +170,16 @@ export default function MyTicketsPage() {
           onPriorityChange={handlePriorityChange}
           onCategoryChange={handleCategoryChange}
         />
+        <div className="flex items-center gap-2">
+          <SavedViewSelector
+            currentFilters={currentFilters}
+            onLoadView={handleLoadView}
+          />
+          <ColumnSelector
+            visibleColumns={visibleColumns}
+            onColumnsChange={handleColumnsChange}
+          />
+        </div>
       </div>
 
       {/* Ticket Table */}
@@ -180,6 +192,21 @@ export default function MyTicketsPage() {
         onPageChange={setPage}
         loading={loading}
         searchActive={!!searchQuery}
+        sortColumn={sortColumn}
+        sortDirection={sortDirection}
+        onSort={handleSort}
+        visibleColumns={visibleColumns}
+        selectedIds={selectedIds}
+        onToggleSelect={toggleSelect}
+        onToggleSelectAll={toggleSelectAll}
+        onTicketUpdated={handleTicketUpdated}
+      />
+
+      {/* Bulk Action Bar */}
+      <BulkActionBar
+        selectedIds={selectedIds}
+        onClearSelection={clearSelection}
+        onComplete={handleBulkComplete}
       />
     </div>
   );

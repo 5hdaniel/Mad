@@ -3,16 +3,20 @@
 /**
  * TicketTable - Support Dashboard
  *
- * Renders the ticket queue as a table with pagination.
+ * Renders the ticket queue as a table with pagination and sortable column headers.
  * Each row navigates to the ticket detail page on click.
+ * Sort state is managed by the parent page and passed via props.
  */
 
 import { Fragment } from 'react';
 import { useRouter } from 'next/navigation';
-import { ChevronLeft, ChevronRight } from 'lucide-react';
+import { ChevronLeft, ChevronRight, ArrowUp, ArrowDown } from 'lucide-react';
 import DOMPurify from 'isomorphic-dompurify';
-import type { SupportTicket, TicketStatus, TicketPriority, SearchHighlight } from '@/lib/support-types';
+import type { SupportTicket, TicketStatus, TicketPriority, SearchHighlight, SortColumn, SortDirection } from '@/lib/support-types';
 import { STATUS_LABELS, PRIORITY_LABELS, STATUS_COLORS, PRIORITY_COLORS } from '@/lib/support-types';
+import type { ColumnKey } from './ColumnSelector';
+import { DEFAULT_VISIBLE_COLUMNS } from './ColumnSelector';
+import { InlineStatusEdit, InlinePriorityEdit, InlineAssigneeEdit, InlineCategoryEdit } from './InlineTicketEdit';
 
 interface TicketTableProps {
   tickets: SupportTicket[];
@@ -23,6 +27,18 @@ interface TicketTableProps {
   onPageChange: (page: number) => void;
   loading?: boolean;
   searchActive?: boolean;
+  sortColumn?: SortColumn;
+  sortDirection?: SortDirection;
+  onSort?: (column: SortColumn) => void;
+  visibleColumns?: ColumnKey[];
+  /** Bulk selection: set of currently selected ticket IDs */
+  selectedIds?: Set<string>;
+  /** Callback when a single row checkbox is toggled */
+  onToggleSelect?: (id: string) => void;
+  /** Callback when the select-all header checkbox is toggled */
+  onToggleSelectAll?: () => void;
+  /** Callback after an inline edit saves successfully -- parent should refresh data */
+  onTicketUpdated?: () => void;
 }
 
 function StatusBadge({ status }: { status: TicketStatus }) {
@@ -85,12 +101,51 @@ function HighlightSnippet({ highlight }: { highlight: SearchHighlight }) {
   return (
     <span className="inline">
       <span className="font-medium text-gray-600">{label}:</span>{' '}
+      {/* Content sanitized by DOMPurify - only <mark> tags allowed */}
       <span
         className="[&_mark]:bg-yellow-200 [&_mark]:px-0.5 [&_mark]:rounded-sm"
         dangerouslySetInnerHTML={{ __html: sanitized }}
       />
     </span>
   );
+}
+
+interface SortableHeaderProps {
+  column: SortColumn;
+  label: string;
+  currentColumn?: SortColumn;
+  currentDirection?: SortDirection;
+  onSort?: (column: SortColumn) => void;
+  className?: string;
+}
+
+function SortableHeader({ column, label, currentColumn, currentDirection, onSort, className = '' }: SortableHeaderProps) {
+  const isActive = currentColumn === column;
+
+  return (
+    <th
+      onClick={() => onSort?.(column)}
+      className={`px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer select-none hover:bg-gray-100 transition-colors ${className}`}
+    >
+      <div className="flex items-center gap-1">
+        <span>{label}</span>
+        {isActive ? (
+          currentDirection === 'asc' ? (
+            <ArrowUp className="h-3.5 w-3.5 text-blue-600" />
+          ) : (
+            <ArrowDown className="h-3.5 w-3.5 text-blue-600" />
+          )
+        ) : (
+          <ArrowDown className="h-3.5 w-3.5 text-gray-300" />
+        )}
+      </div>
+    </th>
+  );
+}
+
+function truncateText(text: string, maxLen: number): string {
+  if (text.length <= maxLen) return text;
+  return text.slice(0, maxLen).trimEnd() + '...';
 }
 
 export function TicketTable({
@@ -102,8 +157,22 @@ export function TicketTable({
   onPageChange,
   loading,
   searchActive,
+  sortColumn = 'created_at',
+  sortDirection = 'desc',
+  onSort,
+  visibleColumns = DEFAULT_VISIBLE_COLUMNS,
+  selectedIds,
+  onToggleSelect,
+  onToggleSelectAll,
+  onTicketUpdated,
 }: TicketTableProps) {
   const router = useRouter();
+  const show = (col: ColumnKey) => visibleColumns.includes(col);
+  const selectionEnabled = !!selectedIds && !!onToggleSelect && !!onToggleSelectAll;
+  const allSelected = selectionEnabled && tickets.length > 0 && tickets.every(t => selectedIds!.has(t.id));
+  const someSelected = selectionEnabled && tickets.some(t => selectedIds!.has(t.id)) && !allSelected;
+  // +1 for checkbox column when selection is enabled
+  const visibleCount = visibleColumns.length + (selectionEnabled ? 1 : 0);
 
   if (loading) {
     return (
@@ -167,27 +236,87 @@ export function TicketTable({
         <table className="min-w-full divide-y divide-gray-200">
           <thead className="bg-gray-50">
             <tr>
-              <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                #
-              </th>
-              <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Subject
-              </th>
-              <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Status
-              </th>
-              <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Priority
-              </th>
-              <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Category
-              </th>
-              <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Requester
-              </th>
-              <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Created
-              </th>
+              {selectionEnabled && (
+                <th className="px-3 py-3 w-10">
+                  <input
+                    type="checkbox"
+                    checked={allSelected}
+                    ref={(el) => { if (el) el.indeterminate = someSelected; }}
+                    onChange={onToggleSelectAll}
+                    className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500 cursor-pointer"
+                    aria-label="Select all tickets"
+                  />
+                </th>
+              )}
+              {show('ticket_number') && (
+                <SortableHeader
+                  column="ticket_number"
+                  label="#"
+                  currentColumn={sortColumn}
+                  currentDirection={sortDirection}
+                  onSort={onSort}
+                />
+              )}
+              {show('subject') && (
+                <SortableHeader
+                  column="subject"
+                  label="Subject"
+                  currentColumn={sortColumn}
+                  currentDirection={sortDirection}
+                  onSort={onSort}
+                />
+              )}
+              {show('status') && (
+                <SortableHeader
+                  column="status"
+                  label="Status"
+                  currentColumn={sortColumn}
+                  currentDirection={sortDirection}
+                  onSort={onSort}
+                />
+              )}
+              {show('priority') && (
+                <SortableHeader
+                  column="priority"
+                  label="Priority"
+                  currentColumn={sortColumn}
+                  currentDirection={sortDirection}
+                  onSort={onSort}
+                />
+              )}
+              {show('category') && (
+                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Category
+                </th>
+              )}
+              {show('requester') && (
+                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Requester
+                </th>
+              )}
+              {show('assignee') && (
+                <SortableHeader
+                  column="assignee_name"
+                  label="Assignee"
+                  currentColumn={sortColumn}
+                  currentDirection={sortDirection}
+                  onSort={onSort}
+                />
+              )}
+              {show('created_at') && (
+                <SortableHeader
+                  column="created_at"
+                  label="Created"
+                  currentColumn={sortColumn}
+                  currentDirection={sortDirection}
+                  onSort={onSort}
+                />
+              )}
+              {show('description') && (
+                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Description
+                </th>
+              )}
             </tr>
           </thead>
           <tbody className="bg-white divide-y divide-gray-200">
@@ -195,49 +324,121 @@ export function TicketTable({
               <Fragment key={ticket.id}>
                 <tr
                   onClick={() => router.push(`/dashboard/support/${ticket.id}`)}
-                  className="hover:bg-gray-50 cursor-pointer transition-colors"
+                  className={`hover:bg-gray-50 cursor-pointer transition-colors ${selectionEnabled && selectedIds!.has(ticket.id) ? 'bg-blue-50' : ''}`}
                 >
-                  <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500">
-                    {ticket.ticket_number}
-                  </td>
-                  <td className="px-4 py-3 text-sm text-gray-900 max-w-xs truncate font-medium [&_mark]:bg-yellow-200 [&_mark]:px-0.5 [&_mark]:rounded-sm">
-                    {(() => {
-                      const subjectHighlight = searchActive && ticket.search_highlights?.find(
-                        h => h.field === 'subject'
-                      );
-                      if (subjectHighlight) {
-                        const sanitized = DOMPurify.sanitize(subjectHighlight.snippet, { ALLOWED_TAGS: ['mark'] });
-                        return <span dangerouslySetInnerHTML={{ __html: sanitized }} />;
-                      }
-                      return ticket.subject;
-                    })()}
-                  </td>
-                  <td className="px-4 py-3 whitespace-nowrap">
-                    <StatusBadge status={ticket.status} />
-                  </td>
-                  <td className="px-4 py-3 whitespace-nowrap">
-                    <PriorityBadge priority={ticket.priority} />
-                  </td>
-                  <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500">
-                    {ticket.category_name || '-'}
-                  </td>
-                  <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500">
-                    <div className="truncate max-w-[160px] [&_mark]:bg-yellow-200 [&_mark]:px-0.5 [&_mark]:rounded-sm" title={ticket.requester_email}>
+                  {selectionEnabled && (
+                    <td className="px-3 py-3 w-10" onClick={(e) => e.stopPropagation()}>
+                      <input
+                        type="checkbox"
+                        checked={selectedIds!.has(ticket.id)}
+                        onChange={() => onToggleSelect!(ticket.id)}
+                        className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500 cursor-pointer"
+                        aria-label={`Select ticket ${ticket.ticket_number}`}
+                      />
+                    </td>
+                  )}
+                  {show('ticket_number') && (
+                    <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500">
+                      {ticket.ticket_number}
+                    </td>
+                  )}
+                  {show('subject') && (
+                    <td className="px-4 py-3 text-sm text-gray-900 max-w-xs truncate font-medium [&_mark]:bg-yellow-200 [&_mark]:px-0.5 [&_mark]:rounded-sm">
                       {(() => {
-                        const requesterHighlight = searchActive && ticket.search_highlights?.find(
-                          h => h.field === 'requester_name' || h.field === 'requester_email'
+                        const subjectHighlight = searchActive && ticket.search_highlights?.find(
+                          h => h.field === 'subject'
                         );
-                        if (requesterHighlight) {
-                          const sanitized = DOMPurify.sanitize(requesterHighlight.snippet, { ALLOWED_TAGS: ['mark'] });
+                        if (subjectHighlight) {
+                          // Content sanitized by DOMPurify - only <mark> tags allowed
+                          const sanitized = DOMPurify.sanitize(subjectHighlight.snippet, { ALLOWED_TAGS: ['mark'] });
                           return <span dangerouslySetInnerHTML={{ __html: sanitized }} />;
                         }
-                        return ticket.requester_name;
+                        return ticket.subject;
                       })()}
-                    </div>
-                  </td>
-                  <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500">
-                    {formatDate(ticket.created_at)}
-                  </td>
+                    </td>
+                  )}
+                  {show('status') && (
+                    <td className="px-4 py-3 whitespace-nowrap">
+                      {onTicketUpdated ? (
+                        <InlineStatusEdit
+                          ticketId={ticket.id}
+                          status={ticket.status}
+                          onUpdated={onTicketUpdated}
+                        />
+                      ) : (
+                        <StatusBadge status={ticket.status} />
+                      )}
+                    </td>
+                  )}
+                  {show('priority') && (
+                    <td className="px-4 py-3 whitespace-nowrap">
+                      {onTicketUpdated ? (
+                        <InlinePriorityEdit
+                          ticketId={ticket.id}
+                          priority={ticket.priority}
+                          onUpdated={onTicketUpdated}
+                        />
+                      ) : (
+                        <PriorityBadge priority={ticket.priority} />
+                      )}
+                    </td>
+                  )}
+                  {show('category') && (
+                    <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500">
+                      {onTicketUpdated ? (
+                        <InlineCategoryEdit
+                          ticketId={ticket.id}
+                          categoryName={ticket.category_name}
+                          categoryId={ticket.category_id}
+                          onUpdated={onTicketUpdated}
+                        />
+                      ) : (
+                        ticket.category_name || '-'
+                      )}
+                    </td>
+                  )}
+                  {show('requester') && (
+                    <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500">
+                      <div className="truncate max-w-[160px] [&_mark]:bg-yellow-200 [&_mark]:px-0.5 [&_mark]:rounded-sm" title={ticket.requester_email}>
+                        {(() => {
+                          const requesterHighlight = searchActive && ticket.search_highlights?.find(
+                            h => h.field === 'requester_name' || h.field === 'requester_email'
+                          );
+                          if (requesterHighlight) {
+                            // Content sanitized by DOMPurify - only <mark> tags allowed
+                            const sanitized = DOMPurify.sanitize(requesterHighlight.snippet, { ALLOWED_TAGS: ['mark'] });
+                            return <span dangerouslySetInnerHTML={{ __html: sanitized }} />;
+                          }
+                          return ticket.requester_name;
+                        })()}
+                      </div>
+                    </td>
+                  )}
+                  {show('assignee') && (
+                    <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500">
+                      {onTicketUpdated ? (
+                        <InlineAssigneeEdit
+                          ticketId={ticket.id}
+                          assigneeName={ticket.assignee_name}
+                          onUpdated={onTicketUpdated}
+                        />
+                      ) : (
+                        ticket.assignee_name || <span className="text-gray-400 italic">Unassigned</span>
+                      )}
+                    </td>
+                  )}
+                  {show('created_at') && (
+                    <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500">
+                      {formatDate(ticket.created_at)}
+                    </td>
+                  )}
+                  {show('description') && (
+                    <td className="px-4 py-3 text-sm text-gray-500 max-w-xs">
+                      <span className="block truncate" title={ticket.description}>
+                        {truncateText(ticket.description || '', 100)}
+                      </span>
+                    </td>
+                  )}
                 </tr>
                 {(() => {
                   const snippetHighlight = searchActive && ticket.search_highlights?.find(
@@ -245,7 +446,7 @@ export function TicketTable({
                   );
                   return snippetHighlight ? (
                     <tr className="border-b border-gray-100">
-                      <td colSpan={7} className="px-4 py-1.5 bg-gray-50">
+                      <td colSpan={visibleCount} className="px-4 py-1.5 bg-gray-50">
                         <div className="flex items-start gap-2 text-xs text-gray-500 pl-4">
                           <HighlightSnippet highlight={snippetHighlight} />
                         </div>
