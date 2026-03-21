@@ -174,7 +174,7 @@ function ProjectStatusDropdown({ status, onChangeStatus }: ProjectStatusDropdown
               key={s}
               type="button"
               onClick={() => handleSelect(s)}
-              className={`w-full text-left px-3 py-1.5 text-xs hover:bg-gray-50 flex items-center gap-2 ${
+              className={`w-full text-left px-3 py-1.5 text-xs text-gray-700 hover:bg-gray-50 flex items-center gap-2 ${
                 s === status ? 'font-semibold' : ''
               }`}
             >

@@ -15,7 +15,7 @@ import { listProjects, createProject } from '@/lib/pm-queries';
 import { ProjectList } from '../components/ProjectList';
 import type { PmProject } from '@/lib/pm-types';
 
-type StatusFilter = 'all' | 'active' | 'archived';
+type StatusFilter = 'all' | 'active' | 'on_hold' | 'completed' | 'archived';
 
 export default function ProjectsPage() {
   const [projects, setProjects] = useState<PmProject[]>([]);
@@ -101,6 +101,8 @@ export default function ProjectsPage() {
 const FILTER_TABS: { key: StatusFilter; label: string }[] = [
   { key: 'all', label: 'All' },
   { key: 'active', label: 'Active' },
+  { key: 'on_hold', label: 'On Hold' },
+  { key: 'completed', label: 'Completed' },
   { key: 'archived', label: 'Archived' },
 ];
 

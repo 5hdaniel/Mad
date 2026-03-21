@@ -181,6 +181,8 @@ export default function TicketDetailPage() {
             onMessageSent={handleMessageSent}
             requesterName={ticket.requester_name}
             ticketNumber={ticket.ticket_number}
+            ticketSubject={ticket.subject}
+            requesterEmail={ticket.requester_email}
           />
 
           {/* 3. Activity Timeline — messages + events, newest first */}
