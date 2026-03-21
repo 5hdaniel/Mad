@@ -17,6 +17,9 @@ ALTER TABLE organization_members
   CHECK (provisioned_by IS NULL OR provisioned_by IN ('manual', 'scim', 'jit', 'invite', 'directory_sync'));
 
 -- Step 2: Add service_account_key_encrypted to organization_identity_providers
--- Used for Google Workspace directory sync (service account JSON key, encrypted at rest)
+-- Used for Google Workspace directory sync (service account JSON key).
+-- KNOWN LIMITATION: Column is named "_encrypted" as future-proofing for KMS
+-- integration, but currently stores plaintext. Actual encryption requires a
+-- KMS (e.g., AWS KMS, GCP KMS, Vault) which is not yet integrated.
 ALTER TABLE organization_identity_providers
   ADD COLUMN IF NOT EXISTS service_account_key_encrypted TEXT;
