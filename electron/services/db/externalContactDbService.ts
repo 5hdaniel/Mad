@@ -28,7 +28,7 @@ export interface ExternalContact {
   company: string | null;
   last_message_at: string | null;
   external_record_id: string;  // Renamed from macos_record_id (Migration 27)
-  source: 'macos' | 'iphone' | 'outlook' | 'google_contacts';  // Source of contact (Migration 27, TASK-1920: added outlook, TASK-2301: added google_contacts)
+  source: 'macos' | 'iphone' | 'outlook' | 'google_contacts';  // Source of contact (Migration 27, TASK-1920: added outlook, TASK-2301/2302: added google_contacts)
   synced_at: string;
 }
 

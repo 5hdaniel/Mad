@@ -11,7 +11,7 @@ import { TimestampSchema, OptionalTimestamp, UuidSchema } from './common';
 // ============================================
 
 export const ContactSourceSchema = z.enum([
-  'manual', 'email', 'sms', 'messages', 'contacts_app', 'inferred', 'outlook',
+  'manual', 'email', 'sms', 'messages', 'contacts_app', 'inferred', 'outlook', 'google_contacts',
 ]);
 
 export const ContactInfoSourceSchema = z.enum(['import', 'manual', 'inferred']);
