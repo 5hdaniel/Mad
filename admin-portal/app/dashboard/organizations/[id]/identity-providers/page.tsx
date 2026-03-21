@@ -2,7 +2,14 @@ import { getAuthenticatedUser, createServiceClient } from '@/lib/supabase/server
 import { redirect, notFound } from 'next/navigation';
 import Link from 'next/link';
 import { ArrowLeft, Building2 } from 'lucide-react';
-import { listIdentityProviders } from '@/lib/idp';
+import {
+  listIdentityProviders,
+  getActiveScimToken,
+  getDirectorySyncStatus,
+  getSyncHistory,
+  getScimEndpointUrl,
+  extractGroupRoleMapping,
+} from '@/lib/idp';
 import { IdpManager } from './components/IdpManager';
 
 export const dynamic = 'force-dynamic';
@@ -10,7 +17,8 @@ export const dynamic = 'force-dynamic';
 /**
  * Identity Providers Page - Admin Portal
  *
- * Server component that loads identity provider configurations for an org.
+ * Server component that loads identity provider configurations for an org,
+ * plus SCIM token status, directory sync status, and sync history.
  * Delegates all CRUD to the IdpManager client component which uses server actions.
  */
 export default async function IdentityProvidersPage({
@@ -56,8 +64,18 @@ export default async function IdentityProvidersPage({
     notFound();
   }
 
-  // Fetch identity providers
-  const { data: providers, error } = await listIdentityProviders(id);
+  // Parallel data fetches for the management panels
+  const [
+    { data: providers, error },
+    { data: scimToken },
+    { data: syncStatus },
+    { data: syncHistory, total: syncHistoryTotal },
+  ] = await Promise.all([
+    listIdentityProviders(id),
+    getActiveScimToken(id),
+    getDirectorySyncStatus(id),
+    getSyncHistory(id, 20, 0),
+  ]);
 
   if (error) {
     return (
@@ -75,6 +93,12 @@ export default async function IdentityProvidersPage({
       </div>
     );
   }
+
+  // Extract group role mapping from the first active provider (if any)
+  const activeProvider = (providers ?? []).find((p) => p.is_active) ?? (providers ?? [])[0];
+  const groupRoleMapping = activeProvider
+    ? extractGroupRoleMapping(activeProvider.attribute_mapping)
+    : { group_role_mapping: {}, default_role: 'agent', group_sync_enabled: false };
 
   return (
     <div className="max-w-5xl mx-auto space-y-6">
@@ -126,6 +150,17 @@ export default async function IdentityProvidersPage({
         initialProviders={providers ?? []}
         orgTenantId={org.microsoft_tenant_id ?? null}
         orgWorkspaceDomain={org.google_workspace_domain ?? null}
+        scimEndpointUrl={getScimEndpointUrl()}
+        initialScimToken={scimToken ?? null}
+        initialSyncStatus={syncStatus ?? {
+          directory_sync_enabled: false,
+          directory_sync_last_at: null,
+          directory_sync_error: null,
+        }}
+        initialGroupRoleMapping={groupRoleMapping}
+        activeIdpId={activeProvider?.id ?? null}
+        initialSyncHistory={syncHistory}
+        syncHistoryTotal={syncHistoryTotal}
       />
     </div>
   );

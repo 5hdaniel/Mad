@@ -1,10 +1,11 @@
 'use client';
 
 /**
- * IdpManager - Client-side orchestrator for identity provider CRUD.
+ * IdpManager - Client-side orchestrator for identity provider CRUD and management.
  *
  * Receives initial data from the server component, manages local state,
- * and delegates mutations to server actions.
+ * and delegates mutations to server actions. Includes SCIM settings,
+ * directory sync panel, group role mapping, and sync history.
  */
 
 import { useState, useCallback } from 'react';
@@ -12,19 +13,44 @@ import { useRouter } from 'next/navigation';
 import { Plus, Shield } from 'lucide-react';
 import { IdpCard } from './IdpCard';
 import { IdpForm } from './IdpForm';
+import { ScimSettings } from './ScimSettings';
+import { DirectorySyncPanel } from './DirectorySyncPanel';
+import { GroupRoleMappingTable } from './GroupRoleMappingTable';
+import { SyncHistoryLog } from './SyncHistoryLog';
 import {
   createIdpAction,
   updateIdpAction,
   deleteIdpAction,
   toggleIdpActiveAction,
+  generateScimTokenAction,
+  revokeScimTokenAction,
+  toggleDirectorySyncAction,
+  triggerDirectorySyncAction,
+  saveGroupRoleMappingAction,
+  loadSyncHistoryAction,
+  refreshSyncHistoryAction,
 } from '../actions';
-import type { IdentityProviderDisplay, IdpFormData } from '@/lib/idp';
+import type {
+  IdentityProviderDisplay,
+  IdpFormData,
+  ScimTokenInfo,
+  DirectorySyncStatus,
+  GroupRoleMappingConfig,
+  SyncLogEntry,
+} from '@/lib/idp';
 
 interface IdpManagerProps {
   organizationId: string;
   initialProviders: IdentityProviderDisplay[];
   orgTenantId: string | null;
   orgWorkspaceDomain: string | null;
+  scimEndpointUrl: string;
+  initialScimToken: ScimTokenInfo | null;
+  initialSyncStatus: DirectorySyncStatus;
+  initialGroupRoleMapping: GroupRoleMappingConfig;
+  activeIdpId: string | null;
+  initialSyncHistory: SyncLogEntry[];
+  syncHistoryTotal: number;
 }
 
 export function IdpManager({
@@ -32,6 +58,13 @@ export function IdpManager({
   initialProviders,
   orgTenantId,
   orgWorkspaceDomain,
+  scimEndpointUrl,
+  initialScimToken,
+  initialSyncStatus,
+  initialGroupRoleMapping,
+  activeIdpId,
+  initialSyncHistory,
+  syncHistoryTotal,
 }: IdpManagerProps) {
   const router = useRouter();
   const [providers, setProviders] = useState(initialProviders);
@@ -114,6 +147,39 @@ export function IdpManager({
     router.refresh();
   }, [router]);
 
+  // --- SCIM Token handlers ---
+  const handleGenerateToken = useCallback(async (description: string) => {
+    return generateScimTokenAction(organizationId, description);
+  }, [organizationId]);
+
+  const handleRevokeToken = useCallback(async (tokenId: string) => {
+    return revokeScimTokenAction(tokenId);
+  }, []);
+
+  // --- Directory Sync handlers ---
+  const handleToggleSync = useCallback(async (enabled: boolean) => {
+    return toggleDirectorySyncAction(organizationId, enabled);
+  }, [organizationId]);
+
+  const handleTriggerSync = useCallback(async () => {
+    return triggerDirectorySyncAction(organizationId);
+  }, [organizationId]);
+
+  // --- Group Role Mapping handlers ---
+  const handleSaveMapping = useCallback(async (config: GroupRoleMappingConfig) => {
+    if (!activeIdpId) return false;
+    return saveGroupRoleMappingAction(activeIdpId, config);
+  }, [activeIdpId]);
+
+  // --- Sync History handlers ---
+  const handleLoadMoreHistory = useCallback(async (offset: number) => {
+    return loadSyncHistoryAction(organizationId, offset);
+  }, [organizationId]);
+
+  const handleRefreshHistory = useCallback(async () => {
+    return refreshSyncHistoryAction(organizationId);
+  }, [organizationId]);
+
   return (
     <div className="space-y-6">
       {/* Header with Add button */}
@@ -174,17 +240,62 @@ export function IdpManager({
           </button>
         </div>
       ) : (
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-          {providers.map((idp) => (
-            <IdpCard
-              key={idp.id}
-              idp={idp}
-              onEdit={handleEdit}
-              onToggleActive={handleToggleActive}
-              onDelete={handleDelete}
+        <>
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+            {providers.map((idp) => (
+              <IdpCard
+                key={idp.id}
+                idp={idp}
+                onEdit={handleEdit}
+                onToggleActive={handleToggleActive}
+                onDelete={handleDelete}
+              />
+            ))}
+          </div>
+
+          {/* Management panels (only when providers exist) */}
+          <div className="space-y-6 pt-2">
+            {/* Section divider */}
+            <div className="border-t border-gray-200 pt-4">
+              <h2 className="text-sm font-semibold text-gray-900 uppercase tracking-wider">
+                Provisioning & Sync
+              </h2>
+            </div>
+
+            {/* SCIM Settings */}
+            <ScimSettings
+              organizationId={organizationId}
+              scimEndpointUrl={scimEndpointUrl}
+              existingToken={initialScimToken}
+              onGenerateToken={handleGenerateToken}
+              onRevokeToken={handleRevokeToken}
             />
-          ))}
-        </div>
+
+            {/* Directory Sync */}
+            <DirectorySyncPanel
+              organizationId={organizationId}
+              initialStatus={initialSyncStatus}
+              onToggleSync={handleToggleSync}
+              onTriggerSync={handleTriggerSync}
+            />
+
+            {/* Group Role Mapping */}
+            {activeIdpId && (
+              <GroupRoleMappingTable
+                initialMapping={initialGroupRoleMapping}
+                onSave={handleSaveMapping}
+              />
+            )}
+
+            {/* Sync History */}
+            <SyncHistoryLog
+              initialEntries={initialSyncHistory}
+              totalCount={syncHistoryTotal}
+              onLoadMore={handleLoadMoreHistory}
+              onRefresh={handleRefreshHistory}
+            />
+          </div>
+        </>
       )}
     </div>
   );
