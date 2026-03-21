@@ -3,11 +3,12 @@
 /**
  * Desktop Auth Login Page
  *
- * OAuth login for desktop app users. After successful authentication,
- * redirects to callback page which sends tokens back to desktop via deep link.
+ * OAuth login for desktop app users, plus magic link (email OTP).
+ * After successful authentication, redirects to callback page which
+ * sends tokens back to desktop via deep link.
  */
 
-import { useState, useEffect, Suspense } from 'react';
+import { useState, useEffect, useRef, useCallback, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
 
 // Error messages for auth failure states
@@ -17,11 +18,26 @@ const ERROR_MESSAGES: Record<string, string> = {
   cancelled: 'Sign in was cancelled. Please try again.',
 };
 
+// Simple email format validation
+function isValidEmail(email: string): boolean {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+}
+
+// Resend cooldown in seconds
+const RESEND_COOLDOWN = 60;
+
 function DesktopLoginForm() {
   const [loading, setLoading] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [hashError, setHashError] = useState<string | null>(null);
   const searchParams = useSearchParams();
+
+  // Magic link state
+  const [email, setEmail] = useState('');
+  const [magicLinkSent, setMagicLinkSent] = useState(false);
+  const [sentEmail, setSentEmail] = useState('');
+  const [cooldown, setCooldown] = useState(0);
+  const cooldownRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   // Parse error details from URL hash (Supabase puts detailed errors there)
   useEffect(() => {
@@ -35,9 +51,30 @@ function DesktopLoginForm() {
     }
   }, []);
 
+  // Cleanup cooldown interval on unmount
+  useEffect(() => {
+    return () => {
+      if (cooldownRef.current) clearInterval(cooldownRef.current);
+    };
+  }, []);
+
   // Get error from URL params (set by auth callback)
   const urlError = searchParams.get('error');
   const displayError = error || hashError || (urlError ? ERROR_MESSAGES[urlError] : null);
+
+  const startCooldown = useCallback(() => {
+    setCooldown(RESEND_COOLDOWN);
+    if (cooldownRef.current) clearInterval(cooldownRef.current);
+    cooldownRef.current = setInterval(() => {
+      setCooldown((prev) => {
+        if (prev <= 1) {
+          if (cooldownRef.current) clearInterval(cooldownRef.current);
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+  }, []);
 
   const handleOAuthLogin = async (provider: 'google' | 'azure') => {
     // Dynamic import to avoid SSR issues
@@ -68,6 +105,137 @@ function DesktopLoginForm() {
       setLoading(null);
     }
   };
+
+  const handleMagicLink = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!isValidEmail(email)) {
+      setError('Please enter a valid email address.');
+      return;
+    }
+
+    const { createClient } = await import('@/lib/supabase/client');
+    const supabase = createClient();
+    setLoading('email');
+    setError(null);
+
+    const { error: otpError } = await supabase.auth.signInWithOtp({
+      email,
+      options: {
+        emailRedirectTo: `${window.location.origin}/auth/desktop/callback`,
+      },
+    });
+
+    if (otpError) {
+      setError(otpError.message);
+      setLoading(null);
+      return;
+    }
+
+    setSentEmail(email);
+    setMagicLinkSent(true);
+    setLoading(null);
+    startCooldown();
+  };
+
+  const handleResend = async () => {
+    if (cooldown > 0) return;
+
+    const { createClient } = await import('@/lib/supabase/client');
+    const supabase = createClient();
+    setLoading('email');
+    setError(null);
+
+    const { error: otpError } = await supabase.auth.signInWithOtp({
+      email: sentEmail,
+      options: {
+        emailRedirectTo: `${window.location.origin}/auth/desktop/callback`,
+      },
+    });
+
+    if (otpError) {
+      setError(otpError.message);
+      setLoading(null);
+      return;
+    }
+
+    setLoading(null);
+    startCooldown();
+  };
+
+  const handleBackToLogin = () => {
+    setMagicLinkSent(false);
+    setError(null);
+    setCooldown(0);
+    if (cooldownRef.current) clearInterval(cooldownRef.current);
+  };
+
+  // Magic link sent confirmation view
+  if (magicLinkSent) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gray-50 py-12 px-4 sm:px-6 lg:px-8">
+        <div className="max-w-md w-full space-y-8">
+          <div className="text-center">
+            <h1 className="text-3xl font-bold text-gray-900">Keepr.</h1>
+          </div>
+
+          {/* Error (e.g., resend failure) */}
+          {error && (
+            <div className="rounded-md bg-red-50 border border-red-200 p-4">
+              <p className="text-sm text-red-700">{error}</p>
+            </div>
+          )}
+
+          <div className="bg-white rounded-lg shadow p-8 text-center space-y-4">
+            <div className="text-green-600">
+              <svg
+                className="w-12 h-12 mx-auto"
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke="currentColor"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"
+                />
+              </svg>
+            </div>
+            <h3 className="text-lg font-medium text-gray-900">Check your email</h3>
+            <p className="text-sm text-gray-600">
+              We sent a magic link to <span className="font-medium">{sentEmail}</span>
+            </p>
+            <p className="text-sm text-gray-500">
+              Click the link in the email to sign in to the desktop app.
+            </p>
+
+            <div className="pt-4 space-y-3">
+              <p className="text-sm text-gray-500">
+                Didn&apos;t receive it?{' '}
+                <button
+                  onClick={handleResend}
+                  disabled={cooldown > 0 || loading === 'email'}
+                  className="text-blue-600 hover:text-blue-500 font-medium disabled:text-gray-400 disabled:cursor-not-allowed"
+                >
+                  {loading === 'email'
+                    ? 'Sending...'
+                    : cooldown > 0
+                      ? `Resend in ${cooldown}s`
+                      : 'Resend'}
+                </button>
+              </p>
+              <button
+                onClick={handleBackToLogin}
+                className="text-sm text-gray-500 hover:text-gray-700 underline"
+              >
+                Back to login
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gray-50 py-12 px-4 sm:px-6 lg:px-8">
@@ -153,6 +321,42 @@ function DesktopLoginForm() {
             <span>{loading === 'azure' ? 'Signing in...' : 'Continue with Microsoft'}</span>
           </button>
         </div>
+
+        {/* Divider */}
+        <div className="relative">
+          <div className="absolute inset-0 flex items-center">
+            <div className="w-full border-t border-gray-300" />
+          </div>
+          <div className="relative flex justify-center text-sm">
+            <span className="px-2 bg-gray-50 text-gray-500">or</span>
+          </div>
+        </div>
+
+        {/* Magic Link */}
+        <form onSubmit={handleMagicLink} className="space-y-3">
+          <input
+            type="email"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            placeholder="Enter your email address"
+            required
+            className="w-full px-4 py-3 border border-gray-300 rounded-lg shadow-sm bg-white text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors"
+          />
+          <button
+            type="submit"
+            disabled={loading !== null}
+            className="w-full px-4 py-3 bg-blue-600 text-white rounded-lg shadow-sm hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed transition-colors font-medium"
+          >
+            {loading === 'email' ? (
+              <span className="flex items-center justify-center gap-2">
+                <span className="animate-spin h-5 w-5 border-2 border-white border-t-transparent rounded-full" />
+                Sending...
+              </span>
+            ) : (
+              'Continue with email'
+            )}
+          </button>
+        </form>
 
         {/* Footer */}
         <p className="text-center text-sm text-gray-500">
