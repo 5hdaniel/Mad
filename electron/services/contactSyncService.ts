@@ -16,6 +16,7 @@
 import logService from './logService';
 import * as externalContactDb from './db/externalContactDbService';
 import { isContactSourceEnabled } from '../utils/preferenceHelper';
+import { GoogleContactProvider } from './providers/googleContactProvider';
 
 // ============================================
 // TYPES & INTERFACES
@@ -305,8 +306,11 @@ export class ContactSyncService {
 
 /**
  * Default singleton instance of the contact sync service.
- * Providers are registered during app initialization.
+ * Providers are registered during initialization.
  */
 const contactSyncService = new ContactSyncService();
+
+// Register providers
+contactSyncService.registerProvider(new GoogleContactProvider());
 
 export default contactSyncService;
