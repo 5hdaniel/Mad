@@ -54,7 +54,18 @@ export function registerFeatureGateHandlers(): void {
 
       const orgId = await resolveOrgId();
       if (!orgId) {
-        // No org => individual user, fail-open (allow all)
+        // No org => individual user
+        // Explicitly deny team/enterprise features
+        const teamFeatures = [
+          "broker_submission",
+          "ai_detection",
+          "broker_email_view",
+          "broker_email_attachments",
+        ];
+        if (teamFeatures.includes(featureKey)) {
+          return { allowed: false, value: "", source: "default" };
+        }
+        // Individual features remain fail-open
         return { allowed: true, value: "", source: "default" };
       }
 
@@ -75,8 +86,15 @@ export function registerFeatureGateHandlers(): void {
 
       const orgId = await resolveOrgId();
       if (!orgId) {
-        // No org => individual user, return empty (nothing gated)
-        return {};
+        // No org => individual user, restrict team/enterprise features
+        // Individual features (text_export, email_export) remain fail-open
+        // Team/Enterprise features are explicitly denied
+        return {
+          broker_submission: { allowed: false, value: "", source: "default" as const },
+          ai_detection: { allowed: false, value: "", source: "default" as const },
+          broker_email_view: { allowed: false, value: "", source: "default" as const },
+          broker_email_attachments: { allowed: false, value: "", source: "default" as const },
+        };
       }
 
       return featureGateService.getAllFeatures(orgId);
