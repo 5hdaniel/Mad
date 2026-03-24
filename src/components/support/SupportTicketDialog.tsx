@@ -118,6 +118,7 @@ export function SupportTicketDialog({
   if (success) {
     return (
       <div
+        data-support-widget
         className="fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center z-50 p-4"
         onClick={handleClose}
       >
@@ -171,6 +172,7 @@ export function SupportTicketDialog({
 
   return (
     <div
+      data-support-widget
       className="fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center z-50 p-4"
       onClick={handleClose}
     >
