@@ -9,7 +9,6 @@
 
 import { ipcMain } from "electron";
 import type { IpcMainInvokeEvent } from "electron";
-import sessionService from "../services/sessionService";
 import supabaseService from "../services/supabaseService";
 import featureGateService from "../services/featureGateService";
 import type { FeatureAccess } from "../services/featureGateService";
@@ -20,10 +19,13 @@ import logService from "../services/logService";
  * Returns null if the user has no org membership.
  */
 async function resolveOrgId(): Promise<string | null> {
-  const session = await sessionService.loadSession();
+  // Get session from the Supabase client (in-memory auth), NOT from session file
+  const client = supabaseService.getClient();
+  const { data: { session } } = await client.auth.getSession();
+
   if (!session?.user?.id) {
     logService.warn(
-      "[FeatureGate] No active session, cannot resolve org",
+      "[FeatureGate] No active Supabase session, cannot resolve org",
       "FeatureGateHandlers"
     );
     return null;
@@ -39,19 +41,11 @@ async function resolveOrgId(): Promise<string | null> {
     session.user.id
   );
 
-  if (membership) {
-    logService.warn(
-      "[FeatureGate] Org resolved successfully",
-      "FeatureGateHandlers",
-      { orgId: membership.organization_id, orgName: membership.organization_name }
-    );
-  } else {
-    logService.warn(
-      "[FeatureGate] No org membership found — user is individual",
-      "FeatureGateHandlers",
-      { userId: session.user.id }
-    );
-  }
+  logService.warn(
+    "[FeatureGate] Org resolution result",
+    "FeatureGateHandlers",
+    { orgId: membership?.organization_id ?? "none" }
+  );
 
   return membership?.organization_id ?? null;
 }
