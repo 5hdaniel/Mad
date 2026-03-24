@@ -172,6 +172,9 @@ PHASE D: PR, TEST & MERGE
 
 12b. SR ENGINEER: Merge PR (only after user approval)
     - gh pr merge <PR> --merge
+    - **CRITICAL:** If merge is blocked by branch protection, merge the target branch
+      into the PR branch and wait for CI. Do NOT use `--admin`. Only the user can
+      authorize `--admin`, and only with explicit words like "use --admin".
     - Verify merge succeeded
     - SR Engineer MUST include own `### Effort` section in handoff to PM
     - If fix agents were spawned for CI failures, include those agent_ids too

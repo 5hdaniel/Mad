@@ -302,6 +302,41 @@ If an existing fix branch seems related:
 
 ---
 
+## Strict Branch Protection (`strict: true`)
+
+The `develop` branch requires `strict: true` in branch protection. This means:
+
+1. All required CI checks must pass (Test & Lint macOS/Windows, Security Audit)
+2. The PR branch must include the latest commits from the target branch
+
+### The Sequential PR Problem
+
+When merging multiple PRs to the same target:
+
+```
+PR-A merges → develop moves to commit X
+PR-B was based on commit X-1 → now out of date → merge blocked
+Fix: merge develop into PR-B → push → CI runs → merge
+PR-B merges → develop moves to commit Y
+PR-C now out of date → repeat
+```
+
+### Recovery Steps
+
+When `gh pr merge` fails with "base branch policy prohibits the merge":
+
+```bash
+git fetch origin develop
+git merge origin/develop --no-edit
+git push origin <branch>
+# Wait for CI to pass
+gh pr merge <PR> --merge
+```
+
+NEVER use `--admin` to bypass this. The strict check exists to ensure code is tested against the latest target branch state.
+
+---
+
 ## Git Worktrees (Parallel Sprint Execution)
 
 > **MANDATORY for Background Agents:** If you are running as a background agent (`run_in_background: true`) or executing parallel sprint tasks, you MUST use isolated git worktrees. This is NON-NEGOTIABLE.
