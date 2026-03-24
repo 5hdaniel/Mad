@@ -594,13 +594,13 @@ describe("autoLinkService", () => {
         expect(firstCallParams).toContain("%elm%");
       });
 
-      it("should NOT fall back when matching emails are already linked to the transaction", async () => {
-        // BUG SCENARIO (TASK-2087 QA fix):
+      it("should fall back to unfiltered when matching emails are already linked (BACKLOG-1340)", async () => {
+        // BACKLOG-1340 FIX:
         // 1. Transaction has address "456 Maple Drive"
         // 2. Email matching "456 maple" exists but is already linked to this transaction
         // 3. findEmailsByContactEmails returns 0 unlinked results (email is linked, c.id IS NULL filters it)
-        // 4. OLD behavior: fallback triggers, returns ALL unlinked emails (wrong!)
-        // 5. NEW behavior: countEmailsMatchingAddress returns > 0, so fallback is suppressed
+        // 4. PREVIOUS behavior: countEmailsMatchingAddress > 0 suppressed the fallback
+        // 5. NEW behavior: fallback ALWAYS runs when 0 unlinked results, to catch non-address emails
 
         // Track calls to find query vs count query
         let findEmailCallCount = 0;
@@ -634,8 +634,8 @@ describe("autoLinkService", () => {
           if (sql.includes("FROM contact_phones")) return [];
           if (sql.includes("FROM emails e")) {
             findEmailCallCount++;
-            // First call (with address filter + c.id IS NULL): 0 results
-            // The email exists but is already linked, so c.id IS NULL excludes it
+            // First call (with address filter): 0 unlinked results
+            // Second call (fallback, no address filter): also 0 (all emails are linked)
             return [];
           }
           return [];
@@ -648,9 +648,9 @@ describe("autoLinkService", () => {
 
         // Should NOT have linked anything (all matching emails are already linked)
         expect(result.emailsLinked).toBe(0);
-        // findEmailsByContactEmails should only be called ONCE (no fallback)
-        expect(findEmailCallCount).toBe(1);
-        // countEmailsMatchingAddress should have been called to check
+        // BACKLOG-1340: findEmailsByContactEmails is now called TWICE (with address, then fallback without)
+        expect(findEmailCallCount).toBe(2);
+        // countEmailsMatchingAddress should have been called for diagnostic logging
         expect(countCallCount).toBe(1);
         // No dbRun calls (no emails to link)
         expect(mockDbRun).not.toHaveBeenCalled();
