@@ -11,7 +11,7 @@
  * - Handler methods for complex operations
  */
 
-import { useCallback, useMemo } from "react";
+import { useCallback, useEffect, useMemo, useRef } from "react";
 import { useAuth, useNetwork, usePlatform } from "../../contexts";
 import { useFeatureGate } from "../../hooks/useFeatureGate";
 import {
@@ -65,8 +65,20 @@ export function useAppStateMachine(): AppStateMachine {
 
   const { isMacOS, isWindows } = usePlatform();
 
-  const { isAllowed } = useFeatureGate();
+  const { isAllowed, refresh: refreshFeatureGate } = useFeatureGate();
   const hasAIAddon = isAllowed("ai_detection");
+
+  // BACKLOG-1348: Refresh feature gate after login completes.
+  // The hook's initial fetch fires before login, caching stale "no org" results.
+  // When isAuthenticated flips to true, invalidate the cache and re-fetch so
+  // org-level features (broker_submission, etc.) resolve correctly.
+  const prevAuthRef = useRef(isAuthenticated);
+  useEffect(() => {
+    if (isAuthenticated && !prevAuthRef.current) {
+      refreshFeatureGate();
+    }
+    prevAuthRef.current = isAuthenticated;
+  }, [isAuthenticated, refreshFeatureGate]);
 
   // ============================================
   // STATE MACHINE (Optional - feature flagged)
