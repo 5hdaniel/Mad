@@ -22,16 +22,37 @@ import logService from "../services/logService";
 async function resolveOrgId(): Promise<string | null> {
   const session = await sessionService.loadSession();
   if (!session?.user?.id) {
-    logService.debug(
+    logService.warn(
       "[FeatureGate] No active session, cannot resolve org",
       "FeatureGateHandlers"
     );
     return null;
   }
 
+  logService.warn(
+    "[FeatureGate] Resolving org for user",
+    "FeatureGateHandlers",
+    { userId: session.user.id, email: session.user.email }
+  );
+
   const membership = await supabaseService.getActiveOrganizationMembership(
     session.user.id
   );
+
+  if (membership) {
+    logService.warn(
+      "[FeatureGate] Org resolved successfully",
+      "FeatureGateHandlers",
+      { orgId: membership.organization_id, orgName: membership.organization_name }
+    );
+  } else {
+    logService.warn(
+      "[FeatureGate] No org membership found — user is individual",
+      "FeatureGateHandlers",
+      { userId: session.user.id }
+    );
+  }
+
   return membership?.organization_id ?? null;
 }
 
@@ -46,7 +67,7 @@ export function registerFeatureGateHandlers(): void {
       _event: IpcMainInvokeEvent,
       featureKey: string
     ): Promise<FeatureAccess> => {
-      logService.debug(
+      logService.warn(
         "[FeatureGate] Checking feature",
         "FeatureGateHandlers",
         { featureKey }
@@ -79,7 +100,7 @@ export function registerFeatureGateHandlers(): void {
     async (
       _event: IpcMainInvokeEvent
     ): Promise<Record<string, FeatureAccess>> => {
-      logService.debug(
+      logService.warn(
         "[FeatureGate] Getting all features",
         "FeatureGateHandlers"
       );
