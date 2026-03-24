@@ -384,6 +384,24 @@ gh pr view <PR-NUMBER> --json state --jq '.state'
 | `OPEN` | Merge failed | Investigate and retry |
 | `CLOSED` | PR closed without merge | Work is LOST - escalate |
 
+### When Merge is Blocked by Branch Protection
+
+If `gh pr merge` fails with "the base branch policy prohibits the merge":
+
+1. **Do NOT use `--admin`** — ever
+2. Merge the target branch into your feature branch:
+   ```bash
+   git fetch origin develop
+   git merge origin/develop --no-edit
+   git push origin <your-branch>
+   ```
+3. Wait for CI to pass on the updated branch
+4. Try `gh pr merge <PR> --merge` again
+
+**Why this happens:** Branch protection has `strict: true`, meaning your branch must include the latest target branch commits. When other PRs merge to develop while your CI is running, your branch falls behind.
+
+**When merging multiple PRs sequentially:** Each merge moves develop forward. Before merging the next PR, always merge develop into it first.
+
 ### Session-End Check
 
 Before ending any session:

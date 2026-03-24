@@ -130,6 +130,15 @@ Wait for user approval before writing any code. This prevents wasted effort from
 
 4. **Merge command**: Use exactly `gh pr merge <PR> --merge` unless told otherwise.
 
+5. **--admin flag**: NEVER use `gh pr merge --admin` or any flag to bypass CI or branch protection. If merge is blocked:
+   a. Merge the target branch into your feature branch: `git fetch origin <base> && git merge origin/<base> --no-edit`
+   b. Push to trigger fresh CI: `git push origin <branch>`
+   c. Wait for all CI checks to pass
+   d. Merge normally: `gh pr merge <PR> --merge`
+   Even if tests appear to be passing, `strict: true` exists for a reason — it ensures code is tested against the latest target branch. Using `--admin` bypasses this safety check.
+
+   **Incident Reference:** PRs #1411/#1412 were merged with `--admin` without user permission, bypassing `strict: true` branch protection.
+
 ### Why This Matters
 
 Adding unrequested actions:

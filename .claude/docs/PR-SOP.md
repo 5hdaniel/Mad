@@ -553,6 +553,16 @@ gh pr view <PR-NUMBER> --json state --jq '.state'
 
 **Do NOT mark the task as complete until you see `MERGED`.**
 
+### --admin Flag (PROHIBITED)
+
+NEVER use `--admin` to bypass branch protection. This includes:
+- `gh pr merge --admin`
+- Any workaround to skip required status checks
+
+If merge is blocked, the fix is ALWAYS: merge base branch into feature branch, push, wait for CI.
+
+**Incident Reference:** PRs #1411/#1412 were merged with `--admin` without explicit user approval.
+
 ### 9.3 Post-Merge
 - [ ] Verify merge completed: `gh pr view <PR> --json state` shows `MERGED`
 - [ ] Delete local branch: `git branch -d your-branch-name`
