@@ -176,14 +176,23 @@ export async function checkAppleDrivers(): Promise<AppleDriverStatus> {
       serviceRunning: result.serviceRunning,
     });
 
+    // BACKLOG-1354: Enhanced breadcrumb with full driver diagnostic context
+    // for remote troubleshooting of iPhone sync issues on Windows
+    const serviceStatusLabel = result.serviceRunning
+      ? "running"
+      : result.isInstalled
+        ? "stopped"
+        : "not-found";
+
     Sentry.addBreadcrumb({
-      category: "driver.check",
-      message: `Apple driver check: installed=${result.isInstalled}, version=${result.version}, service=${result.serviceRunning}`,
+      category: "iphone.driver",
+      message: `Apple driver check: installed=${result.isInstalled}, version=${result.version}, service=${serviceStatusLabel}`,
       level: "info",
       data: {
-        isInstalled: result.isInstalled,
-        version: result.version,
-        serviceRunning: result.serviceRunning,
+        registryFound: result.isInstalled,
+        driverVersion: result.version,
+        serviceStatus: serviceStatusLabel,
+        installationPathFound: result.isInstalled,
       },
     });
 
@@ -537,6 +546,20 @@ function runMsiInstaller(msiPath: string): Promise<DriverInstallResult> {
       log.info("[AppleDriverService] Installer exited with code:", code);
       log.info("[AppleDriverService] stdout:", stdout);
       if (stderr) log.info("[AppleDriverService] stderr:", stderr);
+
+      // BACKLOG-1354: Breadcrumb with full MSI installer result for remote diagnostics
+      const uacDenied = code === 1602 || code === 1;
+      Sentry.addBreadcrumb({
+        category: "iphone.driver",
+        message: `MSI installer exited with code ${code}`,
+        level: code === 0 || code === 3010 ? "info" : "warning",
+        data: {
+          exitCode: code,
+          uacDenied,
+          stderr: stderr.substring(0, 300) || "(none)",
+          stdout: stdout.substring(0, 200) || "(none)",
+        },
+      });
 
       if (code === 0) {
         resolve({
