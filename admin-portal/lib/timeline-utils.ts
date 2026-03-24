@@ -60,6 +60,8 @@ export function getEventIcon(eventType: string): { symbol: string; color: string
       return { symbol: '+', color: 'bg-gray-100 text-gray-600' };
     case 'participant_removed':
       return { symbol: '-', color: 'bg-gray-100 text-gray-600' };
+    case 'internal_note_deleted':
+      return { symbol: '\u2715', color: 'bg-amber-100 text-amber-600' };
     default:
       return { symbol: '\u2022', color: 'bg-gray-100 text-gray-600' };
   }
@@ -92,6 +94,8 @@ export function getEventDescription(event: SupportTicketEvent): string {
       return `Added ${event.new_value || 'participant'}`;
     case 'participant_removed':
       return `Removed ${event.old_value || 'participant'}`;
+    case 'internal_note_deleted':
+      return 'Internal note deleted';
     default:
       return event.event_type.replace(/_/g, ' ');
   }
