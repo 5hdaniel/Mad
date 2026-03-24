@@ -163,10 +163,16 @@ export function contentContainsAddress(
  * Generic fallback helper for address-filtered queries.
  *
  * Runs `queryFn` with the normalized address. If the result is empty and an
- * address was provided, retries without the address filter — UNLESS
- * `countWithFilter` reports that matching items exist (they're just already
- * linked). In that case the address filter is working correctly and the
- * fallback is suppressed.
+ * address was provided, retries without the address filter.
+ *
+ * BACKLOG-1340: The fallback now ALWAYS runs when the address-filtered query
+ * returns 0 unlinked results, even if some already-linked emails match the
+ * address. Previously, `countWithFilter > 0` suppressed the fallback, which
+ * prevented new emails from contacts that don't mention the street address
+ * from ever being auto-linked.
+ *
+ * The `countWithFilter` callback is still called for diagnostic logging but
+ * no longer gates the fallback decision.
  *
  * This eliminates the duplicated "try with address, fall back without" pattern
  * used by autoLinkService and messageMatchingService.
@@ -176,8 +182,7 @@ export function contentContainsAddress(
  * @param debugLog - Callback for logging fallback events (avoids importing logService here)
  * @param entityType - Label for log messages (e.g. "emails", "matches")
  * @param countWithFilter - Optional callback that returns the total count of items matching
- *   the address filter INCLUDING already-linked ones. When > 0, the fallback is suppressed
- *   because the filter is valid — the 0 unlinked results just means everything is linked.
+ *   the address filter INCLUDING already-linked ones. Used for diagnostic logging only.
  * @returns The query results (filtered if possible, unfiltered as fallback)
  */
 export async function withAddressFallback<T>(
@@ -190,24 +195,30 @@ export async function withAddressFallback<T>(
   const results = await queryFn(normalizedAddress);
 
   if (results.length === 0 && normalizedAddress) {
-    // Before falling back, check if matching items exist but are already linked.
-    // If countWithFilter returns > 0, the address filter is correct — the items
-    // are just already linked to this transaction, so we should NOT fall back.
+    // BACKLOG-1340: Log how many total (including linked) match the address for diagnostics.
+    // This helps distinguish "address filter too strict" from "all matching emails already linked".
+    let totalMatching = 0;
     if (countWithFilter) {
-      const totalMatching = await countWithFilter(normalizedAddress);
+      totalMatching = await countWithFilter(normalizedAddress);
       if (totalMatching > 0) {
         await debugLog(
-          `Address filter kept: ${totalMatching} ${entityType} match "${normalizedAddress.full}" but all are already linked, no fallback`
+          `Address filter: ${totalMatching} ${entityType} match "${normalizedAddress.full}" but all are already linked — falling back to unfiltered to catch non-address emails`
         );
-        return results; // Return empty — everything matching is already linked
       }
     }
 
-    // Address filter eliminated all results - retry without it
+    // BACKLOG-1340: Always fall back when address-filtered query returns 0 unlinked results.
+    // Even if some already-linked emails match the address, there may be new emails from
+    // contacts that don't mention the street address in the body (e.g. scheduling emails,
+    // general correspondence). These should still be auto-linked.
     const unfiltered = await queryFn(null);
     if (unfiltered.length > 0) {
       await debugLog(
-        `Address filter fallback: no ${entityType} matched "${normalizedAddress.full}", returning ${unfiltered.length} unfiltered`
+        `Address filter fallback: ${results.length} ${entityType} matched "${normalizedAddress.full}" (${totalMatching} total incl. linked), returning ${unfiltered.length} unfiltered`
+      );
+    } else if (totalMatching === 0) {
+      await debugLog(
+        `Address filter fallback: no ${entityType} matched "${normalizedAddress.full}" even without filter`
       );
     }
     return unfiltered;
