@@ -8,6 +8,7 @@
  * @see TASK-1031
  */
 
+import * as Sentry from "@sentry/electron/main";
 import { dbAll, dbGet, dbRun } from "./db/core/dbConnection";
 import logService from "./logService";
 import { normalizePhone } from "./messageMatchingService";
@@ -108,6 +109,20 @@ async function getContactInfo(contactId: string): Promise<ContactInfo | null> {
   const phoneNumbers = phoneRows
     .map((r) => normalizePhone(r.phone_e164))
     .filter((p): p is string => p !== null);
+
+  // BACKLOG-1340: Sentry breadcrumb for contact email resolution diagnostics
+  Sentry.addBreadcrumb({
+    category: "auto_link.contact_resolution",
+    message: `Resolved contact info: ${emails.length} emails, ${phoneNumbers.length} phones`,
+    level: "info",
+    data: {
+      contactId,
+      emailCount: emails.length,
+      phoneCount: phoneNumbers.length,
+      hasEmails: emails.length > 0,
+      hasPhones: phoneNumbers.length > 0,
+    },
+  });
 
   return {
     id: contactId,
@@ -523,6 +538,12 @@ export async function autoLinkCommunicationsForContact(
         `Contact not found for auto-link: ${contactId}`,
         "AutoLinkService"
       );
+      Sentry.addBreadcrumb({
+        category: "auto_link.abort",
+        message: "Contact not found",
+        level: "warning",
+        data: { contactId, transactionId },
+      });
       return result;
     }
 
@@ -532,6 +553,13 @@ export async function autoLinkCommunicationsForContact(
         `Contact ${contactId} has no email or phone, skipping auto-link`,
         "AutoLinkService"
       );
+      // BACKLOG-1340: Log when contact has no email addresses — common root cause
+      Sentry.addBreadcrumb({
+        category: "auto_link.abort",
+        message: "Contact has no email addresses or phone numbers in contact_emails/contact_phones tables",
+        level: "warning",
+        data: { contactId, transactionId },
+      });
       return result;
     }
 
@@ -543,7 +571,23 @@ export async function autoLinkCommunicationsForContact(
         `Transaction not found for auto-link: ${transactionId}`,
         "AutoLinkService"
       );
+      Sentry.addBreadcrumb({
+        category: "auto_link.abort",
+        message: "Transaction not found",
+        level: "warning",
+        data: { contactId, transactionId },
+      });
       return result;
+    }
+
+    // BACKLOG-1340: Log when transaction has no contacts assigned
+    if (!transactionInfo.propertyAddress) {
+      Sentry.addBreadcrumb({
+        category: "auto_link.context",
+        message: "Transaction has no property address — address filter will be skipped entirely",
+        level: "info",
+        data: { transactionId },
+      });
     }
 
     const { userId } = transactionInfo;
@@ -562,6 +606,37 @@ export async function autoLinkCommunicationsForContact(
     // When multiple transactions share the same contacts, this helps link emails
     // to the correct transaction by checking if the email content mentions the address.
     const txnNormalizedAddress = normalizeAddress(transactionInfo.propertyAddress);
+
+    // BACKLOG-1340: Log date range validity
+    if (!dateRange.start || !dateRange.end || isNaN(dateRange.start.getTime()) || isNaN(dateRange.end.getTime())) {
+      Sentry.addBreadcrumb({
+        category: "auto_link.abort",
+        message: "Date range is null or invalid",
+        level: "warning",
+        data: {
+          transactionId,
+          contactId,
+          dateRangeStart: dateRange.start?.toISOString?.() ?? null,
+          dateRangeEnd: dateRange.end?.toISOString?.() ?? null,
+        },
+      });
+    }
+
+    // BACKLOG-1340: Comprehensive sync trigger breadcrumb
+    Sentry.addBreadcrumb({
+      category: "auto_link.start",
+      message: `Auto-link starting for contact`,
+      level: "info",
+      data: {
+        contactId,
+        transactionId,
+        contactEmailCount: contactInfo.emails.length,
+        contactPhoneCount: contactInfo.phoneNumbers.length,
+        normalizedAddress: txnNormalizedAddress?.full ?? "(none)",
+        dateRangeStart: dateRange.start.toISOString(),
+        dateRangeEnd: dateRange.end.toISOString(),
+      },
+    });
 
     await logService.info(
       `Auto-linking communications for contact ${contactId} to transaction ${transactionId}`,
@@ -587,6 +662,21 @@ export async function autoLinkCommunicationsForContact(
       "emails",
       (addr) => countEmailsMatchingAddress(userId, contactInfo.emails, transactionId, dateRange, addr)
     );
+
+    // BACKLOG-1340: Breadcrumb for auto-link matching results
+    Sentry.addBreadcrumb({
+      category: "auto_link.email_match",
+      message: `Email matching complete: ${emailIds.length} unlinked emails found`,
+      level: emailIds.length === 0 && contactInfo.emails.length > 0 ? "warning" : "info",
+      data: {
+        contactId,
+        transactionId,
+        emailsFound: emailIds.length,
+        contactEmailCount: contactInfo.emails.length,
+        hasAddress: !!txnNormalizedAddress,
+        normalizedAddress: txnNormalizedAddress?.full ?? "(none)",
+      },
+    });
 
     await logService.debug(
       `Found ${emailIds.length} matching emails for contact ${contactId}`,
@@ -702,6 +792,52 @@ export async function autoLinkCommunicationsForContact(
     }
 
     const duration = Date.now() - startTime;
+
+    // BACKLOG-1340: Comprehensive result breadcrumb
+    Sentry.addBreadcrumb({
+      category: "auto_link.complete",
+      message: `Auto-link complete: ${result.emailsLinked} emails, ${result.messagesLinked} threads linked`,
+      level: "info",
+      data: {
+        contactId,
+        transactionId,
+        emailsLinked: result.emailsLinked,
+        messagesLinked: result.messagesLinked,
+        alreadyLinked: result.alreadyLinked,
+        errors: result.errors,
+        durationMs: duration,
+      },
+    });
+
+    // BACKLOG-1340: Capture warning when auto-link finds 0 results despite having contacts with emails.
+    // This is the key diagnostic for the silent failure scenario.
+    if (
+      result.emailsLinked === 0 &&
+      result.messagesLinked === 0 &&
+      result.alreadyLinked === 0 &&
+      (contactInfo.emails.length > 0 || contactInfo.phoneNumbers.length > 0)
+    ) {
+      Sentry.captureMessage(
+        `Auto-link completed with 0 results for contact with ${contactInfo.emails.length} emails and ${contactInfo.phoneNumbers.length} phones`,
+        {
+          level: "warning",
+          tags: {
+            feature: "auto_link",
+            issue: "zero_results",
+          },
+          extra: {
+            contactId,
+            transactionId,
+            contactEmailCount: contactInfo.emails.length,
+            contactPhoneCount: contactInfo.phoneNumbers.length,
+            normalizedAddress: txnNormalizedAddress?.full ?? "(none)",
+            dateRangeStart: dateRange.start.toISOString(),
+            dateRangeEnd: dateRange.end.toISOString(),
+            durationMs: duration,
+          },
+        }
+      );
+    }
 
     await logService.info(
       `Auto-link complete for contact ${contactId}`,

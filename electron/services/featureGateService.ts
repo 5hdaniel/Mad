@@ -102,7 +102,7 @@ class FeatureGateService {
     }
 
     // 4. No cache at all => fail-open
-    logService.info(
+    logService.warn(
       "[FeatureGate] No cache available, defaulting to allowed (fail-open)",
       "FeatureGateService",
       { orgId, featureKey }
@@ -144,7 +144,7 @@ class FeatureGateService {
     }
 
     // 4. No cache => empty (fail-open means nothing is blocked)
-    logService.info(
+    logService.warn(
       "[FeatureGate] No cache available, returning empty features (fail-open)",
       "FeatureGateService",
       { orgId }
@@ -223,7 +223,7 @@ class FeatureGateService {
   // ============================================
 
   private async fetchFromSupabase(orgId: string): Promise<void> {
-    logService.debug(
+    logService.warn(
       "[FeatureGate] Fetching features from Supabase",
       "FeatureGateService",
       { orgId }
@@ -231,13 +231,61 @@ class FeatureGateService {
 
     const client = supabaseService.getClient();
 
+    // BACKLOG-1348: Ensure the Supabase client has a valid auth session before calling the RPC.
+    // The get_org_features RPC uses auth.uid() server-side, which requires an active session.
+    // With persistSession: false, the session is only in-memory and may not be set if:
+    //   - The feature gate check runs before session restoration completes
+    //   - The token expired and wasn't auto-refreshed
+    const { data: sessionData } = await client.auth.getSession();
+    if (!sessionData?.session) {
+      logService.warn(
+        "[FeatureGate] No active Supabase auth session — RPC will likely fail. " +
+        "Attempting session refresh from stored tokens.",
+        "FeatureGateService",
+        { orgId }
+      );
+      // Try to get auth session from supabaseService cache (may trigger SDK refresh)
+      const authSession = await supabaseService.getAuthSession();
+      if (!authSession) {
+        logService.warn(
+          "[FeatureGate] Cannot restore Supabase auth session — no cached session available. " +
+          "Feature gate RPC will fail (no auth.uid()).",
+          "FeatureGateService",
+          { orgId }
+        );
+        throw new Error("No Supabase auth session available for RPC call");
+      }
+      logService.warn(
+        "[FeatureGate] Auth session found in cache, proceeding with RPC",
+        "FeatureGateService",
+        { orgId, userId: authSession.userId }
+      );
+    } else {
+      logService.warn(
+        "[FeatureGate] Auth session active, calling RPC",
+        "FeatureGateService",
+        { orgId, userId: sessionData.session.user?.id }
+      );
+    }
+
     const { data, error } = await client.rpc("get_org_features", {
       p_org_id: orgId,
     });
 
     if (error) {
+      logService.warn(
+        "[FeatureGate] RPC get_org_features failed",
+        "FeatureGateService",
+        { orgId, errorMessage: error.message, errorCode: error.code }
+      );
       throw new Error(`get_org_features RPC failed: ${error.message}`);
     }
+
+    logService.warn(
+      "[FeatureGate] RPC get_org_features response received",
+      "FeatureGateService",
+      { orgId, hasData: !!data, dataType: typeof data }
+    );
 
     // Transform RPC response into feature map
     // get_org_features returns JSONB: { org_id, plan_name, plan_tier, features: { [key]: { enabled, value, source, ... } } }

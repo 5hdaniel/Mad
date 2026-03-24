@@ -668,3 +668,63 @@ export async function supportDeleteSavedView(viewId: string): Promise<{ success:
   if (error) throw error;
   return data as unknown as { success: boolean };
 }
+
+// ---------------------------------------------------------------------------
+// Backlog Links (BACKLOG-1343)
+// ---------------------------------------------------------------------------
+
+export interface BacklogLinkRow {
+  id: string;
+  link_type: 'fix' | 'related' | 'duplicate';
+  backlog_item_id: string;
+  item_number: number;
+  title: string;
+  status: string;
+  priority: string;
+}
+
+/**
+ * Fetch backlog items linked to a support ticket.
+ * Joins support_ticket_backlog_links with pm_backlog_items.
+ */
+export async function getBacklogLinks(ticketId: string): Promise<BacklogLinkRow[]> {
+  const supabase = createClient();
+  const { data, error } = await supabase
+    .from('support_ticket_backlog_links')
+    .select(`
+      id,
+      link_type,
+      backlog_item_id,
+      pm_backlog_items!inner (
+        item_number,
+        title,
+        status,
+        priority
+      )
+    `)
+    .eq('ticket_id', ticketId)
+    .order('created_at', { ascending: false });
+
+  if (error) throw error;
+
+  // Flatten the joined result
+  return ((data ?? []) as unknown as Array<{
+    id: string;
+    link_type: 'fix' | 'related' | 'duplicate';
+    backlog_item_id: string;
+    pm_backlog_items: {
+      item_number: number;
+      title: string;
+      status: string;
+      priority: string;
+    };
+  }>).map((row) => ({
+    id: row.id,
+    link_type: row.link_type,
+    backlog_item_id: row.backlog_item_id,
+    item_number: row.pm_backlog_items.item_number,
+    title: row.pm_backlog_items.title,
+    status: row.pm_backlog_items.status,
+    priority: row.pm_backlog_items.priority,
+  }));
+}

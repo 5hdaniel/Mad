@@ -293,6 +293,7 @@ describe("supportTicketService", () => {
           capturePage: jest.fn().mockResolvedValue({
             toPNG: jest.fn().mockReturnValue(mockPngBuffer),
           }),
+          executeJavaScript: jest.fn().mockResolvedValue(undefined),
         },
       });
 

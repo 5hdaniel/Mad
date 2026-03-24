@@ -37,6 +37,9 @@ import { normalizePhoneNumber } from "../utils/phoneNormalization";
 import { getValidUserId } from "../utils/userIdHelper";
 import { isContactSourceEnabled } from "../utils/preferenceHelper";
 import outlookFetchService from "../services/outlookFetchService";
+import contactSyncService from "../services/contactSyncService";
+import { OutlookContactProvider } from "../services/providers/outlookContactProvider";
+import { GoogleContactProvider } from "../services/providers/googleContactProvider";
 
 // Import handler types
 import type {
@@ -129,6 +132,12 @@ async function backfillImportedContactsFromExternal(userId: string): Promise<{ u
  */
 export function registerContactHandlers(mainWindow: BrowserWindow): void {
   _mainWindow = mainWindow;
+
+  // TASK-2300: Register contact sync providers
+  // TASK-2301: Both providers registered here (not at module load) to avoid side effects during import
+  contactSyncService.registerProvider(new OutlookContactProvider());
+  contactSyncService.registerProvider(new GoogleContactProvider());
+
   // Get all imported contacts for a user (local database only)
   ipcMain.handle(
     "contacts:get-all",
@@ -247,6 +256,7 @@ export function registerContactHandlers(mainWindow: BrowserWindow): void {
         // TASK-1950: Check contact source preferences
         const macosEnabled = await isContactSourceEnabled(validatedUserId, "direct", "macosContacts", true);
         const outlookEnabled = await isContactSourceEnabled(validatedUserId, "direct", "outlookContacts", true);
+        const googleContactsEnabled = await isContactSourceEnabled(validatedUserId, "direct", "googleContacts", true);
 
         // Convert Contacts app data to contact objects
         const availableContacts: AvailableContact[] = [];
@@ -521,7 +531,10 @@ export function registerContactHandlers(mainWindow: BrowserWindow): void {
           if (extContact.source === "outlook" && !outlookEnabled) {
             continue;
           }
-          if (extContact.source !== "outlook" && !macosEnabled) {
+          if (extContact.source === "google_contacts" && !googleContactsEnabled) {
+            continue;
+          }
+          if (extContact.source !== "outlook" && extContact.source !== "google_contacts" && !macosEnabled) {
             continue;
           }
 
@@ -576,7 +589,9 @@ export function registerContactHandlers(mainWindow: BrowserWindow): void {
             phone: extContact.phones?.[0] || null,
             email: extContact.emails?.[0] || null,
             company: extContact.company || null,
-            source: extContact.source === "outlook" ? "outlook" : "contacts_app",
+            source: extContact.source === "outlook" ? "outlook"
+              : extContact.source === "google_contacts" ? "google_contacts"
+              : "contacts_app",
             allPhones: extContact.phones || [],
             allEmails: extContact.emails || [],
             isFromDatabase: false,
@@ -894,7 +909,7 @@ export function registerContactHandlers(mainWindow: BrowserWindow): void {
         }
 
         // Extract source from input data (falls back to "manual" if not provided)
-        const validSources: ContactSource[] = ["manual", "email", "sms", "messages", "contacts_app", "inferred"];
+        const validSources: ContactSource[] = ["manual", "email", "sms", "messages", "contacts_app", "inferred", "google_contacts"];
         const inputSource = (contactData as { source?: string })?.source;
         const source: ContactSource = validSources.includes(inputSource as ContactSource)
           ? (inputSource as ContactSource)
@@ -1617,6 +1632,7 @@ export function registerContactHandlers(mainWindow: BrowserWindow): void {
   );
 
   // TASK-1921: Sync Outlook contacts to external_contacts table
+  // TASK-2300: Delegates to contactSyncService for provider-agnostic sync
   ipcMain.handle(
     "contacts:syncOutlookContacts",
     async (
@@ -1637,52 +1653,25 @@ export function registerContactHandlers(mainWindow: BrowserWindow): void {
           return { success: false, error: "No valid user found in database" };
         }
 
-        // TASK-1950: Check if Outlook contacts source is enabled
-        const outlookEnabled = await isContactSourceEnabled(validatedUserId, "direct", "outlookContacts", true);
-        if (!outlookEnabled) {
-          logService.info("[Main] Outlook contacts sync skipped (disabled in preferences)", "Contacts", { userId: validatedUserId });
-          return { success: true, count: 0 };
-        }
+        // TASK-2300: Delegate to contactSyncService
+        const result = await contactSyncService.syncProvider(validatedUserId, 'outlook');
 
-        // Initialize the Outlook fetch service with user tokens
-        const initialized = await outlookFetchService.initialize(validatedUserId);
-        if (!initialized) {
-          return { success: false, error: "Failed to initialize Outlook service. Please reconnect your Microsoft mailbox." };
-        }
-
-        // Fetch contacts from Microsoft Graph API
-        const fetchResult = await outlookFetchService.fetchContacts(validatedUserId);
-
-        if (!fetchResult.success) {
+        if (!result.success) {
           return {
             success: false,
-            error: fetchResult.error || "Failed to fetch Outlook contacts",
-            reconnectRequired: fetchResult.reconnectRequired,
+            error: result.error || "Failed to sync Outlook contacts",
+            reconnectRequired: result.reconnectRequired,
           };
         }
 
-        // Map OutlookContact to OutlookContactInput format for DB sync
-        const outlookContacts = fetchResult.contacts.map((contact) => ({
-          external_record_id: contact.external_record_id,
-          name: contact.name,
-          emails: contact.emails,
-          phones: contact.phones,
-          company: contact.company,
-        }));
-
-        // Sync to external_contacts table (upsert + delete stale outlook records)
-        const syncResult = externalContactDb.syncOutlookContacts(validatedUserId, outlookContacts);
-
         logService.info("[Main] Outlook contacts sync complete", "Contacts", {
           userId: validatedUserId,
-          inserted: syncResult.inserted,
-          deleted: syncResult.deleted,
-          total: syncResult.total,
+          count: result.count,
         });
 
         return {
           success: true,
-          count: syncResult.inserted,
+          count: result.count,
         };
       } catch (error) {
         logService.error("[Main] Outlook contacts sync failed", "Contacts", {
@@ -1691,6 +1680,65 @@ export function registerContactHandlers(mainWindow: BrowserWindow): void {
         // TASK-2058: Log failure for offline diagnostics
         failureLogService.logFailure(
           "outlook_contacts_sync",
+          error instanceof Error ? error.message : "Unknown error"
+        );
+        return {
+          success: false,
+          error: error instanceof Error ? error.message : "Unknown error",
+        };
+      }
+    },
+  );
+
+  // TASK-2303: Sync Google contacts to external_contacts table
+  // Mirrors syncOutlookContacts pattern, delegates to contactSyncService
+  ipcMain.handle(
+    "contacts:syncGoogleContacts",
+    async (
+      _event: IpcMainInvokeEvent,
+      userId: string,
+    ): Promise<{
+      success: boolean;
+      count?: number;
+      reconnectRequired?: boolean;
+      error?: string;
+    }> => {
+      try {
+        logService.info("[Main] Google contacts sync requested", "Contacts", { userId });
+
+        // Validate user ID
+        const validatedUserId = await getValidUserId(userId, "Contacts");
+        if (!validatedUserId) {
+          return { success: false, error: "No valid user found in database" };
+        }
+
+        // Delegate to contactSyncService (GoogleContactProvider registered in TASK-2301)
+        const result = await contactSyncService.syncProvider(validatedUserId, 'google_contacts');
+
+        if (!result.success) {
+          return {
+            success: false,
+            error: result.error || "Failed to sync Google contacts",
+            reconnectRequired: result.reconnectRequired,
+          };
+        }
+
+        logService.info("[Main] Google contacts sync complete", "Contacts", {
+          userId: validatedUserId,
+          count: result.count,
+        });
+
+        return {
+          success: true,
+          count: result.count,
+        };
+      } catch (error) {
+        logService.error("[Main] Google contacts sync failed", "Contacts", {
+          error: error instanceof Error ? error.message : "Unknown error",
+        });
+        // Log failure for offline diagnostics
+        failureLogService.logFailure(
+          "google_contacts_sync",
           error instanceof Error ? error.message : "Unknown error"
         );
         return {
