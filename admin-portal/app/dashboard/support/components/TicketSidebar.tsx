@@ -30,6 +30,7 @@ import { StatusBadge } from './StatusBadge';
 import { PriorityBadge } from './PriorityBadge';
 import { ParticipantsPanel } from './ParticipantsPanel';
 import { RelatedTicketsPanel } from './RelatedTicketsPanel';
+import { BacklogLinksPanel } from './BacklogLinksPanel';
 import { formatTimestamp } from '@/lib/format';
 
 interface TicketSidebarProps {
@@ -341,6 +342,8 @@ export function TicketSidebar({ ticket, participants, onTicketUpdated }: TicketS
         onTicketUpdated={onTicketUpdated}
       />
 
+      {/* Backlog Links */}
+      <BacklogLinksPanel ticketId={ticket.id} />
 
       {/* Timestamps */}
       <div className="px-4 py-3">
