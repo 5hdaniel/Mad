@@ -9,7 +9,8 @@
  */
 
 import { useState, useEffect } from 'react';
-import { User, Calendar, AlertCircle } from 'lucide-react';
+import Link from 'next/link';
+import { User, Calendar, AlertCircle, ExternalLink } from 'lucide-react';
 import { updateTicketStatus, updateTicketPriority, updateTicketCategory, assignTicket, getAssignableAgents, getCategories } from '@/lib/support-queries';
 import type { AssignableAgent } from '@/lib/support-queries';
 import type { SupportCategory } from '@/lib/support-types';
@@ -303,10 +304,27 @@ export function TicketSidebar({ ticket, participants, onTicketUpdated }: TicketS
           <div className="h-8 w-8 rounded-full bg-gray-200 flex items-center justify-center">
             <User className="h-4 w-4 text-gray-500" />
           </div>
-          <div>
-            <div className="text-sm font-medium text-gray-900">{ticket.requester_name}</div>
-            <div className="text-xs text-gray-500">{ticket.requester_email}</div>
-          </div>
+          {ticket.requester_id ? (
+            <Link
+              href={`/dashboard/users/${ticket.requester_id}`}
+              className="group flex items-center gap-1 min-w-0"
+            >
+              <div className="min-w-0">
+                <div className="text-sm font-medium text-blue-600 group-hover:underline truncate">
+                  {ticket.requester_name}
+                </div>
+                <div className="text-xs text-gray-500 group-hover:text-blue-500 truncate">
+                  {ticket.requester_email}
+                </div>
+              </div>
+              <ExternalLink className="h-3 w-3 text-gray-400 group-hover:text-blue-500 shrink-0" />
+            </Link>
+          ) : (
+            <div>
+              <div className="text-sm font-medium text-gray-900">{ticket.requester_name}</div>
+              <div className="text-xs text-gray-500">{ticket.requester_email}</div>
+            </div>
+          )}
         </div>
       </div>
 
