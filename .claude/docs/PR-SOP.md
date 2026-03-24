@@ -474,7 +474,16 @@ gh run view <RUN-ID>  # Check Package Application job status
    gh run view <LATEST-RUN-ID>
    ```
 
-### 8.4 LLM Guardrails (for Claude and AI agents)
+### 8.4 QA Routing Rule
+
+**QA agents MUST verify CI is green before presenting test cases to the user.** If CI is failing on a PR:
+1. Do NOT present QA test cases — the PR is not ready for user testing
+2. Route back to the engineer agent to fix the failing tests
+3. Only proceed with QA after all CI checks pass
+
+This prevents wasted user testing time on code that will need to change.
+
+### 8.5 LLM Guardrails (for Claude and AI agents)
 
 When verifying CI status, you MUST:
 
@@ -647,11 +656,25 @@ When reviewing PRs, verify:
 - [ ] **Phase 2**: No debug code, proper formatting, uses LogService
 - [ ] **Phase 3**: No security issues, docs updated
 - [ ] **Phase 4**: Adequate test coverage
+- [ ] **Phase 4a**: Test hygiene — behavioral changes have matching test updates (see below)
 - [ ] **Phase 5**: Type check + lint pass
 - [ ] **Phase 6**: Automated code review completed
 - [ ] **Phase 7**: Clear PR description
 - [ ] **Phase 7.5**: Target branch merged into feature branch (MANDATORY)
 - [ ] **Phase 8**: CI passes (after Phase 7.5 sync)
+
+### Phase 4a: Test Hygiene Verification (MANDATORY)
+
+**Reference:** BACKLOG-1356 — SPRINT-O had repeated CI failures from stale tests.
+
+SR Engineer MUST verify the following during code review:
+
+- [ ] **All test files referencing changed functions/components have been updated.** Search for the changed function names across `*.test.*` files and verify expectations match the new behavior.
+- [ ] **Behavioral changes have corresponding test updates.** If a function's return value, call count, parameters, or error handling changed, tests MUST reflect the new behavior.
+- [ ] **Mock alignment.** If a function signature changed (new params, changed return type), all mocks of that function must match the updated signature.
+- [ ] **No stale assertions.** Check that `expect()` calls match actual behavior — stale `.toHaveBeenCalledTimes()`, `.toEqual()`, or `.toHaveBeenCalledWith()` values are the most common CI failure cause.
+
+**If test hygiene is not met:** Request changes. Do not approve PRs where behavioral changes lack matching test updates.
 
 ### Review Output Format
 
