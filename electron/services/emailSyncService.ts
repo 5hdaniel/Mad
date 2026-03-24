@@ -495,6 +495,21 @@ class EmailSyncService {
 
     logService.info(`Email fetch complete: ${emailsFetched} fetched, ${emailsStored} new stored`, "Transactions");
 
+    // BACKLOG-1340: Provider fetch summary breadcrumb with safety cap check
+    Sentry.addBreadcrumb({
+      category: "auto_link.provider_fetch",
+      message: `Provider fetch summary: ${emailsFetched} fetched, ${emailsStored} stored`,
+      level: emailsFetched >= EMAIL_FETCH_SAFETY_CAP ? "warning" : "info",
+      data: {
+        transactionId,
+        emailsFetched,
+        emailsStored,
+        hitSafetyCap: emailsFetched >= EMAIL_FETCH_SAFETY_CAP,
+        safetyCap: EMAIL_FETCH_SAFETY_CAP,
+        networkErrorOccurred,
+      },
+    });
+
     // Step 2: Auto-link from local DB
     Sentry.addBreadcrumb({
       category: 'sync',
@@ -909,6 +924,18 @@ class EmailSyncService {
     // Get contact email addresses
     const contactEmails = getEmailsByContactId(contactId);
 
+    // BACKLOG-1340: Breadcrumb for contact email resolution in sync flow
+    Sentry.addBreadcrumb({
+      category: "auto_link.sync_trigger",
+      message: `Sync triggered for contact assignment`,
+      level: "info",
+      data: {
+        transactionId,
+        contactId,
+        contactEmailCount: contactEmails.length,
+      },
+    });
+
     let emailsFetched = 0;
     let emailsStored = 0;
 
@@ -922,6 +949,13 @@ class EmailSyncService {
           transactionId,
           contactId,
           contactEmailCount: contactEmails.length,
+        });
+        // BACKLOG-1340: Log cache-skip decision
+        Sentry.addBreadcrumb({
+          category: "auto_link.provider_fetch",
+          message: "Skipped provider fetch — local cache covers audit period",
+          level: "info",
+          data: { transactionId, contactId },
         });
       } else {
       logService.info(`Fetching provider emails for contact assignment`, "EmailSyncService", {
@@ -962,7 +996,29 @@ class EmailSyncService {
         emailsFetched,
         emailsStored,
       });
+
+      // BACKLOG-1340: Breadcrumb for provider fetch results
+      Sentry.addBreadcrumb({
+        category: "auto_link.provider_fetch",
+        message: `Provider fetch complete: ${emailsFetched} fetched, ${emailsStored} new stored`,
+        level: emailsFetched === 0 ? "warning" : "info",
+        data: {
+          transactionId,
+          contactId,
+          emailsFetched,
+          emailsStored,
+          hitSafetyCap: emailsFetched >= EMAIL_FETCH_SAFETY_CAP,
+        },
+      });
       } // end else (provider fetch)
+    } else {
+      // BACKLOG-1340: Contact has no emails — log this edge case
+      Sentry.addBreadcrumb({
+        category: "auto_link.provider_fetch",
+        message: "No contact emails — skipping provider fetch (phone-only contact)",
+        level: "info",
+        data: { transactionId, contactId },
+      });
     }
 
     // Now auto-link from local DB (which includes newly fetched emails)

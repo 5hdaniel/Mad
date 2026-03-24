@@ -320,8 +320,8 @@ describe("addressNormalization", () => {
 
       expect(result).toEqual([]);
       expect(queryFn).toHaveBeenCalledTimes(2);
-      // No log since unfiltered also returned empty
-      expect(debugLog).not.toHaveBeenCalled();
+      // BACKLOG-1340: debugLog IS called with "no ... matched ... even without filter"
+      expect(debugLog).toHaveBeenCalledWith(expect.stringContaining("even without filter"));
     });
 
     it("should skip fallback logic when no address is provided", async () => {
@@ -347,19 +347,23 @@ describe("addressNormalization", () => {
       expect(queryFn).toHaveBeenCalledTimes(1);
     });
 
-    it("should NOT fall back when countWithFilter reports matching items exist (already linked)", async () => {
+    it("should STILL fall back when countWithFilter reports matching items exist (BACKLOG-1340)", async () => {
+      // BACKLOG-1340: Previously the fallback was suppressed when countWithFilter > 0.
+      // Now it always falls back to catch non-address emails from contacts.
       const queryFn = jest.fn()
-        .mockResolvedValueOnce([]);  // filtered query: 0 unlinked results
+        .mockResolvedValueOnce([])             // filtered query: 0 unlinked results
+        .mockResolvedValueOnce(["x", "y"]);    // unfiltered fallback: 2 results
       const debugLog = jest.fn();
       // countWithFilter returns 2: matching emails exist but are already linked
       const countWithFilter = jest.fn().mockResolvedValueOnce(2);
 
       const result = await withAddressFallback(queryFn, testAddr, debugLog, "items", countWithFilter);
 
-      expect(result).toEqual([]);  // Should return empty, NOT fall back
-      expect(queryFn).toHaveBeenCalledTimes(1);  // Only called once (no fallback)
+      expect(result).toEqual(["x", "y"]);  // BACKLOG-1340: Should fall back and return unfiltered results
+      expect(queryFn).toHaveBeenCalledTimes(2);  // Called twice (with address, then fallback without)
       expect(countWithFilter).toHaveBeenCalledWith(testAddr);
       expect(debugLog).toHaveBeenCalledWith(expect.stringContaining("all are already linked"));
+      expect(debugLog).toHaveBeenCalledWith(expect.stringContaining("Address filter fallback"));
     });
 
     it("should fall back when countWithFilter reports 0 matching items", async () => {
