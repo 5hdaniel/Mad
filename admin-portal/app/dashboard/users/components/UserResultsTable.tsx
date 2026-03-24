@@ -46,6 +46,27 @@ function UserAvatar({ name, avatarUrl }: { name: string | null; avatarUrl: strin
   );
 }
 
+function OrgBadges({ orgName }: { orgName: string | null }) {
+  if (!orgName) {
+    return <span className="text-gray-400">&mdash;</span>;
+  }
+
+  const orgs = orgName.split(', ').filter(Boolean);
+
+  return (
+    <div className="flex flex-wrap gap-1">
+      {orgs.map((org) => (
+        <span
+          key={org}
+          className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-primary-50 text-primary-700"
+        >
+          {org}
+        </span>
+      ))}
+    </div>
+  );
+}
+
 function StatusBadge({ status }: { status: string | null }) {
   const statusText = status || 'unknown';
   const isActive = statusText.toLowerCase() === 'active';
@@ -186,8 +207,8 @@ export function UserResultsTable({ users, query, isLoading, error }: UserResults
                 <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                   {user.email || '--'}
                 </td>
-                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                  {user.org_name || user.org_slug || '--'}
+                <td className="px-6 py-4 text-sm text-gray-500">
+                  <OrgBadges orgName={user.org_name || user.org_slug} />
                 </td>
                 <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                   {user.org_role || '--'}
