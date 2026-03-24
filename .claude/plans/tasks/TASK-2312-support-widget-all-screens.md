@@ -1,7 +1,7 @@
 # TASK-2312: Support Widget Visible on All Screens
 
 **Backlog ID:** BACKLOG-1341
-**Sprint:** SPRINT-O
+**Sprint:** SPRINT-P (moved from SPRINT-O)
 **Branch:** `fix/task-2312-support-widget-all-screens`
 **Branch From:** `int/identity-provisioning`
 **Branch Into:** `int/identity-provisioning`
