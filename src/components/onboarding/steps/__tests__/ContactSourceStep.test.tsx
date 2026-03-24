@@ -102,7 +102,7 @@ describe("ContactSourceStep", () => {
       expect(screen.getByText("Outlook / Microsoft 365")).toBeInTheDocument();
     });
 
-    it("renders macOS Contacts but not Outlook on macOS with Google auth", () => {
+    it("renders macOS Contacts and Outlook on macOS with Google auth (TASK-2305 universal visibility)", () => {
       (usePlatform as jest.Mock).mockReturnValue({ isMacOS: true });
 
       render(
@@ -113,7 +113,8 @@ describe("ContactSourceStep", () => {
       );
 
       expect(screen.getByText("macOS Contacts App")).toBeInTheDocument();
-      expect(screen.queryByText("Outlook / Microsoft 365")).not.toBeInTheDocument();
+      // TASK-2305: Outlook is now visible for ALL users regardless of auth provider
+      expect(screen.getByText("Outlook / Microsoft 365")).toBeInTheDocument();
     });
 
     it("renders heading text", () => {
@@ -145,7 +146,7 @@ describe("ContactSourceStep", () => {
       expect(screen.getByText("Outlook / Microsoft 365")).toBeInTheDocument();
     });
 
-    it("does not render Outlook on Windows with Google auth", () => {
+    it("renders Outlook on Windows with Google auth (TASK-2305 universal visibility)", () => {
       (usePlatform as jest.Mock).mockReturnValue({ isMacOS: false });
 
       render(
@@ -155,7 +156,8 @@ describe("ContactSourceStep", () => {
         />
       );
 
-      expect(screen.queryByText("Outlook / Microsoft 365")).not.toBeInTheDocument();
+      // TASK-2305: Outlook is now visible for ALL users regardless of auth provider
+      expect(screen.getByText("Outlook / Microsoft 365")).toBeInTheDocument();
     });
 
     it("renders iPhone Contacts when phone type is iPhone", () => {
@@ -234,15 +236,15 @@ describe("ContactSourceStep", () => {
       fireEvent.click(screen.getByText("Continue"));
 
       await waitFor(() => {
-        // Should save preferences with defaults (macOS=true, others=false per TASK-2305)
-        // Google Contacts is now visible for all users (no authProvider filter)
+        // SSO-aware defaults: Microsoft SSO -> outlookContacts: true, googleContacts: false
+        // All sources visible regardless of auth provider (TASK-2305)
         expect(window.api.preferences.update).toHaveBeenCalledWith(
           "test-user-123",
           {
             contactSources: {
               direct: {
                 macosContacts: true,
-                outlookContacts: false,
+                outlookContacts: true,
                 googleContacts: false,
               },
             },
@@ -274,13 +276,14 @@ describe("ContactSourceStep", () => {
       fireEvent.click(screen.getByText("Continue"));
 
       await waitFor(() => {
+        // macOS Contacts deselected, but SSO-aware defaults keep outlookContacts: true (Microsoft SSO)
         expect(window.api.preferences.update).toHaveBeenCalledWith(
           "test-user-123",
           {
             contactSources: {
               direct: {
                 macosContacts: false,
-                outlookContacts: false,
+                outlookContacts: true,
                 googleContacts: false,
               },
             },
