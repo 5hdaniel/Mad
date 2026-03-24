@@ -9,7 +9,7 @@
  */
 
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { Send, Lock, MessageSquare, ChevronDown, ChevronUp, FileText, Search, X } from 'lucide-react';
+import { Send, Lock, MessageSquare, ChevronDown, ChevronUp, FileText, Search, X, GripHorizontal } from 'lucide-react';
 import { addMessage, uploadAttachment, listTemplates } from '@/lib/support-queries';
 import type { MessageType, SupportResponseTemplate } from '@/lib/support-types';
 import { FileUpload } from './FileUpload';
@@ -277,17 +277,22 @@ export function ReplyComposer({ ticketId, onMessageSent, requesterName, ticketNu
 
       {/* Body */}
       <div className="p-3">
-        <textarea
-          value={body}
-          onChange={(e) => setBody(e.target.value)}
-          onKeyDown={handleKeyDown}
-          placeholder={isNote ? 'Add an internal note (not visible to customer)...' : 'Type your reply...'}
-          rows={5}
-          className={`w-full border-0 resize-y min-h-[120px] max-h-[400px] overflow-y-auto text-sm text-gray-900 focus:outline-none focus:ring-0 ${
-            isNote ? 'bg-amber-50 placeholder-amber-400' : 'bg-white placeholder-gray-400'
-          }`}
-          autoFocus
-        />
+        <div className="relative">
+          <textarea
+            value={body}
+            onChange={(e) => setBody(e.target.value)}
+            onKeyDown={handleKeyDown}
+            placeholder={isNote ? 'Add an internal note (not visible to customer)...' : 'Type your reply...'}
+            rows={5}
+            className={`w-full border-0 resize-y min-h-[120px] max-h-[400px] overflow-y-auto text-sm text-gray-900 focus:outline-none focus:ring-0 pb-5 ${
+              isNote ? 'bg-amber-50 placeholder-amber-400' : 'bg-white placeholder-gray-400'
+            }`}
+            autoFocus
+          />
+          <div className="absolute bottom-1 left-1/2 -translate-x-1/2 pointer-events-none text-gray-300 cursor-row-resize">
+            <GripHorizontal className="h-4 w-4" />
+          </div>
+        </div>
 
         {/* File Upload */}
         <div className="mb-2">
