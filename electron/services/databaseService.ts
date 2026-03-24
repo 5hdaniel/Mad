@@ -632,6 +632,79 @@ class DatabaseService implements IDatabaseService {
         `);
       },
     },
+    {
+      version: 33,
+      description: "Update audit_logs CHECK constraint to include all AuditAction values (BACKLOG-1347)",
+      migrate: (d) => {
+        // SQLite does not support ALTER CHECK, so we must recreate the table.
+        // 1. Create new table with updated CHECK constraint
+        d.exec(`
+          CREATE TABLE IF NOT EXISTS audit_logs_new (
+            id TEXT PRIMARY KEY,
+            user_id TEXT NOT NULL,
+            session_id TEXT,
+            action TEXT NOT NULL CHECK (action IN (
+              'LOGIN', 'LOGOUT', 'LOGIN_FAILED', 'SESSION_REFRESH',
+              'TRANSACTION_CREATE', 'TRANSACTION_UPDATE', 'TRANSACTION_DELETE',
+              'TRANSACTION_SUBMIT',
+              'CONTACT_CREATE', 'CONTACT_UPDATE', 'CONTACT_DELETE',
+              'DATA_ACCESS', 'DATA_EXPORT', 'DATA_DELETE',
+              'EXPORT_START', 'EXPORT_COMPLETE', 'EXPORT_FAIL',
+              'MAILBOX_CONNECT', 'MAILBOX_DISCONNECT',
+              'SETTINGS_CHANGE', 'SETTINGS_UPDATE', 'TERMS_ACCEPT'
+            )),
+            resource_type TEXT,
+            resource_id TEXT,
+            details TEXT,
+            metadata TEXT,
+            ip_address TEXT,
+            user_agent TEXT,
+            success INTEGER DEFAULT 1,
+            error_message TEXT,
+            timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
+            synced_at DATETIME,
+            FOREIGN KEY (user_id) REFERENCES users_local(id) ON DELETE CASCADE
+          );
+        `);
+
+        // 2. Copy existing data
+        d.exec(`INSERT OR IGNORE INTO audit_logs_new SELECT * FROM audit_logs;`);
+
+        // 3. Drop old triggers (they reference audit_logs)
+        d.exec(`DROP TRIGGER IF EXISTS prevent_audit_update;`);
+        d.exec(`DROP TRIGGER IF EXISTS prevent_audit_delete;`);
+
+        // 4. Drop old table
+        d.exec(`DROP TABLE IF EXISTS audit_logs;`);
+
+        // 5. Rename new table
+        d.exec(`ALTER TABLE audit_logs_new RENAME TO audit_logs;`);
+
+        // 6. Recreate indexes
+        d.exec(`CREATE INDEX IF NOT EXISTS idx_audit_logs_user_id ON audit_logs(user_id);`);
+        d.exec(`CREATE INDEX IF NOT EXISTS idx_audit_logs_timestamp ON audit_logs(timestamp);`);
+        d.exec(`CREATE INDEX IF NOT EXISTS idx_audit_logs_action ON audit_logs(action);`);
+        d.exec(`CREATE INDEX IF NOT EXISTS idx_audit_logs_synced ON audit_logs(synced_at);`);
+        d.exec(`CREATE INDEX IF NOT EXISTS idx_audit_logs_resource_type ON audit_logs(resource_type);`);
+        d.exec(`CREATE INDEX IF NOT EXISTS idx_audit_logs_session_id ON audit_logs(session_id);`);
+
+        // 7. Recreate triggers
+        d.exec(`
+          CREATE TRIGGER IF NOT EXISTS prevent_audit_update
+          BEFORE UPDATE ON audit_logs
+          BEGIN
+            SELECT RAISE(ABORT, 'Audit logs cannot be modified');
+          END;
+        `);
+        d.exec(`
+          CREATE TRIGGER IF NOT EXISTS prevent_audit_delete
+          BEFORE DELETE ON audit_logs
+          BEGIN
+            SELECT RAISE(ABORT, 'Audit logs cannot be deleted');
+          END;
+        `);
+      },
+    },
   ];
 
   static validateNoDuplicateVersions(migrations: MigrationEntry[]): void {

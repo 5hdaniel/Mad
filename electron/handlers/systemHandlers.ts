@@ -24,6 +24,7 @@ import { getAndClearPendingDeepLinkUser } from "../main";
 import { initializePool } from "../workers/contactWorkerPool";
 import { getDbPath, getEncryptionKey } from "../services/db/core/dbConnection";
 import log from "electron-log";
+import * as Sentry from "@sentry/electron/main";
 import logService from "../services/logService";
 import failureLogService from "../services/failureLogService";
 import { wrapHandler } from "../utils/wrapHandler";
@@ -169,35 +170,125 @@ async function createLocalUserFromCloud(cloudUser: User): Promise<void> {
  * Exported for use by userSettingsHandlers (verify-user-in-local-db).
  */
 export async function ensureUserInLocalDb(): Promise<{ success: boolean; userId?: string; error?: string }> {
-  const authSession = await supabaseService.getAuthSession();
+  Sentry.addBreadcrumb({
+    category: "onboarding",
+    message: "ensureUserInLocalDb: called",
+    level: "info",
+  });
+
+  let authSession;
+  try {
+    authSession = await supabaseService.getAuthSession();
+  } catch (sessionError) {
+    const errorMsg = sessionError instanceof Error ? sessionError.message : String(sessionError);
+    logService.error("ensureUserInLocalDb: getAuthSession threw", "System", { error: errorMsg });
+    Sentry.addBreadcrumb({
+      category: "onboarding",
+      message: "ensureUserInLocalDb: getAuthSession threw",
+      level: "error",
+      data: { error: errorMsg },
+    });
+    return { success: false, error: `Session fetch failed: ${errorMsg}` };
+  }
 
   if (!authSession?.userId) {
     logService.warn("ensureUserInLocalDb: No auth session", "System");
+    Sentry.addBreadcrumb({
+      category: "onboarding",
+      message: "ensureUserInLocalDb: no auth session",
+      level: "warning",
+      data: { hasSession: !!authSession, hasUserId: !!authSession?.userId },
+    });
     return { success: false, error: "No auth session found" };
   }
 
   const userId = authSession.userId;
-  let localUser = await databaseService.getUserById(userId);
+  const userIdShort = userId.substring(0, 8) + "...";
+
+  Sentry.addBreadcrumb({
+    category: "onboarding",
+    message: "ensureUserInLocalDb: checking local DB",
+    level: "info",
+    data: { userId: userIdShort },
+  });
+
+  let localUser;
+  try {
+    localUser = await databaseService.getUserById(userId);
+  } catch (dbLookupError) {
+    const errorMsg = dbLookupError instanceof Error ? dbLookupError.message : String(dbLookupError);
+    logService.error("ensureUserInLocalDb: getUserById threw", "System", { error: errorMsg });
+    Sentry.addBreadcrumb({
+      category: "onboarding",
+      message: "ensureUserInLocalDb: local DB lookup failed",
+      level: "error",
+      data: { error: errorMsg, userId: userIdShort },
+    });
+    return { success: false, error: `Local DB lookup failed: ${errorMsg}` };
+  }
 
   if (localUser) {
-    logService.debug("ensureUserInLocalDb: User already exists", "System", { userId: userId.substring(0, 8) + "..." });
+    logService.debug("ensureUserInLocalDb: User already exists", "System", { userId: userIdShort });
+    Sentry.addBreadcrumb({
+      category: "onboarding",
+      message: "ensureUserInLocalDb: user already exists in local DB",
+      level: "info",
+      data: { userId: userIdShort },
+    });
     return { success: true, userId };
   }
 
   // User doesn't exist - fetch from Supabase cloud and create locally
   logService.info("ensureUserInLocalDb: User not in local DB, fetching from Supabase", "System", {
-    userId: userId.substring(0, 8) + "...",
+    userId: userIdShort,
   });
 
-  const cloudUser = await supabaseService.getUserById(userId);
+  Sentry.addBreadcrumb({
+    category: "onboarding",
+    message: "ensureUserInLocalDb: fetching from Supabase cloud",
+    level: "info",
+    data: { userId: userIdShort },
+  });
+
+  let cloudUser;
+  try {
+    cloudUser = await supabaseService.getUserById(userId);
+  } catch (fetchError) {
+    const errorMsg = fetchError instanceof Error ? fetchError.message : String(fetchError);
+    logService.error("ensureUserInLocalDb: Supabase fetch threw", "System", { error: errorMsg });
+    Sentry.addBreadcrumb({
+      category: "onboarding",
+      message: "ensureUserInLocalDb: Supabase profile fetch failed",
+      level: "error",
+      data: {
+        error: errorMsg,
+        userId: userIdShort,
+        isTimeout: errorMsg.includes("timeout") || errorMsg.includes("ETIMEDOUT"),
+        isRLS: errorMsg.includes("policy") || errorMsg.includes("permission") || errorMsg.includes("RLS"),
+      },
+    });
+    return { success: false, error: `Cloud profile fetch failed: ${errorMsg}` };
+  }
+
   logService.debug("ensureUserInLocalDb: Cloud user result", "System", {
     found: !!cloudUser,
     provider: cloudUser?.oauth_provider,
   });
 
+  Sentry.addBreadcrumb({
+    category: "onboarding",
+    message: `ensureUserInLocalDb: cloud user ${cloudUser ? "found" : "NOT found"}`,
+    level: cloudUser ? "info" : "warning",
+    data: {
+      found: !!cloudUser,
+      provider: cloudUser?.oauth_provider,
+      userId: userIdShort,
+    },
+  });
+
   if (!cloudUser) {
     logService.error("ensureUserInLocalDb: User not found in Supabase cloud", "System");
-    return { success: false, error: "User not found in cloud database" };
+    return { success: false, error: "User not found in cloud database (profile may not exist yet)" };
   }
 
   // Create user in local DB using consolidated helper
@@ -205,13 +296,38 @@ export async function ensureUserInLocalDb(): Promise<{ success: boolean; userId?
     logService.debug("ensureUserInLocalDb: Creating local user", "System", {
       provider: cloudUser.oauth_provider,
     });
+    Sentry.addBreadcrumb({
+      category: "onboarding",
+      message: "ensureUserInLocalDb: creating local user",
+      level: "info",
+      data: { provider: cloudUser.oauth_provider, userId: userIdShort },
+    });
     await createLocalUserFromCloud(cloudUser);
     logService.debug("ensureUserInLocalDb: User created successfully", "System");
-  } catch (createError) {
-    logService.error("ensureUserInLocalDb: Failed to create user", "System", {
-      error: createError instanceof Error ? createError.message : String(createError)
+    Sentry.addBreadcrumb({
+      category: "onboarding",
+      message: "ensureUserInLocalDb: local user created",
+      level: "info",
+      data: { userId: userIdShort },
     });
-    return { success: false, error: `Failed to create user: ${createError instanceof Error ? createError.message : String(createError)}` };
+  } catch (createError) {
+    const errorMsg = createError instanceof Error ? createError.message : String(createError);
+    logService.error("ensureUserInLocalDb: Failed to create user", "System", {
+      error: errorMsg,
+    });
+    Sentry.addBreadcrumb({
+      category: "onboarding",
+      message: "ensureUserInLocalDb: local user creation failed",
+      level: "error",
+      data: {
+        error: errorMsg,
+        userId: userIdShort,
+        isConstraint: errorMsg.includes("CHECK") || errorMsg.includes("constraint"),
+        isBusy: errorMsg.includes("BUSY") || errorMsg.includes("locked"),
+        isDiskFull: errorMsg.includes("FULL") || errorMsg.includes("disk") || errorMsg.includes("SQLITE_FULL"),
+      },
+    });
+    return { success: false, error: `Failed to create user: ${errorMsg}` };
   }
 
   // Verify creation succeeded
@@ -219,10 +335,16 @@ export async function ensureUserInLocalDb(): Promise<{ success: boolean; userId?
 
   if (!localUser) {
     logService.error("ensureUserInLocalDb: User creation verification failed", "System");
+    Sentry.addBreadcrumb({
+      category: "onboarding",
+      message: "ensureUserInLocalDb: user creation verification failed (created but not found)",
+      level: "error",
+      data: { userId: userIdShort },
+    });
     return { success: false, error: "User creation verification failed" };
   }
 
-  logService.info("ensureUserInLocalDb: User created successfully", "System", { userId: userId.substring(0, 8) + "..." });
+  logService.info("ensureUserInLocalDb: User created successfully", "System", { userId: userIdShort });
   return { success: true, userId };
 }
 

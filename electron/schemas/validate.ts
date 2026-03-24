@@ -11,6 +11,7 @@
  */
 import { z } from 'zod/v4';
 import log from 'electron-log';
+import * as Sentry from '@sentry/electron/main';
 
 /**
  * Validate data against a Zod schema with graceful degradation.
@@ -32,9 +33,29 @@ export function validateResponse<T>(schema: z.ZodType<T>, data: unknown, context
     const issueMessages = issues.map(
       (issue) => `  - ${issue.path.join('.')}: ${issue.message}`
     );
-    log.warn(
-      `[Validation] ${context}: Schema validation failed (${result.error.issues.length} issue(s)):\n${issueMessages.join('\n')}`
-    );
+    const warnMsg = `[Validation] ${context}: Schema validation failed (${result.error.issues.length} issue(s)):\n${issueMessages.join('\n')}`;
+    log.warn(warnMsg);
+
+    // Sentry breadcrumb with specific field-level details (BACKLOG-1347)
+    try {
+      Sentry.addBreadcrumb({
+        category: "validation",
+        message: `Schema validation failed: ${context}`,
+        level: "warning",
+        data: {
+          context,
+          issueCount: result.error.issues.length,
+          issues: result.error.issues.slice(0, 5).map((issue) => ({
+            path: issue.path.join('.'),
+            message: issue.message,
+            code: issue.code,
+          })),
+        },
+      });
+    } catch {
+      // Sentry may not be initialized in test environments
+    }
+
     // Graceful degradation: return data as-is
     return data as T;
   }
