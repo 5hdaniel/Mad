@@ -25,9 +25,9 @@ export const UserSchema = z.object({
   // Core Identity
   id: UuidSchema,
   email: z.string(),
-  first_name: z.string().optional(),
-  last_name: z.string().optional(),
-  display_name: z.string().optional(),
+  first_name: z.string().nullable().optional(),
+  last_name: z.string().nullable().optional(),
+  display_name: z.string().nullable().optional(),
   avatar_url: z.string().nullable().optional(),
 
   // OAuth

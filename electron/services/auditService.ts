@@ -10,6 +10,7 @@
  */
 
 import crypto from "crypto";
+import * as Sentry from "@sentry/electron/main";
 import logService from "./logService";
 
 // ============================================
@@ -210,10 +211,24 @@ class AuditService {
       });
     } catch (error) {
       // Log the failure but don't throw - audit failures shouldn't break the app
+      const errorMsg = error instanceof Error ? error.message : "Unknown error";
       logService.error("Failed to write audit log", "AuditService", {
         action: entry.action,
         resourceType: entry.resourceType,
-        error: error instanceof Error ? error.message : "Unknown error",
+        error: errorMsg,
+      });
+
+      // Sentry breadcrumb for audit log write failure (BACKLOG-1347)
+      Sentry.addBreadcrumb({
+        category: "audit",
+        message: `Audit log INSERT failed for action=${entry.action}`,
+        level: "error",
+        data: {
+          action: entry.action,
+          resourceType: entry.resourceType,
+          error: errorMsg,
+          userId: entry.userId ? entry.userId.substring(0, 8) + "..." : "unknown",
+        },
       });
     }
   }
