@@ -76,6 +76,7 @@ export function SupportWidget({
            (Settings/Profile/WelcomeTerms use z-50, Transactions/Contacts/Details use z-[60]) */}
       <button
         onClick={handleOpen}
+        data-support-widget
         className="fixed bottom-4 left-4 z-[70] w-10 h-10 rounded-full bg-blue-500 hover:bg-blue-600 text-white font-bold text-lg shadow-lg hover:shadow-xl transition-all flex items-center justify-center no-drag-region"
         title="Contact Support"
         aria-label="Open support dialog"

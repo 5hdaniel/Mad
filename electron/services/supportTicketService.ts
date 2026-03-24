@@ -201,10 +201,26 @@ export async function captureScreenshot(): Promise<string | null> {
       return null;
     }
 
-    const image = await win.webContents.capturePage();
-    const pngBuffer = image.toPNG();
+    // BACKLOG-1353: Hide support dialog/widget before capturing so the
+    // screenshot shows the actual app content, not the overlay.
+    await win.webContents.executeJavaScript(`
+      document.querySelectorAll('[data-support-widget]').forEach(el => el.style.visibility = 'hidden');
+    `);
 
-    return pngBuffer.toString("base64");
+    // Brief delay for the DOM to repaint after hiding
+    await new Promise((resolve) => setTimeout(resolve, 150));
+
+    try {
+      const image = await win.webContents.capturePage();
+      const pngBuffer = image.toPNG();
+
+      return pngBuffer.toString("base64");
+    } finally {
+      // Always restore support widget visibility, even if capture fails
+      await win.webContents.executeJavaScript(`
+        document.querySelectorAll('[data-support-widget]').forEach(el => el.style.visibility = 'visible');
+      `);
+    }
   } catch (err) {
     logService.error(
       "[Support] Screenshot capture failed",
