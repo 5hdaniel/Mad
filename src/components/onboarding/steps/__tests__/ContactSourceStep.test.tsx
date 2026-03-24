@@ -5,7 +5,7 @@
  * - Meta configuration (hideContinue, platforms, skip)
  * - Platform-specific rendering (both sources on macOS, only Outlook on Windows)
  * - Saving preferences on Continue click
- * - Skipping defaults to all sources enabled
+ * - Skipping defaults to macOS Contacts enabled, others disabled
  *
  * @module onboarding/steps/__tests__/ContactSourceStep.test
  */
@@ -199,7 +199,7 @@ describe("ContactSourceStep", () => {
       expect(screen.queryByText("Coming Soon")).not.toBeInTheDocument();
     });
 
-    it("does not render Google Contacts for Microsoft auth users", () => {
+    it("renders Google Contacts for Microsoft auth users (TASK-2305 removed authProvider filter)", () => {
       (usePlatform as jest.Mock).mockReturnValue({ isMacOS: false });
 
       render(
@@ -209,7 +209,8 @@ describe("ContactSourceStep", () => {
         />
       );
 
-      expect(screen.queryByText("Google Contacts")).not.toBeInTheDocument();
+      // Google Contacts is now visible for ALL users regardless of auth provider
+      expect(screen.getByText("Google Contacts")).toBeInTheDocument();
     });
   });
 
@@ -233,14 +234,16 @@ describe("ContactSourceStep", () => {
       fireEvent.click(screen.getByText("Continue"));
 
       await waitFor(() => {
-        // Should save preferences with visible sources enabled (default)
+        // Should save preferences with defaults (macOS=true, others=false per TASK-2305)
+        // Google Contacts is now visible for all users (no authProvider filter)
         expect(window.api.preferences.update).toHaveBeenCalledWith(
           "test-user-123",
           {
             contactSources: {
               direct: {
                 macosContacts: true,
-                outlookContacts: true,
+                outlookContacts: false,
+                googleContacts: false,
               },
             },
           }
@@ -277,7 +280,8 @@ describe("ContactSourceStep", () => {
             contactSources: {
               direct: {
                 macosContacts: false,
-                outlookContacts: true,
+                outlookContacts: false,
+                googleContacts: false,
               },
             },
           }
