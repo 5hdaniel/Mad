@@ -193,10 +193,7 @@ function AuditTransactionModal({
               showAutocomplete={showAddressAutocomplete}
               suggestions={addressSuggestions}
               onSelectSuggestion={selectAddress}
-              {...(startDateMode ? { startDateMode } : {})}
-              onStartDateModeChange={isEditing || !startDateMode ? undefined : setStartDateMode}
-              autoDetectedDate={autoDetectedDate}
-              isAutoDetecting={isAutoDetecting}
+              startDateMode="manual"
             />
           )}
 
