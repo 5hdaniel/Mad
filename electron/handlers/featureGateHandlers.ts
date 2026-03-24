@@ -9,7 +9,6 @@
 
 import { ipcMain } from "electron";
 import type { IpcMainInvokeEvent } from "electron";
-import sessionService from "../services/sessionService";
 import supabaseService from "../services/supabaseService";
 import featureGateService from "../services/featureGateService";
 import type { FeatureAccess } from "../services/featureGateService";
@@ -20,18 +19,34 @@ import logService from "../services/logService";
  * Returns null if the user has no org membership.
  */
 async function resolveOrgId(): Promise<string | null> {
-  const session = await sessionService.loadSession();
+  // Get session from the Supabase client (in-memory auth), NOT from session file
+  const client = supabaseService.getClient();
+  const { data: { session } } = await client.auth.getSession();
+
   if (!session?.user?.id) {
-    logService.debug(
-      "[FeatureGate] No active session, cannot resolve org",
+    logService.warn(
+      "[FeatureGate] No active Supabase session, cannot resolve org",
       "FeatureGateHandlers"
     );
     return null;
   }
 
+  logService.warn(
+    "[FeatureGate] Resolving org for user",
+    "FeatureGateHandlers",
+    { userId: session.user.id, email: session.user.email }
+  );
+
   const membership = await supabaseService.getActiveOrganizationMembership(
     session.user.id
   );
+
+  logService.warn(
+    "[FeatureGate] Org resolution result",
+    "FeatureGateHandlers",
+    { orgId: membership?.organization_id ?? "none" }
+  );
+
   return membership?.organization_id ?? null;
 }
 
@@ -46,7 +61,7 @@ export function registerFeatureGateHandlers(): void {
       _event: IpcMainInvokeEvent,
       featureKey: string
     ): Promise<FeatureAccess> => {
-      logService.debug(
+      logService.warn(
         "[FeatureGate] Checking feature",
         "FeatureGateHandlers",
         { featureKey }
@@ -54,7 +69,18 @@ export function registerFeatureGateHandlers(): void {
 
       const orgId = await resolveOrgId();
       if (!orgId) {
-        // No org => individual user, fail-open (allow all)
+        // No org => individual user
+        // Explicitly deny team/enterprise features
+        const teamFeatures = [
+          "broker_submission",
+          "ai_detection",
+          "broker_email_view",
+          "broker_email_attachments",
+        ];
+        if (teamFeatures.includes(featureKey)) {
+          return { allowed: false, value: "", source: "default" };
+        }
+        // Individual features remain fail-open
         return { allowed: true, value: "", source: "default" };
       }
 
@@ -68,15 +94,22 @@ export function registerFeatureGateHandlers(): void {
     async (
       _event: IpcMainInvokeEvent
     ): Promise<Record<string, FeatureAccess>> => {
-      logService.debug(
+      logService.warn(
         "[FeatureGate] Getting all features",
         "FeatureGateHandlers"
       );
 
       const orgId = await resolveOrgId();
       if (!orgId) {
-        // No org => individual user, return empty (nothing gated)
-        return {};
+        // No org => individual user, restrict team/enterprise features
+        // Individual features (text_export, email_export) remain fail-open
+        // Team/Enterprise features are explicitly denied
+        return {
+          broker_submission: { allowed: false, value: "", source: "default" as const },
+          ai_detection: { allowed: false, value: "", source: "default" as const },
+          broker_email_view: { allowed: false, value: "", source: "default" as const },
+          broker_email_attachments: { allowed: false, value: "", source: "default" as const },
+        };
       }
 
       return featureGateService.getAllFeatures(orgId);

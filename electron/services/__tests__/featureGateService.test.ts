@@ -58,12 +58,18 @@ jest.mock("@sentry/electron/main", () => ({
 
 // Mock supabaseService
 const mockRpc = jest.fn();
+const mockGetSession = jest.fn();
+const mockGetAuthSession = jest.fn();
 jest.mock("../supabaseService", () => ({
   __esModule: true,
   default: {
     getClient: () => ({
       rpc: mockRpc,
+      auth: {
+        getSession: mockGetSession,
+      },
     }),
+    getAuthSession: mockGetAuthSession,
   },
 }));
 
@@ -104,6 +110,14 @@ describe("FeatureGateService", () => {
     );
     mockFs.writeFile.mockResolvedValue(undefined);
     mockFs.unlink.mockResolvedValue(undefined);
+    // BACKLOG-1348: Default mock for auth session check — simulate active session
+    mockGetSession.mockResolvedValue({
+      data: { session: { user: { id: "user-mock" }, access_token: "token-mock" } },
+    });
+    mockGetAuthSession.mockResolvedValue({
+      userId: "user-mock",
+      accessToken: "token-mock",
+    });
   });
 
   // ==========================================
