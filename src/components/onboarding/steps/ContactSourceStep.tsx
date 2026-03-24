@@ -243,12 +243,12 @@ export function Content({
   const { isMacOS } = usePlatform();
   const [isSaving, setIsSaving] = useState(false);
 
-  // Default all sources to selected (fail-open)
+  // Default only macOS Contacts selected for Mac users
   const [selected, setSelected] = useState<Record<string, boolean>>({
     macosContacts: true,
-    outlookContacts: true,
-    iphoneContacts: true,
-    googleContacts: true,
+    outlookContacts: false,
+    iphoneContacts: false,
+    googleContacts: false,
   });
 
   // Filter sources by platform, phone type, auth provider, and visibility
