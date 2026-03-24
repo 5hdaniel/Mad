@@ -130,4 +130,30 @@ describe("SupportWidget", () => {
       );
     });
   });
+
+  // TASK-2319: Custom event tests
+  it("opens the dialog when 'open-support-widget' event is dispatched", () => {
+    render(<SupportWidget />);
+
+    // Dialog should not be open initially
+    expect(screen.queryByTestId("support-dialog")).not.toBeInTheDocument();
+
+    // Dispatch custom event
+    window.dispatchEvent(new CustomEvent("open-support-widget"));
+
+    // Dialog should now be open
+    expect(screen.getByTestId("support-dialog")).toBeInTheDocument();
+  });
+
+  it("passes prefilledSubject from custom event detail", () => {
+    render(<SupportWidget />);
+
+    window.dispatchEvent(
+      new CustomEvent("open-support-widget", {
+        detail: { subject: "Account Setup Issue" },
+      })
+    );
+
+    expect(screen.getByTestId("support-dialog")).toBeInTheDocument();
+  });
 });

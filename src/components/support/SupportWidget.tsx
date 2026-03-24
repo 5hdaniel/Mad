@@ -14,6 +14,12 @@
 import React, { useState, useCallback, useEffect } from "react";
 import { SupportTicketDialog } from "./SupportTicketDialog";
 
+/** Detail payload for the 'open-support-widget' custom event (TASK-2319) */
+export interface OpenSupportWidgetDetail {
+  /** Pre-fill the subject field in the ticket dialog */
+  subject?: string;
+}
+
 interface SupportWidgetProps {
   /** Optional user email (provided when rendered inside auth context) */
   userEmail?: string;
@@ -67,6 +73,25 @@ export function SupportWidget({
 
   const handleClose = useCallback(() => {
     setIsOpen(false);
+    setPrefilledSubject("");
+  }, []);
+
+  // TASK-2319: Pre-filled subject for programmatic opens
+  const [prefilledSubject, setPrefilledSubject] = useState("");
+
+  // TASK-2319: Listen for 'open-support-widget' custom event so other
+  // components (ErrorBoundary, AccountVerificationStep) can open the widget
+  // without prop drilling or context.
+  useEffect(() => {
+    const handler = (e: Event) => {
+      const detail = (e as CustomEvent<OpenSupportWidgetDetail>).detail;
+      if (detail?.subject) {
+        setPrefilledSubject(detail.subject);
+      }
+      setIsOpen(true);
+    };
+    window.addEventListener("open-support-widget", handler);
+    return () => window.removeEventListener("open-support-widget", handler);
   }, []);
 
   return (
@@ -91,6 +116,7 @@ export function SupportWidget({
           userEmail={userEmail}
           userName={userName}
           autoCaptureScreenshot
+          prefilledSubject={prefilledSubject}
         />
       )}
     </>

@@ -30,6 +30,8 @@ interface SupportTicketDialogProps {
   userName: string;
   /** Auto-capture a screenshot when the dialog opens (used by the floating widget) */
   autoCaptureScreenshot?: boolean;
+  /** TASK-2319: Pre-fill the subject field (used when opened programmatically) */
+  prefilledSubject?: string;
 }
 
 const PRIORITY_OPTIONS: Array<{ value: TicketPriority; label: string }> = [
@@ -48,6 +50,7 @@ export function SupportTicketDialog({
   userEmail,
   userName,
   autoCaptureScreenshot = false,
+  prefilledSubject = "",
 }: SupportTicketDialogProps): React.ReactElement {
   const {
     diagnostics,
@@ -66,7 +69,7 @@ export function SupportTicketDialog({
     reset,
   } = useSupportTicket();
 
-  const [subject, setSubject] = useState("");
+  const [subject, setSubject] = useState(prefilledSubject);
   const [description, setDescription] = useState("");
   const [priority, setPriority] = useState<TicketPriority>("normal");
   const [categoryId, setCategoryId] = useState<string | null>(null);
