@@ -15,6 +15,7 @@ import * as Sentry from '@sentry/electron/renderer';
 
 /**
  * Classified reasons for onboarding failures.
+ * Extended with specific categories for diagnostic precision (BACKLOG-1347).
  */
 export type OnboardingFailureReason =
   | 'db_failed'
@@ -23,6 +24,12 @@ export type OnboardingFailureReason =
   | 'session_invalid'
   | 'driver_install_failed'
   | 'driver_cancelled'
+  | 'audit_constraint_failure'
+  | 'schema_validation_failure'
+  | 'db_locked'
+  | 'profile_not_found'
+  | 'network_timeout'
+  | 'encryption_unavailable'
   | 'unknown';
 
 /**
@@ -77,6 +84,63 @@ export function classifyFailureReason(
         ? context.error.message.toLowerCase()
         : String(context.error).toLowerCase();
 
+    // Check constraint / audit log failures
+    if (
+      message.includes('check constraint') ||
+      message.includes('audit') && message.includes('constraint')
+    ) {
+      return 'audit_constraint_failure';
+    }
+
+    // Schema / validation failures
+    if (
+      message.includes('schema validation') ||
+      message.includes('validation failed') ||
+      message.includes('zod')
+    ) {
+      return 'schema_validation_failure';
+    }
+
+    // Database locked / busy
+    if (
+      message.includes('busy') ||
+      message.includes('locked') ||
+      message.includes('sqlite_busy') ||
+      message.includes('database is locked')
+    ) {
+      return 'db_locked';
+    }
+
+    // Profile not found in cloud
+    if (
+      message.includes('not found in cloud') ||
+      message.includes('profile') && message.includes('not found') ||
+      message.includes('profile may not exist')
+    ) {
+      return 'profile_not_found';
+    }
+
+    // Network timeout
+    if (
+      message.includes('timeout') ||
+      message.includes('etimedout') ||
+      message.includes('econnrefused') ||
+      message.includes('network') && message.includes('fail')
+    ) {
+      return 'network_timeout';
+    }
+
+    // Encryption / safeStorage
+    if (
+      message.includes('encryption') ||
+      message.includes('safestorage') ||
+      message.includes('keychain') ||
+      message.includes('not available')
+    ) {
+      return 'encryption_unavailable';
+    }
+
+    // Auth failures
     if (
       message.includes('auth') ||
       message.includes('unauthorized') ||
@@ -86,6 +150,7 @@ export function classifyFailureReason(
       return 'auth_failed';
     }
 
+    // Session failures
     if (
       message.includes('session') ||
       message.includes('token') ||
