@@ -282,8 +282,8 @@ export function ReplyComposer({ ticketId, onMessageSent, requesterName, ticketNu
           onChange={(e) => setBody(e.target.value)}
           onKeyDown={handleKeyDown}
           placeholder={isNote ? 'Add an internal note (not visible to customer)...' : 'Type your reply...'}
-          rows={4}
-          className={`w-full border-0 resize-none text-sm text-gray-900 focus:outline-none focus:ring-0 ${
+          rows={5}
+          className={`w-full border-0 resize-y min-h-[120px] max-h-[400px] overflow-y-auto text-sm text-gray-900 focus:outline-none focus:ring-0 ${
             isNote ? 'bg-amber-50 placeholder-amber-400' : 'bg-white placeholder-gray-400'
           }`}
           autoFocus
