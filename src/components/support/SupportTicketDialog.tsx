@@ -119,7 +119,7 @@ export function SupportTicketDialog({
     return (
       <div
         data-support-widget
-        className="fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center z-50 p-4"
+        className="fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center z-[70] p-4"
         onClick={handleClose}
       >
         <div
@@ -173,7 +173,7 @@ export function SupportTicketDialog({
   return (
     <div
       data-support-widget
-      className="fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center z-50 p-4"
+      className="fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center z-[70] p-4"
       onClick={handleClose}
     >
       <div
