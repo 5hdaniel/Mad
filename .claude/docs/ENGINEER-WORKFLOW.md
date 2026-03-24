@@ -278,6 +278,50 @@ After each task's PR merges:
 
 ---
 
+## Test Hygiene (MANDATORY — Before Every Commit)
+
+**Reference:** BACKLOG-1356 — repeated CI failures in SPRINT-O from stale tests.
+
+Engineers MUST complete these checks before committing or pushing. Do not rely on CI to catch test failures.
+
+### Before Committing
+
+1. **Run tests locally first:**
+   ```bash
+   npx jest --bail --no-coverage
+   ```
+   If any test fails, fix it before committing. Do not push broken tests.
+
+2. **Find and update all affected test files:**
+   When you change a function's behavior (return value, call count, parameters, error handling), find every test that references it:
+   ```bash
+   # Search for test files referencing the function/component you changed
+   grep -r "functionName" --include="*.test.*" src/ electron/
+   ```
+   Update ALL matching test expectations to match the new behavior. Stale mocks and assertions are the #1 cause of CI failures.
+
+3. **Check mock alignment:**
+   If you changed a function signature, added a parameter, or changed a return type, verify that all mocks of that function match the new signature. Mismatched mocks cause false passes locally and failures in CI.
+
+### Before Pushing
+
+4. **Merge the base branch into your feature branch:**
+   ```bash
+   git fetch origin
+   git merge origin/develop  # or whatever the base branch is
+   npx jest --bail --no-coverage
+   ```
+   Other PRs may have merged test fixes. Merging before pushing ensures your branch is tested against the latest state.
+
+5. **Verify PR body includes Engineer Metrics:**
+   The PR body MUST include the `## Engineer Metrics` section from `.github/PULL_REQUEST_TEMPLATE.md`. PRs missing this section will fail the CI `pr-metrics-check` validation.
+
+### Why This Matters
+
+Every CI failure costs 5-15 minutes of pipeline time and often requires a second engineer invocation to fix. Catching test failures locally eliminates this waste. During SPRINT-O, PRs averaged 2-5 CI cycles before going green — all preventable with local test runs.
+
+---
+
 ## Implementation Details (Within Step 5)
 
 The following details apply during Step 5 (IMPLEMENT):

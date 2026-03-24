@@ -118,7 +118,14 @@ PHASE C: IMPLEMENTATION
 9.  ENGINEER: Implement task, commit changes, push branch
     - Follow the approved plan
     - Make atomic commits
+    - Run full test suite BEFORE pushing: `npx jest --bail --no-coverage`
+      If any tests fail, fix them before creating the PR.
+      Search for ALL test files referencing changed functions:
+      `grep -r "functionName" --include="*.test.*" src/ electron/`
+      and update stale expectations to match new behavior.
     - Push branch to remote
+    - When creating PR, include `## Engineer Metrics` section in body
+      (use template from `.github/PULL_REQUEST_TEMPLATE.md`)
     - Engineer MUST include `### Effort` section in handoff message
       with agent_id and token count. The agent_id is returned by
       the Task tool when the agent completes.
