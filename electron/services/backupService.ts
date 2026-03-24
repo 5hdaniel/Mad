@@ -15,6 +15,7 @@ import { EventEmitter } from "events";
 import path from "path";
 import { app } from "electron";
 import { promises as fs } from "fs";
+import * as Sentry from "@sentry/electron/main";
 import log from "electron-log";
 import { getCommand, isMockMode } from "./libimobiledeviceService";
 import { backupDecryptionService } from "./backupDecryptionService";
@@ -351,6 +352,34 @@ export class BackupService extends EventEmitter {
         const isProgressBar = /\[=*\s*\]\s*\d+%/.test(output);
         if (!isProgressBar && output.trim()) {
           log.warn("[BackupService] stderr:", output.trim());
+
+          // BACKLOG-1354: Log unrecognized stderr patterns to Sentry breadcrumb
+          // Known patterns: trust, password, locked, passcode, no device, not found, disk, space, storage
+          const outputLower = output.toLowerCase();
+          const isKnownPattern =
+            outputLower.includes("trust") ||
+            outputLower.includes("pair") ||
+            outputLower.includes("password") ||
+            outputLower.includes("incorrect") ||
+            outputLower.includes("locked") ||
+            outputLower.includes("passcode") ||
+            outputLower.includes("no device") ||
+            outputLower.includes("not found") ||
+            outputLower.includes("disk") ||
+            outputLower.includes("space") ||
+            outputLower.includes("storage");
+
+          if (!isKnownPattern) {
+            Sentry.addBreadcrumb({
+              category: "iphone.sync",
+              message: "Backup stderr: unrecognized pattern",
+              level: "warning",
+              data: {
+                stderr: output.trim().substring(0, 500),
+                udid: options.udid.substring(0, 8) + "...",
+              },
+            });
+          }
         }
       });
 
@@ -464,6 +493,20 @@ export class BackupService extends EventEmitter {
         } else {
           log.error(`[BackupService] Backup failed with code ${code}`);
           log.error("[BackupService] stderr:", stderrBuffer);
+
+          // BACKLOG-1354: Breadcrumb with full context when backup exits with unexpected code
+          Sentry.addBreadcrumb({
+            category: "iphone.sync",
+            message: `Backup process exited with code ${code}`,
+            level: "warning",
+            data: {
+              exitCode: code,
+              stderr: stderrBuffer.trim().substring(0, 500),
+              udid: options.udid.substring(0, 8) + "...",
+              duration: `${duration}ms`,
+              isIncremental: previousBackupExists && !options.forceFullBackup,
+            },
+          });
         }
 
         // Convert error code to user-friendly message

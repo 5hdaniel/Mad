@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from "react";
+import * as Sentry from "@sentry/electron/renderer";
 import type {
   iOSDevice,
   BackupProgress,
@@ -463,6 +464,18 @@ export function useIPhoneSync(): UseIPhoneSyncReturn {
     // === NOW START DEVICE DETECTION (after all listeners are set up) ===
     // This order ensures we don't miss any events
     logger.info("[useIPhoneSync] Starting device detection...");
+
+    // BACKLOG-1354: Breadcrumb when device detection starts in renderer
+    Sentry.addBreadcrumb({
+      category: "iphone.detection",
+      message: "Device detection started from renderer",
+      level: "info",
+      data: {
+        hasSyncApi: !!syncApi,
+        hasDeviceApi: !!deviceApi,
+      },
+    });
+
     if (syncApi?.startDetection) {
       syncApi.startDetection();
     } else if (deviceApi?.startDetection) {
@@ -520,6 +533,19 @@ export function useIPhoneSync(): UseIPhoneSyncReturn {
 
     if (!device) {
       logger.error("[useIPhoneSync] Cannot start sync: No device connected");
+
+      // BACKLOG-1354: Breadcrumb when user tries to sync but no device detected
+      // On Windows with drivers installed, this suggests trust/USB issue
+      Sentry.addBreadcrumb({
+        category: "iphone.detection",
+        message: "Sync attempted with 0 devices detected",
+        level: "warning",
+        data: {
+          platform: navigator.platform,
+          hint: "No device connected when user initiated sync — possible trust dialog not shown or USB restriction",
+        },
+      });
+
       setError("No device connected");
       return;
     }
