@@ -76,7 +76,7 @@ describe("DeviceDetectionService", () => {
 
   describe("checkLibimobiledeviceAvailable", () => {
     it("should return true when idevice_id is available", async () => {
-      mockExec.mockImplementation((cmd, callback) => {
+      mockExec.mockImplementation((...args: unknown[]) => { const callback = (typeof args[1] === 'function' ? args[1] : args[2]) as (err: Error | null, result: { stdout: string; stderr: string }) => void;
         callback(null, { stdout: "1.3.0", stderr: "" });
       });
 
@@ -88,7 +88,7 @@ describe("DeviceDetectionService", () => {
     });
 
     it("should return false when idevice_id is not available", async () => {
-      mockExec.mockImplementation((cmd, callback) => {
+      mockExec.mockImplementation((...args: unknown[]) => { const callback = (typeof args[1] === 'function' ? args[1] : args[2]) as (err: Error | null, result: { stdout: string; stderr: string }) => void;
         callback(new Error("command not found"));
       });
 
@@ -101,7 +101,7 @@ describe("DeviceDetectionService", () => {
     });
 
     it("should cache the availability check result", async () => {
-      mockExec.mockImplementation((cmd, callback) => {
+      mockExec.mockImplementation((...args: unknown[]) => { const callback = (typeof args[1] === 'function' ? args[1] : args[2]) as (err: Error | null, result: { stdout: string; stderr: string }) => void;
         callback(null, { stdout: "1.3.0", stderr: "" });
       });
 
@@ -172,7 +172,7 @@ describe("DeviceDetectionService", () => {
       const realTimerService = new DeviceDetectionService(); // Create new service with real timers
 
       // Mock availability check - call callback asynchronously
-      mockExec.mockImplementation((cmd, callback) => {
+      mockExec.mockImplementation((...args: unknown[]) => { const callback = (typeof args[1] === 'function' ? args[1] : args[2]) as (err: Error | null, result: { stdout: string; stderr: string }) => void;
         setTimeout(() => callback(null, { stdout: "1.3.0", stderr: "" }), 0);
       });
 
@@ -199,7 +199,7 @@ describe("DeviceDetectionService", () => {
       const realTimerService = new DeviceDetectionService(); // Create new service with real timers
 
       // Mock availability check - call callback asynchronously
-      mockExec.mockImplementation((cmd, callback) => {
+      mockExec.mockImplementation((...args: unknown[]) => { const callback = (typeof args[1] === 'function' ? args[1] : args[2]) as (err: Error | null, result: { stdout: string; stderr: string }) => void;
         setTimeout(() => callback(null, { stdout: "1.3.0", stderr: "" }), 0);
       });
 
@@ -312,7 +312,7 @@ SerialNumber: ABC123456789
       const realTimerService = new DeviceDetectionService(); // Create new service with real timers
 
       // Mock availability check - call callback asynchronously
-      mockExec.mockImplementation((cmd, callback) => {
+      mockExec.mockImplementation((...args: unknown[]) => { const callback = (typeof args[1] === 'function' ? args[1] : args[2]) as (err: Error | null, result: { stdout: string; stderr: string }) => void;
         setTimeout(() => callback(null, { stdout: "1.3.0", stderr: "" }), 0);
       });
 

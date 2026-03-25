@@ -59,6 +59,8 @@ export interface SupportTicketMessage {
   message_type: MessageType;
   body: string;
   created_at: string;
+  edited_at: string | null;
+  edited_by: string | null;
   attachments?: SupportTicketAttachment[];
 }
 
