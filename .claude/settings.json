@@ -1,6 +1,13 @@
 {
   "permissions": {
-    "allow": ["Read", "Glob", "Grep", "Write", "Edit", "Bash"]
+    "allow": [
+      "Read",
+      "Glob",
+      "Grep",
+      "Write",
+      "Edit",
+      "Bash"
+    ]
   },
   "hooks": {
     "PostToolUse": [
@@ -30,5 +37,8 @@
         ]
       }
     ]
+  },
+  "enabledPlugins": {
+    "vercel@claude-plugins-official": true
   }
 }
