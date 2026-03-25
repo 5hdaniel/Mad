@@ -6,11 +6,12 @@
  * Shows a timeline of recent project activity with toggles to filter
  * by event type (status changes, comments, assignments) and scope
  * (all activity vs. only items assigned to current user).
+ * Supports infinite scroll — loads 20 events at a time.
  */
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import Link from 'next/link';
-import { Activity, Filter } from 'lucide-react';
+import { Activity, Filter, Loader2 } from 'lucide-react';
 import { getRecentActivity, getMyNotifications } from '@/lib/pm-queries';
 import type { PmNotification } from '@/lib/pm-types';
 import { getPmEventIcon, getPmEventDescription } from '@/lib/pm-timeline-utils';
@@ -21,6 +22,8 @@ import { getPmEventIcon, getPmEventDescription } from '@/lib/pm-timeline-utils';
 
 type EventFilter = 'all' | 'status' | 'comments' | 'assignments';
 type ScopeFilter = 'all' | 'mine';
+
+const PAGE_SIZE = 20;
 
 const EVENT_FILTER_CONFIG: { key: EventFilter; label: string; types: string[] | null }[] = [
   { key: 'all', label: 'All', types: null },
@@ -54,10 +57,6 @@ function formatRelativeTime(dateStr: string): string {
   });
 }
 
-function getEventDescription(event: PmNotification): string {
-  return getPmEventDescription(event);
-}
-
 // ---------------------------------------------------------------------------
 // Component
 // ---------------------------------------------------------------------------
@@ -65,40 +64,80 @@ function getEventDescription(event: PmNotification): string {
 export function RecentActivityFeed() {
   const [events, setEvents] = useState<PmNotification[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [hasMore, setHasMore] = useState(true);
   const [eventFilter, setEventFilter] = useState<EventFilter>('all');
   const [scopeFilter, setScopeFilter] = useState<ScopeFilter>('all');
+  const sentinelRef = useRef<HTMLDivElement>(null);
 
-  const loadActivity = useCallback(async () => {
-    setLoading(true);
-    try {
-      const since = new Date(Date.now() - 14 * 24 * 60 * 60 * 1000).toISOString();
-      const filterConfig = EVENT_FILTER_CONFIG.find((f) => f.key === eventFilter);
-      const eventTypes = filterConfig?.types ?? null;
+  const since = useRef(
+    new Date(Date.now() - 90 * 24 * 60 * 60 * 1000).toISOString()
+  ).current;
 
-      let data: PmNotification[];
-      if (scopeFilter === 'mine') {
-        // Use existing notifications RPC (only assigned items)
-        const all = await getMyNotifications(since);
-        // Client-side filter by event type since the RPC doesn't support it
-        data = eventTypes
-          ? all.filter((e) => eventTypes.includes(e.event_type))
-          : all;
-      } else {
-        data = await getRecentActivity(since, eventTypes, 50);
+  const loadActivity = useCallback(
+    async (offset: number, append: boolean) => {
+      if (!append) setLoading(true);
+      else setLoadingMore(true);
+
+      try {
+        const filterConfig = EVENT_FILTER_CONFIG.find((f) => f.key === eventFilter);
+        const eventTypes = filterConfig?.types ?? null;
+
+        let data: PmNotification[];
+        if (scopeFilter === 'mine') {
+          // pm_get_my_notifications doesn't support offset — load all, slice client-side
+          if (offset === 0) {
+            const all = await getMyNotifications(since);
+            data = eventTypes
+              ? all.filter((e) => eventTypes.includes(e.event_type))
+              : all;
+            // No server-side pagination for "mine", so no more pages
+            setHasMore(false);
+          } else {
+            data = [];
+            setHasMore(false);
+          }
+        } else {
+          data = await getRecentActivity(since, eventTypes, PAGE_SIZE, offset);
+          setHasMore(data.length >= PAGE_SIZE);
+        }
+
+        const items = Array.isArray(data) ? data : [];
+        setEvents((prev) => (append ? [...prev, ...items] : items));
+      } catch (err) {
+        console.error('Failed to load activity:', err);
+        if (!append) setEvents([]);
+      } finally {
+        setLoading(false);
+        setLoadingMore(false);
       }
+    },
+    [eventFilter, scopeFilter, since],
+  );
 
-      setEvents(Array.isArray(data) ? data : []);
-    } catch (err) {
-      console.error('Failed to load activity:', err);
-      setEvents([]);
-    } finally {
-      setLoading(false);
-    }
-  }, [eventFilter, scopeFilter]);
-
+  // Reset on filter change
   useEffect(() => {
-    loadActivity();
+    setHasMore(true);
+    loadActivity(0, false);
   }, [loadActivity]);
+
+  // Infinite scroll via IntersectionObserver
+  useEffect(() => {
+    const sentinel = sentinelRef.current;
+    if (!sentinel) return;
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries[0].isIntersecting && hasMore && !loading && !loadingMore) {
+          loadActivity(events.length, true);
+        }
+      },
+      { threshold: 0.1 },
+    );
+
+    observer.observe(sentinel);
+    return () => observer.disconnect();
+  }, [hasMore, loading, loadingMore, events.length, loadActivity]);
 
   return (
     <div className="mt-8">
@@ -171,8 +210,9 @@ export function RecentActivityFeed() {
         <div className="space-y-1">
           {events.map((event) => {
             const icon = getPmEventIcon(event.event_type);
-            const description = getEventDescription(event);
+            const description = getPmEventDescription(event);
             const actorName = event.actor_name || null;
+            const commentSnippet = event.comment_body || null;
 
             return (
               <div
@@ -196,9 +236,17 @@ export function RecentActivityFeed() {
                     )}
                     <span>{description}</span>
                   </div>
+                  {/* Comment body preview */}
+                  {commentSnippet && (
+                    <p className="text-xs text-gray-500 mt-0.5 line-clamp-2 italic">
+                      &ldquo;{commentSnippet.length >= 200
+                        ? commentSnippet + '...'
+                        : commentSnippet}&rdquo;
+                    </p>
+                  )}
                   {event.item_title && (
                     <Link
-                      href={`/dashboard/pm/backlog/${event.item_id}`}
+                      href={`/dashboard/pm/tasks/${event.item_id}`}
                       className="text-xs text-blue-600 hover:text-blue-800 hover:underline truncate block mt-0.5"
                     >
                       {event.item_legacy_id && (
@@ -216,6 +264,23 @@ export function RecentActivityFeed() {
               </div>
             );
           })}
+
+          {/* Infinite scroll sentinel */}
+          <div ref={sentinelRef} className="h-4" />
+
+          {/* Loading more indicator */}
+          {loadingMore && (
+            <div className="flex justify-center py-4">
+              <Loader2 className="h-5 w-5 text-gray-400 animate-spin" />
+            </div>
+          )}
+
+          {/* End of list */}
+          {!hasMore && events.length > 0 && (
+            <div className="text-center py-3 text-xs text-gray-400">
+              No more activity
+            </div>
+          )}
         </div>
       )}
     </div>
