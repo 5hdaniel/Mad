@@ -18,6 +18,10 @@ import { SupportTicketDialog } from "./SupportTicketDialog";
 export interface OpenSupportWidgetDetail {
   /** Pre-fill the subject field in the ticket dialog */
   subject?: string;
+  /** Pre-fill user email when DB isn't available (e.g., during onboarding errors) */
+  email?: string;
+  /** Pre-fill user name when DB isn't available */
+  name?: string;
 }
 
 interface SupportWidgetProps {
@@ -43,8 +47,10 @@ export function SupportWidget({
   const [detectedName, setDetectedName] = useState<string>("");
 
   // TASK-2282: Try to detect user info via IPC when props not provided
+  // Also re-detect when widget is opened (user may have logged in since mount)
   useEffect(() => {
     if (propEmail && propName) return; // Already have props, skip IPC
+    if (detectedEmail) return; // Already detected, skip
 
     let cancelled = false;
 
@@ -62,7 +68,7 @@ export function SupportWidget({
 
     detectUser();
     return () => { cancelled = true; };
-  }, [propEmail, propName]);
+  }, [propEmail, propName, isOpen, detectedEmail]);
 
   const userEmail = propEmail || detectedEmail;
   const userName = propName || detectedName;
@@ -88,11 +94,18 @@ export function SupportWidget({
       if (detail?.subject) {
         setPrefilledSubject(detail.subject);
       }
+      // Accept email/name from event when DB isn't available (e.g., onboarding errors)
+      if (detail?.email && !detectedEmail) {
+        setDetectedEmail(detail.email);
+      }
+      if (detail?.name && !detectedName) {
+        setDetectedName(detail.name);
+      }
       setIsOpen(true);
     };
     window.addEventListener("open-support-widget", handler);
     return () => window.removeEventListener("open-support-widget", handler);
-  }, []);
+  }, [detectedEmail, detectedName]);
 
   return (
     <>

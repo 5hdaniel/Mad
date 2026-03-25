@@ -731,10 +731,22 @@ async function migrateUserToSupabaseId(
  */
 async function handleGetCurrentUser(): Promise<CurrentUserResponse> {
   try {
-    // Check if database is initialized first - early return if not
-    // This prevents race conditions where AuthContext calls this before
-    // LoadingOrchestrator has finished initializing the database
+    // Check if database is initialized first
+    // If not, fall back to Supabase session for basic user info
     if (!databaseService.isInitialized()) {
+      const client = supabaseService.getClient();
+      const { data: { session: supaSession } } = await client.auth.getSession();
+      if (supaSession?.user) {
+        const meta = supaSession.user.user_metadata || {};
+        return {
+          success: true,
+          user: {
+            id: supaSession.user.id,
+            email: supaSession.user.email || meta.email || "",
+            display_name: meta.full_name || meta.name || supaSession.user.email || "",
+          } as never,
+        };
+      }
       return { success: false, error: "Database not initialized" };
     }
 
@@ -1005,9 +1017,30 @@ async function handleGetCurrentUser(): Promise<CurrentUserResponse> {
       isNewUser: requiresTerms,
     };
   } catch (error) {
-    await logService.error("Get current user failed", "AuthHandlers", {
+    await logService.error("Get current user failed, trying Supabase session fallback", "AuthHandlers", {
       error: error instanceof Error ? error.message : "Unknown error",
     });
+
+    // Fallback: try to get basic user info from Supabase auth session
+    // This works even when the local DB isn't initialized (e.g., during onboarding)
+    try {
+      const client = supabaseService.getClient();
+      const { data: { session: supaSession } } = await client.auth.getSession();
+      if (supaSession?.user) {
+        const meta = supaSession.user.user_metadata || {};
+        return {
+          success: true,
+          user: {
+            id: supaSession.user.id,
+            email: supaSession.user.email || meta.email || "",
+            display_name: meta.full_name || meta.name || supaSession.user.email || "",
+          } as never, // Partial user — only id/email/display_name available before DB init
+        };
+      }
+    } catch {
+      // Supabase session also unavailable
+    }
+
     Sentry.captureException(error, {
       tags: { service: "session-handlers", operation: "handleGetCurrentUser" },
     });
