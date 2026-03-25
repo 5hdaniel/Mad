@@ -271,6 +271,8 @@ function ContactAssignmentStep({
           phone: contact.phone,
           company: contact.company,
           source: contact.source || "contacts_app",
+          allEmails: contact.allEmails || [],
+          allPhones: contact.allPhones || [],
         });
 
         if (result.success && result.data) {

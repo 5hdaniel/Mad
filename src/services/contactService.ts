@@ -20,6 +20,10 @@ export interface ContactCreateInput {
   company?: string;
   title?: string;
   source?: string;
+  /** All email addresses (BACKLOG-1270) */
+  allEmails?: string[];
+  /** All phone numbers (BACKLOG-1270) */
+  allPhones?: string[];
 }
 
 /**

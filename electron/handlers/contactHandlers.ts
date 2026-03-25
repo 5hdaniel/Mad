@@ -892,6 +892,10 @@ export function registerContactHandlers(mainWindow: BrowserWindow): void {
       contactData: unknown,
     ): Promise<ContactResponse> => {
       try {
+        // DIAG-1270: Log raw input to contacts:create
+        const rawInput = contactData as Record<string, unknown>;
+        logService.warn(`[DIAG-1270] contacts:create raw input: allEmails=${JSON.stringify(rawInput?.allEmails)}, allPhones=${JSON.stringify(rawInput?.allPhones)}, name=${rawInput?.name}`, "Contacts");
+
         // BACKLOG-551: Validate user ID exists in local DB
         const validatedUserId = await getValidUserId(userId, "Contacts");
         if (!validatedUserId) {
@@ -932,6 +936,18 @@ export function registerContactHandlers(mainWindow: BrowserWindow): void {
           source,
           is_imported: true,
         });
+
+        // BACKLOG-1270: Store ALL emails/phones (not just the primary)
+        const inputAllEmails = (contactData as { allEmails?: string[] })?.allEmails || [];
+        const inputAllPhones = (contactData as { allPhones?: string[] })?.allPhones || [];
+        if (inputAllEmails.length > 0) {
+          await databaseService.backfillContactEmails(contact.id, inputAllEmails);
+          logService.info(`[Contacts] Stored ${inputAllEmails.length} emails for new contact ${contact.id}`, "Contacts");
+        }
+        if (inputAllPhones.length > 0) {
+          await databaseService.backfillContactPhones(contact.id, inputAllPhones);
+          logService.info(`[Contacts] Stored ${inputAllPhones.length} phones for new contact ${contact.id}`, "Contacts");
+        }
 
         // Audit log contact creation
         await auditService.log({
