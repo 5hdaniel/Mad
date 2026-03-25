@@ -83,5 +83,6 @@ export async function getEmailCacheDurationMonths(
  * @returns Date representing the earliest email date to fetch
  */
 export function computeEmailCacheSinceDate(durationMonths: number): Date {
+  // Approximate: 30 days per month is sufficient for cache window purposes
   return new Date(Date.now() - durationMonths * 30 * 24 * 60 * 60 * 1000);
 }
