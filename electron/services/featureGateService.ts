@@ -102,7 +102,7 @@ class FeatureGateService {
     }
 
     // 4. No cache at all => fail-open
-    logService.warn(
+    logService.info(
       "[FeatureGate] No cache available, defaulting to allowed (fail-open)",
       "FeatureGateService",
       { orgId, featureKey }
@@ -144,7 +144,7 @@ class FeatureGateService {
     }
 
     // 4. No cache => empty (fail-open means nothing is blocked)
-    logService.warn(
+    logService.info(
       "[FeatureGate] No cache available, returning empty features (fail-open)",
       "FeatureGateService",
       { orgId }
@@ -223,7 +223,7 @@ class FeatureGateService {
   // ============================================
 
   private async fetchFromSupabase(orgId: string): Promise<void> {
-    logService.warn(
+    logService.info(
       "[FeatureGate] Fetching features from Supabase",
       "FeatureGateService",
       { orgId }
@@ -255,13 +255,13 @@ class FeatureGateService {
         );
         throw new Error("No Supabase auth session available for RPC call");
       }
-      logService.warn(
+      logService.info(
         "[FeatureGate] Auth session found in cache, proceeding with RPC",
         "FeatureGateService",
         { orgId, userId: authSession.userId }
       );
     } else {
-      logService.warn(
+      logService.debug(
         "[FeatureGate] Auth session active, calling RPC",
         "FeatureGateService",
         { orgId, userId: sessionData.session.user?.id }
@@ -281,7 +281,7 @@ class FeatureGateService {
       throw new Error(`get_org_features RPC failed: ${error.message}`);
     }
 
-    logService.warn(
+    logService.debug(
       "[FeatureGate] RPC get_org_features response received",
       "FeatureGateService",
       { orgId, hasData: !!data, dataType: typeof data }
