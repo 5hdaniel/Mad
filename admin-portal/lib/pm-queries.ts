@@ -676,12 +676,14 @@ export async function getRecentActivity(
   since?: string | null,
   eventTypes?: string[] | null,
   limit?: number,
+  offset?: number,
 ): Promise<PmNotification[]> {
   const supabase = createClient();
   const { data, error } = await supabase.rpc('pm_get_recent_activity', {
     p_since: since || null,
     p_event_types: eventTypes || null,
-    p_limit: limit || 50,
+    p_limit: limit || 20,
+    p_offset: offset || 0,
   });
   if (error) throw error;
   return (data ?? []) as unknown as PmNotification[];
