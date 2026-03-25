@@ -82,6 +82,9 @@ function toExtendedContact(contact: Contact): ExtendedContact {
     user_id: contact.user_id,
     created_at: contact.created_at,
     updated_at: contact.updated_at,
+    // BACKLOG-1270: Preserve all emails/phones through the selection flow
+    allEmails: (contact as unknown as { allEmails?: string[] }).allEmails,
+    allPhones: (contact as unknown as { allPhones?: string[] }).allPhones,
   };
 }
 
