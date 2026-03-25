@@ -14,6 +14,16 @@
 import React, { useState, useCallback, useEffect } from "react";
 import { SupportTicketDialog } from "./SupportTicketDialog";
 
+/** Detail payload for the 'open-support-widget' custom event (TASK-2319) */
+export interface OpenSupportWidgetDetail {
+  /** Pre-fill the subject field in the ticket dialog */
+  subject?: string;
+  /** Pre-fill user email when DB isn't available (e.g., during onboarding errors) */
+  email?: string;
+  /** Pre-fill user name when DB isn't available */
+  name?: string;
+}
+
 interface SupportWidgetProps {
   /** Optional user email (provided when rendered inside auth context) */
   userEmail?: string;
@@ -37,8 +47,10 @@ export function SupportWidget({
   const [detectedName, setDetectedName] = useState<string>("");
 
   // TASK-2282: Try to detect user info via IPC when props not provided
+  // Also re-detect when widget is opened (user may have logged in since mount)
   useEffect(() => {
     if (propEmail && propName) return; // Already have props, skip IPC
+    if (detectedEmail) return; // Already detected, skip
 
     let cancelled = false;
 
@@ -56,7 +68,7 @@ export function SupportWidget({
 
     detectUser();
     return () => { cancelled = true; };
-  }, [propEmail, propName]);
+  }, [propEmail, propName, isOpen, detectedEmail]);
 
   const userEmail = propEmail || detectedEmail;
   const userName = propName || detectedName;
@@ -67,7 +79,33 @@ export function SupportWidget({
 
   const handleClose = useCallback(() => {
     setIsOpen(false);
+    setPrefilledSubject("");
   }, []);
+
+  // TASK-2319: Pre-filled subject for programmatic opens
+  const [prefilledSubject, setPrefilledSubject] = useState("");
+
+  // TASK-2319: Listen for 'open-support-widget' custom event so other
+  // components (ErrorBoundary, AccountVerificationStep) can open the widget
+  // without prop drilling or context.
+  useEffect(() => {
+    const handler = (e: Event) => {
+      const detail = (e as CustomEvent<OpenSupportWidgetDetail>).detail;
+      if (detail?.subject) {
+        setPrefilledSubject(detail.subject);
+      }
+      // Accept email/name from event when DB isn't available (e.g., onboarding errors)
+      if (detail?.email && !detectedEmail) {
+        setDetectedEmail(detail.email);
+      }
+      if (detail?.name && !detectedName) {
+        setDetectedName(detail.name);
+      }
+      setIsOpen(true);
+    };
+    window.addEventListener("open-support-widget", handler);
+    return () => window.removeEventListener("open-support-widget", handler);
+  }, [detectedEmail, detectedName]);
 
   return (
     <>
@@ -91,6 +129,7 @@ export function SupportWidget({
           userEmail={userEmail}
           userName={userName}
           autoCaptureScreenshot
+          prefilledSubject={prefilledSubject}
         />
       )}
     </>

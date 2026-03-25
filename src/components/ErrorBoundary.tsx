@@ -130,35 +130,18 @@ class ErrorBoundary extends Component<Props, State> {
     this.setState((prev) => ({ showFullReport: !prev.showFullReport }));
   };
 
-  handleContactSupport = async (): Promise<void> => {
-    try {
-      const { error, diagnostics } = this.state;
+  handleContactSupport = (): void => {
+    // TASK-2319: Open in-app support widget instead of mailto
+    const { error } = this.state;
+    const subject = error?.message
+      ? `Error: ${error.message}`
+      : "App Crash Report";
 
-      // Build error details for email
-      let errorDetails = `Error: ${error?.message || "Unknown error"}`;
-      if (diagnostics) {
-        // Include a shorter version in the email body
-        errorDetails += `\n\nSystem Info:\n${diagnostics}`;
-      }
-
-      if (window.api?.system?.contactSupport) {
-        await window.api.system.contactSupport(errorDetails);
-      } else if (window.api?.shell?.openExternal) {
-        const subject = encodeURIComponent("App Crash Report");
-        const body = encodeURIComponent(
-          `Hi,\n\nI encountered an error in the Keepr app.\n\n${errorDetails}\n\nPlease help me resolve this issue.\n\nThank you.`,
-        );
-        await window.api.shell.openExternal(
-          `mailto:${SUPPORT_EMAIL}?subject=${subject}&body=${body}`,
-        );
-      } else {
-        // Fallback: copy support email to clipboard
-        await navigator.clipboard.writeText(SUPPORT_EMAIL);
-        alert(`Support email copied to clipboard: ${SUPPORT_EMAIL}`);
-      }
-    } catch (err) {
-      logger.error("[ErrorBoundary] Failed to open support email:", err);
-    }
+    window.dispatchEvent(
+      new CustomEvent("open-support-widget", {
+        detail: { subject },
+      })
+    );
   };
 
   renderFullReportModal(): ReactNode {

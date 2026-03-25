@@ -30,6 +30,8 @@ interface SupportTicketDialogProps {
   userName: string;
   /** Auto-capture a screenshot when the dialog opens (used by the floating widget) */
   autoCaptureScreenshot?: boolean;
+  /** TASK-2319: Pre-fill the subject field (used when opened programmatically) */
+  prefilledSubject?: string;
 }
 
 const PRIORITY_OPTIONS: Array<{ value: TicketPriority; label: string }> = [
@@ -48,6 +50,7 @@ export function SupportTicketDialog({
   userEmail,
   userName,
   autoCaptureScreenshot = false,
+  prefilledSubject = "",
 }: SupportTicketDialogProps): React.ReactElement {
   const {
     diagnostics,
@@ -66,15 +69,20 @@ export function SupportTicketDialog({
     reset,
   } = useSupportTicket();
 
-  const [subject, setSubject] = useState("");
+  const [subject, setSubject] = useState(prefilledSubject);
   const [description, setDescription] = useState("");
   const [priority, setPriority] = useState<TicketPriority>("normal");
   const [categoryId, setCategoryId] = useState<string | null>(null);
 
-  // TASK-2282: Name/email form fields for unauthenticated users
-  const isAuthenticated = !!userEmail && !!userName;
-  const [formName, setFormName] = useState("");
-  const [formEmail, setFormEmail] = useState("");
+  // Name/email form fields — pre-filled when user info is available, always editable
+  const [formName, setFormName] = useState(userName || "");
+  const [formEmail, setFormEmail] = useState(userEmail || "");
+
+  // Update form fields if user info becomes available after mount
+  useEffect(() => {
+    if (userName && !formName) setFormName(userName);
+    if (userEmail && !formEmail) setFormEmail(userEmail);
+  }, [userName, userEmail]);
 
   // Collect diagnostics when dialog opens
   useEffect(() => {
@@ -93,9 +101,8 @@ export function SupportTicketDialog({
 
     if (!subject.trim() || !description.trim()) return;
 
-    // TASK-2282: Use form fields when unauthenticated
-    const effectiveName = isAuthenticated ? userName : formName.trim();
-    const effectiveEmail = isAuthenticated ? userEmail : formEmail.trim();
+    const effectiveName = formName.trim();
+    const effectiveEmail = formEmail.trim();
 
     if (!effectiveName || !effectiveEmail) return;
 
@@ -214,8 +221,8 @@ export function SupportTicketDialog({
           onSubmit={handleSubmit}
           className="flex-1 overflow-y-auto p-6 space-y-4"
         >
-          {/* TASK-2282: Name and Email fields for unauthenticated users */}
-          {!isAuthenticated && (
+          {/* Name and Email fields — always shown, pre-filled when user info available */}
+          {(
             <>
               <div>
                 <label
@@ -358,13 +365,6 @@ export function SupportTicketDialog({
             loading={diagnosticsLoading}
           />
 
-          {/* Submitting as (only shown for authenticated users) */}
-          {isAuthenticated && (
-            <div className="text-xs text-gray-400">
-              Submitting as {userName} ({userEmail})
-            </div>
-          )}
-
           {/* Error */}
           {error && (
             <div className="bg-red-50 border border-red-200 rounded-lg p-3">
@@ -386,7 +386,7 @@ export function SupportTicketDialog({
           <button
             type="button"
             onClick={handleSubmit}
-            disabled={submitting || !subject.trim() || !description.trim() || (!isAuthenticated && (!formName.trim() || !formEmail.trim()))}
+            disabled={submitting || !subject.trim() || !description.trim() || !formName.trim() || !formEmail.trim()}
             className="flex-1 px-4 py-2.5 text-sm font-semibold text-white bg-blue-500 hover:bg-blue-600 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
           >
             {submitting ? (
