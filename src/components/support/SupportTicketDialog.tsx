@@ -82,7 +82,7 @@ export function SupportTicketDialog({
   useEffect(() => {
     if (userName && !formName) setFormName(userName);
     if (userEmail && !formEmail) setFormEmail(userEmail);
-  }, [userName, userEmail]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [userName, userEmail]);
 
   // Collect diagnostics when dialog opens
   useEffect(() => {
