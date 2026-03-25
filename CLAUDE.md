@@ -263,7 +263,10 @@ This prevents fixes from being lost (as happened with the onboarding fix in `int
 **Quick Reference:**
 ```bash
 # Create isolated worktree for parallel task
-git worktree add ../Mad-task-XXX -b feature/TASK-XXX-description develop
+# For sprint tasks: base from the integration branch
+git worktree add ../Mad-task-XXX -b feature/TASK-XXX-description int/<sprint-name>
+# For standalone work: base from develop
+# git worktree add ../Mad-task-XXX -b feature/TASK-XXX-description develop
 
 # Verify isolation
 git worktree list
@@ -379,11 +382,14 @@ Use conventional commits:
 - `chore:` - Maintenance tasks
 - `ci:` - CI/CD changes
 
-### Step 4: Sync with Develop (MANDATORY before PR)
+### Step 4: Sync with Base Branch (MANDATORY before PR)
 
 ```bash
 git fetch origin
-git merge origin/develop
+# For sprint tasks: merge the integration branch
+git merge origin/int/<sprint-name>
+# For standalone work: merge develop
+# git merge origin/develop
 
 # If conflicts exist, resolve them MANUALLY (see .claude/docs/shared/git-branching.md)
 # NEVER use 'git checkout --theirs' blindly - it discards your branch's changes!
