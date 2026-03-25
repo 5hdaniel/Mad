@@ -36,6 +36,10 @@ export interface ContactAssignment {
   specific_role?: string;
   is_primary?: number;
   notes?: string;
+  /** Total number of emails for this contact (from contact_emails table) */
+  contact_email_count?: number | string;
+  /** Total number of phones for this contact (from contact_phones table) */
+  contact_phone_count?: number | string;
 }
 
 /**

@@ -173,7 +173,9 @@ export async function getTransactionContactsWithRoles(
       ) as contact_phone,
       c.company as contact_company,
       c.title as contact_title,
-      c.source as contact_source
+      c.source as contact_source,
+      (SELECT COUNT(*) FROM contact_emails WHERE contact_id = c.id) as contact_email_count,
+      (SELECT COUNT(*) FROM contact_phones WHERE contact_id = c.id) as contact_phone_count
     FROM transaction_contacts tc
     LEFT JOIN contacts c ON tc.contact_id = c.id
     WHERE tc.transaction_id = ?
