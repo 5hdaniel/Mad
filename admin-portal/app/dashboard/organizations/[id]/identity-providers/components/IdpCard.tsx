@@ -11,8 +11,8 @@ import { useState } from 'react';
 import { Shield, Pencil, Trash2, ToggleLeft, ToggleRight, ExternalLink } from 'lucide-react';
 import { ConfirmationDialog } from '@/components/shared/ConfirmationDialog';
 import { formatDate } from '@/lib/format';
-import type { IdentityProviderDisplay, ProviderType } from '@/lib/idp';
-import { providerTypeLabel } from '@/lib/idp';
+import type { IdentityProviderDisplay, ProviderType } from '@/lib/idp-types';
+import { providerTypeLabel } from '@/lib/idp-types';
 
 interface IdpCardProps {
   idp: IdentityProviderDisplay;

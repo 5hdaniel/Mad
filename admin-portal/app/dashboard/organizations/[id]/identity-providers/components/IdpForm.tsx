@@ -13,8 +13,8 @@
 
 import { useState, useEffect } from 'react';
 import { X, Shield, Info } from 'lucide-react';
-import type { IdentityProviderDisplay, ProviderType, IdpFormData } from '@/lib/idp';
-import { providerTypeLabel } from '@/lib/idp';
+import type { IdentityProviderDisplay, ProviderType, IdpFormData } from '@/lib/idp-types';
+import { providerTypeLabel } from '@/lib/idp-types';
 
 interface IdpFormProps {
   /** Existing IdP to edit, or null for create mode */

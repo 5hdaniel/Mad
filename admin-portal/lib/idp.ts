@@ -10,50 +10,12 @@
 
 import { createServiceClient } from '@/lib/supabase/server';
 
-// ---------------------------------------------------------------------------
-// Types (inline -- NOT from @keepr/shared per Vercel deploy limitation)
-// ---------------------------------------------------------------------------
+// Re-export types and client-safe helpers from idp-types.ts
+// so existing server-side imports continue to work.
+export type { ProviderType, IdentityProvider, IdentityProviderDisplay, IdpFormData, ScimTokenInfo, DirectorySyncStatus, GroupRoleMappingConfig, SyncLogEntry } from '@/lib/idp-types';
+export { providerTypeLabel } from '@/lib/idp-types';
 
-export type ProviderType = 'azure_ad' | 'google_workspace' | 'okta' | 'generic_saml' | 'generic_oidc';
-
-export interface IdentityProvider {
-  id: string;
-  organization_id: string;
-  provider_type: ProviderType;
-  display_name: string;
-  client_id: string | null;
-  /** Always masked when read -- never expose plaintext */
-  client_secret_encrypted: string | null;
-  issuer_url: string | null;
-  authorization_url: string | null;
-  token_url: string | null;
-  userinfo_url: string | null;
-  jwks_url: string | null;
-  saml_metadata_url: string | null;
-  saml_certificate: string | null;
-  attribute_mapping: Record<string, string> | null;
-  is_active: boolean;
-  verified_at: string | null;
-  created_at: string;
-  updated_at: string;
-}
-
-/** Shape returned to the browser -- secret is always masked. */
-export interface IdentityProviderDisplay extends Omit<IdentityProvider, 'client_secret_encrypted'> {
-  has_client_secret: boolean;
-}
-
-export interface IdpFormData {
-  provider_type: ProviderType;
-  display_name: string;
-  client_id: string;
-  client_secret?: string;
-  /** Azure AD only -- also updates organizations.microsoft_tenant_id */
-  tenant_id?: string;
-  /** Google Workspace only -- also updates organizations.google_workspace_domain */
-  workspace_domain?: string;
-  is_active: boolean;
-}
+import type { ProviderType, IdentityProvider, IdentityProviderDisplay, IdpFormData, ScimTokenInfo, DirectorySyncStatus, GroupRoleMappingConfig, SyncLogEntry } from '@/lib/idp-types';
 
 // ---------------------------------------------------------------------------
 // Well-known OAuth / OIDC endpoint templates
@@ -338,15 +300,6 @@ async function syncOrgColumns(
 // SCIM Token Management
 // ---------------------------------------------------------------------------
 
-export interface ScimTokenInfo {
-  id: string;
-  description: string | null;
-  last_used_at: string | null;
-  request_count: number;
-  expires_at: string | null;
-  created_at: string;
-}
-
 /**
  * Get the active (non-revoked) SCIM token for an organization.
  * Returns the most recently created token.
@@ -443,12 +396,6 @@ export async function revokeScimToken(
 // Directory Sync Status
 // ---------------------------------------------------------------------------
 
-export interface DirectorySyncStatus {
-  directory_sync_enabled: boolean;
-  directory_sync_last_at: string | null;
-  directory_sync_error: string | null;
-}
-
 /**
  * Get the directory sync status for an organization.
  */
@@ -541,12 +488,6 @@ export async function triggerDirectorySync(
 // Group Role Mapping CRUD
 // ---------------------------------------------------------------------------
 
-export interface GroupRoleMappingConfig {
-  group_role_mapping: Record<string, string>;
-  default_role: string;
-  group_sync_enabled: boolean;
-}
-
 /**
  * Get the group role mapping configuration from an IdP's attribute_mapping.
  */
@@ -618,17 +559,6 @@ export async function saveGroupRoleMapping(
 // Sync History (scim_sync_log)
 // ---------------------------------------------------------------------------
 
-export interface SyncLogEntry {
-  id: string;
-  operation: string;
-  resource_type: string;
-  resource_id: string | null;
-  external_id: string | null;
-  response_status: number | null;
-  error_message: string | null;
-  created_at: string;
-}
-
 /**
  * Fetch recent sync log entries for an organization.
  */
@@ -680,18 +610,3 @@ export function getScimEndpointUrl(): string {
   return `${supabaseUrl}/functions/v1/scim/v2`;
 }
 
-// ---------------------------------------------------------------------------
-// Display helpers (pure, no DB access)
-// ---------------------------------------------------------------------------
-
-/** Human-friendly label for a provider_type enum value. */
-export function providerTypeLabel(type: ProviderType): string {
-  const labels: Record<ProviderType, string> = {
-    azure_ad: 'Azure AD',
-    google_workspace: 'Google Workspace',
-    okta: 'Okta',
-    generic_saml: 'SAML (Generic)',
-    generic_oidc: 'OIDC (Generic)',
-  };
-  return labels[type] ?? type;
-}
