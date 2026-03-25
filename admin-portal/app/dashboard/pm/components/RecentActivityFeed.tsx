@@ -55,8 +55,7 @@ function formatRelativeTime(dateStr: string): string {
 }
 
 function getEventDescription(event: PmNotification): string {
-  // Adapt PmNotification to the shape getPmEventDescription expects
-  return getPmEventDescription(event as unknown as Parameters<typeof getPmEventDescription>[0]);
+  return getPmEventDescription(event);
 }
 
 // ---------------------------------------------------------------------------

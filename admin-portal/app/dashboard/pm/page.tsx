@@ -1,5 +1,3 @@
-'use client';
-
 /**
  * PM Dashboard - Landing Page
  *
