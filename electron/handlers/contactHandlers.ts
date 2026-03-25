@@ -709,8 +709,10 @@ export function registerContactHandlers(mainWindow: BrowserWindow): void {
             sanitizedContact.id &&
             !sanitizedContact.id.startsWith("contacts-app-")
           ) {
+            logService.warn(`[DIAG-1270] Import path: ${sanitizedContact.name || validatedData.name} → existingDB, allEmails=[${(sanitizedContact.allEmails || []).join(', ')}]`, 'Contacts');
             existingDbContacts.push({ id: sanitizedContact.id, contact: sanitizedContact });
           } else {
+            logService.warn(`[DIAG-1270] Import path: ${sanitizedContact.name || validatedData.name} → newCreate, allEmails=[${(sanitizedContact.allEmails || []).join(', ')}]`, 'Contacts');
             newContactsToCreate.push({
               user_id: validatedUserId,
               display_name: validatedData.name || "Unknown",
@@ -731,6 +733,7 @@ export function registerContactHandlers(mainWindow: BrowserWindow): void {
         // Mark existing DB contacts as imported and backfill any missing emails/phones
         // Also update source to "contacts_app" when importing from macOS Contacts
         for (const { id, contact } of existingDbContacts) {
+          logService.warn(`[DIAG-1270] DB contact backfill: ${contact.name}, contact.allEmails=[${(contact.allEmails || []).join(', ')}], contact.allPhones=[${(contact.allPhones || []).join(', ')}]`, 'Contacts');
           await databaseService.markContactAsImported(id, contact.source || "contacts_app");
 
           // Backfill emails/phones from macOS Contacts if available

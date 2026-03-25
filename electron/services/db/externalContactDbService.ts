@@ -130,18 +130,24 @@ export function getAllForUser(userId: string): ExternalContact[] {
 
   const rows = dbAll<ExternalContactRow>(sql, [userId]);
 
-  return rows.map(row => ({
-    id: row.id,
-    user_id: row.user_id,
-    name: row.name,
-    phones: JSON.parse(row.phones_json || '[]'),
-    emails: JSON.parse(row.emails_json || '[]'),
-    company: row.company,
-    last_message_at: row.last_message_at,
-    external_record_id: row.external_record_id,
-    source: row.source as ExternalContactSource,
-    synced_at: row.synced_at,
-  }));
+  return rows.map(row => {
+    const emails: string[] = JSON.parse(row.emails_json || '[]');
+    if (emails.length > 1) {
+      logService.warn(`[DIAG-1270] Shadow READ (getAllForUser): ${row.name} → ${emails.length} emails: ${emails.join(', ')}`, 'ExternalContactDbService');
+    }
+    return {
+      id: row.id,
+      user_id: row.user_id,
+      name: row.name,
+      phones: JSON.parse(row.phones_json || '[]'),
+      emails,
+      company: row.company,
+      last_message_at: row.last_message_at,
+      external_record_id: row.external_record_id,
+      source: row.source as ExternalContactSource,
+      synced_at: row.synced_at,
+    };
+  });
 }
 
 /**
@@ -165,18 +171,24 @@ export async function getAllForUserAsync(
 
   const rawRows = await queryContacts('external', userId, timeoutMs) as ExternalContactRow[];
 
-  return rawRows.map((row) => ({
-    id: row.id,
-    user_id: row.user_id,
-    name: row.name,
-    phones: JSON.parse(row.phones_json || '[]'),
-    emails: JSON.parse(row.emails_json || '[]'),
-    company: row.company,
-    last_message_at: row.last_message_at,
-    external_record_id: row.external_record_id,
-    source: row.source as ExternalContactSource,
-    synced_at: row.synced_at,
-  }));
+  return rawRows.map((row) => {
+    const emails: string[] = JSON.parse(row.emails_json || '[]');
+    if (emails.length > 1) {
+      logService.warn(`[DIAG-1270] Shadow READ (getAllForUserAsync): ${row.name} → ${emails.length} emails: ${emails.join(', ')}`, 'ExternalContactDbService');
+    }
+    return {
+      id: row.id,
+      user_id: row.user_id,
+      name: row.name,
+      phones: JSON.parse(row.phones_json || '[]'),
+      emails,
+      company: row.company,
+      last_message_at: row.last_message_at,
+      external_record_id: row.external_record_id,
+      source: row.source as ExternalContactSource,
+      synced_at: row.synced_at,
+    };
+  });
 }
 
 /**
@@ -255,14 +267,21 @@ export function upsertFromMacOS(userId: string, contacts: MacOSContact[]): numbe
 
   let count = 0;
 
+  // DIAG-1270: Count multi-email contacts being written
+  let multiEmailCount = 0;
   dbTransaction(() => {
     for (const contact of contacts) {
+      const emailsArr = contact.emails || [];
+      if (emailsArr.length > 1) {
+        multiEmailCount++;
+        logService.warn(`[DIAG-1270] Shadow WRITE: ${contact.name} → ${emailsArr.length} emails: ${emailsArr.join(', ')}`, 'ExternalContactDbService');
+      }
       dbRun(stmt, [
         uuidv4(),
         userId,
         contact.name || null,
         JSON.stringify(contact.phones || []),
-        JSON.stringify(contact.emails || []),
+        JSON.stringify(emailsArr),
         contact.company || null,
         contact.recordId,
         now,
@@ -271,7 +290,7 @@ export function upsertFromMacOS(userId: string, contacts: MacOSContact[]): numbe
     }
   });
 
-  logService.info(`Upserted ${count} external contacts from macOS`, 'ExternalContactDbService', { userId });
+  logService.info(`Upserted ${count} external contacts from macOS (${multiEmailCount} with multiple emails)`, 'ExternalContactDbService', { userId });
 
   return count;
 }
