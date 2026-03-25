@@ -4,6 +4,7 @@
  */
 
 import axios from "axios";
+import * as Sentry from "@sentry/electron/main";
 import logService from "./logService";
 
 /**
@@ -77,6 +78,10 @@ class AddressVerificationService {
 
     if (!this.apiKey) {
       logService.warn("[AddressVerification] No Google Maps API key configured", "AddressVerification");
+      Sentry.captureMessage("Google Maps API key missing — address autocomplete disabled", {
+        level: "warning",
+        tags: { service: "address-verification", issue: "missing-api-key" },
+      });
       return false;
     }
 

@@ -409,6 +409,11 @@ export function registerContactHandlers(mainWindow: BrowserWindow): void {
           // Mark this contact's identifiers as seen
           markAsSeen(dbContact);
 
+          // Query actual emails/phones from contact_emails/contact_phones tables
+          // (BACKLOG-1270: was hardcoded as [] which dropped all email data)
+          const dbEmails = getContactEmailEntries(dbContact.id).map(e => e.email);
+          const dbPhones = getContactPhoneEntries(dbContact.id).map(p => p.phone);
+
           availableContacts.push({
             id: dbContact.id, // Use actual DB ID so we can mark as imported
             name: dbContact.name || dbContact.display_name,
@@ -417,8 +422,8 @@ export function registerContactHandlers(mainWindow: BrowserWindow): void {
             company: dbContact.company || null,
             source: dbContact.source || "contacts_app",
             isFromDatabase: true, // Flag to distinguish from macOS Contacts app
-            allPhones: [],
-            allEmails: [],
+            allPhones: dbPhones,
+            allEmails: dbEmails,
           });
         }
 

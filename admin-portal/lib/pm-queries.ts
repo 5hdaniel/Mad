@@ -668,6 +668,26 @@ export async function getMyNotifications(since?: string | null): Promise<PmNotif
 }
 
 // ---------------------------------------------------------------------------
+// 35b. pm_get_recent_activity -- All recent events across project
+// ---------------------------------------------------------------------------
+
+/** Get recent activity across all project items with optional event type filter. */
+export async function getRecentActivity(
+  since?: string | null,
+  eventTypes?: string[] | null,
+  limit?: number,
+): Promise<PmNotification[]> {
+  const supabase = createClient();
+  const { data, error } = await supabase.rpc('pm_get_recent_activity', {
+    p_since: since || null,
+    p_event_types: eventTypes || null,
+    p_limit: limit || 50,
+  });
+  if (error) throw error;
+  return (data ?? []) as unknown as PmNotification[];
+}
+
+// ---------------------------------------------------------------------------
 // 36. pm_get_item_by_legacy_id -- Agent helper
 // ---------------------------------------------------------------------------
 

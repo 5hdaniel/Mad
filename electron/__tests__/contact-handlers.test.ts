@@ -146,6 +146,13 @@ jest.mock("../services/db/externalContactDbService", () => ({
   getContactSourceStats: jest.fn().mockReturnValue({ macos: 0, iphone: 0, outlook: 0 }),
 }));
 
+// Mock contactDbService functions used by the handler (BACKLOG-1270)
+jest.mock("../services/db/contactDbService", () => ({
+  ...jest.requireActual("../services/db/contactDbService"),
+  getContactEmailEntries: jest.fn().mockReturnValue([]),
+  getContactPhoneEntries: jest.fn().mockReturnValue([]),
+}));
+
 // Import after mocks are set up
 import { registerContactHandlers } from "../handlers/contactHandlers";
 import databaseService from "../services/databaseService";
