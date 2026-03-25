@@ -119,20 +119,13 @@ describe("SupportTicketDialog", () => {
       userName: "Test User",
     };
 
-    it("does not show name and email input fields", () => {
+    it("shows name and email fields pre-filled with user info", () => {
       render(<SupportTicketDialog {...authProps} />);
 
-      expect(screen.queryByLabelText(/Your Name/)).not.toBeInTheDocument();
-      expect(screen.queryByLabelText(/Your Email/)).not.toBeInTheDocument();
-    });
-
-    it("shows 'Submitting as' text with user info", () => {
-      render(<SupportTicketDialog {...authProps} />);
-
-      expect(
-        screen.getByText(/Submitting as Test User/)
-      ).toBeInTheDocument();
-      expect(screen.getByText(/user@example.com/)).toBeInTheDocument();
+      const nameInput = screen.getByLabelText(/Your Name/) as HTMLInputElement;
+      const emailInput = screen.getByLabelText(/Your Email/) as HTMLInputElement;
+      expect(nameInput.value).toBe("Test User");
+      expect(emailInput.value).toBe("user@example.com");
     });
 
     it("enables submit with just subject and description", () => {

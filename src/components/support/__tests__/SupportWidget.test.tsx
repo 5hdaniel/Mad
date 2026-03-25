@@ -119,9 +119,15 @@ describe("SupportWidget", () => {
 
     render(<SupportWidget />);
 
-    // Wait for the IPC call to resolve
+    // Wait for async user detection to complete
     await waitFor(() => {
-      fireEvent.click(screen.getByLabelText("Open support dialog"));
+      expect(window.api.auth.getCurrentUser).toHaveBeenCalled();
+    });
+
+    // Open the dialog after detection completes
+    fireEvent.click(screen.getByLabelText("Open support dialog"));
+
+    await waitFor(() => {
       expect(screen.getByTestId("dialog-email")).toHaveTextContent(
         "detected@example.com"
       );
