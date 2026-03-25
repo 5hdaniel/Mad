@@ -229,6 +229,8 @@ export interface PmNotification {
   new_value: string | null;
   metadata: Record<string, unknown> | null;
   actor_id: string | null;
+  actor_name?: string | null;
+  comment_body?: string | null;
   created_at: string;
   item_id: string | null;
   item_title: string | null;

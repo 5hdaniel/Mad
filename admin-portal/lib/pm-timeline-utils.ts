@@ -8,6 +8,18 @@
 import type { PmComment, PmEvent, PmTimelineEntry } from './pm-types';
 
 /**
+ * Minimal shape for event description/icon helpers.
+ * Both PmEvent and PmNotification satisfy this interface, so callers
+ * don't need unsafe casts.
+ */
+export interface PmEventLike {
+  event_type: string;
+  old_value: string | null;
+  new_value: string | null;
+  metadata: Record<string, unknown> | null;
+}
+
+/**
  * Merge comments and events into a single chronological timeline.
  * Filters out `commented` events (the comment itself is shown separately).
  * Sorted newest-first for natural activity feed order.
@@ -55,6 +67,8 @@ export function getPmEventIcon(eventType: string): { symbol: string; color: stri
       return { symbol: '\u2715', color: 'bg-gray-100 text-gray-600' };
     case 'sprint_changed':
       return { symbol: '\u{1F3C3}', color: 'bg-indigo-100 text-indigo-700' };
+    case 'commented':
+      return { symbol: '\u{1F4AC}', color: 'bg-cyan-100 text-cyan-700' };
     case 'deleted':
       return { symbol: '\u2212', color: 'bg-red-100 text-red-700' };
     default:
@@ -65,7 +79,7 @@ export function getPmEventIcon(eventType: string): { symbol: string; color: stri
 /**
  * Get human-readable description for a PM event.
  */
-export function getPmEventDescription(event: PmEvent): string {
+export function getPmEventDescription(event: PmEventLike): string {
   const meta = event.metadata as Record<string, unknown> | null;
 
   switch (event.event_type) {
@@ -111,7 +125,7 @@ export function getPmEventDescription(event: PmEvent): string {
  * PM events store actor_id but may include actor_name/actor_email
  * as top-level fields or in metadata for display purposes.
  */
-export function getPmActorName(event: PmEvent): string | null {
+export function getPmActorName(event: PmEventLike): string | null {
   const evt = event as unknown as Record<string, unknown>;
   if (typeof evt.actor_name === 'string') return evt.actor_name;
   if (typeof evt.actor_email === 'string') return evt.actor_email;

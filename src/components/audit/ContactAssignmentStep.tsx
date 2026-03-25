@@ -82,6 +82,9 @@ function toExtendedContact(contact: Contact): ExtendedContact {
     user_id: contact.user_id,
     created_at: contact.created_at,
     updated_at: contact.updated_at,
+    // BACKLOG-1270: Preserve all emails/phones through the selection flow
+    allEmails: (contact as unknown as { allEmails?: string[] }).allEmails,
+    allPhones: (contact as unknown as { allPhones?: string[] }).allPhones,
   };
 }
 
@@ -271,6 +274,8 @@ function ContactAssignmentStep({
           phone: contact.phone,
           company: contact.company,
           source: contact.source || "contacts_app",
+          allEmails: contact.allEmails || [],
+          allPhones: contact.allPhones || [],
         });
 
         if (result.success && result.data) {

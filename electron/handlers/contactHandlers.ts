@@ -409,6 +409,11 @@ export function registerContactHandlers(mainWindow: BrowserWindow): void {
           // Mark this contact's identifiers as seen
           markAsSeen(dbContact);
 
+          // Query actual emails/phones from contact_emails/contact_phones tables
+          // (BACKLOG-1270: was hardcoded as [] which dropped all email data)
+          const dbEmails = getContactEmailEntries(dbContact.id).map(e => e.email);
+          const dbPhones = getContactPhoneEntries(dbContact.id).map(p => p.phone);
+
           availableContacts.push({
             id: dbContact.id, // Use actual DB ID so we can mark as imported
             name: dbContact.name || dbContact.display_name,
@@ -417,8 +422,8 @@ export function registerContactHandlers(mainWindow: BrowserWindow): void {
             company: dbContact.company || null,
             source: dbContact.source || "contacts_app",
             isFromDatabase: true, // Flag to distinguish from macOS Contacts app
-            allPhones: [],
-            allEmails: [],
+            allPhones: dbPhones,
+            allEmails: dbEmails,
           });
         }
 
@@ -704,8 +709,10 @@ export function registerContactHandlers(mainWindow: BrowserWindow): void {
             sanitizedContact.id &&
             !sanitizedContact.id.startsWith("contacts-app-")
           ) {
+            logService.warn(`[DIAG-1270] Import path: ${sanitizedContact.name || validatedData.name} → existingDB, allEmails=[${(sanitizedContact.allEmails || []).join(', ')}]`, 'Contacts');
             existingDbContacts.push({ id: sanitizedContact.id, contact: sanitizedContact });
           } else {
+            logService.warn(`[DIAG-1270] Import path: ${sanitizedContact.name || validatedData.name} → newCreate, allEmails=[${(sanitizedContact.allEmails || []).join(', ')}]`, 'Contacts');
             newContactsToCreate.push({
               user_id: validatedUserId,
               display_name: validatedData.name || "Unknown",
@@ -726,6 +733,7 @@ export function registerContactHandlers(mainWindow: BrowserWindow): void {
         // Mark existing DB contacts as imported and backfill any missing emails/phones
         // Also update source to "contacts_app" when importing from macOS Contacts
         for (const { id, contact } of existingDbContacts) {
+          logService.warn(`[DIAG-1270] DB contact backfill: ${contact.name}, contact.allEmails=[${(contact.allEmails || []).join(', ')}], contact.allPhones=[${(contact.allPhones || []).join(', ')}]`, 'Contacts');
           await databaseService.markContactAsImported(id, contact.source || "contacts_app");
 
           // Backfill emails/phones from macOS Contacts if available
@@ -884,6 +892,10 @@ export function registerContactHandlers(mainWindow: BrowserWindow): void {
       contactData: unknown,
     ): Promise<ContactResponse> => {
       try {
+        // DIAG-1270: Log raw input to contacts:create
+        const rawInput = contactData as Record<string, unknown>;
+        logService.warn(`[DIAG-1270] contacts:create raw input: allEmails=${JSON.stringify(rawInput?.allEmails)}, allPhones=${JSON.stringify(rawInput?.allPhones)}, name=${rawInput?.name}`, "Contacts");
+
         // BACKLOG-551: Validate user ID exists in local DB
         const validatedUserId = await getValidUserId(userId, "Contacts");
         if (!validatedUserId) {
@@ -924,6 +936,18 @@ export function registerContactHandlers(mainWindow: BrowserWindow): void {
           source,
           is_imported: true,
         });
+
+        // BACKLOG-1270: Store ALL emails/phones (not just the primary)
+        const inputAllEmails = (contactData as { allEmails?: string[] })?.allEmails || [];
+        const inputAllPhones = (contactData as { allPhones?: string[] })?.allPhones || [];
+        if (inputAllEmails.length > 0) {
+          await databaseService.backfillContactEmails(contact.id, inputAllEmails);
+          logService.info(`[Contacts] Stored ${inputAllEmails.length} emails for new contact ${contact.id}`, "Contacts");
+        }
+        if (inputAllPhones.length > 0) {
+          await databaseService.backfillContactPhones(contact.id, inputAllPhones);
+          logService.info(`[Contacts] Stored ${inputAllPhones.length} phones for new contact ${contact.id}`, "Contacts");
+        }
 
         // Audit log contact creation
         await auditService.log({

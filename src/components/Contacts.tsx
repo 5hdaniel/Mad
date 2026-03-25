@@ -149,6 +149,8 @@ function Contacts({ userId, onClose }: ContactsProps) {
           company: contact.company || "",
           title: contact.title || "",
           source: contact.source || "contacts_app",
+          allEmails: contact.allEmails || [],
+          allPhones: contact.allPhones || [],
         });
 
         if (result.success && result.contact) {
