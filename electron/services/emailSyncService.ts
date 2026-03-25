@@ -25,6 +25,7 @@ import { backfillMissingAttachments } from "../handlers/attachmentHandlers";
 import { isNetworkError } from "../utils/networkErrors";
 import { retryOnNetwork, networkResilienceService } from "./networkResilience";
 import { computeTransactionDateRange } from "../utils/emailDateRange";
+import { getEmailCacheDurationMonths, computeEmailCacheSinceDate } from "../utils/preferenceHelper";
 import {
   getContactEmailsForTransaction,
   resolveContactEmailsByQuery,
@@ -443,10 +444,21 @@ class EmailSyncService {
 
     // TASK-2060/2068: Compute date range for email fetching based on transaction audit period.
     // Uses canonical computeTransactionDateRange from electron/utils/emailDateRange.ts.
-    const emailFetchSinceDate = computeTransactionDateRange(transactionDetails).start;
+    const transactionSinceDate = computeTransactionDateRange(transactionDetails).start;
+
+    // BACKLOG-1361: Apply email cache duration preference as an additional constraint.
+    // Use the LATER (more recent) of the transaction start date and the cache window,
+    // so we never fetch more history than the user configured.
+    const cacheDurationMonths = await getEmailCacheDurationMonths(userId);
+    const cacheSinceDate = computeEmailCacheSinceDate(cacheDurationMonths);
+    const emailFetchSinceDate = transactionSinceDate > cacheSinceDate ? transactionSinceDate : cacheSinceDate;
+
     logService.info(`Email fetch date range: since ${emailFetchSinceDate.toISOString()}`, "Transactions", {
       transactionId,
       sinceDate: emailFetchSinceDate.toISOString(),
+      transactionSinceDate: transactionSinceDate.toISOString(),
+      cacheDurationMonths,
+      cacheSinceDate: cacheSinceDate.toISOString(),
       source: transactionDetails.started_at ? "started_at" : transactionDetails.created_at ? "created_at" : "fallback_2yr",
     });
 
@@ -690,6 +702,14 @@ class EmailSyncService {
           resolvedEmails,
         });
       }
+    }
+
+    // BACKLOG-1361: Apply email cache duration preference as floor on the after date.
+    // Ensures provider searches never go further back than the user's configured cache window.
+    const cacheDurationMonths = await getEmailCacheDurationMonths(userId);
+    const cacheSinceDate = computeEmailCacheSinceDate(cacheDurationMonths);
+    if (!effectiveSearchParams.after || effectiveSearchParams.after < cacheSinceDate) {
+      effectiveSearchParams.after = cacheSinceDate;
     }
 
     // Check which providers are authenticated
@@ -941,7 +961,12 @@ class EmailSyncService {
 
     if (contactEmails.length > 0) {
       // Compute audit period date range
-      const emailFetchSinceDate = computeTransactionDateRange(transactionDetails).start;
+      const transactionSinceDate = computeTransactionDateRange(transactionDetails).start;
+
+      // BACKLOG-1361: Apply email cache duration preference
+      const cacheDurationMonths = await getEmailCacheDurationMonths(userId);
+      const cacheSinceDate = computeEmailCacheSinceDate(cacheDurationMonths);
+      const emailFetchSinceDate = transactionSinceDate > cacheSinceDate ? transactionSinceDate : cacheSinceDate;
 
       // Skip provider fetch if local cache already covers the audit period for this contact
       if (this.localCacheCoversAuditPeriod(userId, contactEmails, emailFetchSinceDate)) {
