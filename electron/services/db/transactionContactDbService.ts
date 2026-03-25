@@ -31,6 +31,8 @@ export interface TransactionContactResult extends TransactionContactData {
   contact_company?: string;
   contact_title?: string;
   contact_source?: string;
+  contact_email_count?: number | string;
+  contact_phone_count?: number | string;
 }
 
 /**
