@@ -37,7 +37,7 @@ import type {
   DirectorySyncStatus,
   GroupRoleMappingConfig,
   SyncLogEntry,
-} from '@/lib/idp';
+} from '@/lib/idp-types';
 
 interface IdpManagerProps {
   organizationId: string;
