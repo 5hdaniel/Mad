@@ -516,6 +516,8 @@ function ContactSummaryCard({
   const phone = assignment.contact_phone;
   const company = assignment.contact_company;
   const isPrimary = assignment.is_primary === 1;
+  const emailCount = Number(assignment.contact_email_count) || 0;
+  const phoneCount = Number(assignment.contact_phone_count) || 0;
 
   return (
     <div
@@ -542,9 +544,23 @@ function ContactSummaryCard({
             )}
           </div>
           <div className="flex items-center gap-2 text-sm text-gray-600">
-            {email && <span>{email}</span>}
+            {email && (
+              <span className="flex items-center gap-1">
+                {email}
+                {emailCount > 1 && (
+                  <span className="text-xs text-blue-600 font-medium">+{emailCount - 1}</span>
+                )}
+              </span>
+            )}
             {email && phone && <span className="text-gray-300">|</span>}
-            {phone && <span>{phone}</span>}
+            {phone && (
+              <span className="flex items-center gap-1">
+                {phone}
+                {phoneCount > 1 && (
+                  <span className="text-xs text-blue-600 font-medium">+{phoneCount - 1}</span>
+                )}
+              </span>
+            )}
           </div>
           {company && (
             <span className="text-xs text-gray-500">{company}</span>
