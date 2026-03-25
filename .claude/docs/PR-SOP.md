@@ -578,7 +578,7 @@ If merge is blocked, the fix is ALWAYS: merge base branch into feature branch, p
 - [ ] Verify merge completed: `gh pr view <PR> --json state` shows `MERGED`
 - [ ] Delete local branch: `git branch -d your-branch-name`
 - [ ] Pull latest changes: `git checkout develop && git pull`
-- [ ] Update task file with completion status
+- [ ] Update task status in Supabase (`pm_update_item_status`)
 - [ ] Notify PM that task is complete (only AFTER merge verified)
 
 ### 9.5 Debugging Metrics Verification (MANDATORY)
@@ -811,7 +811,7 @@ Copy this to your notes:
 - [ ] All approved PRs have been merged
 - [ ] All merges verified with `gh pr view <PR> --json state`
 - [ ] No PRs with failing CI left unattended (or blocker documented)
-- [ ] Task files updated with merge confirmations
+- [ ] Task status updated in Supabase `pm_backlog_items`
 ```
 
 **Do NOT end a session with approved-but-unmerged PRs.**

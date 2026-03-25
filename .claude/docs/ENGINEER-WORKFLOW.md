@@ -40,7 +40,7 @@
 
 ## Agent ID Tracking Table (Per Task)
 
-**Copy this to your task file and fill in as you progress:**
+**Copy this to your notes and fill in as you progress:**
 
 | Step | Agent Type | Agent ID | Tokens | Status |
 |------|------------|----------|--------|--------|
@@ -73,7 +73,7 @@ git checkout -b feature/task-XXX-description
 ```
 
 **IMPORTANT: All sprint PRs target the integration branch (`int/<sprint-name>`), NOT develop.**
-The PM will create `int/<sprint-name>` from develop at sprint start. Your task file will specify the PR target branch. If no integration branch is specified, ask the PM before creating a PR.
+The PM will create `int/<sprint-name>` from develop at sprint start. The task details in Supabase `pm_backlog_items.body` will specify the PR target branch. If no integration branch is specified, ask the PM before creating a PR.
 
 **Incident Reference:** SPRINT-P Phase 1 — targeting develop directly with multiple PRs caused 5+ hours of sequential CI waits due to `strict: true` cascade.
 
@@ -90,17 +90,17 @@ The PM will create `int/<sprint-name>` from develop at sprint start. Your task f
 
 **Who:** Engineer agent — planning phase is read-only (no Edit/Write of production files).
 
-**IMPORTANT:** Do NOT use `EnterPlanMode` — it requires interactive user approval and does not work inside subagent context. Instead, the engineer explores with read-only tools (Glob, Grep, Read) and writes the plan to the task file.
+**IMPORTANT:** Do NOT use `EnterPlanMode` — it requires interactive user approval and does not work inside subagent context. Instead, the engineer explores with read-only tools (Glob, Grep, Read) and writes the plan to a plan file or as a Supabase comment.
 
 **Actions:**
-1. Read the task file (`.claude/plans/tasks/TASK-XXX.md`)
+1. Read task details from Supabase: `SELECT body FROM pm_backlog_items WHERE item_number = 'BACKLOG-XXX'`
 2. Explore relevant codebase files (read-only)
 3. Identify all files to modify/create
 4. Create step-by-step implementation plan
 5. Document any risks or concerns
-6. Write plan to task file — do NOT edit production files yet
+6. Write plan to a plan file or as a Supabase comment — do NOT edit production files yet
 
-**Deliverable:** Implementation plan written to task file or separate plan file
+**Deliverable:** Implementation plan written to a plan file or as a Supabase comment
 
 **IMMEDIATELY RECORD:**
 ```
@@ -219,7 +219,7 @@ When handing off to SR Engineer or PM, the engineer MUST include the `### Effort
 - **Agent ID:** `<agent_id>`
 - **Total Tokens:** ~XK
 - **Duration:** ~X min
-- **Task Estimate:** ~XK (from task file)
+- **Task Estimate:** ~XK (from Supabase task details)
 ```
 
 Without this data, PM cannot label metrics entries, `sum_effort.py` cannot aggregate task totals, and the sprint rollup PR will fail the `pr-metrics-check` CI validation.
@@ -519,21 +519,21 @@ If a parallel task exceeds **2x estimated tokens** in first 10% of work:
 
 ## Checklist Template
 
-Copy this to your task file or notes:
+Copy this to your notes:
 
 ```
 ## Task Checklist: TASK-XXX
 
 ### Pre-Work
 - [ ] Created branch from sprint branch (or worktree for parallel work)
-- [ ] Read task file
+- [ ] Read task details from Supabase
 
 ### Step 1: PLAN
 - [ ] Invoked Plan agent
 - [ ] Plan Agent ID: _______________
 - [ ] Plan covers all acceptance criteria
 - [ ] Files to modify identified
-- [ ] Plan written to task file
+- [ ] Plan written to plan file or Supabase comment
 
 ### Step 2: SR REVIEW
 - [ ] Invoked SR Engineer agent to review plan

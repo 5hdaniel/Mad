@@ -1,6 +1,6 @@
 ---
 name: agentic-pm
-description: Act as an agentic project/engineering manager: reprioritize backlog, design merge-safe phases, generate project plan, dependency graph, task files, and engineer prompts with strict guardrails.
+description: Act as an agentic project/engineering manager: reprioritize backlog, design merge-safe phases, generate project plan, dependency graph, task details (in Supabase), and engineer prompts with strict guardrails.
 ---
 
 # Agentic PM (Project / Engineering Manager)
@@ -29,7 +29,7 @@ You are an **Agentic Project / Engineering Manager** (EM/TL/Release Manager hybr
 **Full reference:** `.claude/skills/agent-handoff/SKILL.md`
 
 When executing sprint tasks, PM is responsible for these steps:
-- **Step 1:** Verify task file exists with proper context
+- **Step 1:** Verify task details exist in Supabase `pm_backlog_items.body`
 - **Steps 2-4:** Setup (worktree, branch, status → `In Progress`)
 - **Step 5:** Handoff to Engineer for planning (read-only exploration, NOT EnterPlanMode)
 - **Step 8:** Update after plan review (approved → stays `In Progress`; rejected → `Deferred`)
@@ -40,19 +40,17 @@ When executing sprint tasks, PM is responsible for these steps:
 **Valid statuses:** `pending`, `in_progress`, `testing`, `completed`, `deferred` (Supabase underscore format)
 **Updates at EVERY transition (in order):**
 1. `pm_update_item_status(p_item_id, p_new_status)` — primary (Supabase, source of truth)
-2. `.claude/plans/tasks/TASK-XXX.md` — update `Status:` field in the task file frontmatter (commit artifact)
-3. `.claude/plans/sprints/SPRINT-XXX.md` — In-Scope table Status column
-4. `.claude/plans/backlog/data/backlog.csv` — OPTIONAL (backward compatibility during transition)
+2. `.claude/plans/sprints/SPRINT-XXX.md` — In-Scope table Status column
+3. `.claude/plans/backlog/data/backlog.csv` — OPTIONAL (backward compatibility during transition)
 
 **Sprint Close Checklist (Step 15):**
-1. Update ALL individual task files to `Status: Completed`
-2. Update parent backlog item(s) to `Completed` with completion date
-3. Update sprint file status to `Completed`
-4. Clean up worktrees (`git worktree remove` + `git worktree prune`)
-5. Check for orphaned PRs: `gh pr list --state open`
-6. Switch main repo back to develop: `git checkout develop && git pull`
-7. Write sprint summary (tasks, PRs, key deliverables, issues)
-8. Merge integration branch to develop (one final PR: `int/<sprint-name>` → develop)
+1. Update ALL backlog items to `Completed` with completion date (via Supabase RPC)
+2. Update sprint file status to `Completed`
+3. Clean up worktrees (`git worktree remove` + `git worktree prune`)
+4. Check for orphaned PRs: `gh pr list --state open`
+5. Switch main repo back to develop: `git checkout develop && git pull`
+6. Write sprint summary (tasks, PRs, key deliverables, issues)
+7. Merge integration branch to develop (one final PR: `int/<sprint-name>` → develop)
 
 **Handoff Protocol:** Use the handoff message template from `.claude/skills/agent-handoff/templates/`.
 
@@ -68,7 +66,8 @@ Use this skill when the user asks for any of:
 - Selecting tasks for a design sprint (merge-first)
 - Phase planning / project plan creation
 - Task dependency graph
-- Task file authoring for engineers
+- Task detail authoring (writing to Supabase `pm_backlog_items.body`)
+- Writing task details to Supabase `pm_backlog_items.body` for engineers
 - Handling engineer questions or resolving scope/contract ambiguity
 - Testing and quality planning for any project/feature
 - Backlog maintenance (adding new items, marking complete, cleanup, TODO extraction)
@@ -116,7 +115,7 @@ Only load the module you need:
 | Sprint selection / phase planning | `modules/sprint-selection.md` |
 | Project plan assembly | `modules/project-plan.md` |
 | Dependency graph | `modules/dependency-graph.md` |
-| Task files for engineers | `modules/task-file-authoring.md` |
+| Task details for engineers (Supabase body) | `modules/task-file-authoring.md` |
 | Engineer Q&A / guardrail escalation | `modules/engineer-questions.md` |
 | Testing & quality planning | `modules/testing-quality-planning.md` |
 | Backlog maintenance / cleanup | `modules/backlog-maintenance.md` |
@@ -160,7 +159,7 @@ When asked to "plan a sprint" or "create a project plan," generate:
 4) Phase plan (parallel vs sequential justification)
 5) Merge plan (branch + integration sequencing)
 6) Dependency graph (human + machine-readable)
-7) Task files for engineers (per included backlog item)
+7) Task details written to Supabase `pm_backlog_items.body` (per included backlog item)
 8) Engineer assignment messages (one per engineer)
 9) Risk register + Decision log
 10) End-of-sprint validation checklist
@@ -206,7 +205,7 @@ For detailed integration guidance, see `INTEGRATION.md`.
 After engineers complete tasks, PRs go through the `senior-engineer-pr-lead` agent which:
 - Validates architecture boundaries (entry file guardrails, line budgets)
 - Runs the PR-SOP checklist (`.claude/docs/PR-SOP.md`)
-- Ensures testing requirements from task files are met
+- Ensures testing requirements from task details (Supabase) are met
 - Enforces merge policy (traditional merge, never squash)
 - **Verifies PR is MERGED (not just approved)** before task completion
 
@@ -230,7 +229,7 @@ If any sprint-related PRs are open, the sprint CANNOT be closed.
 |----------|----------|----------------|
 | **Supabase (source of truth)** | `pm_*` tables via RPCs | `pm_list_items`, `pm_get_item_detail`, etc. |
 | Sprint plans | `.claude/plans/sprints/` | `SPRINT-<NNN>-<slug>.md` |
-| Task files | `.claude/plans/tasks/` | `TASK-<NNN>-<slug>.md` |
+| Task details | Supabase `pm_backlog_items.body` | Read via MCP: `SELECT body FROM pm_backlog_items WHERE item_number = 'BACKLOG-XXX'` |
 | Backlog CSV (archive) | `.claude/plans/backlog/data/backlog.csv` | Read-only reference |
 | Backlog detail files | `.claude/plans/backlog/items/` | `BACKLOG-<NNN>.md` (not all items have one) |
 | Backlog README | `.claude/plans/backlog/README.md` | Schema, status flow, queries |
@@ -280,7 +279,7 @@ git push -u origin int/<sprint-name>
 4. After all sprint work is done and tested, one PR from `int/*` to develop
 5. One CI run, one merge to develop
 
-**Add to every task file:**
+**Include in every task's Supabase body:**
 ```markdown
 **PR Target:** `int/<sprint-name>` (NOT develop)
 ```
@@ -295,7 +294,7 @@ git push -u origin int/<sprint-name>
 
 **Full reference:** `.claude/docs/shared/git-branching.md`
 
-This skill generates task files aligned with the project's GitFlow strategy:
+This skill generates task details (in Supabase `pm_backlog_items.body`) aligned with the project's GitFlow strategy:
 - Feature branches: `feature/<ID>-<slug>`
 - Fix branches: `fix/<ID>-<slug>`
 - AI-assisted: `claude/<ID>-<slug>`

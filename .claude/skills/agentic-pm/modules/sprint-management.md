@@ -63,11 +63,11 @@ Engineers self-report token usage (~8K) but actual consumption is 100x+ higher (
    ```
 
 4. **Flag if actual > 4x estimate**
-   - Update task file with actual tokens
+   - Update Supabase backlog item with actual tokens (add to `body` field or comments)
    - Note in sprint tracking
    - Investigate root cause
 
-5. **Update task file**
+5. **Record metrics**
    ```markdown
    ### Engineer Metrics (ACTUAL)
 
@@ -84,7 +84,7 @@ Before marking any engineer task complete:
 - [ ] Checked TaskOutput for actual tokens
 - [ ] Compared to estimate
 - [ ] Flagged if >4x overrun
-- [ ] Updated task file with actual tokens
+- [ ] Updated Supabase item with actual tokens
 
 ### Why Engineers Can't Self-Report Accurately
 
@@ -165,7 +165,7 @@ Estimates capture planning assumptions at sprint start. Changing them retroactiv
 ### Prerequisites
 
 1. Sprint plan reviewed by SR Engineer
-2. All task files created
+2. All task details written to Supabase `pm_backlog_items.body` via MCP
 3. Dependency graph validated
 4. Token caps set (4x upper estimate)
 
@@ -174,8 +174,8 @@ Estimates capture planning assumptions at sprint start. Changing them retroactiv
 - [ ] Sprint created in Supabase: `SELECT pm_create_sprint(p_name := 'SPRINT-XXX', p_goal := 'Sprint goal');`
 - [ ] **Integration branch created:** `git checkout -b int/<sprint-name> develop && git push -u origin int/<sprint-name>`
 - [ ] Sprint file created: `.claude/plans/sprints/SPRINT-XXX-slug.md`
-- [ ] All task files created in `.claude/plans/tasks/`
-- [ ] **All task files specify PR target:** `int/<sprint-name>` (NOT develop)
+- [ ] All task details written to Supabase `pm_backlog_items.body` (via MCP `UPDATE pm_backlog_items SET body = '...' WHERE id = '<uuid>'`)
+- [ ] **All task details specify PR target:** `int/<sprint-name>` (NOT develop)
 - [ ] Items assigned to sprint in Supabase: `SELECT pm_assign_to_sprint(p_item_id := '<uuid>', p_sprint_id := '<uuid>');`
 - [ ] INDEX.md updated with sprint assignment
 - [ ] Worktrees ready for parallel tasks (BACKLOG-132)
@@ -198,7 +198,7 @@ Estimates capture planning assumptions at sprint start. Changing them retroactiv
 Every time you check on running agents:
 1. TaskOutput with `block=false` to check status
 2. If complete, check actual tokens
-3. Update task files with real consumption
+3. Update sprint file with real consumption
 4. Flag overruns immediately
 
 ### Handling Overruns
@@ -210,7 +210,7 @@ If actual tokens > 4x estimate:
    - Edit retries? → Agent is struggling with edits
    - npm commands? → Unnecessary verbose output
    - File re-reads? → Context management issue
-3. Document in task file
+3. Document in sprint file and Supabase comments
 4. Adjust future estimates for similar tasks
 
 ---
@@ -271,7 +271,7 @@ For each task in the sprint:
    ```
 
 3. **Record actuals** — Copy totals to:
-   - Task file `## Actual Effort` section
+   - Supabase `pm_backlog_items` record (update `actual_tokens` field)
    - Sprint file In-Scope table `Actual Tokens` column
 
 4. **Build estimation accuracy table:**
@@ -344,7 +344,7 @@ Every sprint file must have a `## Sprint Retrospective` section (populated at cl
 - [ ] **All item statuses updated in Supabase** - `pm_update_item_status('<uuid>', 'completed')` for each item
 - [ ] **All agent metrics labeled** - Every agent_id from handoffs labeled in tokens.csv
 - [ ] **Per-task actuals recorded** - sum_effort.py run for each task
-- [ ] All task files have actual (monitored) token data
+- [ ] All tasks have actual (monitored) token data in sprint file
 - [ ] Token variance analysis complete
 - [ ] **Sprint Retrospective populated** - Estimation accuracy, issues, lessons
 - [ ] INDEX.md updated with completion
@@ -384,7 +384,8 @@ Capture for each task:
 
 ### Required Workflow: When Unplanned Work Arises
 
-1. **Create Task File Immediately**
+1. **Create Supabase Backlog Item Immediately**
+   Write the following to the `body` field of a new `pm_backlog_items` entry via MCP:
    ```markdown
    # TASK-XXX: <Title> (Unplanned)
 
@@ -491,7 +492,7 @@ Before starting implementation phase:
 1. Review all investigation findings
 2. For each planned implementation task, decide:
    - **PROCEED**: Bug confirmed, fix needed
-   - **MODIFY**: Different fix needed (update task file)
+   - **MODIFY**: Different fix needed (update task details in Supabase)
    - **SKIP**: No bug found, mark backlog item as `deferred`
 3. Update sprint file with decisions
 4. Notify user of any scope changes
@@ -510,7 +511,7 @@ Before starting implementation phase:
 ### How to Move
 
 1. Update sprint assignment in Supabase: `SELECT pm_assign_to_sprint(p_item_id := '<uuid>', p_sprint_id := '<new-sprint-uuid>');`
-2. Update task file with new sprint assignment
+2. Update task details in Supabase with new sprint assignment
 3. Update INDEX.md
 4. Update both sprint files
 5. Note reason for move in decision log

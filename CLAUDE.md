@@ -8,7 +8,7 @@ This guide is for all Claude agents working on Keepr. Follow these standards for
 
 **CRITICAL: READ THIS BEFORE ANY SPRINT/TASK WORK**
 
-When working on tasks from `.claude/plans/tasks/`, you MUST follow the **15-step agent-handoff workflow**. Direct implementation is PROHIBITED.
+When working on sprint tasks, you MUST follow the **15-step agent-handoff workflow**. Direct implementation is PROHIBITED. Task details (requirements, acceptance criteria, approach, estimates) live in the `body` field of `pm_backlog_items` in Supabase — read them via `SELECT body FROM pm_backlog_items WHERE item_number = 'BACKLOG-XXX'`.
 
 ### Authoritative Reference
 
@@ -535,7 +535,10 @@ npx prebuild-install --runtime=electron --target=35.7.5 --arch=x64 --platform=wi
 | **Docs Index** | `.claude/docs/INDEX.md` | Master index of all documentation |
 | **PR SOP** | `.claude/docs/PR-SOP.md` | Complete PR checklist (all phases) |
 | **Senior Engineer** | `.claude/docs/PR-SOP.md` + `senior-engineer-pr-lead` agent | Architecture standards, advanced reviews |
+| **Task Details** | Supabase `pm_backlog_items.body` | Task requirements, acceptance criteria, approach |
 | **This Guide** | `CLAUDE.md` | Quick start, branching, workflow |
+
+> **Note:** Task details (requirements, acceptance criteria, files to modify, estimates) are stored in the `body` field of `pm_backlog_items` in Supabase. Local `.claude/plans/tasks/` files are legacy — do not create new ones. Sprint plan files (`.claude/plans/sprints/`) are still used as high-level overviews.
 
 ### Shared References (Canonical Sources)
 

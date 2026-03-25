@@ -14,7 +14,7 @@ This skill defines how agents hand off work during sprint task execution. Read t
 ### PM Agent Steps
 | Step | Action | Status Update | Hand Off To |
 |------|--------|---------------|-------------|
-| 1 | Verify task file exists with context | — | - (abort if missing) |
+| 1 | Verify task details exist in Supabase `pm_backlog_items.body` | — | - (abort if missing) |
 | 2-4 | Setup (worktree, branch, status) | CSV + Sprint → `In Progress` | - |
 | 5 | Task ready for planning | — | Engineer (read-only exploration) |
 | 8 | Plan reviewed | Sprint notes: "Plan approved" | Engineer (implement) or User (if rejected) |
@@ -64,9 +64,9 @@ PHASE A: SETUP (PM)
     - All engineer PRs will target this branch, NOT develop
     - Incident ref: SPRINT-P Phase 1 (5+ hours lost to strict:true cascade)
 
-1.  PM: Verify task file exists with proper context
-    - Read task file from .claude/plans/tasks/TASK-XXXX-*.md
-    - Confirm it has: requirements, acceptance criteria, dependencies
+1.  PM: Verify task details exist in Supabase
+    - Read task details: SELECT body FROM pm_backlog_items WHERE item_number = 'BACKLOG-XXXX'
+    - Confirm body has: requirements, acceptance criteria, dependencies
     - If missing or incomplete: STOP, notify user
 
 2.  PM: Create worktree (if parallel tasks in phase)
@@ -84,15 +84,15 @@ PHASE A: SETUP (PM)
 
 5.  PM → ENGINEER: Handoff task for planning (read-only exploration)
     - Use handoff message template
-    - Specify: Task ID, task file path, branch name
-    - Instruct engineer: "Plan only — explore codebase, write plan, do NOT edit production files"
+    - Specify: Task ID, Supabase item_number (BACKLOG-XXXX), branch name
+    - Instruct engineer: "Read task details from Supabase pm_backlog_items.body. Plan only — explore codebase, write plan, do NOT edit production files"
 
 PHASE B: PLANNING
 -----------------
 6.  ENGINEER: Explore codebase and create implementation plan
-    - Read task file thoroughly
+    - Read task details from Supabase: `SELECT body FROM pm_backlog_items WHERE item_number = 'BACKLOG-XXXX'`
     - Use Glob, Grep, Read tools to explore relevant code (read-only)
-    - Write implementation plan to task file or plan file
+    - Write implementation plan to a plan file or as a Supabase comment
     - Do NOT edit production files — planning phase is read-only
     - Return plan → SR ENGINEER for review
     NOTE: Do NOT use EnterPlanMode — it requires interactive user approval
@@ -118,7 +118,7 @@ PHASE B: PLANNING
     └─ If rejected → Notify user, END
         - Update Supabase: `SELECT pm_update_item_status('<uuid>', 'deferred');`
         - (Optional) Update backlog CSV status → `Deferred`
-        - Document reason in task file
+        - Document reason in Supabase comments
 
 PHASE C: IMPLEMENTATION
 -----------------------
@@ -202,7 +202,7 @@ PHASE D: PR, TEST & MERGE
         --label --agent-id <ID> -t <type> -i TASK-XXXX -d "<desc>"
     - Aggregate totals:
       python .claude/skills/log-metrics/sum_effort.py --task TASK-XXXX --pretty
-    - Copy aggregated totals to task file `## Actual Effort` section
+    - Copy aggregated totals to sprint file `Actual Tokens` column
     - Update sprint file In-Scope table `Actual Tokens` column
     - Collect issues from handoff messages → sprint file `## Issues Summary`
 
