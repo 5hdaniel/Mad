@@ -10,7 +10,7 @@
  */
 
 import React from "react";
-import { render, screen, fireEvent, waitFor } from "@testing-library/react";
+import { render, screen, fireEvent, waitFor, act } from "@testing-library/react";
 import { SupportWidget } from "../SupportWidget";
 
 // Mock SupportTicketDialog to avoid complex setup
@@ -138,8 +138,10 @@ describe("SupportWidget", () => {
     // Dialog should not be open initially
     expect(screen.queryByTestId("support-dialog")).not.toBeInTheDocument();
 
-    // Dispatch custom event
-    window.dispatchEvent(new CustomEvent("open-support-widget"));
+    // Dispatch custom event — wrap in act() for React state update
+    act(() => {
+      window.dispatchEvent(new CustomEvent("open-support-widget"));
+    });
 
     // Dialog should now be open
     expect(screen.getByTestId("support-dialog")).toBeInTheDocument();
@@ -148,11 +150,13 @@ describe("SupportWidget", () => {
   it("passes prefilledSubject from custom event detail", () => {
     render(<SupportWidget />);
 
-    window.dispatchEvent(
-      new CustomEvent("open-support-widget", {
-        detail: { subject: "Account Setup Issue" },
-      })
-    );
+    act(() => {
+      window.dispatchEvent(
+        new CustomEvent("open-support-widget", {
+          detail: { subject: "Account Setup Issue" },
+        })
+      );
+    });
 
     expect(screen.getByTestId("support-dialog")).toBeInTheDocument();
   });
