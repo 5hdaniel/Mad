@@ -52,6 +52,10 @@ const mockSyncOutlookContacts = jest.fn().mockResolvedValue({
   success: true,
   count: 5,
 });
+const mockSyncGoogleContacts = jest.fn().mockResolvedValue({
+  success: true,
+  count: 3,
+});
 const mockGetSourceStats = jest.fn().mockResolvedValue({
   success: true,
   stats: { macos: 10, iphone: 0, outlook: 5 },
@@ -65,6 +69,7 @@ const defaultProps = {
   outlookContactsEnabled: true,
   macosContactsEnabled: true,
   gmailContactsEnabled: true,
+  googleContactsEnabled: true,
   outlookEmailsInferred: false,
   gmailEmailsInferred: false,
   messagesInferred: false,
@@ -89,6 +94,7 @@ function renderWithPlatform(
       contacts: {
         getExternalSyncStatus: mockGetExternalSyncStatus,
         syncOutlookContacts: mockSyncOutlookContacts,
+        syncGoogleContacts: mockSyncGoogleContacts,
         syncExternal: jest.fn().mockResolvedValue({ success: true }),
         forceReimport: jest.fn().mockResolvedValue({ success: true, cleared: 0 }),
         getSourceStats: mockGetSourceStats,
@@ -105,6 +111,7 @@ beforeEach(() => {
   mockRequestSync.mockClear();
   mockGetExternalSyncStatus.mockClear();
   mockSyncOutlookContacts.mockClear();
+  mockSyncGoogleContacts.mockClear();
   mockGetSourceStats.mockClear();
   mockOnToggleSource.mockClear();
 
@@ -117,6 +124,10 @@ beforeEach(() => {
   mockSyncOutlookContacts.mockResolvedValue({
     success: true,
     count: 5,
+  });
+  mockSyncGoogleContacts.mockResolvedValue({
+    success: true,
+    count: 3,
   });
   mockGetSourceStats.mockResolvedValue({
     success: true,
@@ -177,7 +188,7 @@ describe("ContactsImportSettings", () => {
 
       // On Windows without Microsoft connected, should show "no sources" message
       expect(
-        screen.getByText(/Connect a Microsoft account or use macOS/)
+        screen.getByText(/Connect a Microsoft or Google account/)
       ).toBeInTheDocument();
       expect(screen.queryByLabelText("macOS iPhone Contacts import")).not.toBeInTheDocument();
     });
@@ -201,7 +212,7 @@ describe("ContactsImportSettings", () => {
       );
 
       expect(
-        screen.getByText(/Connect a Microsoft account or use macOS/)
+        screen.getByText(/Connect a Microsoft or Google account/)
       ).toBeInTheDocument();
       expect(screen.getByText("Contacts")).toBeInTheDocument();
     });

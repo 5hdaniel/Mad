@@ -10,7 +10,7 @@
  */
 
 import React from "react";
-import { render, screen, fireEvent, waitFor } from "@testing-library/react";
+import { render, screen, fireEvent, waitFor, act } from "@testing-library/react";
 import { SupportWidget } from "../SupportWidget";
 
 // Mock SupportTicketDialog to avoid complex setup
@@ -119,9 +119,15 @@ describe("SupportWidget", () => {
 
     render(<SupportWidget />);
 
-    // Wait for the IPC call to resolve
+    // Wait for async user detection to complete
     await waitFor(() => {
-      fireEvent.click(screen.getByLabelText("Open support dialog"));
+      expect(window.api.auth.getCurrentUser).toHaveBeenCalled();
+    });
+
+    // Open the dialog after detection completes
+    fireEvent.click(screen.getByLabelText("Open support dialog"));
+
+    await waitFor(() => {
       expect(screen.getByTestId("dialog-email")).toHaveTextContent(
         "detected@example.com"
       );
@@ -129,5 +135,35 @@ describe("SupportWidget", () => {
         "Detected User"
       );
     });
+  });
+
+  // TASK-2319: Custom event tests
+  it("opens the dialog when 'open-support-widget' event is dispatched", () => {
+    render(<SupportWidget />);
+
+    // Dialog should not be open initially
+    expect(screen.queryByTestId("support-dialog")).not.toBeInTheDocument();
+
+    // Dispatch custom event — wrap in act() for React state update
+    act(() => {
+      window.dispatchEvent(new CustomEvent("open-support-widget"));
+    });
+
+    // Dialog should now be open
+    expect(screen.getByTestId("support-dialog")).toBeInTheDocument();
+  });
+
+  it("passes prefilledSubject from custom event detail", () => {
+    render(<SupportWidget />);
+
+    act(() => {
+      window.dispatchEvent(
+        new CustomEvent("open-support-widget", {
+          detail: { subject: "Account Setup Issue" },
+        })
+      );
+    });
+
+    expect(screen.getByTestId("support-dialog")).toBeInTheDocument();
   });
 });

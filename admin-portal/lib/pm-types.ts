@@ -42,7 +42,7 @@ export type LinkType =
 
 export type SprintStatus = 'planned' | 'active' | 'completed' | 'cancelled';
 
-export type ProjectStatus = 'active' | 'archived';
+export type ProjectStatus = 'active' | 'on_hold' | 'completed' | 'archived';
 
 // ---------------------------------------------------------------------------
 // Assignable user (returned by pm_list_assignable_users RPC)
@@ -467,6 +467,20 @@ export const SPRINT_STATUS_COLORS: Record<SprintStatus, string> = {
   cancelled: 'bg-red-100 text-red-800',
 };
 
+export const PROJECT_STATUS_LABELS: Record<ProjectStatus, string> = {
+  active: 'Active',
+  on_hold: 'On Hold',
+  completed: 'Completed',
+  archived: 'Archived',
+};
+
+export const PROJECT_STATUS_COLORS: Record<ProjectStatus, string> = {
+  active: 'bg-green-100 text-green-800',
+  on_hold: 'bg-yellow-100 text-yellow-800',
+  completed: 'bg-blue-100 text-blue-800',
+  archived: 'bg-gray-100 text-gray-500',
+};
+
 // ---------------------------------------------------------------------------
 // Sortable column keys for backlog table
 // ---------------------------------------------------------------------------
@@ -557,7 +571,7 @@ export type ItemField =
 export type SprintField = 'name' | 'goal' | 'start_date' | 'end_date';
 
 /** Whitelisted fields that can be passed to pm_update_project_field. */
-export type ProjectField = 'name' | 'description';
+export type ProjectField = 'name' | 'description' | 'status';
 
 /** Typed updates object for pm_bulk_update. */
 export interface BulkUpdateFields {

@@ -34,6 +34,7 @@ import {
   formatDriverServiceStoppedError,
 } from "./diagnostics/userFacingErrors";
 import { checkAppleDrivers } from "./appleDriverService";
+import { canUseLibimobiledevice } from "./libimobiledeviceService";
 import type { iOSDevice } from "../types/device";
 import type { iOSMessage, iOSConversation } from "../types/iosMessages";
 import type { iOSContact } from "../types/iosContacts";
@@ -262,11 +263,26 @@ export class DeviceSyncOrchestrator extends EventEmitter {
       }
 
       // TASK-2276: On Windows, check Apple drivers before attempting sync
+      let driversInstalled = true;
+      let serviceRunning = true;
       if (process.platform === "win32") {
         const driverStatus = await checkAppleDrivers();
+        driversInstalled = driverStatus.isInstalled;
+        serviceRunning = driverStatus.serviceRunning;
         if (!driverStatus.isInstalled) {
           const userError = formatMissingDriversError();
           log.warn("[DeviceSyncOrchestrator] Apple drivers not installed");
+          // BACKLOG-1354: Breadcrumb + captureMessage when pre-sync fails
+          Sentry.addBreadcrumb({
+            category: "iphone.sync",
+            message: "Pre-sync failed: Apple drivers not installed",
+            level: "warning",
+            data: { driversInstalled: false, serviceRunning: false },
+          });
+          Sentry.captureMessage("Pre-sync check failed: Apple drivers not installed", {
+            level: "warning",
+            tags: { component: "device_sync", platform: process.platform },
+          });
           this.isRunning = false;
           this.emit("error", { message: userError.description, userError });
           return this.errorResult(userError.description);
@@ -274,11 +290,39 @@ export class DeviceSyncOrchestrator extends EventEmitter {
         if (!driverStatus.serviceRunning) {
           const userError = formatDriverServiceStoppedError();
           log.warn("[DeviceSyncOrchestrator] Apple Mobile Device Service not running");
+          // BACKLOG-1354: Breadcrumb + captureMessage when pre-sync fails
+          Sentry.addBreadcrumb({
+            category: "iphone.sync",
+            message: "Pre-sync failed: Apple Mobile Device Service not running",
+            level: "warning",
+            data: { driversInstalled: true, serviceRunning: false },
+          });
+          Sentry.captureMessage("Pre-sync check failed: Apple Mobile Device Service stopped", {
+            level: "warning",
+            tags: { component: "device_sync", platform: process.platform },
+          });
           this.isRunning = false;
           this.emit("error", { message: userError.description, userError });
           return this.errorResult(userError.description);
         }
       }
+
+      // BACKLOG-1354: Pre-sync summary breadcrumb with all check results
+      const libimobiledeviceAvailable = canUseLibimobiledevice();
+      const connectedDevices = this.deviceService.getConnectedDevices();
+      Sentry.addBreadcrumb({
+        category: "iphone.sync",
+        message: "Pre-sync checks passed",
+        level: "info",
+        data: {
+          driversInstalled,
+          serviceRunning,
+          libimobiledeviceAvailable,
+          devicesDetectedCount: connectedDevices.length,
+          diskSpaceSufficientMB: diskCheck.availableMB,
+          platform: process.platform,
+        },
+      });
 
       // Step 0: Check for existing/interrupted backups
       this.emitProgress({

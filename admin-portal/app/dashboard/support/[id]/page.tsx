@@ -181,6 +181,8 @@ export default function TicketDetailPage() {
             onMessageSent={handleMessageSent}
             requesterName={ticket.requester_name}
             ticketNumber={ticket.ticket_number}
+            ticketSubject={ticket.subject}
+            requesterEmail={ticket.requester_email}
           />
 
           {/* 3. Activity Timeline — messages + events, newest first */}
@@ -189,6 +191,7 @@ export default function TicketDetailPage() {
             events={events}
             attachments={attachments}
             showAttachments={showAttachments}
+            onTimelineChanged={loadDetail}
           />
 
           <div ref={threadEndRef} />

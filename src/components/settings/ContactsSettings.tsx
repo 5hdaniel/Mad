@@ -25,6 +25,11 @@ export function ContactsSettings({
     const val = initialPreferences?.contactSources?.direct?.gmailContacts;
     return typeof val === "boolean" ? val : true;
   });
+  // TASK-2303: Google Contacts toggle (backed by googleContacts preference key)
+  const [googleContactsEnabled, setGoogleContactsEnabled] = useState<boolean>(() => {
+    const val = initialPreferences?.contactSources?.direct?.googleContacts;
+    return typeof val === "boolean" ? val : true;
+  });
   const [macosContactsEnabled, setMacosContactsEnabled] = useState<boolean>(() => {
     const val = initialPreferences?.contactSources?.direct?.macosContacts;
     return typeof val === "boolean" ? val : true;
@@ -52,6 +57,7 @@ export function ContactsSettings({
       outlookContacts: setOutlookContactsEnabled,
       macosContacts: setMacosContactsEnabled,
       gmailContacts: setGmailContactsEnabled,
+      googleContacts: setGoogleContactsEnabled,
       outlookEmails: setOutlookEmailsInferred,
       gmailEmails: setGmailEmailsInferred,
       messages: setMessagesInferred,
@@ -78,6 +84,7 @@ export function ContactsSettings({
           outlookContactsEnabled={outlookContactsEnabled}
           macosContactsEnabled={macosContactsEnabled}
           gmailContactsEnabled={gmailContactsEnabled}
+          googleContactsEnabled={googleContactsEnabled}
           outlookEmailsInferred={outlookEmailsInferred}
           gmailEmailsInferred={gmailEmailsInferred}
           messagesInferred={messagesInferred}

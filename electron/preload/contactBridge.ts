@@ -192,6 +192,19 @@ export const contactBridge = {
   }> => ipcRenderer.invoke("contacts:syncOutlookContacts", userId),
 
   /**
+   * Sync Google contacts to external_contacts table (TASK-2303)
+   * Fetches contacts from Google People API and syncs to local SQLite
+   * @param userId - User ID to sync contacts for
+   * @returns Sync result (count of contacts synced, reconnectRequired flag)
+   */
+  syncGoogleContacts: (userId: string): Promise<{
+    success: boolean;
+    count?: number;
+    reconnectRequired?: boolean;
+    error?: string;
+  }> => ipcRenderer.invoke("contacts:syncGoogleContacts", userId),
+
+  /**
    * Listen for import progress updates
    * @param callback - Called with progress updates during contact import
    * @returns Cleanup function to remove listener

@@ -22,6 +22,7 @@ import type {
   OnboardingStepContentProps,
 } from "../types";
 import type { UserVerifiedInLocalDbAction } from "../types/actions";
+import * as Sentry from '@sentry/electron/renderer';
 import logger from '../../../utils/logger';
 import {
   classifyFailureReason,
@@ -174,9 +175,32 @@ export function AccountVerificationContent({
     setStatus('verifying');
     setErrorMessage(null);
 
+    // Breadcrumb: verification attempt start (BACKLOG-1347)
+    Sentry.addBreadcrumb({
+      category: 'onboarding',
+      message: `AccountVerification: attempt ${attempt + 1}/${MAX_RETRIES + 1}`,
+      level: 'info',
+      data: {
+        attempt: attempt + 1,
+        maxRetries: MAX_RETRIES + 1,
+        networkOnline: navigator.onLine,
+      },
+    });
+
     try {
       // Use dedicated handler that ensures user exists in local DB
       const result = await window.api.system.verifyUserInLocalDb();
+
+      Sentry.addBreadcrumb({
+        category: 'onboarding',
+        message: `AccountVerification: IPC result success=${result.success}`,
+        level: result.success ? 'info' : 'warning',
+        data: {
+          success: result.success,
+          error: result.error || undefined,
+          attempt: attempt + 1,
+        },
+      });
 
       if (result.success) {
         setStatus('success');
@@ -194,6 +218,7 @@ export function AccountVerificationContent({
         // Note: The step will be filtered out after context updates,
         // causing automatic advancement to the next step
       } else {
+        const failureMsg = result.error || 'Unknown failure';
         // Auto-retry if under limit
         if (attempt < MAX_RETRIES) {
           setRetryCount(attempt + 1);
@@ -209,6 +234,7 @@ export function AccountVerificationContent({
             const reason = classifyFailureReason({
               dbInitialized: true, // We reached this step, so DB was initialized
               networkOnline: navigator.onLine,
+              error: new Error(failureMsg),
             });
             reportOnboardingFailure({
               step: 'account_verification',
@@ -216,12 +242,26 @@ export function AccountVerificationContent({
               dbInitialized: true,
               networkOnline: navigator.onLine,
               hasSession: true, // User is authenticated to reach onboarding
+              errorMessage: failureMsg,
             });
           }
         }
       }
     } catch (error) {
+      const errorMsg = error instanceof Error ? error.message : String(error);
       logger.error('[AccountVerificationStep] Verification failed:', error);
+
+      Sentry.addBreadcrumb({
+        category: 'onboarding',
+        message: `AccountVerification: exception on attempt ${attempt + 1}`,
+        level: 'error',
+        data: {
+          error: errorMsg,
+          attempt: attempt + 1,
+          networkOnline: navigator.onLine,
+        },
+      });
+
       // Auto-retry on exception
       if (attempt < MAX_RETRIES) {
         setRetryCount(attempt + 1);
@@ -247,8 +287,7 @@ export function AccountVerificationContent({
             dbInitialized: true,
             networkOnline: navigator.onLine,
             hasSession: true,
-            errorMessage:
-              error instanceof Error ? error.message : String(error),
+            errorMessage: errorMsg,
           });
         }
       }
@@ -273,8 +312,11 @@ export function AccountVerificationContent({
   };
 
   const handleContactSupport = () => {
-    window.api?.shell?.openExternal?.(
-      'mailto:support@keeprcompliance.com?subject=Account%20Setup%20Issue'
+    // TASK-2319: Open in-app support widget instead of mailto
+    window.dispatchEvent(
+      new CustomEvent('open-support-widget', {
+        detail: { subject: 'Account Setup Issue' },
+      })
     );
   };
 

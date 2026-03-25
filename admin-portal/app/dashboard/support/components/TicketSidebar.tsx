@@ -9,9 +9,11 @@
  */
 
 import { useState, useEffect } from 'react';
-import { User, Calendar, Tag, AlertCircle } from 'lucide-react';
-import { updateTicketStatus, updateTicketPriority, assignTicket, getAssignableAgents } from '@/lib/support-queries';
+import Link from 'next/link';
+import { User, Calendar, AlertCircle, ExternalLink } from 'lucide-react';
+import { updateTicketStatus, updateTicketPriority, updateTicketCategory, assignTicket, getAssignableAgents, getCategories } from '@/lib/support-queries';
 import type { AssignableAgent } from '@/lib/support-queries';
+import type { SupportCategory } from '@/lib/support-types';
 import type {
   SupportTicket,
   TicketStatus,
@@ -28,6 +30,7 @@ import { StatusBadge } from './StatusBadge';
 import { PriorityBadge } from './PriorityBadge';
 import { ParticipantsPanel } from './ParticipantsPanel';
 import { RelatedTicketsPanel } from './RelatedTicketsPanel';
+import { BacklogLinksPanel } from './BacklogLinksPanel';
 import { formatTimestamp } from '@/lib/format';
 
 interface TicketSidebarProps {
@@ -38,11 +41,14 @@ interface TicketSidebarProps {
 
 export function TicketSidebar({ ticket, participants, onTicketUpdated }: TicketSidebarProps) {
   const [agents, setAgents] = useState<AssignableAgent[]>([]);
+  const [categories, setCategories] = useState<SupportCategory[]>([]);
   const [updatingStatus, setUpdatingStatus] = useState(false);
   const [updatingPriority, setUpdatingPriority] = useState(false);
+  const [updatingCategory, setUpdatingCategory] = useState(false);
   const [updatingAssignee, setUpdatingAssignee] = useState(false);
   const [selectedStatus, setSelectedStatus] = useState<TicketStatus | ''>('');
   const [selectedPriority, setSelectedPriority] = useState<TicketPriority>(ticket.priority);
+  const [selectedCategory, setSelectedCategory] = useState<string>(ticket.category_id || '');
   const [selectedAssignee, setSelectedAssignee] = useState<string>(ticket.assignee_id || '');
   const [showPendingReason, setShowPendingReason] = useState(false);
   const [pendingReason, setPendingReason] = useState<PendingReason>('customer');
@@ -53,6 +59,7 @@ export function TicketSidebar({ ticket, participants, onTicketUpdated }: TicketS
 
   useEffect(() => {
     getAssignableAgents().then(setAgents).catch(() => {});
+    getCategories().then((cats) => setCategories(cats.filter((c) => !c.parent_id))).catch(() => {});
   }, []);
 
   const allowedTransitions = ALLOWED_TRANSITIONS[ticket.status] || [];
@@ -87,6 +94,21 @@ export function TicketSidebar({ ticket, participants, onTicketUpdated }: TicketS
       setError(err instanceof Error ? err.message : 'Failed to update priority');
     } finally {
       setUpdatingPriority(false);
+    }
+  }
+
+  async function handleCategorySave() {
+    const newCategoryId = selectedCategory || null;
+    if (newCategoryId === (ticket.category_id || null)) return;
+    setUpdatingCategory(true);
+    setError(null);
+    try {
+      await updateTicketCategory(ticket.id, newCategoryId);
+      onTicketUpdated();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to update category');
+    } finally {
+      setUpdatingCategory(false);
     }
   }
 
@@ -253,12 +275,24 @@ export function TicketSidebar({ ticket, participants, onTicketUpdated }: TicketS
         <label className="text-xs font-medium text-gray-500 uppercase tracking-wider mb-2 block">
           Category
         </label>
-        <div className="flex items-center gap-1.5 text-sm text-gray-700">
-          <Tag className="h-3.5 w-3.5 text-gray-400" />
-          {ticket.category_name || 'Uncategorized'}
-          {ticket.subcategory_name && (
-            <span className="text-gray-400">/ {ticket.subcategory_name}</span>
-          )}
+        <div className="flex items-center gap-2">
+          <select
+            value={selectedCategory}
+            onChange={(e) => setSelectedCategory(e.target.value)}
+            className="flex-1 text-sm text-gray-900 border border-gray-300 rounded-md px-2 py-1.5 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+          >
+            <option value="">Uncategorized</option>
+            {categories.map((cat) => (
+              <option key={cat.id} value={cat.id}>{cat.name}</option>
+            ))}
+          </select>
+          <button
+            onClick={handleCategorySave}
+            disabled={(selectedCategory || null) === (ticket.category_id || null) || updatingCategory}
+            className="text-xs px-3 py-1.5 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+          >
+            {updatingCategory ? 'Saving...' : 'Save'}
+          </button>
         </div>
       </div>
 
@@ -271,10 +305,27 @@ export function TicketSidebar({ ticket, participants, onTicketUpdated }: TicketS
           <div className="h-8 w-8 rounded-full bg-gray-200 flex items-center justify-center">
             <User className="h-4 w-4 text-gray-500" />
           </div>
-          <div>
-            <div className="text-sm font-medium text-gray-900">{ticket.requester_name}</div>
-            <div className="text-xs text-gray-500">{ticket.requester_email}</div>
-          </div>
+          {ticket.requester_id ? (
+            <Link
+              href={`/dashboard/users/${ticket.requester_id}`}
+              className="group flex items-center gap-1 min-w-0"
+            >
+              <div className="min-w-0">
+                <div className="text-sm font-medium text-blue-600 group-hover:underline truncate">
+                  {ticket.requester_name}
+                </div>
+                <div className="text-xs text-gray-500 group-hover:text-blue-500 truncate">
+                  {ticket.requester_email}
+                </div>
+              </div>
+              <ExternalLink className="h-3 w-3 text-gray-400 group-hover:text-blue-500 shrink-0" />
+            </Link>
+          ) : (
+            <div>
+              <div className="text-sm font-medium text-gray-900">{ticket.requester_name}</div>
+              <div className="text-xs text-gray-500">{ticket.requester_email}</div>
+            </div>
+          )}
         </div>
       </div>
 
@@ -291,6 +342,8 @@ export function TicketSidebar({ ticket, participants, onTicketUpdated }: TicketS
         onTicketUpdated={onTicketUpdated}
       />
 
+      {/* Backlog Links */}
+      <BacklogLinksPanel ticketId={ticket.id} />
 
       {/* Timestamps */}
       <div className="px-4 py-3">

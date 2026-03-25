@@ -28,6 +28,7 @@ import type {
   TicketLinkSearchResult,
   RequesterSearchResult,
   RecentTicket,
+  SupportSavedView,
 } from './support-types';
 
 // ---------------------------------------------------------------------------
@@ -58,9 +59,16 @@ function sendTicketNotification(payload: Record<string, unknown>): void {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(payload),
-  }).catch((err) => {
-    console.error('[Support] Failed to send ticket notification:', err);
-  });
+  })
+    .then(async (res) => {
+      if (!res.ok) {
+        const text = await res.text().catch(() => '(no body)');
+        console.error('[Support] Notification proxy returned error:', res.status, text);
+      }
+    })
+    .catch((err) => {
+      console.error('[Support] Failed to send ticket notification:', err);
+    });
 }
 
 /**
@@ -130,6 +138,8 @@ export async function listTickets(params: TicketListParams): Promise<TicketListR
     p_requester_email: params.requester_email || null,
     p_page: params.page || 1,
     p_page_size: params.page_size || 20,
+    p_sort_by: params.sort_by || 'created_at',
+    p_sort_dir: params.sort_dir || 'desc',
   });
   if (error) throw error;
   return data as unknown as TicketListResponse;
@@ -200,6 +210,19 @@ export async function updateTicketPriority(
   return data as unknown as { id: string; priority: string; changed: boolean };
 }
 
+export async function updateTicketCategory(
+  ticketId: string,
+  categoryId: string | null
+): Promise<{ id: string; category_id: string | null; changed: boolean }> {
+  const supabase = createClient();
+  const { data, error } = await supabase.rpc('support_update_ticket_category', {
+    p_ticket_id: ticketId,
+    p_category_id: categoryId,
+  });
+  if (error) throw error;
+  return data as unknown as { id: string; category_id: string | null; changed: boolean };
+}
+
 export async function assignTicket(
   ticketId: string,
   assigneeId: string
@@ -244,7 +267,8 @@ export async function assignTicket(
 export async function addMessage(
   ticketId: string,
   body: string,
-  messageType: 'reply' | 'internal_note' = 'reply'
+  messageType: 'reply' | 'internal_note' = 'reply',
+  ticketMeta?: { subject: string; ticket_number: number; requester_email: string }
 ): Promise<{ id: string; ticket_id: string; message_type: string }> {
   const supabase = createClient();
   const { data, error } = await supabase.rpc('support_add_message', {
@@ -255,23 +279,17 @@ export async function addMessage(
   if (error) throw error;
 
   // Fire-and-forget: notify customer of agent reply (never for internal notes).
-  // Entire notification path is non-blocking -- we don't await any of it.
-  if (messageType === 'reply') {
+  // Uses ticketMeta passed from the caller to avoid a direct table query
+  // (RLS blocks direct support_tickets reads from the browser client).
+  if (messageType === 'reply' && ticketMeta) {
     const brokerPortalUrl =
       process.env.NEXT_PUBLIC_BROKER_PORTAL_URL || 'https://app.keeprcompliance.com';
 
-    Promise.all([
-      supabase
-        .from('support_tickets')
-        .select('subject, ticket_number, requester_email')
-        .eq('id', ticketId)
-        .single(),
-      supabase.auth.getUser(),
-    ])
-      .then(([ticketResult, userResult]) => {
-        if (ticketResult.data && userResult.data?.user) {
-          const agentName = userResult.data.user.user_metadata?.full_name || 'Support Team';
-          notifyCustomerOfReply(ticketId, body, ticketResult.data, agentName, brokerPortalUrl);
+    supabase.auth.getUser()
+      .then(({ data: userData }) => {
+        if (userData?.user) {
+          const agentName = userData.user.user_metadata?.full_name || 'Support Team';
+          notifyCustomerOfReply(ticketId, body, ticketMeta, agentName, brokerPortalUrl);
         }
       })
       .catch((notifyErr) => {
@@ -347,6 +365,25 @@ export async function getAgentAnalytics(periodDays: number = 30): Promise<AgentA
   });
   if (error) throw error;
   return data as unknown as AgentAnalyticsResponse;
+}
+
+// --- Bulk update functions (TASK-2292) ---
+
+export async function bulkUpdateTickets(
+  ticketIds: string[],
+  options: { status?: string; assignee_id?: string; priority?: string; category_id?: string; unassign?: boolean }
+): Promise<{ updated_count: number; ticket_ids: string[] }> {
+  const supabase = createClient();
+  const { data, error } = await supabase.rpc('support_bulk_update_tickets', {
+    p_ticket_ids: ticketIds,
+    p_status: options.status || null,
+    p_assignee_id: options.assignee_id || null,
+    p_priority: options.priority || null,
+    p_category_id: options.category_id || null,
+    p_unassign: options.unassign || false,
+  });
+  if (error) throw error;
+  return data as unknown as { updated_count: number; ticket_ids: string[] };
 }
 
 // --- Delete functions ---
@@ -555,6 +592,32 @@ export async function searchTicketsForLink(
   return (data ?? []) as unknown as TicketLinkSearchResult[];
 }
 
+// --- Internal Note Edit/Delete functions (TASK-2315) ---
+
+export async function editInternalNote(
+  messageId: string,
+  newBody: string
+): Promise<{ id: string; ticket_id: string; body: string; edited_at: string; edited_by: string }> {
+  const supabase = createClient();
+  const { data, error } = await supabase.rpc('support_edit_internal_note', {
+    p_message_id: messageId,
+    p_body: newBody,
+  });
+  if (error) throw error;
+  return data as unknown as { id: string; ticket_id: string; body: string; edited_at: string; edited_by: string };
+}
+
+export async function deleteInternalNote(
+  messageId: string
+): Promise<{ deleted: boolean; message_id: string; ticket_id: string }> {
+  const supabase = createClient();
+  const { data, error } = await supabase.rpc('support_delete_internal_note', {
+    p_message_id: messageId,
+  });
+  if (error) throw error;
+  return data as unknown as { deleted: boolean; message_id: string; ticket_id: string };
+}
+
 // --- Diagnostics functions (TASK-2283) ---
 
 /**
@@ -592,4 +655,102 @@ export async function getTicketDiagnostics(
   } catch {
     return null;
   }
+}
+
+// ---------------------------------------------------------------------------
+// Saved View functions (TASK-2299)
+// ---------------------------------------------------------------------------
+
+/** Save a filter view for the current user. */
+export async function supportSaveView(
+  name: string,
+  filtersJson: Record<string, unknown>,
+  isShared: boolean = false
+): Promise<{ id: string }> {
+  const supabase = createClient();
+  const { data, error } = await supabase.rpc('support_save_view', {
+    p_name: name,
+    p_filters_json: filtersJson,
+    p_is_shared: isShared,
+  });
+  if (error) throw error;
+  return data as unknown as { id: string };
+}
+
+/** List the current user's saved views plus shared views. */
+export async function supportListSavedViews(): Promise<SupportSavedView[]> {
+  const supabase = createClient();
+  const { data, error } = await supabase.rpc('support_list_saved_views');
+  if (error) throw error;
+  return (data ?? []) as unknown as SupportSavedView[];
+}
+
+/** Delete a saved view. Only the owner can delete it. */
+export async function supportDeleteSavedView(viewId: string): Promise<{ success: boolean }> {
+  const supabase = createClient();
+  const { data, error } = await supabase.rpc('support_delete_saved_view', {
+    p_view_id: viewId,
+  });
+  if (error) throw error;
+  return data as unknown as { success: boolean };
+}
+
+// ---------------------------------------------------------------------------
+// Backlog Links (BACKLOG-1343)
+// ---------------------------------------------------------------------------
+
+export interface BacklogLinkRow {
+  id: string;
+  link_type: 'fix' | 'related' | 'duplicate';
+  backlog_item_id: string;
+  item_number: number;
+  title: string;
+  status: string;
+  priority: string;
+}
+
+/**
+ * Fetch backlog items linked to a support ticket.
+ * Joins support_ticket_backlog_links with pm_backlog_items.
+ */
+export async function getBacklogLinks(ticketId: string): Promise<BacklogLinkRow[]> {
+  const supabase = createClient();
+  const { data, error } = await supabase
+    .from('support_ticket_backlog_links')
+    .select(`
+      id,
+      link_type,
+      backlog_item_id,
+      pm_backlog_items!inner (
+        item_number,
+        title,
+        status,
+        priority
+      )
+    `)
+    .eq('ticket_id', ticketId)
+    .order('created_at', { ascending: false });
+
+  if (error) throw error;
+
+  // Flatten the joined result
+  return ((data ?? []) as unknown as Array<{
+    id: string;
+    link_type: 'fix' | 'related' | 'duplicate';
+    backlog_item_id: string;
+    pm_backlog_items: {
+      item_number: number;
+      title: string;
+      status: string;
+      priority: string;
+    };
+  }>).map((row) => ({
+    id: row.id,
+    link_type: row.link_type,
+    backlog_item_id: row.backlog_item_id,
+    item_number: row.pm_backlog_items.item_number,
+    title: row.pm_backlog_items.title,
+    status: row.pm_backlog_items.status,
+    priority: row.pm_backlog_items.priority,
+  }));
 }

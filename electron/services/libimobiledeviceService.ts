@@ -7,8 +7,10 @@
  */
 
 import path from "path";
+import fs from "fs";
 import { app } from "electron";
 import log from "electron-log";
+import * as Sentry from "@sentry/electron/main";
 
 /**
  * List of required executable names for libimobiledevice functionality
@@ -78,7 +80,6 @@ export function areBinariesAvailable(): boolean {
 
   try {
     const basePath = getLibimobiledevicePath();
-    const fs = require("fs");
     return fs.existsSync(basePath);
   } catch (error) {
     log.error(
@@ -112,6 +113,9 @@ export function getCommand(name: string): string {
 /**
  * Check if we can use libimobiledevice commands
  * Returns true in mock mode or if platform is supported
+ *
+ * BACKLOG-1354: Logs Sentry breadcrumb + captureMessage when binaries are missing
+ * on Windows, including which specific binaries are absent.
  */
 export function canUseLibimobiledevice(): boolean {
   if (isMockMode()) {
@@ -119,7 +123,60 @@ export function canUseLibimobiledevice(): boolean {
   }
 
   if (process.platform === "win32") {
-    return areBinariesAvailable();
+    const available = areBinariesAvailable();
+    if (!available) {
+      // BACKLOG-1354: Detailed diagnostics for missing binaries
+      let basePath = "(unknown)";
+      let directoryExists = false;
+      const missingBinaries: string[] = [];
+      const presentBinaries: string[] = [];
+
+      try {
+        basePath = getLibimobiledevicePath();
+        directoryExists = fs.existsSync(basePath);
+
+        if (directoryExists) {
+          // Directory exists but check individual binaries
+          for (const exe of REQUIRED_EXECUTABLES) {
+            const exePath = path.join(basePath, `${exe}.exe`);
+            if (fs.existsSync(exePath)) {
+              presentBinaries.push(exe);
+            } else {
+              missingBinaries.push(exe);
+            }
+          }
+        }
+      } catch {
+        // Non-fatal — we'll log whatever we have
+      }
+
+      Sentry.addBreadcrumb({
+        category: "iphone.sync",
+        message: "libimobiledevice binaries not available",
+        level: "warning",
+        data: {
+          basePath,
+          directoryExists,
+          missingBinaries,
+          presentBinaries,
+          hint: directoryExists && missingBinaries.length > 0
+            ? "Directory exists but binaries missing — possible antivirus removal"
+            : "Binary directory not found",
+        },
+      });
+
+      Sentry.captureMessage("libimobiledevice binaries missing on Windows", {
+        level: "warning",
+        tags: { component: "libimobiledevice", platform: "win32" },
+        extra: {
+          basePath,
+          directoryExists,
+          missingBinaries,
+          presentBinaries,
+        },
+      });
+    }
+    return available;
   }
 
   // On macOS/Linux, assume commands are available in PATH

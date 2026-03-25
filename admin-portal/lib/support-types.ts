@@ -4,7 +4,7 @@
  * Used by both the admin portal (agent dashboard) and shared query layer.
  */
 
-export type TicketStatus = 'new' | 'assigned' | 'in_progress' | 'pending' | 'resolved' | 'closed';
+export type TicketStatus = 'new' | 'assigned' | 'in_progress' | 'pending' | 'resolved' | 'closed' | 'deleted';
 export type TicketPriority = 'low' | 'normal' | 'high' | 'urgent';
 export type MessageType = 'reply' | 'internal_note';
 export type SourceChannel = 'web_form' | 'email' | 'in_app_redirect' | 'admin_created';
@@ -59,6 +59,8 @@ export interface SupportTicketMessage {
   message_type: MessageType;
   body: string;
   created_at: string;
+  edited_at: string | null;
+  edited_by: string | null;
   attachments?: SupportTicketAttachment[];
 }
 
@@ -108,6 +110,9 @@ export interface SupportCategory {
   children?: SupportCategory[];
 }
 
+export type SortColumn = 'ticket_number' | 'subject' | 'status' | 'priority' | 'created_at' | 'assignee_name';
+export type SortDirection = 'asc' | 'desc';
+
 export interface TicketListParams {
   status?: TicketStatus | null;
   priority?: TicketPriority | null;
@@ -117,6 +122,8 @@ export interface TicketListParams {
   requester_email?: string | null;
   page?: number;
   page_size?: number;
+  sort_by?: SortColumn;
+  sort_dir?: SortDirection;
 }
 
 export interface TicketListResponse {
@@ -251,6 +258,7 @@ export const ALLOWED_TRANSITIONS: Record<TicketStatus, TicketStatus[]> = {
   pending: ['in_progress'],
   resolved: ['in_progress', 'closed'],
   closed: ['in_progress'], // admin reopen only
+  deleted: ['new'], // recovery: reopen as new
 };
 
 export const STATUS_LABELS: Record<TicketStatus, string> = {
@@ -260,6 +268,7 @@ export const STATUS_LABELS: Record<TicketStatus, string> = {
   pending: 'Pending',
   resolved: 'Resolved',
   closed: 'Closed',
+  deleted: 'Deleted',
 };
 
 export const PRIORITY_LABELS: Record<TicketPriority, string> = {
@@ -276,6 +285,7 @@ export const STATUS_COLORS: Record<TicketStatus, string> = {
   pending: 'bg-orange-100 text-orange-800',
   resolved: 'bg-purple-100 text-purple-800',
   closed: 'bg-gray-100 text-gray-800',
+  deleted: 'bg-red-100 text-red-800',
 };
 
 export const PRIORITY_COLORS: Record<TicketPriority, string> = {
@@ -284,6 +294,17 @@ export const PRIORITY_COLORS: Record<TicketPriority, string> = {
   high: 'bg-orange-100 text-orange-800',
   urgent: 'bg-red-100 text-red-800',
 };
+
+// --- Saved View types ---
+
+export interface SupportSavedView {
+  id: string;
+  name: string;
+  filters: Record<string, unknown>;
+  is_shared: boolean;
+  is_own: boolean;
+  created_at: string;
+}
 
 // --- Timeline types ---
 

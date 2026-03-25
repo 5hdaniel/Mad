@@ -8,26 +8,37 @@ This document outlines the standard procedure for creating, reviewing, and mergi
 
 | PR Type | Target Branch | Merge Type | Required Checks |
 |---------|---------------|------------|-----------------|
-| Feature | `develop` | Traditional | Tests, Security |
-| Bug Fix | `develop` | Traditional | Tests, Security |
+| Sprint Task | `int/<sprint-name>` | Traditional | Tests, Security |
+| Sprint Final | `develop` (from `int/*`) | Traditional | Tests, Security |
+| Standalone Feature | `develop` | Traditional | Tests, Security |
+| Standalone Bug Fix | `develop` | Traditional | Tests, Security |
 | Hotfix | `main` + `develop` | Traditional | Tests, Builds, Security |
 | Release | `main` (from develop) | Traditional | All checks |
 
 **CRITICAL: Always use traditional merges (not squash) to preserve commit history.**
+**CRITICAL: All sprint PRs target `int/<sprint-name>`, NOT develop directly.**
 
 ---
 
 ## Phase 0: Target Branch Verification
 
-Before creating a PR, verify you're targeting the correct branch:
+Before creating a PR, verify you are targeting the correct branch:
 
 | Your Branch Type | Target Branch |
 |------------------|---------------|
-| `feature/*` | `develop` |
-| `fix/*` | `develop` |
-| `claude/*` | `develop` |
+| `feature/*` (sprint task) | `int/<sprint-name>` |
+| `fix/*` (sprint task) | `int/<sprint-name>` |
+| `claude/*` (sprint task) | `int/<sprint-name>` |
+| `feature/*` (standalone) | `develop` |
+| `fix/*` (standalone) | `develop` |
 | `hotfix/*` | `main` AND `develop` |
 | `develop` (release) | `main` |
+| `int/*` (sprint complete) | `develop` |
+
+**MANDATORY: All sprint PRs target the integration branch (`int/<sprint-name>`), NOT develop directly.**
+Only the final integration PR (after all sprint work is merged and tested) targets develop.
+
+**Incident Reference:** SPRINT-P Phase 1 — 4 PRs targeting develop directly caused 5+ hours of sequential CI waits due to `strict: true` branch protection cascade.
 
 ```bash
 # Check your current branch
@@ -35,7 +46,7 @@ git branch --show-current
 
 # Verify target branch is up to date
 git fetch origin
-git log --oneline HEAD..origin/develop  # Should be empty or show expected commits
+git log --oneline HEAD..origin/int/<sprint-name>  # For sprint PRs
 ```
 
 ---
@@ -355,7 +366,7 @@ Provide specific file:line references and suggested fixes.
 ```bash
 git push -u origin your-branch-name
 
-gh pr create --base develop --title "type: description" --body "..."
+gh pr create --base int/<sprint-name> --title "type: description" --body "..."  # Use int branch for sprint PRs
 ```
 
 🤖 **LLM Assist**: Claude can draft PR descriptions based on the changes made.
@@ -474,7 +485,16 @@ gh run view <RUN-ID>  # Check Package Application job status
    gh run view <LATEST-RUN-ID>
    ```
 
-### 8.4 LLM Guardrails (for Claude and AI agents)
+### 8.4 QA Routing Rule
+
+**QA agents MUST verify CI is green before presenting test cases to the user.** If CI is failing on a PR:
+1. Do NOT present QA test cases — the PR is not ready for user testing
+2. Route back to the engineer agent to fix the failing tests
+3. Only proceed with QA after all CI checks pass
+
+This prevents wasted user testing time on code that will need to change.
+
+### 8.5 LLM Guardrails (for Claude and AI agents)
 
 When verifying CI status, you MUST:
 
@@ -543,6 +563,16 @@ gh pr view <PR-NUMBER> --json state --jq '.state'
 | `CLOSED` | PR was closed without merge | Work is LOST - investigate |
 
 **Do NOT mark the task as complete until you see `MERGED`.**
+
+### --admin Flag (PROHIBITED)
+
+NEVER use `--admin` to bypass branch protection. This includes:
+- `gh pr merge --admin`
+- Any workaround to skip required status checks
+
+If merge is blocked, the fix is ALWAYS: merge base branch into feature branch, push, wait for CI.
+
+**Incident Reference:** PRs #1411/#1412 were merged with `--admin` without explicit user approval.
 
 ### 9.3 Post-Merge
 - [ ] Verify merge completed: `gh pr view <PR> --json state` shows `MERGED`
@@ -647,11 +677,25 @@ When reviewing PRs, verify:
 - [ ] **Phase 2**: No debug code, proper formatting, uses LogService
 - [ ] **Phase 3**: No security issues, docs updated
 - [ ] **Phase 4**: Adequate test coverage
+- [ ] **Phase 4a**: Test hygiene — behavioral changes have matching test updates (see below)
 - [ ] **Phase 5**: Type check + lint pass
 - [ ] **Phase 6**: Automated code review completed
 - [ ] **Phase 7**: Clear PR description
 - [ ] **Phase 7.5**: Target branch merged into feature branch (MANDATORY)
 - [ ] **Phase 8**: CI passes (after Phase 7.5 sync)
+
+### Phase 4a: Test Hygiene Verification (MANDATORY)
+
+**Reference:** BACKLOG-1356 — SPRINT-O had repeated CI failures from stale tests.
+
+SR Engineer MUST verify the following during code review:
+
+- [ ] **All test files referencing changed functions/components have been updated.** Search for the changed function names across `*.test.*` files and verify expectations match the new behavior.
+- [ ] **Behavioral changes have corresponding test updates.** If a function's return value, call count, parameters, or error handling changed, tests MUST reflect the new behavior.
+- [ ] **Mock alignment.** If a function signature changed (new params, changed return type), all mocks of that function must match the updated signature.
+- [ ] **No stale assertions.** Check that `expect()` calls match actual behavior — stale `.toHaveBeenCalledTimes()`, `.toEqual()`, or `.toHaveBeenCalledWith()` values are the most common CI failure cause.
+
+**If test hygiene is not met:** Request changes. Do not approve PRs where behavioral changes lack matching test updates.
 
 ### Review Output Format
 

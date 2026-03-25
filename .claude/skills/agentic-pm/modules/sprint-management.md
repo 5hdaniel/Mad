@@ -172,11 +172,15 @@ Estimates capture planning assumptions at sprint start. Changing them retroactiv
 ### Sprint Creation Checklist
 
 - [ ] Sprint created in Supabase: `SELECT pm_create_sprint(p_name := 'SPRINT-XXX', p_goal := 'Sprint goal');`
+- [ ] **Integration branch created:** `git checkout -b int/<sprint-name> develop && git push -u origin int/<sprint-name>`
 - [ ] Sprint file created: `.claude/plans/sprints/SPRINT-XXX-slug.md`
 - [ ] All task files created in `.claude/plans/tasks/`
+- [ ] **All task files specify PR target:** `int/<sprint-name>` (NOT develop)
 - [ ] Items assigned to sprint in Supabase: `SELECT pm_assign_to_sprint(p_item_id := '<uuid>', p_sprint_id := '<uuid>');`
 - [ ] INDEX.md updated with sprint assignment
 - [ ] Worktrees ready for parallel tasks (BACKLOG-132)
+
+**Incident Reference:** SPRINT-P Phase 1 — targeting develop directly with 4 PRs caused 5+ hours of sequential CI waits due to `strict: true` cascade. Integration branches are now mandatory for all sprints.
 
 ---
 

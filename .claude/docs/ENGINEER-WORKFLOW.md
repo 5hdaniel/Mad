@@ -64,13 +64,18 @@ grep "<engineer_agent_id>" .claude/metrics/tokens.csv
 **Before starting the 5-step cycle:**
 
 ```bash
-# Always start from the sprint branch (or develop)
-git checkout develop  # or develop
-git pull origin develop
+# Always start from the integration branch (PM creates int/<sprint-name> at sprint start)
+git checkout int/<sprint-name>
+git pull origin int/<sprint-name>
 
 # Create feature branch with task ID
 git checkout -b feature/task-XXX-description
 ```
+
+**IMPORTANT: All sprint PRs target the integration branch (`int/<sprint-name>`), NOT develop.**
+The PM will create `int/<sprint-name>` from develop at sprint start. Your task file will specify the PR target branch. If no integration branch is specified, ask the PM before creating a PR.
+
+**Incident Reference:** SPRINT-P Phase 1 — targeting develop directly with multiple PRs caused 5+ hours of sequential CI waits due to `strict: true` cascade.
 
 **Naming Convention:**
 - `fix/task-XXX-...` for bug fixes
@@ -278,6 +283,50 @@ After each task's PR merges:
 
 ---
 
+## Test Hygiene (MANDATORY — Before Every Commit)
+
+**Reference:** BACKLOG-1356 — repeated CI failures in SPRINT-O from stale tests.
+
+Engineers MUST complete these checks before committing or pushing. Do not rely on CI to catch test failures.
+
+### Before Committing
+
+1. **Run tests locally first:**
+   ```bash
+   npx jest --bail --no-coverage
+   ```
+   If any test fails, fix it before committing. Do not push broken tests.
+
+2. **Find and update all affected test files:**
+   When you change a function's behavior (return value, call count, parameters, error handling), find every test that references it:
+   ```bash
+   # Search for test files referencing the function/component you changed
+   grep -r "functionName" --include="*.test.*" src/ electron/
+   ```
+   Update ALL matching test expectations to match the new behavior. Stale mocks and assertions are the #1 cause of CI failures.
+
+3. **Check mock alignment:**
+   If you changed a function signature, added a parameter, or changed a return type, verify that all mocks of that function match the new signature. Mismatched mocks cause false passes locally and failures in CI.
+
+### Before Pushing
+
+4. **Merge the base branch into your feature branch:**
+   ```bash
+   git fetch origin
+   git merge origin/develop  # or origin/int/<sprint-name> if targeting an integration branch
+   npx jest --bail --no-coverage
+   ```
+   Other PRs may have merged test fixes. Merging before pushing ensures your branch is tested against the latest state.
+
+5. **Verify PR body includes Engineer Metrics:**
+   The PR body MUST include the `## Engineer Metrics` section from `.github/PULL_REQUEST_TEMPLATE.md`. PRs missing this section will fail the CI `pr-metrics-check` validation.
+
+### Why This Matters
+
+Every CI failure costs 5-15 minutes of pipeline time and often requires a second engineer invocation to fix. Catching test failures locally eliminates this waste. During SPRINT-O, PRs averaged 2-5 CI cycles before going green — all preventable with local test runs.
+
+---
+
 ## Implementation Details (Within Step 5)
 
 The following details apply during Step 5 (IMPLEMENT):
@@ -300,7 +349,7 @@ git commit -m "type(scope): description
 Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>"
 
 git push -u origin your-branch-name
-gh pr create --base develop --title "..." --body "..."
+gh pr create --base int/<sprint-name> --title "..." --body "..."
 ```
 
 ### CI and Debug Failures
@@ -339,6 +388,24 @@ gh pr view <PR-NUMBER> --json state --jq '.state'
 | `MERGED` | Success - notify PM | Proceed to Step 6 |
 | `OPEN` | Merge failed | Investigate and retry |
 | `CLOSED` | PR closed without merge | Work is LOST - escalate |
+
+### When Merge is Blocked by Branch Protection
+
+If `gh pr merge` fails with "the base branch policy prohibits the merge":
+
+1. **Do NOT use `--admin`** — ever
+2. Merge the target branch into your feature branch (usually the int branch, or develop for the final int→develop PR):
+   ```bash
+   git fetch origin  # fetch the target branch (int/<sprint-name> or develop)
+   git merge origin/<target-branch> --no-edit  # int/<sprint-name> or develop
+   git push origin <your-branch>
+   ```
+3. Wait for CI to pass on the updated branch
+4. Try `gh pr merge <PR> --merge` again
+
+**Why this happens:** Branch protection has `strict: true`, meaning your branch must include the latest target branch commits. When other PRs merge to develop while your CI is running, your branch falls behind.
+
+**When merging multiple PRs sequentially:** Each merge moves develop forward. Before merging the next PR, always merge develop into it first.
 
 ### Session-End Check
 

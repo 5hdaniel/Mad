@@ -74,6 +74,9 @@ export class DeviceDetectionService extends EventEmitter {
   private isPolling: boolean = false;
   private mockMode: boolean = false;
   private libimobiledeviceAvailable: boolean | null = null;
+  /** BACKLOG-1354: Tracks whether we've already sent a Sentry warning for 0 devices found.
+   *  Resets when devices are found, so we only fire once per "no devices" period. */
+  private sentZeroDevicesWarning: boolean = false;
 
   constructor() {
     super();
@@ -371,6 +374,23 @@ export class DeviceDetectionService extends EventEmitter {
       const currentUdids = await this.listDevices();
       const previousUdids = new Set(this.connectedDevices.keys());
 
+      // BACKLOG-1354: Capture a warning once when polling finds 0 devices
+      // but libimobiledevice IS available (suggests device present but untrusted/blocked)
+      if (currentUdids.length === 0 && this.libimobiledeviceAvailable && !this.sentZeroDevicesWarning) {
+        this.sentZeroDevicesWarning = true;
+        Sentry.captureMessage("Device detection found 0 devices with libimobiledevice available", {
+          level: "warning",
+          tags: { component: "device_detection", platform: process.platform },
+          extra: {
+            libimobiledeviceAvailable: true,
+            hint: "Device may be present but untrusted, locked, or blocked by corporate USB policy",
+          },
+        });
+      } else if (currentUdids.length > 0) {
+        // Reset flag when devices are found so we warn again if they disappear
+        this.sentZeroDevicesWarning = false;
+      }
+
       // Check for new devices
       for (const udid of currentUdids) {
         if (!previousUdids.has(udid)) {
@@ -489,6 +509,32 @@ export class DeviceDetectionService extends EventEmitter {
           return valid;
         });
 
+        // BACKLOG-1354: When idevice_id succeeds but finds 0 devices,
+        // add Sentry breadcrumb with diagnostic context for remote troubleshooting
+        if (validUdids.length === 0) {
+          Sentry.addBreadcrumb({
+            category: "iphone.detection",
+            message: "idevice_id returned empty device list",
+            level: "info",
+            data: {
+              platform: process.platform,
+              libimobiledeviceAvailable: true,
+              exitCode: code,
+              stderr: stderr.trim().substring(0, 200) || "(none)",
+            },
+          });
+
+          // BACKLOG-1354: On Windows, check for corporate USB restrictions
+          // by probing whether the Apple USB driver is loaded and if the device
+          // appears in Windows PnP at all. This runs asynchronously and logs to
+          // Sentry breadcrumbs — it does NOT block the resolve.
+          if (process.platform === "win32") {
+            this.checkCorporateUsbRestrictions().catch(() => {
+              // Fire-and-forget diagnostic — errors are non-fatal
+            });
+          }
+        }
+
         // Only log device count changes, not every poll
         // The pollDevices() method will log when devices connect/disconnect
         resolve(validUdids);
@@ -496,6 +542,12 @@ export class DeviceDetectionService extends EventEmitter {
 
       proc.on("error", (err) => {
         log.error("[DeviceDetection] Failed to spawn idevice_id:", err);
+        Sentry.addBreadcrumb({
+          category: "iphone.detection",
+          message: `Failed to spawn idevice_id: ${err.message}`,
+          level: "error",
+          data: { platform: process.platform },
+        });
         resolve([]);
       });
     });
@@ -546,6 +598,18 @@ export class DeviceDetectionService extends EventEmitter {
 
       proc.on("close", (code) => {
         if (code !== 0) {
+          // BACKLOG-1354: Breadcrumb when ideviceinfo fails for a specific device
+          Sentry.addBreadcrumb({
+            category: "iphone.detection",
+            message: `ideviceinfo failed for device`,
+            level: "warning",
+            data: {
+              udid: validatedUdid.substring(0, 8) + "...",
+              exitCode: code,
+              stderr: stderr.trim().substring(0, 200),
+              platform: process.platform,
+            },
+          });
           reject(
             new Error(`ideviceinfo exited with code ${code}: ${stderr.trim()}`),
           );
@@ -561,6 +625,12 @@ export class DeviceDetectionService extends EventEmitter {
       });
 
       proc.on("error", (err) => {
+        Sentry.addBreadcrumb({
+          category: "iphone.detection",
+          message: `Failed to spawn ideviceinfo: ${err.message}`,
+          level: "error",
+          data: { udid: validatedUdid.substring(0, 8) + "...", platform: process.platform },
+        });
         reject(new Error(`Failed to spawn ideviceinfo: ${err.message}`));
       });
     });
@@ -593,6 +663,70 @@ export class DeviceDetectionService extends EventEmitter {
       serialNumber: info["SerialNumber"] || "Unknown",
       isConnected: true,
     };
+  }
+
+  /**
+   * BACKLOG-1354: Check for corporate USB restrictions on Windows.
+   * Probes whether the Apple Mobile Device USB Driver service is queryable
+   * and whether Windows PnP sees any Apple/iPhone entries.
+   * Results are logged to Sentry breadcrumbs for remote diagnostics.
+   * This is fire-and-forget — errors are non-fatal.
+   */
+  private async checkCorporateUsbRestrictions(): Promise<void> {
+    try {
+      // Check Apple Mobile Device USB Driver service status
+      let usbDriverStatus = "unknown";
+      try {
+        const { stdout: scOutput } = await execAsync(
+          'sc query "Apple Mobile Device USB Driver"',
+          { timeout: 5000 },
+        );
+        if (scOutput.includes("RUNNING")) {
+          usbDriverStatus = "running";
+        } else if (scOutput.includes("STOPPED")) {
+          usbDriverStatus = "stopped";
+        } else {
+          usbDriverStatus = "other";
+        }
+      } catch {
+        usbDriverStatus = "not_found";
+      }
+
+      // Check if Windows PnP sees any Apple/iPhone USB device
+      let pnpDeviceFound = false;
+      let pnpStatus = "unknown";
+      try {
+        const { stdout: wmicOutput } = await execAsync(
+          'wmic path Win32_PnPEntity where "Name like \'%Apple%iPhone%\'" get Name,Status /format:list',
+          { timeout: 5000 },
+        );
+        if (wmicOutput.trim()) {
+          pnpDeviceFound = true;
+          pnpStatus = wmicOutput.trim().substring(0, 200);
+        }
+      } catch {
+        // wmic may not be available or query may fail — non-fatal
+        pnpStatus = "query_failed";
+      }
+
+      Sentry.addBreadcrumb({
+        category: "iphone.detection",
+        message: "Corporate USB restriction check",
+        level: "info",
+        data: {
+          appleUsbDriverService: usbDriverStatus,
+          pnpDeviceFound,
+          pnpStatus,
+          hint: pnpDeviceFound && usbDriverStatus === "not_found"
+            ? "Device physically connected but Apple USB driver not installed"
+            : !pnpDeviceFound
+              ? "No Apple/iPhone USB device visible to Windows — may be blocked by policy"
+              : "Device and driver present",
+        },
+      });
+    } catch (err) {
+      log.debug("[DeviceDetection] Corporate USB check failed:", err);
+    }
   }
 
   /**

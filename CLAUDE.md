@@ -130,6 +130,15 @@ Wait for user approval before writing any code. This prevents wasted effort from
 
 4. **Merge command**: Use exactly `gh pr merge <PR> --merge` unless told otherwise.
 
+5. **--admin flag**: NEVER use `gh pr merge --admin` or any flag to bypass CI or branch protection. If merge is blocked:
+   a. Merge the target branch into your feature branch: `git fetch origin <base> && git merge origin/<base> --no-edit`
+   b. Push to trigger fresh CI: `git push origin <branch>`
+   c. Wait for all CI checks to pass
+   d. Merge normally: `gh pr merge <PR> --merge`
+   Even if tests appear to be passing, `strict: true` exists for a reason — it ensures code is tested against the latest target branch. Using `--admin` bypasses this safety check.
+
+   **Incident Reference:** PRs #1411/#1412 were merged with `--admin` without user permission, bypassing `strict: true` branch protection.
+
 ### Why This Matters
 
 Adding unrequested actions:
@@ -215,7 +224,18 @@ Even "quick fixes" and "obvious bugs" must use branches. This ensures:
 
 ### Integration Branch Rules (MANDATORY)
 
-Integration branches (`int/*`) collect related feature work before merging to develop.
+**Incident Reference:** SPRINT-P Phase 1 — 4 PRs targeting develop directly caused 5+ hours of sequential CI waits due to `strict: true` branch protection cascade.
+
+**ALL sprint work MUST use an integration branch. NEVER target develop directly with multiple sprint PRs.**
+
+Integration branches (`int/*`) collect all sprint work before merging to develop.
+
+**Pattern:**
+1. PM creates `int/<sprint-name>` from develop at sprint start
+2. All engineer PRs target the `int/*` branch (NOT develop)
+3. The `int/*` branch has no `strict: true` — PRs merge fast
+4. After all sprint work is done and tested, one PR from `int/*` to develop
+5. One CI run, one merge to develop
 
 **Before starting any new sprint:**
 ```bash
@@ -243,7 +263,10 @@ This prevents fixes from being lost (as happened with the onboarding fix in `int
 **Quick Reference:**
 ```bash
 # Create isolated worktree for parallel task
-git worktree add ../Mad-task-XXX -b feature/TASK-XXX-description develop
+# For sprint tasks: base from the integration branch
+git worktree add ../Mad-task-XXX -b feature/TASK-XXX-description int/<sprint-name>
+# For standalone work: base from develop
+# git worktree add ../Mad-task-XXX -b feature/TASK-XXX-description develop
 
 # Verify isolation
 git worktree list
@@ -359,11 +382,14 @@ Use conventional commits:
 - `chore:` - Maintenance tasks
 - `ci:` - CI/CD changes
 
-### Step 4: Sync with Develop (MANDATORY before PR)
+### Step 4: Sync with Base Branch (MANDATORY before PR)
 
 ```bash
 git fetch origin
-git merge origin/develop
+# For sprint tasks: merge the integration branch
+git merge origin/int/<sprint-name>
+# For standalone work: merge develop
+# git merge origin/develop
 
 # If conflicts exist, resolve them MANUALLY (see .claude/docs/shared/git-branching.md)
 # NEVER use 'git checkout --theirs' blindly - it discards your branch's changes!
@@ -378,7 +404,11 @@ npm test
 git push -u origin feature/your-feature-name
 
 # Create PR targeting develop
-gh pr create --base develop --title "feat: your feature" --body "Description..."
+# For sprint tasks: target the integration branch
+gh pr create --base int/<sprint-name> --title "feat: your feature" --body "Description..."
+
+# For standalone work (no sprint): target develop
+# gh pr create --base develop --title "feat: your feature" --body "Description..."
 ```
 
 ### Step 6: Wait for CI
@@ -531,10 +561,14 @@ npx prebuild-install --runtime=electron --target=35.7.5 --arch=x64 --platform=wi
 
 | Task | Target Branch | Merge Type |
 |------|---------------|------------|
-| New feature | `develop` | Traditional |
-| Bug fix | `develop` | Traditional |
+| Sprint task (2+ PRs) | `int/<sprint-name>` | Traditional |
+| Sprint final merge | `develop` (from `int/*`) | Traditional |
+| Standalone feature | `develop` | Traditional |
+| Standalone bug fix | `develop` | Traditional |
 | Hotfix | `main` + `develop` | Traditional |
 | Release | `main` (from develop) | Traditional |
+
+**CRITICAL: All sprint work (2+ tasks) MUST use an integration branch. Never target develop directly with multiple PRs.**
 
 ### Investigation-First Sprints
 

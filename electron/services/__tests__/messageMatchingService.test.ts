@@ -383,8 +383,9 @@ describe("messageMatchingService - address filtering (TASK-2087)", () => {
 
       // Should NOT have linked anything (all are already linked)
       expect(result.linked).toBe(0);
-      // findEmailsByAddresses should only be called ONCE (no fallback)
-      expect(findEmailsCallCount).toBe(1);
+      // findEmailsByAddresses called TWICE: address-filtered query + fallback
+      // (BACKLOG-1340: fallback always runs when 0 unlinked results)
+      expect(findEmailsCallCount).toBe(2);
     });
   });
 

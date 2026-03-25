@@ -57,17 +57,24 @@ Sprint Task Lifecycle
 
 PHASE A: SETUP (PM)
 -------------------
+1a. PM: Create integration branch (if not already created for this sprint)
+    - git checkout develop && git pull origin develop
+    - git checkout -b int/<sprint-name>
+    - git push -u origin int/<sprint-name>
+    - All engineer PRs will target this branch, NOT develop
+    - Incident ref: SPRINT-P Phase 1 (5+ hours lost to strict:true cascade)
+
 1.  PM: Verify task file exists with proper context
     - Read task file from .claude/plans/tasks/TASK-XXXX-*.md
     - Confirm it has: requirements, acceptance criteria, dependencies
     - If missing or incomplete: STOP, notify user
 
 2.  PM: Create worktree (if parallel tasks in phase)
-    - git worktree add ../Mad-TASK-XXXX -b feature/TASK-XXXX develop
+    - git worktree add ../Mad-TASK-XXXX -b feature/TASK-XXXX int/<sprint-name>
 
 3.  PM: Create branch for task
     - If worktree: already created in step 2
-    - If sequential: git checkout -b feature/TASK-XXXX develop
+    - If sequential: git checkout -b feature/TASK-XXXX int/<sprint-name>
 
 4.  PM: Update task status to "In Progress"
     - Update Supabase via RPC: `SELECT pm_update_item_status('<uuid>', 'in_progress');`
@@ -118,7 +125,14 @@ PHASE C: IMPLEMENTATION
 9.  ENGINEER: Implement task, commit changes, push branch
     - Follow the approved plan
     - Make atomic commits
+    - Run full test suite BEFORE pushing: `npx jest --bail --no-coverage`
+      If any tests fail, fix them before creating the PR.
+      Search for ALL test files referencing changed functions:
+      `grep -r "functionName" --include="*.test.*" src/ electron/`
+      and update stale expectations to match new behavior.
     - Push branch to remote
+    - When creating PR, include `## Engineer Metrics` section in body
+      (use template from `.github/PULL_REQUEST_TEMPLATE.md`)
     - Engineer MUST include `### Effort` section in handoff message
       with agent_id and token count. The agent_id is returned by
       the Task tool when the agent completes.
@@ -144,7 +158,8 @@ PHASE C: IMPLEMENTATION
 PHASE D: PR, TEST & MERGE
 --------------------------
 12. SR ENGINEER: Create PR + Review (DO NOT MERGE)
-    - gh pr create --base develop
+    - PR targets int/<sprint-name> branch (NOT develop)
+    - gh pr create --base int/<sprint-name>  # All sprint PRs target the int branch
     - Review code quality, security, architecture
     - Wait for CI
     ├─ CI passes → Step 12a
@@ -165,6 +180,9 @@ PHASE D: PR, TEST & MERGE
 
 12b. SR ENGINEER: Merge PR (only after user approval)
     - gh pr merge <PR> --merge
+    - **CRITICAL:** If merge is blocked by branch protection, merge the target branch
+      into the PR branch and wait for CI. Do NOT use `--admin`. Only the user can
+      authorize `--admin`, and only with explicit words like "use --admin".
     - Verify merge succeeded
     - SR Engineer MUST include own `### Effort` section in handoff to PM
     - If fix agents were spawned for CI failures, include those agent_ids too
@@ -202,6 +220,10 @@ PHASE D: PR, TEST & MERGE
       (this passes the CI pr-metrics-check)
     - Include Agent ID, Total Tokens, Duration, Variance in PR body
     - Update sprint status to "completed"
+    - Create final integration PR: int/<sprint-name> → develop
+    - Wait for CI on the int→develop PR
+    - Merge the integration branch to develop (one merge, one CI run)
+    - This avoids the strict:true cascade that occurs when merging N PRs to develop directly
 ```
 
 ---

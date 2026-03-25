@@ -147,9 +147,48 @@ gh pr create --base main --head develop --title "release: v1.2.3"
 
 ---
 
-## Integration Branch Rules
+## Integration Branch Rules (MANDATORY)
 
-Integration branches (`int/*`) collect related feature work before merging to develop.
+**Incident Reference:** SPRINT-P Phase 1 — 4 PRs targeting develop directly caused 5+ hours of sequential CI waits due to `strict: true` branch protection cascade.
+
+**ALL sprint work MUST use an integration branch. NEVER target develop directly with multiple sprint PRs.**
+
+Integration branches (`int/*`) collect all sprint work before merging to develop.
+
+### Sprint Integration Branch Workflow
+
+```bash
+# 1. PM creates integration branch at sprint start
+git checkout develop
+git pull origin develop
+git checkout -b int/<sprint-name>
+git push -u origin int/<sprint-name>
+
+# 2. Engineers create feature branches from the int branch
+git checkout int/<sprint-name>
+git checkout -b feature/task-XXX-description
+
+# 3. All sprint PRs target the int branch
+gh pr create --base int/<sprint-name> --title "fix: description"
+
+# 4. After all sprint work is merged to int and tested:
+#    One final PR from int/<sprint-name> → develop
+gh pr create --base develop --head int/<sprint-name> --title "sprint: SPRINT-XXX complete"
+
+# 5. One CI run, one merge to develop
+gh pr merge <PR> --merge
+```
+
+### Why This Is Mandatory
+
+| Approach | N PRs | CI Wait Time | Total Merge Time |
+|----------|-------|-------------|------------------|
+| Direct to develop (strict:true) | 4 | 4 x 15-30 min (sequential) | 1-2+ hours |
+| Integration branch | 4 + 1 | 1 x 15-30 min (final only) | 15-30 min |
+
+With `strict: true` on develop, each merge invalidates all other open PRs because they no longer include the latest commit. This forces sequential CI runs. Integration branches bypass this entirely.
+
+### When to Check for Existing Integration Branches
 
 **Before starting any new sprint:**
 ```bash
@@ -165,6 +204,10 @@ git branch -a | grep "int/"
 | Parallel work truly needed | Sync both branches regularly |
 
 **Never branch new sprint work from develop when develop is behind an active `int/*` branch.**
+
+### Single-Task Exception
+
+For truly standalone work (a single PR with no sprint context), targeting develop directly is acceptable. But any sprint with 2+ tasks MUST use an integration branch.
 
 ---
 
@@ -299,6 +342,41 @@ If an existing fix branch seems related:
 3. If it contains the fix, **merge it** instead of starting over
 
 **After creating a fix branch:** A fix is NOT complete until merged. Don't move on until the PR is merged.
+
+---
+
+## Strict Branch Protection (`strict: true`)
+
+The `develop` branch requires `strict: true` in branch protection. This means:
+
+1. All required CI checks must pass (Test & Lint macOS/Windows, Security Audit)
+2. The PR branch must include the latest commits from the target branch
+
+### The Sequential PR Problem
+
+When merging multiple PRs to the same target:
+
+```
+PR-A merges → develop moves to commit X
+PR-B was based on commit X-1 → now out of date → merge blocked
+Fix: merge develop into PR-B → push → CI runs → merge
+PR-B merges → develop moves to commit Y
+PR-C now out of date → repeat
+```
+
+### Recovery Steps
+
+When `gh pr merge` fails with "base branch policy prohibits the merge":
+
+```bash
+git fetch origin develop
+git merge origin/develop --no-edit
+git push origin <branch>
+# Wait for CI to pass
+gh pr merge <PR> --merge
+```
+
+NEVER use `--admin` to bypass this. The strict check exists to ensure code is tested against the latest target branch state.
 
 ---
 

@@ -15,10 +15,6 @@ export function GeneralSettings({ userId, initialPreferences }: GeneralSettingsP
   const { isOnline } = useNetwork();
 
   // Local state initialized from loaded preferences
-  const [startDateDefault, setStartDateDefault] = useState<"auto" | "manual">(() => {
-    const val = initialPreferences?.audit?.startDateDefault;
-    return (val === "auto" || val === "manual") ? val : "manual";
-  });
   const [autoSyncOnLogin, setAutoSyncOnLogin] = useState<boolean>(() => {
     const val = initialPreferences?.sync?.autoSyncOnLogin;
     return typeof val === "boolean" ? val : true;
@@ -42,18 +38,6 @@ export function GeneralSettings({ userId, initialPreferences }: GeneralSettingsP
   const [updateVersion, setUpdateVersion] = useState<string>('');
 
   // Handlers
-  const handleStartDateDefaultChange = async (mode: "auto" | "manual"): Promise<void> => {
-    setStartDateDefault(mode);
-    try {
-      const result = await settingsService.updatePreferences(userId, { audit: { startDateDefault: mode } });
-      if (!result.success) {
-        logger.error("[Settings] Failed to save start date default:", result);
-      }
-    } catch (error) {
-      logger.error("[Settings] Error saving start date default:", error);
-    }
-  };
-
   const handleAutoSyncToggle = async (): Promise<void> => {
     const newValue = !autoSyncOnLogin;
     setAutoSyncOnLogin(newValue);
@@ -141,40 +125,6 @@ export function GeneralSettings({ userId, initialPreferences }: GeneralSettingsP
         General
       </h3>
       <div className="space-y-4">
-        {/* TASK-1980: Start Date Mode Default */}
-        <div className="flex items-center justify-between p-4 bg-gray-50 rounded-lg border border-gray-200">
-          <div className="flex-1">
-            <h4 className="text-sm font-medium text-gray-900">
-              Start Date Mode
-            </h4>
-            <p className="text-xs text-gray-600 mt-1">
-              Default mode for representation start date when creating new audits
-            </p>
-          </div>
-          <div className="ml-4 flex items-center gap-1">
-            <button
-              onClick={() => handleStartDateDefaultChange("auto")}
-              className={`px-3 py-1.5 rounded-md text-xs font-medium transition-all ${
-                startDateDefault === "auto"
-                  ? "bg-blue-500 text-white"
-                  : "bg-gray-100 text-gray-700 hover:bg-gray-200"
-              }`}
-            >
-              Auto
-            </button>
-            <button
-              onClick={() => handleStartDateDefaultChange("manual")}
-              className={`px-3 py-1.5 rounded-md text-xs font-medium transition-all ${
-                startDateDefault === "manual"
-                  ? "bg-blue-500 text-white"
-                  : "bg-gray-100 text-gray-700 hover:bg-gray-200"
-              }`}
-            >
-              Manual
-            </button>
-          </div>
-        </div>
-
         {/* Auto-Sync on Login */}
         <div className="flex items-center justify-between p-4 bg-gray-50 rounded-lg border border-gray-200">
           <div className="flex-1">

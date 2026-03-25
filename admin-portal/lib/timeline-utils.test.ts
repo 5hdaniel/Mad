@@ -12,6 +12,8 @@ function makeMessage(overrides: Partial<SupportTicketMessage> = {}): SupportTick
     message_type: 'reply',
     body: 'Test message',
     created_at: '2026-03-10T10:00:00Z',
+    edited_at: null,
+    edited_by: null,
     ...overrides,
   };
 }
