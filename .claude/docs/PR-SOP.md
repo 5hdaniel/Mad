@@ -811,7 +811,7 @@ Copy this to your notes:
 - [ ] All approved PRs have been merged
 - [ ] All merges verified with `gh pr view <PR> --json state`
 - [ ] No PRs with failing CI left unattended (or blocker documented)
-- [ ] Task files updated with merge confirmations
+- [ ] Task status updated in Supabase `pm_backlog_items`
 ```
 
 **Do NOT end a session with approved-but-unmerged PRs.**

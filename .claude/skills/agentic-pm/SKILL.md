@@ -45,12 +45,12 @@ When executing sprint tasks, PM is responsible for these steps:
 
 **Sprint Close Checklist (Step 15):**
 1. Update ALL backlog items to `Completed` with completion date (via Supabase RPC)
-3. Update sprint file status to `Completed`
-4. Clean up worktrees (`git worktree remove` + `git worktree prune`)
-5. Check for orphaned PRs: `gh pr list --state open`
-6. Switch main repo back to develop: `git checkout develop && git pull`
-7. Write sprint summary (tasks, PRs, key deliverables, issues)
-8. Merge integration branch to develop (one final PR: `int/<sprint-name>` → develop)
+2. Update sprint file status to `Completed`
+3. Clean up worktrees (`git worktree remove` + `git worktree prune`)
+4. Check for orphaned PRs: `gh pr list --state open`
+5. Switch main repo back to develop: `git checkout develop && git pull`
+6. Write sprint summary (tasks, PRs, key deliverables, issues)
+7. Merge integration branch to develop (one final PR: `int/<sprint-name>` → develop)
 
 **Handoff Protocol:** Use the handoff message template from `.claude/skills/agent-handoff/templates/`.
 

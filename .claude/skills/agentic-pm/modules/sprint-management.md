@@ -271,7 +271,7 @@ For each task in the sprint:
    ```
 
 3. **Record actuals** — Copy totals to:
-   - Task file `## Actual Effort` section
+   - Supabase `pm_backlog_items` record (update `actual_tokens` field)
    - Sprint file In-Scope table `Actual Tokens` column
 
 4. **Build estimation accuracy table:**
