@@ -312,8 +312,11 @@ export function AccountVerificationContent({
   };
 
   const handleContactSupport = () => {
-    window.api?.shell?.openExternal?.(
-      'mailto:support@keeprcompliance.com?subject=Account%20Setup%20Issue'
+    // TASK-2319: Open in-app support widget instead of mailto
+    window.dispatchEvent(
+      new CustomEvent('open-support-widget', {
+        detail: { subject: 'Account Setup Issue' },
+      })
     );
   };
 
