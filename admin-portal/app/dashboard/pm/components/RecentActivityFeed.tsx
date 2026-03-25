@@ -231,7 +231,11 @@ export function RecentActivityFeed() {
                   <div className="text-sm text-gray-700">
                     {actorName && (
                       <span className="font-medium text-gray-900">
-                        {actorName}{' '}
+                        {actorName}
+                        {(event.metadata as Record<string, unknown> | null)?.source === 'claude-cli' && (
+                          <span className="text-xs text-gray-400 font-normal ml-1">via Claude</span>
+                        )}
+                        {' '}
                       </span>
                     )}
                     <span>{description}</span>
