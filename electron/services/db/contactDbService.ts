@@ -335,6 +335,9 @@ export function createContactsBatch(
       if (allEmails.length === 0 && contactData.email) {
         allEmails.push(contactData.email);
       }
+      if (allEmails.length > 1) {
+        logService.warn(`[DIAG-1270] Batch create: ${contactData.display_name} → storing ${allEmails.length} emails: ${allEmails.join(', ')}`, 'ContactDbService');
+      }
       const storedEmails = new Set<string>();
       let isFirstEmail = true;
       for (const email of allEmails) {
@@ -349,6 +352,7 @@ export function createContactsBatch(
         );
         isFirstEmail = false;
       }
+      logService.warn(`[DIAG-1270] Batch create: ${contactData.display_name} → ${storedEmails.size} emails stored (from ${allEmails.length} input)`, 'ContactDbService');
 
       // Report progress every 50 contacts
       if (onProgress && (i + 1) % 50 === 0) {
@@ -624,6 +628,7 @@ export async function backfillContactEmails(contactId: string, emails: string[])
   // Get existing emails for this contact
   const existingSql = "SELECT LOWER(email) as email FROM contact_emails WHERE contact_id = ?";
   const existingRows = dbAll<{ email: string }>(existingSql, [contactId]);
+  logService.warn(`[DIAG-1270] Backfill emails for ${contactId}: input=${emails.length} emails [${emails.join(', ')}], existing=${existingRows.length}`, 'ContactDbService');
   for (const row of existingRows) {
     storedEmails.add(row.email);
   }
@@ -650,6 +655,7 @@ export async function backfillContactEmails(contactId: string, emails: string[])
     }
   }
 
+  logService.warn(`[DIAG-1270] Backfill emails for ${contactId}: added=${added}`, 'ContactDbService');
   if (added > 0) {
     logService.info(`[Contacts] Backfilled ${added} email(s) for contact ${contactId}`, "Contacts");
   }
@@ -1483,6 +1489,7 @@ export function getContactEmailEntries(contactId: string): { id: string; email: 
     ORDER BY is_primary DESC, created_at ASC
   `;
   const rows = dbAll<{ id: string; email: string; is_primary: number }>(sql, [contactId]);
+  logService.warn(`[DIAG-1270] getContactEmailEntries(${contactId}): ${rows.length} emails found`, 'ContactDbService');
   return rows.map(r => ({ id: r.id, email: r.email, is_primary: r.is_primary === 1 }));
 }
 
