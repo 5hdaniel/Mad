@@ -1,8 +1,8 @@
 -- ============================================
--- Update pm_get_recent_activity and pm_get_my_notifications
--- to include comment body for 'commented' events,
--- add p_offset param for pagination
+-- PM Recent Activity Feed RPCs (consolidated)
 -- ============================================
+-- 1. pm_get_recent_activity — all project events with actor name, comment body, pagination
+-- 2. pm_get_my_notifications — events on assigned items with actor name, comment body
 
 -- Drop old signature (3 params) before creating new one (4 params)
 DROP FUNCTION IF EXISTS pm_get_recent_activity(TIMESTAMPTZ, TEXT[], INT);
