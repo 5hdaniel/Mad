@@ -224,7 +224,18 @@ Even "quick fixes" and "obvious bugs" must use branches. This ensures:
 
 ### Integration Branch Rules (MANDATORY)
 
-Integration branches (`int/*`) collect related feature work before merging to develop.
+**Incident Reference:** SPRINT-P Phase 1 — 4 PRs targeting develop directly caused 5+ hours of sequential CI waits due to `strict: true` branch protection cascade.
+
+**ALL sprint work MUST use an integration branch. NEVER target develop directly with multiple sprint PRs.**
+
+Integration branches (`int/*`) collect all sprint work before merging to develop.
+
+**Pattern:**
+1. PM creates `int/<sprint-name>` from develop at sprint start
+2. All engineer PRs target the `int/*` branch (NOT develop)
+3. The `int/*` branch has no `strict: true` — PRs merge fast
+4. After all sprint work is done and tested, one PR from `int/*` to develop
+5. One CI run, one merge to develop
 
 **Before starting any new sprint:**
 ```bash
@@ -387,7 +398,11 @@ npm test
 git push -u origin feature/your-feature-name
 
 # Create PR targeting develop
-gh pr create --base develop --title "feat: your feature" --body "Description..."
+# For sprint tasks: target the integration branch
+gh pr create --base int/<sprint-name> --title "feat: your feature" --body "Description..."
+
+# For standalone work (no sprint): target develop
+# gh pr create --base develop --title "feat: your feature" --body "Description..."
 ```
 
 ### Step 6: Wait for CI
@@ -540,10 +555,14 @@ npx prebuild-install --runtime=electron --target=35.7.5 --arch=x64 --platform=wi
 
 | Task | Target Branch | Merge Type |
 |------|---------------|------------|
-| New feature | `develop` | Traditional |
-| Bug fix | `develop` | Traditional |
+| Sprint task (2+ PRs) | `int/<sprint-name>` | Traditional |
+| Sprint final merge | `develop` (from `int/*`) | Traditional |
+| Standalone feature | `develop` | Traditional |
+| Standalone bug fix | `develop` | Traditional |
 | Hotfix | `main` + `develop` | Traditional |
 | Release | `main` (from develop) | Traditional |
+
+**CRITICAL: All sprint work (2+ tasks) MUST use an integration branch. Never target develop directly with multiple PRs.**
 
 ### Investigation-First Sprints
 

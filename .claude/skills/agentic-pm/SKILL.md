@@ -52,6 +52,7 @@ When executing sprint tasks, PM is responsible for these steps:
 5. Check for orphaned PRs: `gh pr list --state open`
 6. Switch main repo back to develop: `git checkout develop && git pull`
 7. Write sprint summary (tasks, PRs, key deliverables, issues)
+8. Merge integration branch to develop (one final PR: `int/<sprint-name>` → develop)
 
 **Handoff Protocol:** Use the handoff message template from `.claude/skills/agent-handoff/templates/`.
 
@@ -137,7 +138,7 @@ You must produce high-quality artifacts, but **nothing is automatic**. If requir
 1) Backlog items (list). Each item should have: ID, title, brief description.
 2) Repo context: language/stack, key folders, CI, branching rules (if any).
 3) Constraints: "do not touch" modules, deadlines (if relevant), risk tolerance.
-4) Merge target: `main`/`develop`/`project` branch name.
+4) Merge target: `int/<sprint-name>` for sprint work, `develop` for standalone work, or `main` for hotfixes.
 
 ### Guardrail: stop-and-ask triggers
 
@@ -147,6 +148,7 @@ Stop and ask the user if:
 - Contract ownership is unclear (APIs/schemas shared across tasks)
 - The user requests parallelization of clearly conflicting tasks
 - Testing requirements are unclear for any feature or task
+- Sprint PRs are targeting develop directly instead of an integration branch
 
 ## Outputs you must generate (depending on the request)
 
@@ -257,6 +259,38 @@ The backlog index (`.claude/plans/backlog/INDEX.md`) tracks:
 
 See `modules/backlog-maintenance.md` for procedures.
 
+### Integration Branch Requirement (MANDATORY)
+
+**Incident Reference:** SPRINT-P Phase 1 — 4 PRs targeting develop directly caused 5+ hours of sequential CI waits due to `strict: true` branch protection cascade.
+
+**ALL sprint work MUST use an integration branch. NEVER target develop directly with multiple sprint PRs.**
+
+**PM creates the integration branch at sprint start:**
+```bash
+git checkout develop
+git pull origin develop
+git checkout -b int/<sprint-name>
+git push -u origin int/<sprint-name>
+```
+
+**Pattern:**
+1. PM creates `int/<sprint-name>` from develop at sprint start
+2. All engineer PRs target the `int/*` branch (NOT develop)
+3. The `int/*` branch has no `strict: true` — PRs merge fast
+4. After all sprint work is done and tested, one PR from `int/*` to develop
+5. One CI run, one merge to develop
+
+**Add to every task file:**
+```markdown
+**PR Target:** `int/<sprint-name>` (NOT develop)
+```
+
+**Why this is mandatory:**
+- `develop` has `strict: true` branch protection
+- Each merge to develop invalidates all other open PRs (they fall behind)
+- With N PRs, this causes N sequential CI waits (each ~15-30 min)
+- Integration branches avoid this entirely — merges are fast, CI runs once at the end
+
 ### Branching alignment
 
 **Full reference:** `.claude/docs/shared/git-branching.md`
@@ -265,7 +299,7 @@ This skill generates task files aligned with the project's GitFlow strategy:
 - Feature branches: `feature/<ID>-<slug>`
 - Fix branches: `fix/<ID>-<slug>`
 - AI-assisted: `claude/<ID>-<slug>`
-- Target: `develop` (or `main` for hotfixes)
+- Target: `int/<sprint-name>` for sprint work (or `develop` for standalone work, `main` for hotfixes)
 
 ### Magic Audit CI Pipeline
 

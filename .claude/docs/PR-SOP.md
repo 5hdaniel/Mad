@@ -8,26 +8,37 @@ This document outlines the standard procedure for creating, reviewing, and mergi
 
 | PR Type | Target Branch | Merge Type | Required Checks |
 |---------|---------------|------------|-----------------|
-| Feature | `develop` | Traditional | Tests, Security |
-| Bug Fix | `develop` | Traditional | Tests, Security |
+| Sprint Task | `int/<sprint-name>` | Traditional | Tests, Security |
+| Sprint Final | `develop` (from `int/*`) | Traditional | Tests, Security |
+| Standalone Feature | `develop` | Traditional | Tests, Security |
+| Standalone Bug Fix | `develop` | Traditional | Tests, Security |
 | Hotfix | `main` + `develop` | Traditional | Tests, Builds, Security |
 | Release | `main` (from develop) | Traditional | All checks |
 
 **CRITICAL: Always use traditional merges (not squash) to preserve commit history.**
+**CRITICAL: All sprint PRs target `int/<sprint-name>`, NOT develop directly.**
 
 ---
 
 ## Phase 0: Target Branch Verification
 
-Before creating a PR, verify you're targeting the correct branch:
+Before creating a PR, verify you are targeting the correct branch:
 
 | Your Branch Type | Target Branch |
 |------------------|---------------|
-| `feature/*` | `develop` |
-| `fix/*` | `develop` |
-| `claude/*` | `develop` |
+| `feature/*` (sprint task) | `int/<sprint-name>` |
+| `fix/*` (sprint task) | `int/<sprint-name>` |
+| `claude/*` (sprint task) | `int/<sprint-name>` |
+| `feature/*` (standalone) | `develop` |
+| `fix/*` (standalone) | `develop` |
 | `hotfix/*` | `main` AND `develop` |
 | `develop` (release) | `main` |
+| `int/*` (sprint complete) | `develop` |
+
+**MANDATORY: All sprint PRs target the integration branch (`int/<sprint-name>`), NOT develop directly.**
+Only the final integration PR (after all sprint work is merged and tested) targets develop.
+
+**Incident Reference:** SPRINT-P Phase 1 — 4 PRs targeting develop directly caused 5+ hours of sequential CI waits due to `strict: true` branch protection cascade.
 
 ```bash
 # Check your current branch
@@ -35,7 +46,7 @@ git branch --show-current
 
 # Verify target branch is up to date
 git fetch origin
-git log --oneline HEAD..origin/develop  # Should be empty or show expected commits
+git log --oneline HEAD..origin/int/<sprint-name>  # For sprint PRs
 ```
 
 ---
@@ -355,7 +366,7 @@ Provide specific file:line references and suggested fixes.
 ```bash
 git push -u origin your-branch-name
 
-gh pr create --base develop --title "type: description" --body "..."
+gh pr create --base int/<sprint-name> --title "type: description" --body "..."  # Use int branch for sprint PRs
 ```
 
 🤖 **LLM Assist**: Claude can draft PR descriptions based on the changes made.

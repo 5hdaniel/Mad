@@ -64,13 +64,18 @@ grep "<engineer_agent_id>" .claude/metrics/tokens.csv
 **Before starting the 5-step cycle:**
 
 ```bash
-# Always start from the sprint branch (or develop)
-git checkout develop  # or develop
-git pull origin develop
+# Always start from the integration branch (PM creates int/<sprint-name> at sprint start)
+git checkout int/<sprint-name>
+git pull origin int/<sprint-name>
 
 # Create feature branch with task ID
 git checkout -b feature/task-XXX-description
 ```
+
+**IMPORTANT: All sprint PRs target the integration branch (`int/<sprint-name>`), NOT develop.**
+The PM will create `int/<sprint-name>` from develop at sprint start. Your task file will specify the PR target branch. If no integration branch is specified, ask the PM before creating a PR.
+
+**Incident Reference:** SPRINT-P Phase 1 — targeting develop directly with multiple PRs caused 5+ hours of sequential CI waits due to `strict: true` cascade.
 
 **Naming Convention:**
 - `fix/task-XXX-...` for bug fixes
@@ -308,7 +313,7 @@ Engineers MUST complete these checks before committing or pushing. Do not rely o
 4. **Merge the base branch into your feature branch:**
    ```bash
    git fetch origin
-   git merge origin/develop  # or whatever the base branch is
+   git merge origin/develop  # or origin/int/<sprint-name> if targeting an integration branch
    npx jest --bail --no-coverage
    ```
    Other PRs may have merged test fixes. Merging before pushing ensures your branch is tested against the latest state.
@@ -344,7 +349,7 @@ git commit -m "type(scope): description
 Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>"
 
 git push -u origin your-branch-name
-gh pr create --base develop --title "..." --body "..."
+gh pr create --base int/<sprint-name> --title "..." --body "..."
 ```
 
 ### CI and Debug Failures
@@ -389,10 +394,10 @@ gh pr view <PR-NUMBER> --json state --jq '.state'
 If `gh pr merge` fails with "the base branch policy prohibits the merge":
 
 1. **Do NOT use `--admin`** — ever
-2. Merge the target branch into your feature branch:
+2. Merge the target branch into your feature branch (usually the int branch, or develop for the final int→develop PR):
    ```bash
-   git fetch origin develop
-   git merge origin/develop --no-edit
+   git fetch origin  # fetch the target branch (int/<sprint-name> or develop)
+   git merge origin/<target-branch> --no-edit  # int/<sprint-name> or develop
    git push origin <your-branch>
    ```
 3. Wait for CI to pass on the updated branch
