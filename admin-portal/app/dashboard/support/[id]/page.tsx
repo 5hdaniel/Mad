@@ -191,6 +191,7 @@ export default function TicketDetailPage() {
             events={events}
             attachments={attachments}
             showAttachments={showAttachments}
+            onTimelineChanged={loadDetail}
           />
 
           <div ref={threadEndRef} />
