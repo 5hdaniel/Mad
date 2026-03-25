@@ -280,6 +280,21 @@ class SyncOrchestratorServiceClass {
       if (!result.success) {
         throw new Error(result.error || 'Email sync failed');
       }
+      onProgress(70);
+
+      // BACKLOG-1362: Pre-cache emails after AI scan completes.
+      // This bulk-fetches emails from connected providers into the local cache
+      // using the user's emailCache.durationMonths preference. Incremental.
+      if (signal?.aborted) return;
+      try {
+        logger.info('[SyncOrchestrator] Starting email pre-cache after scan');
+        await window.api.transactions.precacheEmails(userId);
+        logger.info('[SyncOrchestrator] Email pre-cache complete');
+      } catch (precacheError) {
+        // Pre-cache failure is non-fatal; the scan already succeeded
+        logger.warn('[SyncOrchestrator] Email pre-cache failed (non-fatal):', precacheError);
+      }
+
       onProgress(100);
       logger.info('[SyncOrchestrator] Emails sync complete');
     });
