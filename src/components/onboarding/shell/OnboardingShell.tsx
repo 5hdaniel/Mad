@@ -39,7 +39,7 @@ export function OnboardingShell({
       {/* Progress indicator spans full viewport width — no padding */}
       {progressSlot}
 
-      <div className={`${maxWidth} w-full mx-auto px-4`}>
+      <div className={`${maxWidth} w-full mx-auto px-4 sm:px-6 lg:px-8`}>
         {/* Card with responsive gap from progress bar */}
         <div className="mt-4 sm:mt-6">
           {/* Main card container */}
