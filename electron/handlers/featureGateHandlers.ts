@@ -15,6 +15,18 @@ import type { FeatureAccess } from "../services/featureGateService";
 import logService from "../services/logService";
 
 /**
+ * Features that require team/enterprise plans.
+ * Individual users without an org are denied these features.
+ * Used in both feature-gate:check and feature-gate:get-all handlers.
+ */
+const TEAM_ONLY_FEATURES = [
+  "broker_submission",
+  "ai_detection",
+  "broker_email_view",
+  "broker_email_attachments",
+] as const;
+
+/**
  * Resolve the organization ID for the current user.
  * Returns null if the user has no org membership.
  */
@@ -31,7 +43,7 @@ async function resolveOrgId(): Promise<string | null> {
     return null;
   }
 
-  logService.warn(
+  logService.debug(
     "[FeatureGate] Resolving org for user",
     "FeatureGateHandlers",
     { userId: session.user.id, email: session.user.email }
@@ -41,7 +53,7 @@ async function resolveOrgId(): Promise<string | null> {
     session.user.id
   );
 
-  logService.warn(
+  logService.debug(
     "[FeatureGate] Org resolution result",
     "FeatureGateHandlers",
     { orgId: membership?.organization_id ?? "none" }
@@ -61,7 +73,7 @@ export function registerFeatureGateHandlers(): void {
       _event: IpcMainInvokeEvent,
       featureKey: string
     ): Promise<FeatureAccess> => {
-      logService.warn(
+      logService.debug(
         "[FeatureGate] Checking feature",
         "FeatureGateHandlers",
         { featureKey }
@@ -71,13 +83,7 @@ export function registerFeatureGateHandlers(): void {
       if (!orgId) {
         // No org => individual user
         // Explicitly deny team/enterprise features
-        const teamFeatures = [
-          "broker_submission",
-          "ai_detection",
-          "broker_email_view",
-          "broker_email_attachments",
-        ];
-        if (teamFeatures.includes(featureKey)) {
+        if (TEAM_ONLY_FEATURES.includes(featureKey as typeof TEAM_ONLY_FEATURES[number])) {
           return { allowed: false, value: "", source: "default" };
         }
         // Individual features remain fail-open
@@ -94,7 +100,7 @@ export function registerFeatureGateHandlers(): void {
     async (
       _event: IpcMainInvokeEvent
     ): Promise<Record<string, FeatureAccess>> => {
-      logService.warn(
+      logService.debug(
         "[FeatureGate] Getting all features",
         "FeatureGateHandlers"
       );
@@ -104,12 +110,11 @@ export function registerFeatureGateHandlers(): void {
         // No org => individual user, restrict team/enterprise features
         // Individual features (text_export, email_export) remain fail-open
         // Team/Enterprise features are explicitly denied
-        return {
-          broker_submission: { allowed: false, value: "", source: "default" as const },
-          ai_detection: { allowed: false, value: "", source: "default" as const },
-          broker_email_view: { allowed: false, value: "", source: "default" as const },
-          broker_email_attachments: { allowed: false, value: "", source: "default" as const },
-        };
+        const denied: Record<string, FeatureAccess> = {};
+        for (const key of TEAM_ONLY_FEATURES) {
+          denied[key] = { allowed: false, value: "", source: "default" as const };
+        }
+        return denied;
       }
 
       return featureGateService.getAllFeatures(orgId);
