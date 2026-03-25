@@ -25,6 +25,7 @@ import { backfillMissingAttachments } from "../handlers/attachmentHandlers";
 import { isNetworkError } from "../utils/networkErrors";
 import { retryOnNetwork, networkResilienceService } from "./networkResilience";
 import { computeTransactionDateRange } from "../utils/emailDateRange";
+import { getEmailCacheDurationMonths, computeEmailCacheSinceDate } from "../utils/preferenceHelper";
 import {
   getContactEmailsForTransaction,
   resolveContactEmailsByQuery,
