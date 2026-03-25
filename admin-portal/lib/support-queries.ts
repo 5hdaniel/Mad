@@ -592,6 +592,32 @@ export async function searchTicketsForLink(
   return (data ?? []) as unknown as TicketLinkSearchResult[];
 }
 
+// --- Internal Note Edit/Delete functions (TASK-2315) ---
+
+export async function editInternalNote(
+  messageId: string,
+  newBody: string
+): Promise<{ id: string; ticket_id: string; body: string; edited_at: string; edited_by: string }> {
+  const supabase = createClient();
+  const { data, error } = await supabase.rpc('support_edit_internal_note', {
+    p_message_id: messageId,
+    p_body: newBody,
+  });
+  if (error) throw error;
+  return data as unknown as { id: string; ticket_id: string; body: string; edited_at: string; edited_by: string };
+}
+
+export async function deleteInternalNote(
+  messageId: string
+): Promise<{ deleted: boolean; message_id: string; ticket_id: string }> {
+  const supabase = createClient();
+  const { data, error } = await supabase.rpc('support_delete_internal_note', {
+    p_message_id: messageId,
+  });
+  if (error) throw error;
+  return data as unknown as { deleted: boolean; message_id: string; ticket_id: string };
+}
+
 // --- Diagnostics functions (TASK-2283) ---
 
 /**

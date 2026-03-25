@@ -7,17 +7,21 @@
  * Messages render as cards (same style as ConversationThread MessageList).
  * Events render as compact inline system pills (centered, gray).
  * Filters out `message_added` events since the message itself is shown.
+ *
+ * Internal notes authored by the current user show edit/delete controls
+ * on hover (TASK-2315 / BACKLOG-1344).
  */
 
 import { useState, useEffect } from 'react';
-import { Lock, Paperclip } from 'lucide-react';
+import { Lock, Paperclip, Pencil, Trash2 } from 'lucide-react';
+import { useAuth } from '@/components/providers/AuthProvider';
 import type {
   SupportTicketMessage,
   SupportTicketEvent,
   SupportTicketAttachment,
 } from '@/lib/support-types';
 import { buildTimeline, getEventIcon, getEventDescription, getActorName } from '@/lib/timeline-utils';
-import { getAttachmentUrl } from '@/lib/support-queries';
+import { getAttachmentUrl, editInternalNote, deleteInternalNote } from '@/lib/support-queries';
 import { AttachmentLightbox } from './AttachmentLightbox';
 
 // ─── Props ───────────────────────────────────────────────────────────
@@ -27,6 +31,7 @@ interface ActivityTimelineProps {
   events: SupportTicketEvent[];
   attachments: SupportTicketAttachment[];
   showAttachments?: boolean;
+  onTimelineChanged?: () => void;
 }
 
 // ─── Helpers ─────────────────────────────────────────────────────────
@@ -155,23 +160,71 @@ function InlineAttachments({
 /**
  * MessageCard - Renders a single message in the timeline.
  * Preserves the internal note amber/yellow styling with lock icon.
+ * Shows edit/delete controls on hover for own internal notes.
  */
 function MessageCard({
   message,
   attachments,
   showAttachments,
+  currentUserId,
   onPreview,
+  onEdited,
+  onDeleted,
 }: {
   message: SupportTicketMessage;
   attachments: SupportTicketAttachment[];
   showAttachments: boolean;
+  currentUserId: string | null;
   onPreview: (url: string, att: SupportTicketAttachment) => void;
+  onEdited?: () => void;
+  onDeleted?: () => void;
 }) {
   const isNote = message.message_type === 'internal_note';
+  const isOwnMessage = currentUserId != null && message.sender_id === currentUserId;
+  const canModify = isNote && isOwnMessage;
+
+  const [editing, setEditing] = useState(false);
+  const [editText, setEditText] = useState(message.body);
+  const [saving, setSaving] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function handleSaveEdit() {
+    if (!editText.trim() || editText === message.body) {
+      setEditing(false);
+      return;
+    }
+    setSaving(true);
+    setError(null);
+    try {
+      await editInternalNote(message.id, editText.trim());
+      setEditing(false);
+      onEdited?.();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to save edit');
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function handleDelete() {
+    setDeleting(true);
+    setError(null);
+    try {
+      await deleteInternalNote(message.id);
+      setConfirmDelete(false);
+      onDeleted?.();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to delete note');
+    } finally {
+      setDeleting(false);
+    }
+  }
 
   return (
     <div
-      className={`rounded-lg p-4 ${
+      className={`group rounded-lg p-4 ${
         isNote
           ? 'bg-amber-50 border border-amber-200'
           : 'bg-white border border-gray-200'
@@ -192,10 +245,93 @@ function MessageCard({
             <span className="text-xs text-gray-400">{message.sender_email}</span>
           )}
         </div>
-        <span className="text-xs text-gray-400">{formatTimestamp(message.created_at)}</span>
+        <div className="flex items-center gap-2">
+          {canModify && !editing && !confirmDelete && (
+            <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+              <button
+                onClick={() => { setEditText(message.body); setEditing(true); }}
+                className="p-1 text-gray-400 hover:text-gray-600 transition-colors"
+                title="Edit note"
+              >
+                <Pencil className="h-3.5 w-3.5" />
+              </button>
+              <button
+                onClick={() => setConfirmDelete(true)}
+                className="p-1 text-gray-400 hover:text-red-500 transition-colors"
+                title="Delete note"
+              >
+                <Trash2 className="h-3.5 w-3.5" />
+              </button>
+            </div>
+          )}
+          <span className="text-xs text-gray-400">
+            {formatTimestamp(message.created_at)}
+            {message.edited_at && (
+              <span className="ml-1 text-gray-400">(edited)</span>
+            )}
+          </span>
+        </div>
       </div>
-      <div className="text-sm text-gray-700 whitespace-pre-wrap">{message.body}</div>
-      {showAttachments && (
+
+      {/* Inline edit mode */}
+      {editing ? (
+        <div className="space-y-2">
+          <textarea
+            value={editText}
+            onChange={(e) => setEditText(e.target.value)}
+            className="w-full px-3 py-2 text-sm text-gray-900 bg-white border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-amber-400 focus:border-transparent resize-y min-h-[60px]"
+            rows={3}
+            disabled={saving}
+            autoFocus
+          />
+          {error && <p className="text-xs text-red-600">{error}</p>}
+          <div className="flex items-center gap-2">
+            <button
+              onClick={handleSaveEdit}
+              disabled={saving || !editText.trim()}
+              className="px-3 py-1.5 text-xs font-medium text-white bg-amber-600 hover:bg-amber-700 rounded-md transition-colors disabled:opacity-50"
+            >
+              {saving ? 'Saving...' : 'Save'}
+            </button>
+            <button
+              onClick={() => { setEditing(false); setError(null); }}
+              disabled={saving}
+              className="px-3 py-1.5 text-xs font-medium text-gray-600 hover:text-gray-800 transition-colors"
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
+      ) : confirmDelete ? (
+        /* Inline delete confirmation */
+        <div className="space-y-2">
+          <p className="text-sm text-gray-700">
+            Are you sure you want to delete this internal note? This cannot be undone.
+          </p>
+          {error && <p className="text-xs text-red-600">{error}</p>}
+          <div className="flex items-center gap-2">
+            <button
+              onClick={handleDelete}
+              disabled={deleting}
+              className="px-3 py-1.5 text-xs font-medium text-white bg-red-600 hover:bg-red-700 rounded-md transition-colors disabled:opacity-50"
+            >
+              {deleting ? 'Deleting...' : 'Delete'}
+            </button>
+            <button
+              onClick={() => { setConfirmDelete(false); setError(null); }}
+              disabled={deleting}
+              className="px-3 py-1.5 text-xs font-medium text-gray-600 hover:text-gray-800 transition-colors"
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
+      ) : (
+        /* Normal message body */
+        <div className="text-sm text-gray-700 whitespace-pre-wrap">{message.body}</div>
+      )}
+
+      {showAttachments && !editing && !confirmDelete && (
         <InlineAttachments attachments={attachments} onPreview={onPreview} />
       )}
     </div>
@@ -238,7 +374,11 @@ export function ActivityTimeline({
   events,
   attachments,
   showAttachments = true,
+  onTimelineChanged,
 }: ActivityTimelineProps) {
+  const { user } = useAuth();
+  const currentUserId = user?.id ?? null;
+
   const [lightbox, setLightbox] = useState<{
     url: string;
     attachment: SupportTicketAttachment;
@@ -281,7 +421,10 @@ export function ActivityTimeline({
                 message={msg}
                 attachments={msgAttachments}
                 showAttachments={showAttachments}
+                currentUserId={currentUserId}
                 onPreview={openLightbox}
+                onEdited={onTimelineChanged}
+                onDeleted={onTimelineChanged}
               />
             );
           } else {
