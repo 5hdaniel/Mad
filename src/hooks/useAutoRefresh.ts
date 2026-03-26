@@ -220,8 +220,9 @@ export function useAutoRefresh({
       // Gating here was redundant and caused contacts to be skipped entirely
       // when both FDA and email conditions were false.
       typesToSync.push('contacts');
-      // Only sync emails if AI addon enabled and email connected
-      if (hasAIAddon && emailConnected) {
+      // Sync emails if email connected (pre-cache for fast transaction lookups)
+      // AI addon is NOT required — auto-detection is a separate feature
+      if (emailConnected) {
         typesToSync.push('emails');
       }
       if (isMacOS && hasPermissions) {

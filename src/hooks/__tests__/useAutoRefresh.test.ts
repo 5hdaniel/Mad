@@ -169,7 +169,7 @@ describe("useAutoRefresh", () => {
 
       // Should have called requestSync with contacts and messages (macOS)
       expect(mockRequestSync).toHaveBeenCalledWith(
-        ['contacts', 'messages'],
+        ['contacts', 'emails', 'messages'],
         'test-user-123'
       );
     });
@@ -324,7 +324,7 @@ describe("useAutoRefresh", () => {
       });
 
       expect(mockRequestSync).toHaveBeenCalledWith(
-        ['contacts', 'messages'],
+        ['contacts', 'emails', 'messages'],
         'test-user-123'
       );
     });
@@ -340,7 +340,7 @@ describe("useAutoRefresh", () => {
 
       // TASK-1953: Outlook contacts sync via Graph API on all platforms when email connected
       expect(mockRequestSync).toHaveBeenCalledWith(
-        ['contacts'],
+        ['contacts', 'emails'],
         'test-user-123'
       );
     });
@@ -377,7 +377,7 @@ describe("useAutoRefresh", () => {
 
       // TASK-1953: Outlook contacts still sync without macOS permissions (uses Graph API)
       expect(mockRequestSync).toHaveBeenCalledWith(
-        ['contacts'],
+        ['contacts', 'emails'],
         'test-user-123'
       );
     });
@@ -587,7 +587,7 @@ describe("useAutoRefresh", () => {
 
       // Manual triggerRefresh should bypass the import flag
       expect(mockRequestSync).toHaveBeenCalledWith(
-        ['contacts', 'messages'],
+        ['contacts', 'emails', 'messages'],
         'test-user-123'
       );
     });
@@ -612,7 +612,7 @@ describe("useAutoRefresh", () => {
       });
 
       expect(mockRequestSync).toHaveBeenCalledWith(
-        ['contacts', 'messages'],
+        ['contacts', 'emails', 'messages'],
         'test-user-123'
       );
     });
