@@ -67,6 +67,7 @@ export interface FolderExportOptions {
   includeEmails: boolean;
   includeTexts: boolean;
   includeAttachments: boolean;
+  attachmentType?: "all" | "email" | "text" | "none";
   emailExportMode?: "thread" | "individual";
   onProgress?: (progress: FolderExportProgress) => void;
 }
@@ -116,7 +117,7 @@ class FolderExportService {
     communications: Communication[],
     options: FolderExportOptions
   ): Promise<string> {
-    const { includeEmails, includeTexts, includeAttachments, emailExportMode, onProgress } = options;
+    const { includeEmails, includeTexts, includeAttachments, attachmentType = "all", emailExportMode, onProgress } = options;
 
     try {
       logService.info("[Folder Export] Starting folder export", "FolderExport", {
@@ -306,7 +307,7 @@ class FolderExportService {
       }
 
       // Export attachments with manifest
-      if (includeAttachments) {
+      if (includeAttachments && attachmentType !== "none") {
         onProgress?.({
           stage: "attachments",
           current: 0,
@@ -314,8 +315,17 @@ class FolderExportService {
           message: "Collecting attachments...",
         });
 
-        const allCommunications = [...emails, ...texts];
-        await this.exportAttachments(transaction, allCommunications, attachmentsPath, emailAttachmentResult);
+        // Filter communications based on attachmentType
+        let attachmentComms: typeof emails;
+        if (attachmentType === "email") {
+          attachmentComms = [...emails];
+        } else if (attachmentType === "text") {
+          attachmentComms = [...texts];
+        } else {
+          // "all" — include both
+          attachmentComms = [...emails, ...texts];
+        }
+        await this.exportAttachments(transaction, attachmentComms, attachmentsPath, attachmentType === "text" ? undefined : emailAttachmentResult);
 
         onProgress?.({
           stage: "attachments",
@@ -500,7 +510,7 @@ class FolderExportService {
    * Export attachments and create manifest
    * TASK-2050: Updated to include email attachment metadata in manifest
    */
-  private async exportAttachments(
+  async exportAttachments(
     transaction: Transaction,
     communications: Communication[],
     outputPath: string,

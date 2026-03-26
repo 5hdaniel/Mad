@@ -24,6 +24,7 @@ interface ExportOptions {
   startDate?: string;
   endDate?: string;
   summaryOnly?: boolean; // If true, only export summary + indexes (no full content)
+  attachmentType?: "all" | "email" | "text" | "none";
 }
 
 class EnhancedExportService {
@@ -47,6 +48,7 @@ class EnhancedExportService {
       startDate: optionStartDate,
       endDate: optionEndDate,
       summaryOnly = false,
+      attachmentType = "none",
     } = options;
 
     try {
@@ -103,7 +105,7 @@ class EnhancedExportService {
       let exportPath: string;
       switch (exportFormat) {
         case "pdf":
-          exportPath = await this._exportPDF(transaction, filteredComms, summaryOnly);
+          exportPath = await this._exportPDF(transaction, filteredComms, summaryOnly, attachmentType);
           break;
         case "excel":
         case "csv":
@@ -188,20 +190,59 @@ class EnhancedExportService {
     transaction: TransactionWithDetails,
     communications: Communication[],
     summaryOnly: boolean = false,
+    attachmentType: "all" | "email" | "text" | "none" = "none",
   ): Promise<string> {
     const downloadsPath = app.getPath("downloads");
-    const suffix = summaryOnly ? "Summary" : "Full";
-    const fileName = sanitizeFileSystemName(
-      `Transaction_${suffix}_${transaction.property_address}_${Date.now()}.pdf`,
-    );
-    const outputPath = path.join(downloadsPath, fileName);
+    const needsAttachments = !summaryOnly && attachmentType !== "none";
 
-    return await folderExportService.exportTransactionToCombinedPDF(
-      transaction,
-      communications,
-      outputPath,
-      summaryOnly,
-    );
+    if (needsAttachments) {
+      // Create a folder: PDF + attachments subfolder
+      const folderName = sanitizeFileSystemName(
+        `Transaction_${transaction.property_address}_${Date.now()}`,
+      );
+      const folderPath = path.join(downloadsPath, folderName);
+      await fs.mkdir(folderPath, { recursive: true });
+
+      // Generate the combined PDF inside the folder
+      const pdfPath = path.join(folderPath, "Combined_Report.pdf");
+      await folderExportService.exportTransactionToCombinedPDF(
+        transaction,
+        communications,
+        pdfPath,
+        summaryOnly,
+      );
+
+      // Export attachments into an /attachments subfolder
+      const attachmentsPath = path.join(folderPath, "attachments");
+      await fs.mkdir(attachmentsPath, { recursive: true });
+
+      // Filter communications by attachment type
+      let attachmentComms = communications;
+      if (attachmentType === "email") {
+        attachmentComms = communications.filter((c) => isEmailMessage(c));
+      } else if (attachmentType === "text") {
+        attachmentComms = communications.filter((c) => isTextMessage(c));
+      }
+
+      // Use folderExportService's attachment export
+      await folderExportService.exportAttachments(transaction, attachmentComms, attachmentsPath);
+
+      return folderPath;
+    } else {
+      // Simple PDF file, no attachments
+      const suffix = summaryOnly ? "Summary" : "Full";
+      const fileName = sanitizeFileSystemName(
+        `Transaction_${suffix}_${transaction.property_address}_${Date.now()}.pdf`,
+      );
+      const outputPath = path.join(downloadsPath, fileName);
+
+      return await folderExportService.exportTransactionToCombinedPDF(
+        transaction,
+        communications,
+        outputPath,
+        summaryOnly,
+      );
+    }
   }
 
   /**

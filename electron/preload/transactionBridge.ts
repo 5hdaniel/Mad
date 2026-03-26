@@ -31,6 +31,7 @@ export interface ExportEnhancedOptions {
   startDate?: string;
   endDate?: string;
   summaryOnly?: boolean; // If true, only export summary + indexes (no full content)
+  attachmentType?: "all" | "email" | "text" | "none";
 }
 
 /**
@@ -40,6 +41,8 @@ export interface ExportFolderOptions {
   includeEmails?: boolean;
   includeTexts?: boolean;
   includeAttachments?: boolean;
+  contentType?: "both" | "emails" | "texts";
+  attachmentType?: "all" | "email" | "text" | "none";
 }
 
 export const transactionBridge = {

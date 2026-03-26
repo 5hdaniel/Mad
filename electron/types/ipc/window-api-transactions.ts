@@ -120,6 +120,8 @@ export interface WindowApiTransactions {
       contentType?: "text" | "email" | "both";
       startDate?: string;
       endDate?: string;
+      summaryOnly?: boolean;
+      attachmentType?: "all" | "email" | "text" | "none";
     },
   ) => Promise<{ success: boolean; path?: string; error?: string }>;
   assignContact: (
@@ -283,6 +285,8 @@ export interface WindowApiTransactions {
     includeEmails?: boolean;
     includeTexts?: boolean;
     includeAttachments?: boolean;
+    contentType?: "both" | "emails" | "texts";
+    attachmentType?: "all" | "email" | "text" | "none";
   }) => Promise<{
     success: boolean;
     path?: string;
