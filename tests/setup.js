@@ -105,6 +105,12 @@ if (typeof window !== 'undefined') {
       reindexDatabase: jest.fn().mockResolvedValue({ success: true }),
       // BACKLOG-611: Check if user exists in local DB
       checkUserInLocalDb: jest.fn().mockResolvedValue({ success: true, exists: false }),
+      // BACKLOG-1383: Event-driven init
+      verifyUserInLocalDb: jest.fn().mockResolvedValue({ success: true, userId: 'test-user-123' }),
+      isDatabaseInitialized: jest.fn().mockResolvedValue({ success: true, initialized: true }),
+      onInitStage: jest.fn().mockReturnValue(() => {}),
+      getInitStage: jest.fn().mockResolvedValue({ stage: 'complete' }),
+      initializeDatabase: jest.fn().mockResolvedValue({ success: true }),
     },
     address: {
       initialize: jest.fn(),

@@ -5,8 +5,11 @@
  *
  * Shows active users by app version with a bar chart
  * and a data table with counts and adoption percentages.
+ * Clicking a version reveals the users on that version.
  */
 
+import { useState } from 'react';
+import Link from 'next/link';
 import {
   BarChart,
   Bar,
@@ -17,6 +20,7 @@ import {
   ResponsiveContainer,
   Cell,
 } from 'recharts';
+import { ChevronDown, ChevronRight, User } from 'lucide-react';
 import type { VersionDistribution as VersionDistributionData } from '@/lib/analytics-queries';
 
 interface Props {
@@ -33,6 +37,8 @@ const COLORS = [
 ];
 
 export function VersionDistribution({ data }: Props) {
+  const [expandedVersion, setExpandedVersion] = useState<string | null>(null);
+
   if (data.length === 0) {
     return (
       <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
@@ -47,13 +53,19 @@ export function VersionDistribution({ data }: Props) {
     );
   }
 
+  const handleBarClick = (entry: VersionDistributionData) => {
+    setExpandedVersion(
+      expandedVersion === entry.app_version ? null : entry.app_version
+    );
+  };
+
   return (
     <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
       <h3 className="text-lg font-semibold text-gray-900 mb-4">
         Active Users by App Version
       </h3>
       <p className="text-sm text-gray-500 mb-6">
-        Based on active devices seen in the last 30 days
+        Based on active devices seen in the last 30 days. Click a bar or row to see users.
       </p>
 
       {/* Bar Chart */}
@@ -75,11 +87,20 @@ export function VersionDistribution({ data }: Props) {
               }}
               formatter={(value) => [Number(value) || 0, 'Users']}
             />
-            <Bar dataKey="user_count" radius={[4, 4, 0, 0]}>
-              {data.map((_, index) => (
+            <Bar
+              dataKey="user_count"
+              radius={[4, 4, 0, 0]}
+              cursor="pointer"
+              onClick={(_data, index) => {
+                if (typeof index === 'number') handleBarClick(data[index]);
+              }}
+            >
+              {data.map((entry, index) => (
                 <Cell
                   key={`cell-${index}`}
-                  fill={COLORS[index % COLORS.length]}
+                  fill={expandedVersion === entry.app_version
+                    ? '#1d4ed8'
+                    : COLORS[index % COLORS.length]}
                 />
               ))}
             </Bar>
@@ -104,24 +125,68 @@ export function VersionDistribution({ data }: Props) {
             </tr>
           </thead>
           <tbody>
-            {data.map((row) => (
-              <tr
-                key={row.app_version}
-                className="border-b border-gray-100 last:border-0"
-              >
-                <td className="py-2 px-3 font-mono text-gray-900">
-                  {row.app_version}
-                </td>
-                <td className="text-right py-2 px-3 text-gray-700">
-                  {row.user_count}
-                </td>
-                <td className="text-right py-2 px-3">
-                  <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-primary-100 text-primary-800">
-                    {row.adoption_pct}%
-                  </span>
-                </td>
-              </tr>
-            ))}
+            {data.map((row) => {
+              const isExpanded = expandedVersion === row.app_version;
+              return (
+                <tr key={row.app_version} className="group">
+                  <td colSpan={3} className="p-0">
+                    {/* Clickable row */}
+                    <button
+                      type="button"
+                      onClick={() => handleBarClick(row)}
+                      className="w-full flex items-center border-b border-gray-100 last:border-0 hover:bg-gray-50 transition-colors"
+                    >
+                      <span className="flex items-center gap-1.5 py-2 px-3 font-mono text-gray-900 flex-1 text-left">
+                        {isExpanded
+                          ? <ChevronDown className="h-3.5 w-3.5 text-gray-400 shrink-0" />
+                          : <ChevronRight className="h-3.5 w-3.5 text-gray-400 shrink-0" />}
+                        {row.app_version}
+                      </span>
+                      <span className="py-2 px-3 text-gray-700 text-right w-20">
+                        {row.user_count}
+                      </span>
+                      <span className="py-2 px-3 text-right w-24">
+                        <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-primary-100 text-primary-800">
+                          {row.adoption_pct}%
+                        </span>
+                      </span>
+                    </button>
+
+                    {/* Expanded user list */}
+                    {isExpanded && (
+                      <div className="bg-gray-50 border-b border-gray-100 px-6 py-3">
+                        <p className="text-xs font-medium text-gray-500 mb-2">
+                          Users on {row.app_version}
+                        </p>
+                        {row.users.length === 0 ? (
+                          <p className="text-xs text-gray-400">No user details available</p>
+                        ) : (
+                          <div className="space-y-1">
+                            {row.users.map((u) => (
+                              <Link
+                                key={u.id}
+                                href={`/dashboard/users/${u.id}`}
+                                className="flex items-center gap-2 px-2 py-1.5 rounded hover:bg-gray-100 transition-colors group/user"
+                              >
+                                <User className="h-3.5 w-3.5 text-gray-400 shrink-0" />
+                                <span className="text-sm text-gray-900 group-hover/user:text-primary-700">
+                                  {u.display_name ?? u.email ?? 'Unknown User'}
+                                </span>
+                                {u.display_name && u.email && (
+                                  <span className="text-xs text-gray-400">
+                                    {u.email}
+                                  </span>
+                                )}
+                              </Link>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </td>
+                </tr>
+              );
+            })}
           </tbody>
         </table>
       </div>

@@ -61,6 +61,7 @@ import type {
 
 import { DatabaseError } from "../types";
 import { databaseEncryptionService } from "./databaseEncryptionService";
+import { initializationBroadcaster } from "./initializationBroadcaster";
 import type { AuditLogEntry, AuditLogDbRow } from "./auditService";
 
 // Import domain services for delegation
@@ -134,6 +135,12 @@ class DatabaseService implements IDatabaseService {
 
       await logService.info("Initializing database", "DatabaseService", { path: this.dbPath });
 
+      // BACKLOG-1381: Broadcast db-opening stage
+      initializationBroadcaster.broadcast({
+        stage: "db-opening",
+        message: "Opening secure database...",
+      });
+
       // Ensure app data directory exists before any DB file operations.
       // Uses recursive:true which is a safe no-op if directory already exists,
       // avoiding TOCTOU race with existsSync. Fixes Sentry ELECTRON-33.
@@ -160,9 +167,31 @@ class DatabaseService implements IDatabaseService {
       // (e.g., disk full during migration). Fixes Sentry ELECTRON-2P / ELECTRON-2X.
       this._ensureFailureLogTable(this.db);
 
+      // BACKLOG-1381: Broadcast migrating stage before running migrations
+      initializationBroadcaster.broadcast({
+        stage: "migrating",
+        progress: 0,
+        message: "Updating database...",
+      });
+
       try {
         await this.runMigrations();
+
+        // BACKLOG-1381: Broadcast db-ready after successful migrations
+        initializationBroadcaster.broadcast({
+          stage: "db-ready",
+          message: "Database ready",
+        });
       } catch (migrationError) {
+        // BACKLOG-1381: Broadcast error on migration failure
+        initializationBroadcaster.broadcast({
+          stage: "error",
+          error: {
+            message: migrationError instanceof Error ? migrationError.message : "Migration failed",
+            retryable: true,
+          },
+        });
+
         // Migration failed -- attempt auto-restore from pre-migration backup
         log.error("[DatabaseService] Migration FAILED:", migrationError instanceof Error ? migrationError.message : String(migrationError));
         await logService.error("Migration failed, attempting auto-restore", "DatabaseService", {
@@ -209,6 +238,15 @@ class DatabaseService implements IDatabaseService {
       await logService.debug("Database initialized successfully with encryption", "DatabaseService");
       return true;
     } catch (error) {
+      // BACKLOG-1381: Broadcast error on initialization failure
+      initializationBroadcaster.broadcast({
+        stage: "error",
+        error: {
+          message: error instanceof Error ? error.message : "Database initialization failed",
+          retryable: true,
+        },
+      });
+
       await logService.error("Failed to initialize database", "DatabaseService", {
         error: error instanceof Error ? error.message : String(error),
       });

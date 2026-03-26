@@ -41,13 +41,13 @@ const PRIORITY_ORDER: Record<string, number> = {
 };
 
 const STATUS_ORDER: Record<string, number> = {
-  blocked: 0,
+  pending: 0,
   in_progress: 1,
   testing: 2,
   reopened: 3,
-  pending: 4,
-  deferred: 5,
-  completed: 6,
+  blocked: 4,
+  completed: 5,
+  deferred: 6,
   obsolete: 7,
 };
 

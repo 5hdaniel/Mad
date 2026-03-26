@@ -14,6 +14,7 @@
  */
 
 import React, { useEffect, useRef, useCallback } from "react";
+import * as Sentry from "@sentry/electron/renderer";
 import { useAppState } from "./useAppState";
 import { LoadingScreen } from "./components/LoadingScreen";
 import { ErrorScreen } from "./components/ErrorScreen";
@@ -328,6 +329,99 @@ export function LoadingOrchestrator({
       };
     }
   }, [state.status, loadingPhase, dispatch, dispatchApiNotReady]);
+
+  // ============================================
+  // INIT STAGE SUBSCRIPTION (BACKLOG-1379)
+  // Subscribes to main process init stage broadcasts during
+  // the initializing-db phase and dispatches metadata actions.
+  // Also logs Sentry breadcrumbs for every stage transition.
+  // ============================================
+  const initStageSubscribedRef = useRef(false);
+  const initStageTimestampRef = useRef<number | null>(null);
+  const previousStageRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    // Subscribe when entering the initializing-db phase
+    if (state.status !== "loading" || loadingPhase !== "initializing-db") {
+      return;
+    }
+
+    // Guard against duplicate subscriptions
+    if (initStageSubscribedRef.current) {
+      return;
+    }
+
+    // Check if the API is available (onInitStage may not exist on older builds)
+    if (!window.api?.system?.onInitStage) {
+      return;
+    }
+
+    initStageSubscribedRef.current = true;
+    initStageTimestampRef.current = Date.now();
+    previousStageRef.current = null;
+
+    const cleanup = window.api.system.onInitStage((event) => {
+      const now = Date.now();
+      const previousStage = previousStageRef.current;
+      const timeInPreviousStage = initStageTimestampRef.current
+        ? now - initStageTimestampRef.current
+        : 0;
+
+      // Update timing refs
+      initStageTimestampRef.current = now;
+      previousStageRef.current = event.stage;
+
+      // Sentry breadcrumb for every stage transition
+      Sentry.addBreadcrumb({
+        category: "init",
+        message: `Init stage: ${event.stage}`,
+        level: "info",
+        data: {
+          stage: event.stage,
+          previousStage,
+          progress: event.progress,
+          message: event.message,
+          timeInPreviousStage,
+        },
+      });
+
+      // Tag scope so any crash during init shows which stage it was in
+      Sentry.setTag("init_stage", event.stage);
+
+      // Sentry error event for error stages
+      if (event.stage === "error" && event.error) {
+        Sentry.captureMessage("Initialization error during init stage", {
+          level: "error",
+          tags: {
+            component: "init",
+            init_stage: "error",
+          },
+          extra: {
+            error_message: event.error.message,
+            retryable: event.error.retryable,
+            previousStage,
+            timeInPreviousStage,
+          },
+        });
+      }
+
+      // Dispatch metadata to state machine
+      dispatch({
+        type: "INIT_STAGE_RECEIVED",
+        payload: {
+          stage: event.stage,
+          progress: event.progress,
+          message: event.message,
+          error: event.error,
+        },
+      });
+    });
+
+    return () => {
+      cleanup();
+      initStageSubscribedRef.current = false;
+    };
+  }, [state.status, loadingPhase, dispatch]);
 
   // ============================================
   // PHASE 3: Load auth state
@@ -653,11 +747,15 @@ export function LoadingOrchestrator({
   // Loading states - show loading screen with platform-specific messages
   if (state.status === "loading" && loadingPhase) {
     // console.log("[LoadingOrchestrator] Rendering LoadingScreen for phase:", loadingPhase);
+    const loadingState = state as import("./types").LoadingState;
     return (
       <LoadingScreen
         phase={loadingPhase}
         progress={state.progress}
         platform={platformRef.current}
+        initStage={loadingState.initStage}
+        migrationProgress={loadingState.migrationProgress}
+        initMessage={loadingState.initMessage}
       />
     );
   }

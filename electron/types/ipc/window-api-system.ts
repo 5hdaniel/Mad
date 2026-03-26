@@ -4,6 +4,7 @@
  */
 
 import type { OAuthProvider } from "../models";
+import type { InitStageEvent } from "../../services/initializationBroadcaster";
 
 /**
  * System methods on window.api
@@ -136,4 +137,7 @@ export interface WindowApiSystem {
     userId?: string;
     error?: string;
   }>;
+  // Initialization stage events (BACKLOG-1379: event-driven init protocol)
+  onInitStage: (callback: (event: InitStageEvent) => void) => () => void;
+  getInitStage: () => Promise<InitStageEvent>;
 }

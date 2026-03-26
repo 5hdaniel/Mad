@@ -6,9 +6,12 @@
  * creating them if necessary via the existing initializeSecureStorage handler.
  *
  * Features:
- * - Auto-retry on failure (max 3 attempts, 1.5s delay between)
- * - Shows error with "Contact Support" option after max retries
+ * - Event-driven: waits for 'complete' init stage event before verifying (BACKLOG-1383)
+ * - Shows stage-appropriate messages while waiting for init
+ * - Exponential backoff retry on failure (1s, 2s, 4s + jitter, max 3 retries)
+ * - Shows error with "Try Again" + "Contact Support" after max retries
  * - Auto-advances on success
+ * - Sentry breadcrumbs for full verification lifecycle
  *
  * Platform: macOS, Windows, Linux (all platforms)
  *
@@ -34,7 +37,12 @@ import {
 // =============================================================================
 
 const MAX_RETRIES = 3;
-const RETRY_DELAY_MS = 1500;
+/** Base delay for exponential backoff (ms) */
+const BACKOFF_BASE_MS = 1000;
+/** Backoff multiplier */
+const BACKOFF_FACTOR = 2;
+/** Maximum random jitter added to backoff (ms) */
+const MAX_JITTER_MS = 500;
 /** Minimum time to show "Setting up..." so user sees the step */
 const MIN_DISPLAY_MS = 1200;
 
@@ -151,18 +159,39 @@ function ErrorIcon(): React.ReactElement {
 // CONTENT COMPONENT
 // =============================================================================
 
-type VerificationStatus = 'verifying' | 'success' | 'error';
+type VerificationStatus = 'waiting-for-init' | 'verifying' | 'success' | 'error';
+
+/** Stage-appropriate messages shown while waiting for init to complete */
+const INIT_STAGE_MESSAGES: Record<string, string> = {
+  'db-opening': 'Opening secure database...',
+  'migrating': 'Updating database...',
+  'creating-user': 'Setting up your account...',
+  'db-ready': 'Database ready...',
+  'idle': 'Preparing...',
+};
+
+/**
+ * Calculate exponential backoff delay with jitter.
+ * Delay = base * factor^attempt + random(0, maxJitter)
+ */
+function getBackoffDelay(attempt: number): number {
+  const delay = BACKOFF_BASE_MS * Math.pow(BACKOFF_FACTOR, attempt);
+  const jitter = Math.random() * MAX_JITTER_MS;
+  return delay + jitter;
+}
 
 /**
  * Content component for the account verification step.
- * Automatically verifies the user exists in local DB and advances.
+ * Event-driven: waits for 'complete' init stage before verifying user in local DB.
+ * Uses exponential backoff retry on verification failure.
  */
 export function AccountVerificationContent({
   onAction,
 }: OnboardingStepContentProps): React.ReactElement {
-  const [status, setStatus] = useState<VerificationStatus>('verifying');
+  const [status, setStatus] = useState<VerificationStatus>('waiting-for-init');
   const [retryCount, setRetryCount] = useState(0);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [initStageMessage, setInitStageMessage] = useState<string>('Preparing...');
 
   // Effect safety pattern: ref guard prevents double-execution
   const hasStartedRef = useRef(false);
@@ -170,69 +199,111 @@ export function AccountVerificationContent({
   const startTimeRef = useRef(Date.now());
   // Guard to ensure Sentry event fires only once per error occurrence
   const hasSentryReportedRef = useRef(false);
+  // Ref guard for init stage subscription (per LoadingOrchestrator pattern)
+  const initStageSubscribedRef = useRef(false);
+  // Track mount state for cleanup
+  const mountedRef = useRef(true);
 
   const verify = async (attempt: number) => {
+    if (!mountedRef.current) return;
+
     setStatus('verifying');
     setErrorMessage(null);
 
-    // Breadcrumb: verification attempt start (BACKLOG-1347)
+    const totalMs = Date.now() - startTimeRef.current;
+
+    // Sentry breadcrumb: verification attempt started
     Sentry.addBreadcrumb({
-      category: 'onboarding',
-      message: `AccountVerification: attempt ${attempt + 1}/${MAX_RETRIES + 1}`,
+      category: 'onboarding.verification',
+      message: `Verification attempt ${attempt + 1}/${MAX_RETRIES + 1}`,
       level: 'info',
       data: {
         attempt: attempt + 1,
-        maxRetries: MAX_RETRIES + 1,
+        init_stage: 'complete',
         networkOnline: navigator.onLine,
       },
     });
+
+    // Tag scope with onboarding phase during verification
+    Sentry.setTag('onboarding_phase', 'verification');
 
     try {
       // Use dedicated handler that ensures user exists in local DB
       const result = await window.api.system.verifyUserInLocalDb();
 
-      Sentry.addBreadcrumb({
-        category: 'onboarding',
-        message: `AccountVerification: IPC result success=${result.success}`,
-        level: result.success ? 'info' : 'warning',
-        data: {
-          success: result.success,
-          error: result.error || undefined,
-          attempt: attempt + 1,
-        },
-      });
+      if (!mountedRef.current) return;
 
       if (result.success) {
+        const successTotalMs = Date.now() - startTimeRef.current;
+
+        // Sentry breadcrumb: verification succeeded
+        Sentry.addBreadcrumb({
+          category: 'onboarding.verification',
+          message: `Verification succeeded on attempt ${attempt + 1}`,
+          level: 'info',
+          data: {
+            attempt: attempt + 1,
+            total_ms: successTotalMs,
+          },
+        });
+
         setStatus('success');
 
         // Ensure the step is visible for at least MIN_DISPLAY_MS
         const elapsed = Date.now() - startTimeRef.current;
         const remaining = Math.max(0, MIN_DISPLAY_MS - elapsed);
         setTimeout(() => {
+          if (!mountedRef.current) return;
           // Dispatch action to update context
           const action: UserVerifiedInLocalDbAction = {
             type: 'USER_VERIFIED_IN_LOCAL_DB',
           };
           onAction(action);
         }, remaining);
-        // Note: The step will be filtered out after context updates,
-        // causing automatic advancement to the next step
       } else {
         const failureMsg = result.error || 'Unknown failure';
-        // Auto-retry if under limit
+        // Auto-retry with exponential backoff if under limit
         if (attempt < MAX_RETRIES) {
+          // Sentry breadcrumb: verification failed, will retry
+          Sentry.addBreadcrumb({
+            category: 'onboarding.verification',
+            message: `Verification failed on attempt ${attempt + 1}, will retry`,
+            level: 'warning',
+            data: {
+              attempt: attempt + 1,
+              error: failureMsg,
+              will_retry: true,
+            },
+          });
+
           setRetryCount(attempt + 1);
-          // Automatic retry after delay
-          setTimeout(() => verify(attempt + 1), RETRY_DELAY_MS);
+          const delay = getBackoffDelay(attempt);
+          setTimeout(() => verify(attempt + 1), delay);
         } else {
           // Max retries reached - show error
           setStatus('error');
           setErrorMessage('Unable to set up your account. Please contact support.');
-          // Report to Sentry once per error occurrence
+          // Report final failure to Sentry
           if (!hasSentryReportedRef.current) {
             hasSentryReportedRef.current = true;
+
+            Sentry.captureMessage('Account verification failed after max retries', {
+              level: 'error',
+              tags: {
+                component: 'onboarding',
+                step: 'account_verification',
+                onboarding_phase: 'verification',
+              },
+              extra: {
+                attempts: MAX_RETRIES + 1,
+                total_ms: totalMs,
+                error_message: failureMsg,
+                network_online: navigator.onLine,
+              },
+            });
+
             const reason = classifyFailureReason({
-              dbInitialized: true, // We reached this step, so DB was initialized
+              dbInitialized: true,
               networkOnline: navigator.onLine,
               error: new Error(failureMsg),
             });
@@ -241,31 +312,35 @@ export function AccountVerificationContent({
               reason,
               dbInitialized: true,
               networkOnline: navigator.onLine,
-              hasSession: true, // User is authenticated to reach onboarding
+              hasSession: true,
               errorMessage: failureMsg,
             });
           }
         }
       }
     } catch (error) {
+      if (!mountedRef.current) return;
+
       const errorMsg = error instanceof Error ? error.message : String(error);
       logger.error('[AccountVerificationStep] Verification failed:', error);
 
-      Sentry.addBreadcrumb({
-        category: 'onboarding',
-        message: `AccountVerification: exception on attempt ${attempt + 1}`,
-        level: 'error',
-        data: {
-          error: errorMsg,
-          attempt: attempt + 1,
-          networkOnline: navigator.onLine,
-        },
-      });
-
-      // Auto-retry on exception
+      // Auto-retry on exception with exponential backoff
       if (attempt < MAX_RETRIES) {
+        // Sentry breadcrumb: exception, will retry
+        Sentry.addBreadcrumb({
+          category: 'onboarding.verification',
+          message: `Verification exception on attempt ${attempt + 1}, will retry`,
+          level: 'warning',
+          data: {
+            attempt: attempt + 1,
+            error: errorMsg,
+            will_retry: true,
+          },
+        });
+
         setRetryCount(attempt + 1);
-        setTimeout(() => verify(attempt + 1), RETRY_DELAY_MS);
+        const delay = getBackoffDelay(attempt);
+        setTimeout(() => verify(attempt + 1), delay);
       } else {
         setStatus('error');
         setErrorMessage(
@@ -273,9 +348,25 @@ export function AccountVerificationContent({
             ? `Setup failed: ${error.message}`
             : 'Unable to set up your account. Please contact support.'
         );
-        // Report to Sentry once per error occurrence
+        // Report final failure to Sentry
         if (!hasSentryReportedRef.current) {
           hasSentryReportedRef.current = true;
+
+          Sentry.captureMessage('Account verification failed after max retries (exception)', {
+            level: 'error',
+            tags: {
+              component: 'onboarding',
+              step: 'account_verification',
+              onboarding_phase: 'verification',
+            },
+            extra: {
+              attempts: MAX_RETRIES + 1,
+              total_ms: totalMs,
+              error_message: errorMsg,
+              network_online: navigator.onLine,
+            },
+          });
+
           const reason = classifyFailureReason({
             dbInitialized: true,
             networkOnline: navigator.onLine,
@@ -294,17 +385,100 @@ export function AccountVerificationContent({
     }
   };
 
+  // Event-driven initialization (BACKLOG-1383):
+  // On mount, check current init stage. If 'complete', proceed immediately.
+  // Otherwise, subscribe to onInitStage events and wait for 'complete'.
   useEffect(() => {
-    if (!hasStartedRef.current) {
-      hasStartedRef.current = true;
+    if (hasStartedRef.current) return;
+    hasStartedRef.current = true;
+    mountedRef.current = true;
+
+    const startVerification = () => {
+      setStatus('verifying');
       verify(0);
-    }
+    };
+
+    const checkAndSubscribe = async () => {
+      // 1. Check current init stage
+      try {
+        const currentStage = await window.api?.system?.getInitStage?.();
+        if (!mountedRef.current) return;
+
+        if (currentStage && currentStage.stage === 'complete') {
+          // Already complete - proceed immediately
+          Sentry.addBreadcrumb({
+            category: 'onboarding.init',
+            message: 'Init already complete on mount',
+            level: 'info',
+            data: { stage: currentStage.stage, waited_ms: 0 },
+          });
+          startVerification();
+          return;
+        }
+      } catch {
+        // getInitStage may not be available — fall through to subscription or direct verification
+      }
+
+      // 2. If not complete, subscribe to events
+      if (!window.api?.system?.onInitStage) {
+        // Fallback: if onInitStage is unavailable, proceed directly
+        // (backward compatibility with older preload bridges)
+        logger.warn('[AccountVerificationStep] onInitStage not available, proceeding directly');
+        startVerification();
+        return;
+      }
+
+      // Guard against duplicate subscriptions
+      if (initStageSubscribedRef.current) return;
+      initStageSubscribedRef.current = true;
+
+      setStatus('waiting-for-init');
+      setInitStageMessage('Preparing...');
+
+      const unsubscribe = window.api.system.onInitStage((event) => {
+        if (!mountedRef.current) return;
+
+        const waitedMs = Date.now() - startTimeRef.current;
+
+        // Sentry breadcrumb: init stage received while waiting
+        Sentry.addBreadcrumb({
+          category: 'onboarding.init',
+          message: `Init stage received while waiting: ${event.stage}`,
+          level: 'info',
+          data: { stage: event.stage, waited_ms: waitedMs },
+        });
+
+        // Update stage-appropriate message
+        const message = INIT_STAGE_MESSAGES[event.stage] || event.message || 'Preparing...';
+        setInitStageMessage(message);
+
+        if (event.stage === 'complete') {
+          // Init complete - clean up subscription and start verification
+          unsubscribe();
+          initStageSubscribedRef.current = false;
+          startVerification();
+        }
+      });
+
+      // Store cleanup
+      cleanupFnRef.current = () => {
+        unsubscribe();
+        initStageSubscribedRef.current = false;
+      };
+    };
+
+    const cleanupFnRef = { current: () => {} };
+
+    checkAndSubscribe();
+
+    return () => {
+      mountedRef.current = false;
+      cleanupFnRef.current();
+    };
   }, []);
 
   const handleRetry = () => {
     // Reset retry count and start fresh verification
-    // Note: hasStartedRef is only for preventing double-execution in useEffect,
-    // manual retries should always execute regardless
     setRetryCount(0);
     // Reset Sentry guard so a new failure sequence can report again
     hasSentryReportedRef.current = false;
@@ -333,6 +507,8 @@ export function AccountVerificationContent({
           icon: <ErrorIcon />,
           gradient: 'from-red-500 to-rose-600',
         };
+      case 'waiting-for-init':
+      case 'verifying':
       default:
         return {
           icon: <SpinnerIcon />,
@@ -352,6 +528,7 @@ export function AccountVerificationContent({
 
       {/* Title */}
       <h2 className="text-xl font-bold text-gray-900 mb-2">
+        {status === 'waiting-for-init' && 'Initializing...'}
         {status === 'verifying' && 'Setting up your account...'}
         {status === 'success' && 'Account ready!'}
         {status === 'error' && 'Setup failed'}
@@ -359,6 +536,7 @@ export function AccountVerificationContent({
 
       {/* Status message */}
       <p className="text-gray-600 text-sm mb-5">
+        {status === 'waiting-for-init' && initStageMessage}
         {status === 'verifying' && (
           retryCount > 0
             ? `Retrying... (attempt ${retryCount + 1} of ${MAX_RETRIES + 1})`
