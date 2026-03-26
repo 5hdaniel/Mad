@@ -93,6 +93,8 @@ export function SyncStatusIndicator({
   const [showCompletion, setShowCompletion] = useState(false);
   const [dismissed, setDismissed] = useState(false);
   const wasSyncingRef = useRef(false);
+  const hadErrorsDuringSync = useRef(false);
+  const errorItemsDuringSync = useRef<string[]>([]);
   const autoDismissTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Get feature gate status for AI-specific features (pending count, Review Now button)
@@ -130,8 +132,20 @@ export function SyncStatusIndicator({
   // is not removed mid-step. A separate effect below handles starting the timer when the tour ends.
   useEffect(() => {
     if (isAnySyncing) {
+      if (!wasSyncingRef.current) {
+        // First render of a new sync — reset error tracking
+        hadErrorsDuringSync.current = false;
+        errorItemsDuringSync.current = [];
+      }
       wasSyncingRef.current = true;
-      setDismissed(false); // Reset dismissed state when new sync starts
+      setDismissed(false);
+      // Track errors as they happen during sync
+      for (const item of queue) {
+        if (item.status === 'error' && !errorItemsDuringSync.current.includes(item.type)) {
+          hadErrorsDuringSync.current = true;
+          errorItemsDuringSync.current.push(item.type);
+        }
+      }
       // Cancel any pending auto-dismiss timer when new sync starts
       if (autoDismissTimerRef.current) {
         clearTimeout(autoDismissTimerRef.current);
@@ -139,14 +153,21 @@ export function SyncStatusIndicator({
       }
       setShowCompletion(false);
     } else if (wasSyncingRef.current && !isAnySyncing && (queue.length === 0 || queue.some(item => item.status === 'complete' || item.status === 'error'))) {
-      // Just finished syncing - show completion message (queue may be empty if items auto-cleaned)
+      // Just finished syncing - show completion message
+      // BACKLOG-1368: Track errors in ref so they persist after queue is cleaned
+      for (const item of queue) {
+        if (item.status === 'error' && !errorItemsDuringSync.current.includes(item.type)) {
+          hadErrorsDuringSync.current = true;
+          errorItemsDuringSync.current.push(item.type);
+        }
+      }
+      logger.info(`[SyncStatusIndicator] Completion: hadErrors=${hadErrorsDuringSync.current}, queue=${JSON.stringify(queue.map(q => ({ type: q.type, status: q.status })))}`);
       setShowCompletion(true);
       wasSyncingRef.current = false;
 
       // Only auto-dismiss if tour is NOT active (TASK-2081)
       // BACKLOG-1368: Do NOT auto-dismiss if there were errors — user needs time to read
-      const hasErrors = queue.some(item => item.status === 'error');
-      if (!isTourActive && !hasErrors) {
+      if (!isTourActive && !hadErrorsDuringSync.current) {
         autoDismissTimerRef.current = setTimeout(() => {
           setShowCompletion(false);
           setDismissed(true);
@@ -166,7 +187,7 @@ export function SyncStatusIndicator({
   // TASK-2081: When tour ends while completion is still showing, start the auto-dismiss timer.
   // This is a separate effect to avoid re-firing the sync transition logic above.
   useEffect(() => {
-    if (!isTourActive && showCompletion && !dismissed && !isAnySyncing) {
+    if (!isTourActive && showCompletion && !dismissed && !isAnySyncing && !hadErrorsDuringSync.current) {
       autoDismissTimerRef.current = setTimeout(() => {
         setShowCompletion(false);
         setDismissed(true);
@@ -209,7 +230,7 @@ export function SyncStatusIndicator({
     // BACKLOG-1368: If any queue item had an error, show amber "completed with errors"
     // instead of unconditionally showing green "Sync Complete"
     const completionVariant: 'error' | 'pending' | 'success' =
-      hasError ? 'error' : hasPending ? 'pending' : 'success';
+      (hasError || hadErrorsDuringSync.current) ? 'error' : hasPending ? 'pending' : 'success';
 
     const completionStyles = {
       error: {
@@ -242,9 +263,8 @@ export function SyncStatusIndicator({
       completionVariant === 'pending' ? `${pendingCount} transaction${pendingCount !== 1 ? "s" : ""} found` :
       'Sync Complete';
 
-    const errorItems = queue.filter(item => item.status === 'error').map(item => item.type);
     const completionSubtitle =
-      completionVariant === 'error' ? `Failed: ${errorItems.join(', ')}` :
+      completionVariant === 'error' ? `Failed: ${errorItemsDuringSync.current.join(', ')}` :
       completionVariant === 'pending' ? 'New transactions detected and ready for review' :
       'All data synced successfully';
 
@@ -321,7 +341,7 @@ export function SyncStatusIndicator({
               </p>
               {completionVariant === 'error' && (
                 <p className="text-xs text-amber-600 mt-1">
-                  If this persists, please <button type="button" onClick={() => window.api?.shell?.openExternal?.('https://app.keeprcompliance.com/support/new')} className="underline hover:text-amber-800">submit a support ticket</button>.
+                  If this persists, please <button type="button" onClick={() => window.dispatchEvent(new CustomEvent('open-support-widget', { detail: { subject: `Sync Error: ${errorItemsDuringSync.current.join(', ')}` } }))} className="underline hover:text-amber-800">submit a support ticket</button>.
                 </p>
               )}
             </div>
