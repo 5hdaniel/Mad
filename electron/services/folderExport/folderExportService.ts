@@ -29,6 +29,7 @@ import logService from "../logService";
 import databaseService from "../databaseService";
 import { getUserById } from "../db/userDbService";
 import type { Transaction, Communication } from "../../types/models";
+import type { TransactionWithDetails } from "../transactionService/types";
 import type { FolderExportProgress } from "../../types/ipc";
 import { isEmailMessage, isTextMessage } from "../../utils/channelHelpers";
 import {
@@ -111,7 +112,7 @@ class FolderExportService {
    * Export transaction to organized folder structure
    */
   async exportTransactionToFolder(
-    transaction: Transaction,
+    transaction: TransactionWithDetails,
     communications: Communication[],
     options: FolderExportOptions
   ): Promise<string> {
@@ -343,7 +344,7 @@ class FolderExportService {
    * Generate summary PDF for the transaction
    */
   private async generateSummaryPDF(
-    transaction: Transaction,
+    transaction: TransactionWithDetails,
     communications: Communication[],
     basePath: string,
     phoneNameMap?: Record<string, string>
@@ -816,7 +817,7 @@ class FolderExportService {
    * Export transaction to a single combined PDF
    */
   async exportTransactionToCombinedPDF(
-    transaction: Transaction,
+    transaction: TransactionWithDetails,
     communications: Communication[],
     outputPath: string,
     summaryOnly: boolean = false,

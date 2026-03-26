@@ -4,9 +4,11 @@
  * Extracted from folderExportService.ts for maintainability.
  */
 
-import type { Communication, Transaction } from "../../types/models";
+import type { Communication } from "../../types/models";
+import type { TransactionWithDetails } from "../transactionService/types";
+import type { TransactionContactResult } from "../db/transactionContactDbService";
 import { isEmailMessage, isTextMessage } from "../../utils/channelHelpers";
-import { escapeHtml, formatCurrency, formatDate } from "../../utils/exportUtils";
+import { escapeHtml, formatDate } from "../../utils/exportUtils";
 import { countTextThreads, generateTextIndex, getMessageTypeCounts } from "./textExportHelpers";
 import { extractParticipantHandles } from "../contactResolutionService";
 import { getContactNamesByHandles } from "../../utils/exportUtils";
@@ -15,7 +17,7 @@ import { getContactNamesByHandles } from "../../utils/exportUtils";
  * Generate HTML for summary report
  */
 export function generateSummaryHTML(
-  transaction: Transaction,
+  transaction: TransactionWithDetails,
   communications: Communication[],
   phoneNameMap?: Record<string, string>
 ): string {
@@ -120,6 +122,39 @@ export function generateSummaryHTML(
     .text-item .contact { flex: 1; font-weight: 500; color: #2d3748; }
     .text-item .date { color: #718096; width: 120px; text-align: right; }
     .text-item .preview { color: #4a5568; font-size: 12px; margin-top: 4px; margin-left: 40px; }
+    .contact-list { margin-top: 12px; }
+    .contact-item {
+      padding: 12px 16px;
+      border: 1px solid #e2e8f0;
+      border-radius: 6px;
+      margin-bottom: 8px;
+      background: #f7fafc;
+    }
+    .contact-item:last-child { margin-bottom: 0; }
+    .contact-item .contact-name {
+      font-size: 15px;
+      font-weight: 600;
+      color: #1a202c;
+    }
+    .contact-item .contact-role {
+      font-size: 12px;
+      color: #667eea;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      margin-left: 8px;
+    }
+    .contact-item .contact-details {
+      font-size: 13px;
+      color: #4a5568;
+      margin-top: 4px;
+    }
+    .contact-item .contact-details span { margin-right: 16px; }
+    .no-contacts {
+      color: #a0aec0;
+      font-style: italic;
+      font-size: 14px;
+      padding: 12px 0;
+    }
     .note {
       background: #edf2f7;
       padding: 12px;
@@ -157,16 +192,8 @@ export function generateSummaryHTML(
       <div class="value">${transaction.transaction_type === "purchase" ? "Purchase" : transaction.transaction_type === "sale" ? "Sale" : "N/A"}</div>
     </div>
     <div class="detail-card">
-      <div class="label">Sale Price</div>
-      <div class="value">${formatCurrency(transaction.sale_price)}</div>
-    </div>
-    <div class="detail-card">
       <div class="label">Closing Date</div>
       <div class="value">${formatDate(transaction.closed_at)}</div>
-    </div>
-    <div class="detail-card">
-      <div class="label">Listing Price</div>
-      <div class="value">${formatCurrency(transaction.listing_price)}</div>
     </div>
     <div class="detail-card">
       <div class="label">Total Emails</div>
@@ -177,6 +204,8 @@ export function generateSummaryHTML(
       <div class="value">${texts.length}</div>
     </div>
   </div>
+
+  ${generateContactsSection(transaction.contact_assignments)}
 
   ${(messageTypeCounts.voiceMessages > 0 || messageTypeCounts.locationMessages > 0 || messageTypeCounts.attachmentOnlyMessages > 0) ? `
   <div class="section">
@@ -245,4 +274,51 @@ export function generateSummaryHTML(
 </body>
 </html>
     `;
+}
+
+/**
+ * Generate the Contacts section HTML for the summary report.
+ */
+function generateContactsSection(contacts?: TransactionContactResult[]): string {
+  if (!contacts || contacts.length === 0) {
+    return `
+  <div class="section">
+    <h3>Contacts</h3>
+    <div class="no-contacts">No contacts assigned</div>
+  </div>`;
+  }
+
+  const contactItems = contacts
+    .map((c) => {
+      const name = escapeHtml(c.contact_name || "Unknown");
+      const role = c.specific_role || c.role || "";
+      const roleHtml = role ? `<span class="contact-role">${escapeHtml(role)}</span>` : "";
+
+      const details: string[] = [];
+      if (c.contact_email) {
+        details.push(`<span>${escapeHtml(c.contact_email)}</span>`);
+      }
+      if (c.contact_phone) {
+        details.push(`<span>${escapeHtml(c.contact_phone)}</span>`);
+      }
+
+      const detailsHtml = details.length > 0
+        ? `<div class="contact-details">${details.join("")}</div>`
+        : "";
+
+      return `
+      <div class="contact-item">
+        <div><span class="contact-name">${name}</span>${roleHtml}</div>
+        ${detailsHtml}
+      </div>`;
+    })
+    .join("");
+
+  return `
+  <div class="section">
+    <h3>Contacts (${contacts.length})</h3>
+    <div class="contact-list">
+      ${contactItems}
+    </div>
+  </div>`;
 }
