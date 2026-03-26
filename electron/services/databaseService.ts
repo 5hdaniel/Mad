@@ -705,6 +705,16 @@ class DatabaseService implements IDatabaseService {
         `);
       },
     },
+    {
+      version: 34,
+      description: "Add skip_address_filter column to transactions (BACKLOG-1364)",
+      migrate: (d) => {
+        const info = d.prepare("PRAGMA table_info(transactions)").all() as { name: string }[];
+        if (!info.some((c) => c.name === "skip_address_filter")) {
+          d.exec("ALTER TABLE transactions ADD COLUMN skip_address_filter INTEGER DEFAULT 0");
+        }
+      },
+    },
   ];
 
   static validateNoDuplicateVersions(migrations: MigrationEntry[]): void {

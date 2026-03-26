@@ -255,6 +255,19 @@ export interface WindowApiTransactions {
     totalMessagesLinked?: number;
     totalAlreadyLinked?: number;
     totalErrors?: number;
+    addressFilterMessage?: string;
+    message?: string;
+    error?: string;
+  }>;
+  /** BACKLOG-1364: Update address filter toggle and re-run auto-link */
+  updateAddressFilter: (transactionId: string, skipAddressFilter: boolean) => Promise<{
+    success: boolean;
+    contactsProcessed?: number;
+    totalEmailsLinked?: number;
+    totalMessagesLinked?: number;
+    totalAlreadyLinked?: number;
+    totalErrors?: number;
+    addressFilterMessage?: string;
     message?: string;
     error?: string;
   }>;

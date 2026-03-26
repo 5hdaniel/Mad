@@ -218,6 +218,19 @@ function TransactionDetails({
   const [syncingCommunications, setSyncingCommunications] = useState<boolean>(false);
   const [syncingMessages, setSyncingMessages] = useState<boolean>(false);
   const [showSubmitModal, setShowSubmitModal] = useState<boolean>(false);
+  // BACKLOG-1364: Derive address filter message — shown when filter is ON, no emails linked, and contacts exist
+  const addressFilterMessage = useMemo(() => {
+    if (
+      transaction.skip_address_filter !== 1 &&
+      transaction.property_address &&
+      emailCommunications.length === 0 &&
+      contactAssignments.length > 0 &&
+      !loading
+    ) {
+      return "No emails found matching the property address. Turn off the address filter to widen the search.";
+    }
+    return undefined;
+  }, [transaction.skip_address_filter, transaction.property_address, emailCommunications.length, contactAssignments.length, loading]);
 
   // Submit for Review hook (BACKLOG-391)
   const isResubmit = transaction.submission_status === "needs_changes";
@@ -466,6 +479,36 @@ function TransactionDetails({
     }
   }, [transaction.id, showSuccess, showError, refreshMessages]);
 
+  // BACKLOG-1364: Handle address filter toggle
+  const handleToggleAddressFilter = useCallback(async (skipFilter: boolean) => {
+    try {
+      const result = await window.api.transactions.updateAddressFilter(transaction.id, skipFilter);
+
+      if (result.success) {
+        // Update local transaction state to reflect the new toggle value
+        setTransaction(prev => ({ ...prev, skip_address_filter: skipFilter ? 1 : 0 }));
+
+        const totalLinked = (result.totalEmailsLinked || 0) + (result.totalMessagesLinked || 0);
+        if (totalLinked > 0) {
+          showSuccess(
+            `Address filter ${skipFilter ? "off" : "on"}. ${totalLinked} new email${totalLinked !== 1 ? "s" : ""} linked.`
+          );
+          loadDetails();
+          // Reload email communications
+          loadCommunications("email");
+        } else {
+          showSuccess(`Address filter ${skipFilter ? "off" : "on"}. No new emails to link.`);
+        }
+        onTransactionUpdated?.();
+      } else {
+        showError("Failed to update address filter");
+      }
+    } catch (err) {
+      logger.error("Failed to toggle address filter:", err);
+      showError("Failed to update address filter. Please try again.");
+    }
+  }, [transaction.id, showSuccess, showError, loadDetails, loadCommunications, onTransactionUpdated]);
+
   // Show a loading overlay while initial data loads
   if (loading && contactAssignments.length === 0) {
     return (
@@ -573,6 +616,9 @@ function TransactionDetails({
               onShowSuccess={showSuccess}
               auditStartDate={transaction.started_at ? String(transaction.started_at) : undefined}
               auditEndDate={transaction.closed_at ? String(transaction.closed_at) : undefined}
+              skipAddressFilter={transaction.skip_address_filter === 1}
+              onToggleAddressFilter={handleToggleAddressFilter}
+              addressFilterMessage={addressFilterMessage}
             />
           )}
 

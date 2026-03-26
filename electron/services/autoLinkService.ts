@@ -17,7 +17,7 @@ import {
   isThreadLinkedToTransaction,
 } from "./db/communicationDbService";
 import { computeTransactionDateRange } from "../utils/emailDateRange";
-import { normalizeAddress, withAddressFallback, type NormalizedAddress } from "../utils/addressNormalization";
+import { normalizeAddress, type NormalizedAddress } from "../utils/addressNormalization";
 
 
 // ============================================
@@ -54,6 +54,8 @@ export interface AutoLinkResult {
   alreadyLinked: number;
   /** Number of errors encountered */
   errors: number;
+  /** BACKLOG-1364: User-facing message when address filter is ON and 0 emails found */
+  addressFilterMessage?: string;
 }
 
 /**
@@ -74,6 +76,8 @@ interface TransactionInfo {
   created_at: string | null;
   closed_at: string | null;
   propertyAddress: string | null;
+  /** BACKLOG-1364: When true, skip the address filter and link ALL emails from contacts */
+  skipAddressFilter: boolean;
 }
 
 // ============================================
@@ -145,7 +149,8 @@ async function getTransactionInfo(
       created_at,
       closed_at,
       property_address,
-      property_street
+      property_street,
+      skip_address_filter
     FROM transactions
     WHERE id = ?
   `;
@@ -157,6 +162,7 @@ async function getTransactionInfo(
     closed_at: string | null;
     property_address: string | null;
     property_street: string | null;
+    skip_address_filter: number | null;
   }>(sql, [transactionId]);
 
   if (!transaction) {
@@ -169,6 +175,7 @@ async function getTransactionInfo(
     created_at: transaction.created_at,
     closed_at: transaction.closed_at,
     propertyAddress: transaction.property_address || transaction.property_street || null,
+    skipAddressFilter: transaction.skip_address_filter === 1,
   };
 }
 
@@ -607,6 +614,9 @@ export async function autoLinkCommunicationsForContact(
     // to the correct transaction by checking if the email content mentions the address.
     const txnNormalizedAddress = normalizeAddress(transactionInfo.propertyAddress);
 
+    // BACKLOG-1364: Determine effective address filter based on per-transaction toggle
+    const { skipAddressFilter } = transactionInfo;
+
     // BACKLOG-1340: Log date range validity
     if (!dateRange.start || !dateRange.end || isNaN(dateRange.start.getTime()) || isNaN(dateRange.end.getTime())) {
       Sentry.addBreadcrumb({
@@ -633,6 +643,7 @@ export async function autoLinkCommunicationsForContact(
         contactEmailCount: contactInfo.emails.length,
         contactPhoneCount: contactInfo.phoneNumbers.length,
         normalizedAddress: txnNormalizedAddress?.full ?? "(none)",
+        skipAddressFilter,
         dateRangeStart: dateRange.start.toISOString(),
         dateRangeEnd: dateRange.end.toISOString(),
       },
@@ -645,6 +656,7 @@ export async function autoLinkCommunicationsForContact(
         emails: contactInfo.emails.length,
         phones: contactInfo.phoneNumbers.length,
         normalizedAddress: txnNormalizedAddress?.full ?? null,
+        skipAddressFilter,
         dateRange: {
           start: dateRange.start.toISOString(),
           end: dateRange.end.toISOString(),
@@ -653,15 +665,36 @@ export async function autoLinkCommunicationsForContact(
     );
 
     // 4. Find matching emails (from communications table)
-    // TASK-2087: Use withAddressFallback to try with address filter first, fall back if empty.
-    // Pass countWithFilter to prevent fallback when matching emails exist but are already linked.
-    const emailIds = await withAddressFallback(
-      (addr) => findEmailsByContactEmails(userId, contactInfo.emails, transactionId, dateRange, addr),
-      txnNormalizedAddress,
-      (msg) => logService.debug(msg, "AutoLinkService"),
-      "emails",
-      (addr) => countEmailsMatchingAddress(userId, contactInfo.emails, transactionId, dateRange, addr)
-    );
+    // BACKLOG-1364: When skip_address_filter is ON, link ALL emails from contacts (no address filter).
+    // When OFF (default), apply address filter WITHOUT silent fallback — if 0 emails match,
+    // return 0 results with a user-facing message suggesting they turn off the filter.
+    let emailIds: string[];
+    if (skipAddressFilter) {
+      // Skip address filtering — get all emails from contacts regardless of content
+      emailIds = await findEmailsByContactEmails(userId, contactInfo.emails, transactionId, dateRange, null);
+      await logService.debug(
+        `Address filter SKIPPED (user toggle): ${emailIds.length} unfiltered emails found`,
+        "AutoLinkService"
+      );
+    } else {
+      // Apply address filter (default behavior) — NO silent fallback (BACKLOG-1364)
+      emailIds = await findEmailsByContactEmails(userId, contactInfo.emails, transactionId, dateRange, txnNormalizedAddress);
+
+      // If filter is ON and 0 emails found, set a user-facing message instead of silently widening
+      if (emailIds.length === 0 && txnNormalizedAddress && contactInfo.emails.length > 0) {
+        result.addressFilterMessage =
+          "No emails found matching the property address. Turn off the address filter to widen the search.";
+        await logService.debug(
+          `Address filter ON, 0 emails matched "${txnNormalizedAddress.full}" — returning message to user (no silent fallback)`,
+          "AutoLinkService"
+        );
+      } else if (emailIds.length > 0 && txnNormalizedAddress) {
+        await logService.debug(
+          `Address filter applied: ${emailIds.length} emails matched "${txnNormalizedAddress.full}"`,
+          "AutoLinkService"
+        );
+      }
+    }
 
     // BACKLOG-1340: Breadcrumb for auto-link matching results
     Sentry.addBreadcrumb({
@@ -675,6 +708,8 @@ export async function autoLinkCommunicationsForContact(
         contactEmailCount: contactInfo.emails.length,
         hasAddress: !!txnNormalizedAddress,
         normalizedAddress: txnNormalizedAddress?.full ?? "(none)",
+        skipAddressFilter,
+        addressFilterMessage: result.addressFilterMessage ?? null,
       },
     });
 

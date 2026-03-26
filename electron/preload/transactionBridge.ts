@@ -384,6 +384,17 @@ export const transactionBridge = {
     ipcRenderer.invoke("transactions:resync-auto-link", transactionId),
 
   /**
+   * BACKLOG-1364: Update the address filter toggle for a transaction and re-run auto-link.
+   * When skipAddressFilter is true, ALL emails from assigned contacts are linked.
+   * When false (default), only emails mentioning the property address are linked.
+   * @param transactionId - Transaction ID to update
+   * @param skipAddressFilter - true to skip address filtering, false to enable it
+   * @returns Results with counts of newly linked communications after re-link
+   */
+  updateAddressFilter: (transactionId: string, skipAddressFilter: boolean) =>
+    ipcRenderer.invoke("transactions:update-address-filter", transactionId, skipAddressFilter),
+
+  /**
    * Sync emails from provider (Gmail/Outlook) for a transaction.
    * BACKLOG-457: Fetches NEW emails from connected email provider based on
    * contact email addresses, stores them, then runs auto-link.
