@@ -46,6 +46,7 @@ function ExportModal({
   );
 
   const [contentType, setContentType] = useState<"both" | "emails" | "texts">("both");
+  const [attachmentType, setAttachmentType] = useState<"all" | "email" | "text" | "none">("all");
   const [exportFormat, setExportFormat] = useState("folder"); // folder, pdf, excel, csv, json, txt_eml
   const [emailExportMode, setEmailExportMode] = useState<"thread" | "individual">("thread");
   const [exporting, setExporting] = useState(false);
@@ -63,6 +64,8 @@ function ExportModal({
   const canExportText = isAllowed("text_export");
   const canExportEmail = isAllowed("email_export");
   const canExport = canExportText || canExportEmail;
+  const canAttachEmail = isAllowed("desktop_email_attachments");
+  const canAttachText = isAllowed("desktop_text_attachments");
 
   // Formats that are currently implemented
   const implementedFormats = ["pdf", "folder"];
@@ -95,6 +98,22 @@ function ExportModal({
 
     loadDefaultFormat();
   }, [userId]);
+
+  // Adjust attachmentType default when feature gates finish loading
+  useEffect(() => {
+    if (!featureGateLoading) {
+      if (attachmentType === "all" && (!canAttachEmail || !canAttachText)) {
+        // Downgrade to the best available option
+        if (canAttachEmail) setAttachmentType("email");
+        else if (canAttachText) setAttachmentType("text");
+        else setAttachmentType("none");
+      } else if (attachmentType === "email" && !canAttachEmail) {
+        setAttachmentType(canAttachText ? "text" : "none");
+      } else if (attachmentType === "text" && !canAttachText) {
+        setAttachmentType(canAttachEmail ? "email" : "none");
+      }
+    }
+  }, [featureGateLoading, canAttachEmail, canAttachText]);
 
   // Listen for folder export progress events
   useEffect(() => {
@@ -150,16 +169,17 @@ function ExportModal({
         // Use folder export for comprehensive audit package
         // Note: Type cast needed due to type inference issue with window.d.ts
         const exportFolderFn = (window.api.transactions as unknown as {
-          exportFolder: (id: string, opts: { includeEmails: boolean; includeTexts: boolean; includeAttachments: boolean; emailExportMode?: "thread" | "individual"; startDate?: string; endDate?: string; contentType?: "both" | "emails" | "texts" }) => Promise<{ success: boolean; path?: string; error?: string }>;
+          exportFolder: (id: string, opts: { includeEmails: boolean; includeTexts: boolean; includeAttachments: boolean; emailExportMode?: "thread" | "individual"; startDate?: string; endDate?: string; contentType?: "both" | "emails" | "texts"; attachmentType?: "all" | "email" | "text" | "none" }) => Promise<{ success: boolean; path?: string; error?: string }>;
         }).exportFolder;
         result = await exportFolderFn(transaction.id, {
           includeEmails: contentType === "emails" || contentType === "both",
           includeTexts: contentType === "texts" || contentType === "both",
-          includeAttachments: true,
+          includeAttachments: attachmentType !== "none",
           emailExportMode,
           startDate,
           endDate,
           contentType,
+          attachmentType,
         });
       } else {
         // Use enhanced export for single-file formats
@@ -452,147 +472,189 @@ function ExportModal({
 
           {/* Step 2: Export Options */}
           {step === 2 && (
-            <div className="space-y-6">
+            <div className="space-y-5">
               <div>
-                <h4 className="text-lg font-semibold text-gray-900 mb-2">
+                <h4 className="text-lg font-semibold text-gray-900 mb-1">
                   Export Options
                 </h4>
-                <p className="text-sm text-gray-600 mb-6">
-                  Choose what content and format you'd like to export.
+                <p className="text-sm text-gray-600">
+                  Choose your format, content, and attachment preferences.
                 </p>
               </div>
 
+              {/* FORMAT section */}
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-3">
-                  Export Format
+                <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">
+                  Format
                 </label>
-                <div className="grid grid-cols-2 gap-3">
-                  {/* Active export formats */}
+                <div className="grid grid-cols-3 gap-3">
                   <button
-                    onClick={() => { setExportFormat("folder"); setContentType("both"); }}
+                    onClick={() => setExportFormat("folder")}
                     className={`px-4 py-3 rounded-lg font-medium transition-all text-left ${
-                      exportFormat === "folder" && contentType === "both"
+                      exportFormat === "folder"
                         ? "bg-purple-500 text-white shadow-md"
                         : "bg-gray-100 text-gray-700 hover:bg-gray-200"
                     }`}
                   >
                     <div className="flex items-center justify-between">
-                      <span className="font-semibold">Audit Package</span>
+                      <span className="font-semibold text-sm">Audit Package</span>
                       <span className={`text-xs px-2 py-0.5 rounded ${
                         exportFormat === "folder"
                           ? "bg-purple-400 text-white"
                           : "bg-green-100 text-green-700"
                       }`}>Recommended</span>
                     </div>
-                    <div className="text-xs opacity-80">
+                    <div className="text-xs opacity-80 mt-0.5">
                       Folder with individual PDFs
                     </div>
                   </button>
                   <button
-                    onClick={() => { setExportFormat("pdf"); setContentType("both"); }}
+                    onClick={() => setExportFormat("pdf")}
                     className={`px-4 py-3 rounded-lg font-medium transition-all text-left ${
-                      exportFormat === "pdf" && contentType === "both"
+                      exportFormat === "pdf"
                         ? "bg-purple-500 text-white shadow-md"
                         : "bg-gray-100 text-gray-700 hover:bg-gray-200"
                     }`}
                   >
-                    <div className="font-semibold">Summary PDF</div>
-                    <div className="text-xs opacity-80">
+                    <div className="font-semibold text-sm">Summary PDF</div>
+                    <div className="text-xs opacity-80 mt-0.5">
                       Transaction report only
                     </div>
                   </button>
-                  {/* One PDF - Coming Soon */}
                   <button
                     disabled
                     className="px-4 py-3 rounded-lg font-medium text-left bg-gray-50 text-gray-400 cursor-not-allowed border border-gray-200"
                   >
                     <div className="flex items-center justify-between">
-                      <span className="font-semibold">One PDF</span>
+                      <span className="font-semibold text-sm">One PDF</span>
                       <span className="text-xs bg-gray-200 text-gray-500 px-2 py-0.5 rounded">Coming Soon</span>
                     </div>
-                    <div className="text-xs opacity-80">Combined PDF with all content</div>
-                  </button>
-                  {/* Emails Only - license-gated behind email_export */}
-                  <button
-                    onClick={() => {
-                      if (canExportEmail) {
-                        setContentType("emails");
-                        setExportFormat("folder");
-                      }
-                    }}
-                    disabled={!canExportEmail}
-                    className={`px-4 py-3 rounded-lg font-medium transition-all text-left ${
-                      contentType === "emails"
-                        ? "bg-purple-500 text-white shadow-md"
-                        : canExportEmail
-                          ? "bg-gray-100 text-gray-700 hover:bg-gray-200"
-                          : "bg-gray-50 text-gray-400 cursor-not-allowed border border-gray-200"
-                    }`}
-                  >
-                    <div className="flex items-center justify-between">
-                      <span className="font-semibold">Emails Only</span>
-                      {!canExportEmail && (
-                        <span className="text-xs bg-amber-100 text-amber-700 px-2 py-0.5 rounded">Upgrade</span>
-                      )}
-                    </div>
-                    <div className="text-xs opacity-80">Export only email communications</div>
-                  </button>
-                  {/* Texts Only - license-gated behind text_export */}
-                  <button
-                    onClick={() => {
-                      if (canExportText) {
-                        setContentType("texts");
-                        setExportFormat("folder");
-                      }
-                    }}
-                    disabled={!canExportText}
-                    className={`px-4 py-3 rounded-lg font-medium transition-all text-left ${
-                      contentType === "texts"
-                        ? "bg-purple-500 text-white shadow-md"
-                        : canExportText
-                          ? "bg-gray-100 text-gray-700 hover:bg-gray-200"
-                          : "bg-gray-50 text-gray-400 cursor-not-allowed border border-gray-200"
-                    }`}
-                  >
-                    <div className="flex items-center justify-between">
-                      <span className="font-semibold">Texts Only</span>
-                      {!canExportText && (
-                        <span className="text-xs bg-amber-100 text-amber-700 px-2 py-0.5 rounded">Upgrade</span>
-                      )}
-                    </div>
-                    <div className="text-xs opacity-80">Export only text messages</div>
+                    <div className="text-xs opacity-80 mt-0.5">Combined PDF with all content</div>
                   </button>
                 </div>
-                {exportFormat === "folder" && contentType === "both" && (
-                  <div className="mt-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
-                    <p className="text-sm text-blue-800 font-medium">Audit Package includes:</p>
-                    <ul className="mt-2 text-xs text-blue-700 space-y-1">
-                      <li>Summary_Report.pdf - Transaction overview</li>
-                      <li>emails/ - Each email as individual PDF</li>
-                      <li>texts/ - Text conversations by contact</li>
-                      <li>attachments/ - All attachments with manifest</li>
-                    </ul>
-                  </div>
-                )}
-                {contentType === "emails" && (
-                  <div className="mt-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
-                    <p className="text-sm text-blue-800 font-medium">Emails Only export includes:</p>
-                    <ul className="mt-2 text-xs text-blue-700 space-y-1">
-                      <li>Summary_Report.pdf - Transaction overview</li>
-                      <li>emails/ - Each email as individual PDF</li>
-                      <li>attachments/ - Email attachments with manifest</li>
-                    </ul>
-                  </div>
-                )}
-                {contentType === "texts" && (
-                  <div className="mt-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
-                    <p className="text-sm text-blue-800 font-medium">Texts Only export includes:</p>
-                    <ul className="mt-2 text-xs text-blue-700 space-y-1">
-                      <li>Summary_Report.pdf - Transaction overview</li>
-                      <li>texts/ - Text conversations by contact</li>
-                    </ul>
-                  </div>
-                )}
+              </div>
+
+              {/* CONTENT section */}
+              <div>
+                <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">
+                  Content
+                </label>
+                <div className="flex gap-2">
+                  {(["both", "emails", "texts"] as const).map((value) => {
+                    const labels: Record<string, string> = { both: "Both", emails: "Emails Only", texts: "Texts Only" };
+                    return (
+                      <button
+                        key={value}
+                        onClick={() => setContentType(value)}
+                        className={`px-4 py-2 rounded-full text-sm font-medium transition-all ${
+                          contentType === value
+                            ? "bg-purple-500 text-white shadow-sm"
+                            : "bg-gray-100 text-gray-700 hover:bg-gray-200"
+                        }`}
+                      >
+                        {labels[value]}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* ATTACHMENTS section */}
+              <div>
+                <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">
+                  Attachments
+                </label>
+                <div className="flex flex-wrap gap-2">
+                  {/* All - requires both attachment licenses */}
+                  <button
+                    onClick={() => { if (canAttachEmail && canAttachText) setAttachmentType("all"); }}
+                    disabled={!canAttachEmail || !canAttachText}
+                    className={`px-4 py-2 rounded-full text-sm font-medium transition-all ${
+                      attachmentType === "all"
+                        ? "bg-purple-500 text-white shadow-sm"
+                        : canAttachEmail && canAttachText
+                          ? "bg-gray-100 text-gray-700 hover:bg-gray-200"
+                          : "bg-gray-50 text-gray-400 cursor-not-allowed border border-gray-200"
+                    }`}
+                  >
+                    <span className="flex items-center gap-1.5">
+                      All
+                      {(!canAttachEmail || !canAttachText) && (
+                        <span className="text-xs bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded">Upgrade</span>
+                      )}
+                    </span>
+                  </button>
+                  {/* Email attachments only */}
+                  <button
+                    onClick={() => { if (canAttachEmail) setAttachmentType("email"); }}
+                    disabled={!canAttachEmail}
+                    className={`px-4 py-2 rounded-full text-sm font-medium transition-all ${
+                      attachmentType === "email"
+                        ? "bg-purple-500 text-white shadow-sm"
+                        : canAttachEmail
+                          ? "bg-gray-100 text-gray-700 hover:bg-gray-200"
+                          : "bg-gray-50 text-gray-400 cursor-not-allowed border border-gray-200"
+                    }`}
+                  >
+                    <span className="flex items-center gap-1.5">
+                      Email only
+                      {!canAttachEmail && (
+                        <span className="text-xs bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded">Upgrade</span>
+                      )}
+                    </span>
+                  </button>
+                  {/* Text attachments only */}
+                  <button
+                    onClick={() => { if (canAttachText) setAttachmentType("text"); }}
+                    disabled={!canAttachText}
+                    className={`px-4 py-2 rounded-full text-sm font-medium transition-all ${
+                      attachmentType === "text"
+                        ? "bg-purple-500 text-white shadow-sm"
+                        : canAttachText
+                          ? "bg-gray-100 text-gray-700 hover:bg-gray-200"
+                          : "bg-gray-50 text-gray-400 cursor-not-allowed border border-gray-200"
+                    }`}
+                  >
+                    <span className="flex items-center gap-1.5">
+                      Text only
+                      {!canAttachText && (
+                        <span className="text-xs bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded">Upgrade</span>
+                      )}
+                    </span>
+                  </button>
+                  {/* None - always available */}
+                  <button
+                    onClick={() => setAttachmentType("none")}
+                    className={`px-4 py-2 rounded-full text-sm font-medium transition-all ${
+                      attachmentType === "none"
+                        ? "bg-purple-500 text-white shadow-sm"
+                        : "bg-gray-100 text-gray-700 hover:bg-gray-200"
+                    }`}
+                  >
+                    None
+                  </button>
+                </div>
+
+                {/* Info notes */}
+                <div className="mt-3 space-y-2">
+                  <p className="text-xs text-gray-500 flex items-start gap-1.5">
+                    <span className="shrink-0 mt-px">i</span>
+                    <span>Attachments are exported as separate files in an /attachments folder, not embedded in the PDF.</span>
+                  </p>
+                  {(!canAttachEmail || !canAttachText) && (
+                    <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 flex items-start gap-1.5">
+                      <span className="shrink-0 mt-px">&#128274;</span>
+                      <span>
+                        {!canAttachEmail && !canAttachText
+                          ? "Email and Text attachments require add-on licenses. Upgrade to include."
+                          : !canAttachEmail
+                            ? "Email attachments require the Email Attachments add-on. Upgrade to include."
+                            : "Text attachments require the Text Attachments add-on. Upgrade to include."
+                        }
+                      </span>
+                    </p>
+                  )}
+                </div>
               </div>
             </div>
           )}

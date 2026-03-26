@@ -41,6 +41,7 @@ export interface ExportFolderOptions {
   includeTexts?: boolean;
   includeAttachments?: boolean;
   contentType?: "both" | "emails" | "texts";
+  attachmentType?: "all" | "email" | "text" | "none";
 }
 
 export const transactionBridge = {
