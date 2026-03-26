@@ -243,14 +243,15 @@ describe("messageMatchingService - address filtering (TASK-2087)", () => {
     });
   });
 
-  describe("autoLinkEmailsToTransaction - address fallback", () => {
-    it("should fall back to unfiltered results when no emails match the address", async () => {
+  describe("autoLinkEmailsToTransaction - address filter (BACKLOG-1364)", () => {
+    it("should return 0 results when address filter matches nothing (no silent fallback)", async () => {
       mockDbGet.mockImplementation((sql: string) => {
         if (sql.includes("FROM transactions")) {
           return {
             user_id: mockUserId,
             property_address: "999 Nonexistent Way, Nowhere, XX",
             property_street: null,
+            skip_address_filter: 0,
           };
         }
         if (sql.includes("FROM communications") && sql.includes("message_id")) return null;
@@ -263,15 +264,7 @@ describe("messageMatchingService - address filtering (TASK-2087)", () => {
         if (sql.includes("FROM transaction_contacts") && sql.includes("contact_emails")) {
           return [{ contactId: "contact-1", email: "seller@example.com" }];
         }
-        // countAllEmailsMatchingAddress: queries ALL emails (no NOT IN exclusion)
-        // Return emails but none matching the address (content check is in JS)
-        if (sql.includes("FROM messages m") && sql.includes("channel = 'email'") && !sql.includes("NOT IN")) {
-          return [
-            { id: "msg-1", sender: "seller@example.com", recipients: null, subject: "General inquiry", body_text: null },
-            { id: "msg-2", sender: "seller@example.com", recipients: null, subject: "Follow up", body_text: null },
-          ];
-        }
-        // findEmailsByAddresses: return 2 messages each time it's called (uses NOT IN for exclusion)
+        // findEmailsByAddresses: return 2 messages
         if (sql.includes("FROM messages m") && sql.includes("channel = 'email'")) {
           findEmailsCallCount++;
           return [
@@ -288,12 +281,10 @@ describe("messageMatchingService - address filtering (TASK-2087)", () => {
 
       const result = await autoLinkEmailsToTransaction(mockTransactionId);
 
-      // Fallback: all emails should be linked since address filter returned nothing
-      // AND countAllEmailsMatchingAddress confirmed no emails match the address
-      expect(result.linked).toBe(2);
-      // findEmailsByAddresses should be called twice via withAddressFallback
-      // (once with address filter that yields empty, once without)
-      expect(findEmailsCallCount).toBe(2);
+      // BACKLOG-1364: No silent fallback — 0 results when address filter finds nothing
+      expect(result.linked).toBe(0);
+      // findEmailsByAddresses called once (no fallback retry)
+      expect(findEmailsCallCount).toBe(1);
     });
 
     it("should skip address filter when transaction has no property_address", async () => {
@@ -332,19 +323,60 @@ describe("messageMatchingService - address filtering (TASK-2087)", () => {
       );
       expect(contentQueryCalls.length).toBe(0);
     });
+
+    it("should skip address filter when skip_address_filter toggle is ON", async () => {
+      mockDbGet.mockImplementation((sql: string) => {
+        if (sql.includes("FROM transactions")) {
+          return {
+            user_id: mockUserId,
+            property_address: "123 Main St, Portland, OR",
+            property_street: null,
+            skip_address_filter: 1,
+          };
+        }
+        if (sql.includes("FROM communications") && sql.includes("message_id")) return null;
+        if (sql.includes("FROM messages WHERE id")) return { id: "msg" };
+        return null;
+      });
+
+      mockDbAll.mockImplementation((sql: string) => {
+        if (sql.includes("FROM transaction_contacts") && sql.includes("contact_emails")) {
+          return [{ contactId: "contact-1", email: "agent@realty.com" }];
+        }
+        if (sql.includes("FROM messages m") && sql.includes("channel = 'email'")) {
+          return [
+            { id: "msg-1", sender: "agent@realty.com", recipients: null, direction: "inbound", channel: "email" },
+            { id: "msg-2", sender: "agent@realty.com", recipients: null, direction: "inbound", channel: "email" },
+          ];
+        }
+        return [];
+      });
+
+      const result = await autoLinkEmailsToTransaction(mockTransactionId);
+
+      // BACKLOG-1364: All emails linked because address filter is toggled off
+      expect(result.linked).toBe(2);
+
+      // Should NOT have queried for message content (address filter skipped)
+      const contentQueryCalls = mockDbAll.mock.calls.filter(
+        (call) => typeof call[0] === "string" && call[0].includes("subject, body_text")
+      );
+      expect(contentQueryCalls.length).toBe(0);
+    });
   });
 
   describe("autoLinkEmailsToTransaction - no fallback when already linked", () => {
     it("should NOT fall back when matching emails are already linked to the transaction", async () => {
       // BUG SCENARIO (TASK-2087 QA fix):
       // Transaction has address "456 Maple Drive", contact has matching emails
-      // that are already linked. Fallback should NOT trigger.
+      // that are already linked. No fallback should occur (BACKLOG-1364).
       mockDbGet.mockImplementation((sql: string) => {
         if (sql.includes("FROM transactions")) {
           return {
             user_id: mockUserId,
             property_address: "456 Maple Drive, Portland, OR",
             property_street: null,
+            skip_address_filter: 0,
           };
         }
         if (sql.includes("FROM communications") && sql.includes("message_id")) return null;
@@ -357,22 +389,8 @@ describe("messageMatchingService - address filtering (TASK-2087)", () => {
         if (sql.includes("FROM transaction_contacts") && sql.includes("contact_emails")) {
           return [{ contactId: "contact-1", email: "bob@example.com" }];
         }
-        // countAllEmailsMatchingAddress: queries ALL emails without NOT IN exclusion
-        // Return an email that mentions the address (already linked but still matches)
-        if (sql.includes("FROM messages m") && sql.includes("channel = 'email'") && !sql.includes("NOT IN")) {
-          return [
-            {
-              id: "msg-1",
-              sender: "bob@example.com",
-              recipients: null,
-              subject: "456 Maple closing docs",
-              body_text: null,
-            },
-          ];
-        }
-        // findEmailsByAddresses: uses NOT IN to exclude already-linked emails
-        // Returns 0 because the matching email is already linked
-        if (sql.includes("FROM messages m") && sql.includes("channel = 'email'") && sql.includes("NOT IN")) {
+        // findEmailsByAddresses: returns 0 because the matching email is already linked
+        if (sql.includes("FROM messages m") && sql.includes("channel = 'email'")) {
           findEmailsCallCount++;
           return [];
         }
@@ -383,9 +401,8 @@ describe("messageMatchingService - address filtering (TASK-2087)", () => {
 
       // Should NOT have linked anything (all are already linked)
       expect(result.linked).toBe(0);
-      // findEmailsByAddresses called TWICE: address-filtered query + fallback
-      // (BACKLOG-1340: fallback always runs when 0 unlinked results)
-      expect(findEmailsCallCount).toBe(2);
+      // BACKLOG-1364: findEmailsByAddresses called once (no fallback)
+      expect(findEmailsCallCount).toBe(1);
     });
   });
 

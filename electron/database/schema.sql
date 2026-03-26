@@ -460,6 +460,9 @@ CREATE TABLE IF NOT EXISTS transactions (
   submitted_at DATETIME,
   last_review_notes TEXT,
 
+  -- Email Auto-Link Settings (BACKLOG-1364)
+  skip_address_filter INTEGER DEFAULT 0, -- 1 = link ALL emails from contacts, 0 = filter by property address
+
   -- Metadata
   metadata TEXT,                         -- JSON for additional data
   created_at DATETIME DEFAULT CURRENT_TIMESTAMP,

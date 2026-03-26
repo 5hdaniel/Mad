@@ -44,6 +44,12 @@ interface TransactionEmailsTabProps {
   auditStartDate?: string;
   /** Audit period end date (ISO string) for email date filtering */
   auditEndDate?: string;
+  /** BACKLOG-1364: Whether address filtering is currently skipped */
+  skipAddressFilter?: boolean;
+  /** BACKLOG-1364: Callback to toggle the address filter */
+  onToggleAddressFilter?: (skipFilter: boolean) => Promise<void>;
+  /** BACKLOG-1364: Message from auto-link when filter is ON and no results */
+  addressFilterMessage?: string;
 }
 
 export function TransactionEmailsTab({
@@ -64,9 +70,13 @@ export function TransactionEmailsTab({
   onShowSuccess,
   auditStartDate,
   auditEndDate,
+  skipAddressFilter = false,
+  onToggleAddressFilter,
+  addressFilterMessage,
 }: TransactionEmailsTabProps): React.ReactElement {
   const { currentUser } = useAuth();
   const [showAttachModal, setShowAttachModal] = useState(false);
+  const [togglingFilter, setTogglingFilter] = useState(false);
 
   // TASK-2074: Disable sync when offline, already syncing, or when a global dashboard sync is running
   const syncDisabled = !isOnline || syncingCommunications || globalSyncRunning;
@@ -93,6 +103,8 @@ export function TransactionEmailsTab({
     return null;
   }, [unlinkingCommId, emailThreads]);
 
+  const [showFilterInfo, setShowFilterInfo] = useState(false);
+
   // Handle attach button click
   const handleAttachClick = useCallback(() => {
     setShowAttachModal(true);
@@ -103,6 +115,17 @@ export function TransactionEmailsTab({
     onEmailsChanged?.();
     onShowSuccess?.("Emails attached successfully");
   }, [onEmailsChanged, onShowSuccess]);
+
+  // BACKLOG-1364: Handle address filter toggle
+  const handleToggleAddressFilter = useCallback(async () => {
+    if (!onToggleAddressFilter || togglingFilter) return;
+    setTogglingFilter(true);
+    try {
+      await onToggleAddressFilter(!skipAddressFilter);
+    } finally {
+      setTogglingFilter(false);
+    }
+  }, [onToggleAddressFilter, skipAddressFilter, togglingFilter]);
 
   // Handle thread unlink - unlinks all emails in the thread
   const handleUnlinkThread = useCallback(
@@ -130,6 +153,41 @@ export function TransactionEmailsTab({
   if (emailThreads.length === 0) {
     return (
       <div>
+        {/* BACKLOG-1364: Address filter toggle — above empty state */}
+        {onToggleAddressFilter && hasContacts && (
+          <div className="flex flex-col items-center mb-4 pb-4 border-b border-gray-200">
+            <div className="flex items-center gap-3">
+              <span className="text-sm text-gray-600 flex items-center gap-1.5 relative">
+                <button type="button" onClick={() => setShowFilterInfo(!showFilterInfo)} className="w-5 h-5 rounded-full bg-blue-100 text-blue-600 text-xs font-bold flex items-center justify-center hover:bg-blue-200 transition-colors">i</button>
+                {showFilterInfo && (
+                  <div className="absolute left-0 top-7 z-50 w-72 p-3 text-xs text-gray-600 bg-white border border-gray-200 rounded-lg shadow-lg">
+                    When ON, only emails mentioning the property address are linked. When OFF, all emails from assigned contacts are included. Existing linked emails are never removed.
+                    <button type="button" onClick={() => setShowFilterInfo(false)} className="block mt-2 text-blue-500 hover:text-blue-700 text-xs font-medium">Got it</button>
+                  </div>
+                )}
+                Filter by property address
+              </span>
+              <button
+                type="button"
+                role="switch"
+                aria-checked={!skipAddressFilter}
+                onClick={handleToggleAddressFilter}
+                disabled={togglingFilter}
+                className={`relative inline-flex h-5 w-9 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed ${
+                  !skipAddressFilter ? "bg-blue-600" : "bg-gray-300"
+                }`}
+                data-testid="address-filter-toggle"
+              >
+                <span
+                  className={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${
+                    !skipAddressFilter ? "translate-x-4" : "translate-x-0"
+                  }`}
+                />
+              </button>
+            </div>
+          </div>
+        )}
+
         <div className="bg-gray-50 rounded-lg p-6 text-center">
           <svg
             className="w-12 h-12 text-gray-300 mx-auto mb-3"
@@ -146,7 +204,9 @@ export function TransactionEmailsTab({
           </svg>
           <p className="text-gray-600 mb-1">No emails linked</p>
           <p className="text-sm text-gray-500 mb-4">
-            {hasContacts
+            {addressFilterMessage
+              ? addressFilterMessage
+              : hasContacts
               ? "Sync emails from assigned contacts or attach manually"
               : "Click \"Attach Emails\" to get started"}
           </p>
@@ -198,6 +258,7 @@ export function TransactionEmailsTab({
               </button>
             )}
           </div>
+
         </div>
 
         {/* Attach Emails Modal */}
@@ -307,6 +368,40 @@ export function TransactionEmailsTab({
           )}
         </div>
       </div>
+
+      {/* BACKLOG-1364: Address filter toggle */}
+      {onToggleAddressFilter && hasContacts && (
+        <div className="flex items-center justify-between bg-gray-50 rounded-lg px-4 py-2.5 mb-4">
+          <div className="flex items-center gap-2">
+            <span className="text-sm text-gray-700 flex items-center gap-1.5">
+                <button type="button" onClick={() => setShowFilterInfo(!showFilterInfo)} className="w-5 h-5 rounded-full bg-blue-100 text-blue-600 text-xs font-bold flex items-center justify-center hover:bg-blue-200 transition-colors">i</button>
+                Filter by property address
+              </span>
+              {showFilterInfo && (
+                <p className="text-xs text-gray-500 bg-blue-50 border border-blue-200 rounded px-3 py-2 mt-1">
+                  When ON, only emails mentioning the property address are linked. When OFF, all emails from assigned contacts are included. Existing linked emails are never removed.
+                </p>
+              )}
+          </div>
+          <button
+            type="button"
+            role="switch"
+            aria-checked={!skipAddressFilter}
+            onClick={handleToggleAddressFilter}
+            disabled={togglingFilter}
+            className={`relative inline-flex h-5 w-9 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed ${
+              !skipAddressFilter ? "bg-blue-600" : "bg-gray-300"
+            }`}
+            data-testid="address-filter-toggle"
+          >
+            <span
+              className={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${
+                !skipAddressFilter ? "translate-x-4" : "translate-x-0"
+              }`}
+            />
+          </button>
+        </div>
+      )}
 
       {/* Email thread list */}
       <div className="space-y-3">

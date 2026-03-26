@@ -689,17 +689,6 @@ function ExportModal({
               )}
 
               {/* Format info boxes */}
-              {exportFormat === "folder" && (
-                <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg">
-                  <p className="text-sm text-blue-800 font-medium">Audit Package includes:</p>
-                  <ul className="mt-2 text-xs text-blue-700 space-y-1">
-                    <li>Summary_Report.pdf - Transaction overview</li>
-                    <li>emails/ - Each email as individual PDF</li>
-                    <li>texts/ - Text conversations by contact</li>
-                    <li>attachments/ - All attachments with manifest</li>
-                  </ul>
-                </div>
-              )}
               {exportFormat === "combined-pdf" && (
                 <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg">
                   <p className="text-sm text-blue-800 font-medium">One PDF includes:</p>
