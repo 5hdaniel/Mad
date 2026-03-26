@@ -13,7 +13,6 @@ import { createEmail, getEmailByExternalId } from "../services/db/emailDbService
 import { createCommunication } from "../services/db/communicationDbService";
 import gmailFetchService from "../services/gmailFetchService";
 import outlookFetchService from "../services/outlookFetchService";
-import emailAttachmentService from "../services/emailAttachmentService";
 import emailSyncService from "../services/emailSyncService";
 import { wrapHandler } from "../utils/wrapHandler";
 import type { TransactionResponse } from "../types/handlerTypes";
@@ -198,29 +197,8 @@ export function registerEmailLinkingHandlers(): void {
                   });
                 }
 
-                // TASK-1775: Download email attachments if present
-                if (email.hasAttachments && email.attachments && email.attachments.length > 0) {
-                  try {
-                    await emailAttachmentService.downloadEmailAttachments(
-                      transaction.user_id,
-                      emailRecord.id,
-                      messageId, // External email ID (Gmail message ID)
-                      "gmail",
-                      email.attachments.map((att: { filename?: string; name?: string; mimeType?: string; contentType?: string; size?: number; attachmentId?: string; id?: string }) => ({
-                        filename: att.filename || att.name || "attachment",
-                        mimeType: att.mimeType || att.contentType || "application/octet-stream",
-                        size: att.size || 0,
-                        attachmentId: att.attachmentId || att.id || "",
-                      }))
-                    );
-                  } catch (attachmentError) {
-                    // Log but don't fail - attachment download is non-blocking
-                    logService.warn("Failed to download Gmail email attachments", "Transactions", {
-                      emailId: emailRecord.id,
-                      error: attachmentError instanceof Error ? attachmentError.message : "Unknown",
-                    });
-                  }
-                }
+                // BACKLOG-1369: Attachment downloads removed from link-emails.
+                // Attachments are now downloaded on-demand when user views email or during export.
 
                 // Create junction link in communications table
                 await createCommunication({
@@ -279,29 +257,8 @@ export function registerEmailLinkingHandlers(): void {
                   });
                 }
 
-                // TASK-1775: Download email attachments if present
-                if (email.hasAttachments && email.attachments && email.attachments.length > 0) {
-                  try {
-                    await emailAttachmentService.downloadEmailAttachments(
-                      transaction.user_id,
-                      emailRecord.id,
-                      messageId, // External email ID (Outlook message ID)
-                      "outlook",
-                      email.attachments.map((att: { filename?: string; name?: string; mimeType?: string; contentType?: string; size?: number; attachmentId?: string; id?: string }) => ({
-                        filename: att.filename || att.name || "attachment",
-                        mimeType: att.mimeType || att.contentType || "application/octet-stream",
-                        size: att.size || 0,
-                        attachmentId: att.attachmentId || att.id || "",
-                      }))
-                    );
-                  } catch (attachmentError) {
-                    // Log but don't fail - attachment download is non-blocking
-                    logService.warn("Failed to download Outlook email attachments", "Transactions", {
-                      emailId: emailRecord.id,
-                      error: attachmentError instanceof Error ? attachmentError.message : "Unknown",
-                    });
-                  }
-                }
+                // BACKLOG-1369: Attachment downloads removed from link-emails.
+                // Attachments are now downloaded on-demand when user views email or during export.
 
                 // Create junction link in communications table
                 await createCommunication({

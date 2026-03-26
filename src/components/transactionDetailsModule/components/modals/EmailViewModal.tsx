@@ -165,18 +165,25 @@ export function EmailViewModal({
   const [attachments, setAttachments] = useState<EmailAttachment[]>([]);
   const [loadingAttachments, setLoadingAttachments] = useState(false);
   const [attachmentsExpanded, setAttachmentsExpanded] = useState(false);
+  // BACKLOG-1369: Attachment download status
+  const [attachmentMessage, setAttachmentMessage] = useState<string | null>(null);
   // TASK-1778: Preview modal state
   const [previewAttachment, setPreviewAttachment] = useState<EmailAttachment | null>(null);
 
-  // TASK-1776: Fetch attachments when email loads
+  // TASK-1776 + BACKLOG-1369: Fetch/download attachments when email loads (on-demand)
   useEffect(() => {
     if (email?.id && email.has_attachments) {
       setLoadingAttachments(true);
+      setAttachmentMessage(null);
       window.api.transactions
         .getEmailAttachments(email.id)
-        .then((result: { success: boolean; data?: EmailAttachment[]; error?: string }) => {
+        .then((result: { success: boolean; data?: EmailAttachment[]; error?: string; downloadBlocked?: boolean; offline?: boolean; downloadRequired?: boolean; reason?: string }) => {
           if (result.success && result.data) {
             setAttachments(result.data);
+          }
+          // BACKLOG-1369: Handle blocked/offline scenarios
+          if (result.downloadBlocked || result.offline) {
+            setAttachmentMessage(result.reason || "Attachments are not available.");
           }
         })
         .catch((err: Error) => {
@@ -354,8 +361,10 @@ export function EmailViewModal({
               </svg>
               <span className="font-medium">
                 {loadingAttachments
-                  ? "Loading attachments..."
-                  : `${attachments.length} attachment${attachments.length !== 1 ? "s" : ""}`}
+                  ? "Downloading attachments..."
+                  : attachmentMessage
+                    ? attachmentMessage
+                    : `${attachments.length} attachment${attachments.length !== 1 ? "s" : ""}`}
               </span>
             </button>
 

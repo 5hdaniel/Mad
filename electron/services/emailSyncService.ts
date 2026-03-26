@@ -20,8 +20,6 @@ import gmailFetchService from "./gmailFetchService";
 import outlookFetchService from "./outlookFetchService";
 import databaseService from "./databaseService";
 import failureLogService from "./failureLogService";
-import emailAttachmentService from "./emailAttachmentService";
-import { backfillMissingAttachments } from "../handlers/attachmentHandlers";
 import { isNetworkError } from "../utils/networkErrors";
 import { retryOnNetwork, networkResilienceService } from "./networkResilience";
 import { computeTransactionDateRange } from "../utils/emailDateRange";
@@ -324,52 +322,8 @@ async function fetchStoreAndDedup(params: {
 
       runTransaction();
 
-      // Download attachments AFTER the batch insert (outside transaction)
-      // This keeps the DB transaction fast and avoids holding locks during network I/O
-      for (const email of emailsToInsert) {
-        const internalId = insertedEmailMap.get(email.id);
-        if (!internalId || !email.hasAttachments) continue;
-
-        try {
-          if (provider === "outlook" && getAttachmentsFn) {
-            const graphAttachments = await getAttachmentsFn(email.id);
-            if (graphAttachments.length > 0) {
-              await emailAttachmentService.downloadEmailAttachments(
-                userId,
-                internalId,
-                email.id,
-                "outlook",
-                graphAttachments.map((att) => ({
-                  filename: att.name || "attachment",
-                  mimeType: att.contentType || "application/octet-stream",
-                  size: att.size || 0,
-                  attachmentId: att.id,
-                })),
-              );
-            }
-          } else if (provider === "gmail" && email.attachments && email.attachments.length > 0) {
-            await emailAttachmentService.downloadEmailAttachments(
-              userId,
-              internalId,
-              email.id,
-              "gmail",
-              email.attachments.map((att) => ({
-                filename: att.filename || att.name || "attachment",
-                mimeType: att.mimeType || att.contentType || "application/octet-stream",
-                size: att.size || 0,
-                attachmentId: att.attachmentId || att.id || "",
-              })),
-            );
-          }
-        } catch (attError) {
-          if (!isNetworkError(attError)) {
-            logService.warn(`Failed to download ${provider} attachments during sync`, "Transactions", {
-              emailId: internalId,
-              error: attError instanceof Error ? attError.message : "Unknown",
-            });
-          }
-        }
-      }
+      // BACKLOG-1369: Attachment downloads removed from sync pipeline.
+      // Attachments are now downloaded on-demand when user views email or during export.
     } catch (batchError) {
       // If the entire batch transaction fails, log and count all as errors
       errors += emailsToInsert.length - stored;
@@ -400,7 +354,6 @@ class EmailSyncService {
    * 2. Fetch emails from Outlook (inbox/sent/all-folders) with network resilience
    * 3. Fetch emails from Gmail (search/all-labels) with network resilience
    * 4. Auto-link communications for each contact assignment
-   * 5. Backfill missing attachments
    */
   async syncTransactionEmails(params: {
     transactionId: string;
@@ -563,8 +516,8 @@ class EmailSyncService {
       },
     });
 
-    // Step 3: Backfill any missing attachments for previously-synced emails
-    const backfillResult = await backfillMissingAttachments(userId);
+    // BACKLOG-1369: Attachment backfill removed from sync pipeline.
+    // Attachments are now downloaded on-demand when user views email or during export.
 
     logService.info("Sync and fetch emails complete", "Transactions", {
       transactionId,
@@ -573,7 +526,6 @@ class EmailSyncService {
       totalMessagesLinked,
       totalAlreadyLinked,
       totalErrors,
-      attachmentsBackfilled: backfillResult.downloaded,
       networkErrorOccurred,
     });
 
@@ -1225,14 +1177,8 @@ class EmailSyncService {
 
     onProgress?.(90);
 
-    // Backfill missing attachments for newly cached emails
-    try {
-      await backfillMissingAttachments(userId);
-    } catch (attError) {
-      logService.warn("Attachment backfill failed during pre-cache", "EmailSyncService", {
-        error: attError instanceof Error ? attError.message : "Unknown",
-      });
-    }
+    // BACKLOG-1369: Attachment backfill removed from precache pipeline.
+    // Attachments are now downloaded on-demand when user views email or during export.
 
     onProgress?.(100);
 

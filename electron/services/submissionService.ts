@@ -17,7 +17,7 @@
 
 import * as crypto from "crypto";
 import * as os from "os";
-import { app } from "electron";
+import { app, net } from "electron";
 import supabaseService from "./supabaseService";
 import supabaseStorageService, {
   LocalAttachment,
@@ -25,6 +25,9 @@ import supabaseStorageService, {
 } from "./supabaseStorageService";
 import databaseService from "./databaseService";
 import logService from "./logService";
+import emailAttachmentService from "./emailAttachmentService";
+import gmailFetchService from "./gmailFetchService";
+import outlookFetchService from "./outlookFetchService";
 import { getContactNames } from "./contactsService";
 import type {
   Transaction,
@@ -678,12 +681,143 @@ class SubmissionService {
     return rows;
   }
 
+  /**
+   * BACKLOG-1369: Load transaction attachments, downloading any missing email
+   * attachments on-demand before returning.
+   *
+   * Since sync no longer downloads attachments eagerly, this method checks for
+   * emails with has_attachments=true but no attachment records, and downloads
+   * them from the provider before querying.
+   */
   private async loadTransactionAttachments(
     transactionId: string,
     auditStartDate?: Date | null,
     auditEndDate?: Date | null
   ): Promise<Attachment[]> {
+    // Download missing email attachments before returning
+    await this.downloadMissingEmailAttachments(transactionId);
+
     return databaseService.getTransactionAttachments(transactionId, auditStartDate, auditEndDate);
+  }
+
+  /**
+   * BACKLOG-1369: Download missing email attachments for a transaction.
+   * Finds emails linked to this transaction that have has_attachments=true but
+   * no attachment records in the DB, then downloads from the provider.
+   */
+  private async downloadMissingEmailAttachments(transactionId: string): Promise<void> {
+    // Check network connectivity first
+    try {
+      if (!net.isOnline()) {
+        logService.warn(
+          "[Submission] Cannot download missing attachments: device is offline",
+          "SubmissionService",
+          { transactionId }
+        );
+        return;
+      }
+    } catch {
+      // net.isOnline() may not be available in all contexts; proceed anyway
+    }
+
+    try {
+      const db = databaseService.getRawDatabase();
+
+      // Find emails linked to this transaction that have attachments but no records
+      const emailsMissing = db.prepare(`
+        SELECT DISTINCT e.id, e.external_id, e.source, e.user_id
+        FROM emails e
+        INNER JOIN communications c ON c.email_id = e.id
+        WHERE c.transaction_id = ?
+          AND e.has_attachments = 1
+          AND e.external_id IS NOT NULL
+          AND e.source IS NOT NULL
+          AND NOT EXISTS (SELECT 1 FROM attachments a WHERE a.email_id = e.id)
+      `).all(transactionId) as { id: string; external_id: string; source: string; user_id: string }[];
+
+      if (emailsMissing.length === 0) return;
+
+      logService.info(
+        `[Submission] Downloading attachments for ${emailsMissing.length} emails before export`,
+        "SubmissionService",
+        { transactionId }
+      );
+
+      // Group by source for efficient provider initialization
+      const outlookEmails = emailsMissing.filter(e => e.source === "outlook");
+      const gmailEmails = emailsMissing.filter(e => e.source === "gmail");
+
+      if (outlookEmails.length > 0) {
+        const userId = outlookEmails[0].user_id;
+        try {
+          const isReady = await outlookFetchService.initialize(userId);
+          if (isReady) {
+            for (const email of outlookEmails) {
+              try {
+                const graphAttachments = await outlookFetchService.getAttachments(email.external_id);
+                if (graphAttachments.length > 0) {
+                  await emailAttachmentService.downloadEmailAttachments(
+                    email.user_id, email.id, email.external_id, "outlook",
+                    graphAttachments.map((att: { id: string; name: string; contentType: string; size: number }) => ({
+                      filename: att.name || "attachment",
+                      mimeType: att.contentType || "application/octet-stream",
+                      size: att.size || 0,
+                      attachmentId: att.id,
+                    })),
+                  );
+                }
+              } catch (err) {
+                logService.warn("[Submission] Failed to download Outlook attachment for export", "SubmissionService", {
+                  emailId: email.id, error: err instanceof Error ? err.message : "Unknown",
+                });
+              }
+            }
+          }
+        } catch (err) {
+          logService.warn("[Submission] Outlook init failed for attachment download", "SubmissionService", {
+            error: err instanceof Error ? err.message : "Unknown",
+          });
+        }
+      }
+
+      if (gmailEmails.length > 0) {
+        const userId = gmailEmails[0].user_id;
+        try {
+          const isReady = await gmailFetchService.initialize(userId);
+          if (isReady) {
+            for (const email of gmailEmails) {
+              try {
+                const fullEmail = await gmailFetchService.getEmailById(email.external_id);
+                if (fullEmail.attachments && fullEmail.attachments.length > 0) {
+                  await emailAttachmentService.downloadEmailAttachments(
+                    email.user_id, email.id, email.external_id, "gmail",
+                    fullEmail.attachments.map((att: { filename?: string; name?: string; mimeType?: string; contentType?: string; size?: number; attachmentId?: string; id?: string }) => ({
+                      filename: att.filename || att.name || "attachment",
+                      mimeType: att.mimeType || att.contentType || "application/octet-stream",
+                      size: att.size || 0,
+                      attachmentId: att.attachmentId || att.id || "",
+                    })),
+                  );
+                }
+              } catch (err) {
+                logService.warn("[Submission] Failed to download Gmail attachment for export", "SubmissionService", {
+                  emailId: email.id, error: err instanceof Error ? err.message : "Unknown",
+                });
+              }
+            }
+          }
+        } catch (err) {
+          logService.warn("[Submission] Gmail init failed for attachment download", "SubmissionService", {
+            error: err instanceof Error ? err.message : "Unknown",
+          });
+        }
+      }
+    } catch (err) {
+      logService.warn("[Submission] Failed to download missing email attachments for export", "SubmissionService", {
+        transactionId,
+        error: err instanceof Error ? err.message : "Unknown",
+      });
+    }
   }
 
   private async getUserOrganizationId(): Promise<string | null> {
