@@ -340,7 +340,7 @@ describe("SyncStatusIndicator", () => {
       // Should show amber "completed with errors", NOT green "Sync Complete"
       expect(screen.getByTestId("sync-status-complete")).toBeInTheDocument();
       expect(screen.getByText("Sync Completed with Errors")).toBeInTheDocument();
-      expect(screen.getByText("Some items failed to sync")).toBeInTheDocument();
+      expect(screen.getByText("Failed: contacts")).toBeInTheDocument();
       expect(screen.queryByText("Sync Complete")).not.toBeInTheDocument();
       expect(screen.queryByText("All data synced successfully")).not.toBeInTheDocument();
     });
