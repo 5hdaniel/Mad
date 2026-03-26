@@ -25,6 +25,7 @@ import { logAllFlags, logStateChange } from "../../appCore/state/machine/debug";
 import type { AppStateMachine } from "../../appCore/state/types";
 import type { StepAction } from "./types";
 import logger from '../../utils/logger';
+import * as Sentry from '@sentry/electron/renderer';
 
 /**
  * Props for the OnboardingFlow component.
@@ -68,12 +69,10 @@ interface OnboardingFlowInnerProps {
 
 function OnboardingFlowInner({ app, machineState }: OnboardingFlowInnerProps) {
   // Track if we're waiting for DB init to complete after clicking Continue on secure-storage.
-  // While true, isDatabaseInitialized is suppressed in appState so the queue won't
-  // advance to account-verification before the main process DB is actually ready.
+  // Event-driven: subscribes to onInitStage events instead of polling.
   const [waitingForDbInit, setWaitingForDbInit] = useState(false);
 
-  // Tracks the actual DB init status from the selector (not gated by waitingForDbInit).
-  // Used by the effect below to detect when init actually completes.
+  // Tracks the actual DB init status confirmed by init stage events.
   const [dbInitConfirmed, setDbInitConfirmed] = useState(false);
 
   // Track if user has been verified in local DB (set by account-verification step)
@@ -83,13 +82,17 @@ function OnboardingFlowInner({ app, machineState }: OnboardingFlowInnerProps) {
   const [emailSkipped, setEmailSkipped] = useState(false);
   const [driverSkipped, setDriverSkipped] = useState(false);
 
+  // Ref guard to prevent duplicate init stage subscriptions (per LoadingOrchestrator pattern)
+  const initStageSubscribedRef = useRef(false);
+
   // Build app state, deriving from state machine when available
   const appState: OnboardingAppState = useMemo(() => {
     if (machineState) {
       const { state } = machineState;
       const selectorSaysDbInit = selectIsDatabaseInitialized(state);
-      // Gate on dbInitConfirmed: if we're waiting for DB init, suppress until
-      // the main process confirms the DB is actually ready.
+      // Simplified: the state machine now receives init stage events and only sets
+      // isDatabaseInitialized after 'db-ready' or 'complete'. For deferred-DB-init
+      // (first-time macOS), we gate on dbInitConfirmed from event subscription.
       const isDatabaseInitialized = selectorSaysDbInit && (!waitingForDbInit || dbInitConfirmed);
       const emailConnected = selectHasEmailConnectedNullable(state);
       const hasPermissions = selectHasPermissionsNullable(state);
@@ -274,34 +277,88 @@ function OnboardingFlowInner({ app, machineState }: OnboardingFlowInnerProps) {
     isViewingPastStep,
   } = queue;
 
-  // Poll the main process to confirm DB is actually initialized.
-  // The selector may report isDatabaseInitialized=true before the main process
-  // has fully finished (race condition). We poll system:is-database-initialized
-  // to gate the queue's isDatabaseInitialized flag.
+  // Event-driven DB init confirmation (BACKLOG-1383).
+  // Subscribes to onInitStage events instead of polling system:is-database-initialized.
+  // When 'complete' event arrives, confirms DB is ready and unblocks the queue.
   useEffect(() => {
     if (!waitingForDbInit) return;
 
-    let cancelled = false;
-    const poll = async () => {
+    // Guard against duplicate subscriptions
+    if (initStageSubscribedRef.current) return;
+
+    // First, check current stage in case init already completed
+    const checkCurrentStage = async () => {
       try {
-        const ready = await window.api?.system?.isDatabaseInitialized?.();
-        if (ready && !cancelled) {
-          logStateChange('OnboardingFlow', 'DB_INIT_CONFIRMED by main process', {});
+        const currentStage = await window.api?.system?.getInitStage?.();
+        if (currentStage && (currentStage.stage === 'complete' || currentStage.stage === 'db-ready')) {
+          logStateChange('OnboardingFlow', 'DB_INIT_CONFIRMED by current init stage', { stage: currentStage.stage });
+          Sentry.addBreadcrumb({
+            category: 'onboarding.init',
+            message: `DB init already complete on check: ${currentStage.stage}`,
+            level: 'info',
+          });
+          setDbInitConfirmed(true);
+          setWaitingForDbInit(false);
+          return true; // Already complete, no need to subscribe
+        }
+      } catch {
+        // getInitStage may not be available — fall through to subscription
+      }
+      return false;
+    };
+
+    let cancelled = false;
+
+    checkCurrentStage().then((alreadyComplete) => {
+      if (cancelled || alreadyComplete) return;
+
+      // Subscribe to init stage events
+      if (!window.api?.system?.onInitStage) {
+        // Fallback: if onInitStage not available, use legacy polling once
+        logger.warn('[OnboardingFlow] onInitStage not available, falling back to isDatabaseInitialized check');
+        window.api?.system?.isDatabaseInitialized?.().then((ready) => {
+          if (ready && !cancelled) {
+            logStateChange('OnboardingFlow', 'DB_INIT_CONFIRMED by legacy check', {});
+            setDbInitConfirmed(true);
+            setWaitingForDbInit(false);
+          }
+        }).catch(() => { /* ignore */ });
+        return;
+      }
+
+      initStageSubscribedRef.current = true;
+
+      const unsubscribe = window.api.system.onInitStage((event) => {
+        if (cancelled) return;
+
+        Sentry.addBreadcrumb({
+          category: 'onboarding.init',
+          message: `Init stage received during onboarding: ${event.stage}`,
+          level: 'info',
+          data: { stage: event.stage, message: event.message },
+        });
+
+        if (event.stage === 'complete' || event.stage === 'db-ready') {
+          logStateChange('OnboardingFlow', 'DB_INIT_CONFIRMED by init stage event', { stage: event.stage });
           setDbInitConfirmed(true);
           setWaitingForDbInit(false);
         }
-      } catch {
-        // Ignore — will retry
-      }
-    };
+      });
 
-    // Poll every 500ms
-    const interval = setInterval(poll, 500);
-    poll(); // Immediate first check
+      // Store cleanup for the effect's return
+      cleanupRef.current = () => {
+        unsubscribe();
+        initStageSubscribedRef.current = false;
+      };
+    });
+
+    // Mutable ref to hold the event unsubscribe cleanup
+    const cleanupRef = { current: () => {} };
 
     return () => {
       cancelled = true;
-      clearInterval(interval);
+      cleanupRef.current();
+      initStageSubscribedRef.current = false;
     };
   }, [waitingForDbInit]);
 
