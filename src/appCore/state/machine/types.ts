@@ -167,6 +167,15 @@ export interface LoadingState {
    * This prevents the Keychain prompt from appearing before the login screen.
    */
   deferredDbInit?: boolean;
+
+  // ---- Init stage metadata (BACKLOG-1379: event-driven init protocol) ----
+
+  /** Current initialization stage from main process broadcaster */
+  initStage?: string;
+  /** Migration progress 0-100 from main process (when stage is 'migrating') */
+  migrationProgress?: number;
+  /** Human-readable init status message from main process */
+  initMessage?: string;
 }
 
 /**
@@ -263,7 +272,8 @@ export type AppAction =
   | AppReadyAction
   | LogoutAction
   | ErrorAction
-  | RetryAction;
+  | RetryAction
+  | InitStageReceivedAction;
 
 /**
  * Storage check completed - determined if key store exists.
@@ -445,6 +455,21 @@ export interface ErrorAction {
  */
 export interface RetryAction {
   type: "RETRY";
+}
+
+/**
+ * Received an initialization stage event from the main process.
+ * Updates metadata on LoadingState without changing state transitions.
+ * Part of the event-driven initialization protocol (BACKLOG-1379).
+ */
+export interface InitStageReceivedAction {
+  type: "INIT_STAGE_RECEIVED";
+  payload: {
+    stage: string;
+    progress?: number;
+    message?: string;
+    error?: { message: string; retryable: boolean };
+  };
 }
 
 // ============================================

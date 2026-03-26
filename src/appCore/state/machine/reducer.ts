@@ -20,6 +20,7 @@ import type {
   UserData,
   LoginSuccessAction,
   AuthPreValidatedAction,
+  InitStageReceivedAction,
 } from "./types";
 import { INITIAL_APP_STATE } from "./types";
 
@@ -706,6 +707,27 @@ export function appStateReducer(
 
       // Return to previous state, or initial if no previous state
       return state.previousState || INITIAL_APP_STATE;
+    }
+
+    // ============================================
+    // INIT STAGE METADATA (BACKLOG-1379)
+    // ============================================
+
+    case "INIT_STAGE_RECEIVED": {
+      // Only update metadata while in loading state — this is informational only
+      // and does NOT drive state transitions.
+      if (state.status !== "loading") {
+        return state;
+      }
+
+      const { stage, progress, message } = (action as InitStageReceivedAction).payload;
+
+      return {
+        ...state,
+        initStage: stage,
+        migrationProgress: progress,
+        initMessage: message,
+      };
     }
 
     default: {
