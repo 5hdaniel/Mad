@@ -1,0 +1,81 @@
+#!/bin/sh
+
+# pre-push hook: run tests affected by changes being pushed
+# Blocks push if affected tests fail; succeeds silently if no tests match
+
+# Get the remote tracking branch to compare against
+upstream=$(git rev-parse --abbrev-ref @{upstream} 2>/dev/null)
+if [ -z "$upstream" ]; then
+  # No upstream set — compare against the merge base with origin/develop
+  upstream="origin/develop"
+fi
+
+# Get list of changed files between upstream and HEAD
+changed_files=$(git diff --name-only "$upstream"...HEAD 2>/dev/null || git diff --name-only HEAD~1 2>/dev/null || echo "")
+
+if [ -z "$changed_files" ]; then
+  exit 0
+fi
+
+# Find related test files for changed .ts/.tsx source files
+test_files=""
+for file in $changed_files; do
+  case "$file" in
+    *.test.ts|*.test.tsx)
+      # Changed file is itself a test — include it directly
+      if [ -f "$file" ]; then
+        test_files="$test_files $file"
+      fi
+      ;;
+    *.ts|*.tsx)
+      # Strip extension and check for corresponding test files
+      base="${file%.*}"
+      ext="${file##*.}"
+
+      # Check <name>.test.ts / <name>.test.tsx
+      for test_ext in ts tsx; do
+        candidate="${base}.test.${test_ext}"
+        if [ -f "$candidate" ]; then
+          test_files="$test_files $candidate"
+        fi
+      done
+
+      # Check __tests__/<filename>.test.ts / .test.tsx (same directory)
+      dir=$(dirname "$file")
+      filename=$(basename "$base")
+      for test_ext in ts tsx; do
+        candidate="${dir}/__tests__/${filename}.test.${test_ext}"
+        if [ -f "$candidate" ]; then
+          test_files="$test_files $candidate"
+        fi
+      done
+      ;;
+  esac
+done
+
+# Deduplicate and trim
+test_files=$(echo "$test_files" | tr ' ' '\n' | sort -u | tr '\n' ' ' | sed 's/^ *//;s/ *$//')
+
+if [ -z "$test_files" ]; then
+  echo "[pre-push] No affected test files found — skipping tests."
+  exit 0
+fi
+
+echo "[pre-push] Running affected tests:"
+for f in $test_files; do
+  echo "  - $f"
+done
+
+# Run only affected tests with bail (stop on first failure)
+npx jest --bail --no-coverage --passWithNoTests $test_files
+exit_code=$?
+
+if [ $exit_code -ne 0 ]; then
+  echo ""
+  echo "[pre-push] Tests failed. Push blocked."
+  echo "[pre-push] Fix failing tests before pushing."
+  exit 1
+fi
+
+echo "[pre-push] All affected tests passed."
+exit 0

@@ -120,6 +120,8 @@ export interface WindowApiTransactions {
       contentType?: "text" | "email" | "both";
       startDate?: string;
       endDate?: string;
+      summaryOnly?: boolean;
+      attachmentType?: "all" | "email" | "text" | "none";
     },
   ) => Promise<{ success: boolean; path?: string; error?: string }>;
   assignContact: (
@@ -253,6 +255,19 @@ export interface WindowApiTransactions {
     totalMessagesLinked?: number;
     totalAlreadyLinked?: number;
     totalErrors?: number;
+    addressFilterMessage?: string;
+    message?: string;
+    error?: string;
+  }>;
+  /** BACKLOG-1364: Update address filter toggle and re-run auto-link */
+  updateAddressFilter: (transactionId: string, skipAddressFilter: boolean) => Promise<{
+    success: boolean;
+    contactsProcessed?: number;
+    totalEmailsLinked?: number;
+    totalMessagesLinked?: number;
+    totalAlreadyLinked?: number;
+    totalErrors?: number;
+    addressFilterMessage?: string;
     message?: string;
     error?: string;
   }>;
@@ -270,11 +285,21 @@ export interface WindowApiTransactions {
     message?: string;
     rateLimited?: boolean;
   }>;
+  /** BACKLOG-1362: Pre-cache emails from connected providers */
+  precacheEmails: (userId: string) => Promise<{
+    success: boolean;
+    emailsFetched?: number;
+    emailsStored?: number;
+    error?: string;
+    rateLimited?: boolean;
+  }>;
   /** Export transaction to organized folder structure */
   exportFolder: (transactionId: string, options?: {
     includeEmails?: boolean;
     includeTexts?: boolean;
     includeAttachments?: boolean;
+    contentType?: "both" | "emails" | "texts";
+    attachmentType?: "all" | "email" | "text" | "none";
   }) => Promise<{
     success: boolean;
     path?: string;
@@ -313,6 +338,10 @@ export interface WindowApiTransactions {
       storage_path: string | null;
     }>;
     error?: string;
+    downloadBlocked?: boolean;
+    offline?: boolean;
+    downloadRequired?: boolean;
+    reason?: string;
   }>;
   /** Backfill missing email attachments */
   backfillAttachments: (userId: string) => Promise<{

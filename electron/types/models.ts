@@ -588,6 +588,10 @@ export interface Transaction {
   /** Most recent broker feedback (synced from cloud) */
   last_review_notes?: string | null;
 
+  // ========== Email Auto-Link Settings (BACKLOG-1364) ==========
+  /** Per-transaction toggle: 1 = skip address filter (link ALL emails from contacts), 0 = filter by property address (default) */
+  skip_address_filter?: number;
+
   // ========== Legacy Fields (backwards compatibility) ==========
   /** @deprecated Use status instead */
   transaction_status?: string;

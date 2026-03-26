@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useRef } from "react";
 import { useNetwork } from '../../contexts/NetworkContext';
 import {
   emitEmailConnectionChanged,
@@ -194,6 +194,54 @@ export function EmailSettings({
       setDisconnectingProvider(null);
     }
   };
+
+  // BACKLOG-1362: Re-cache emails state
+  const [isRecaching, setIsRecaching] = useState(false);
+  const [recacheResult, setRecacheResult] = useState<{
+    success: boolean;
+    message: string;
+  } | null>(null);
+  const recacheTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Clean up timeout on unmount
+  useEffect(() => {
+    return () => {
+      if (recacheTimeoutRef.current) {
+        clearTimeout(recacheTimeoutRef.current);
+      }
+    };
+  }, []);
+
+  const handleRecacheEmails = async (): Promise<void> => {
+    setIsRecaching(true);
+    setRecacheResult(null);
+    try {
+      const result = await window.api.transactions.precacheEmails(userId);
+      if (result.success) {
+        setRecacheResult({
+          success: true,
+          message: `Cached ${result.emailsStored ?? 0} new emails (${result.emailsFetched ?? 0} checked).`,
+        });
+      } else {
+        setRecacheResult({
+          success: false,
+          message: result.error || "Failed to re-cache emails.",
+        });
+      }
+    } catch (error) {
+      logger.error("[Settings] Email re-cache failed:", error);
+      setRecacheResult({
+        success: false,
+        message: "An error occurred while re-caching emails.",
+      });
+    } finally {
+      setIsRecaching(false);
+      // Clear result after 8 seconds
+      recacheTimeoutRef.current = setTimeout(() => setRecacheResult(null), 8000);
+    }
+  };
+
+  const hasAnyConnection = connections.google?.connected || connections.microsoft?.connected;
 
   // Email cache duration handler
   const handleEmailCacheDurationChange = async (months: number): Promise<void> => {
@@ -437,6 +485,44 @@ export function EmailSettings({
               <option value={12}>1 year</option>
             </select>
           </div>
+        </div>
+
+        {/* BACKLOG-1362: Re-cache Emails */}
+        <div className="p-4 bg-gray-50 rounded-lg border border-gray-200">
+          <div className="flex items-center justify-between">
+            <div className="flex-1">
+              <h4 className="text-sm font-medium text-gray-900">
+                Re-cache Emails
+              </h4>
+              <p className="text-xs text-gray-600 mt-1">
+                Fetch latest emails from your connected provider into the local cache.
+                Only downloads emails newer than what is already cached.
+              </p>
+            </div>
+            <button
+              onClick={handleRecacheEmails}
+              disabled={isRecaching || !isOnline || !hasAnyConnection}
+              title={
+                !isOnline
+                  ? "You are offline"
+                  : !hasAnyConnection
+                    ? "Connect an email provider first"
+                    : undefined
+              }
+              className="ml-4 px-4 py-1.5 bg-blue-500 hover:bg-blue-600 text-white text-sm font-medium rounded transition-all disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap"
+            >
+              {isRecaching ? "Caching..." : "Re-cache"}
+            </button>
+          </div>
+          {recacheResult && (
+            <p
+              className={`text-xs mt-2 ${
+                recacheResult.success ? "text-green-600" : "text-red-600"
+              }`}
+            >
+              {recacheResult.message}
+            </p>
+          )}
         </div>
       </div>
     </div>

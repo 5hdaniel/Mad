@@ -157,6 +157,8 @@ export const TABLE_FIELDS = {
     "submission_id",
     "submitted_at",
     "last_review_notes",
+    // BACKLOG-1364: Address filter toggle
+    "skip_address_filter",
   ]),
 
   communications: new Set([

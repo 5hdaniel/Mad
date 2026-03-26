@@ -4,7 +4,7 @@
 //          get counts, and backfill
 // ============================================
 
-import { ipcMain, app, shell } from "electron";
+import { ipcMain, app, shell, net } from "electron";
 import type { BrowserWindow } from "electron";
 import type { IpcMainInvokeEvent } from "electron";
 import path from "path";
@@ -15,6 +15,8 @@ import emailAttachmentService from "../services/emailAttachmentService";
 import databaseService from "../services/databaseService";
 import gmailFetchService from "../services/gmailFetchService";
 import outlookFetchService from "../services/outlookFetchService";
+import featureGateService from "../services/featureGateService";
+import supabaseService from "../services/supabaseService";
 import { getEmailById } from "../services/db/emailDbService";
 import { wrapHandler } from "../utils/wrapHandler";
 import type { Transaction } from "../types/models";
@@ -164,11 +166,54 @@ export function registerAttachmentHandlers(
 
       let attachments = await emailAttachmentService.getAttachmentsForEmail(emailId);
 
-      // On-demand download: if DB has no records but email says it has attachments,
-      // fetch them now from the provider (handles emails synced before attachment fix)
+      // BACKLOG-1369: On-demand download -- if DB has no records but email says it has attachments,
+      // fetch them now from the provider. This is the primary download path (no eager sync).
       if (attachments.length === 0) {
         const email = await getEmailById(emailId);
         if (email && email.has_attachments && email.external_id && email.source) {
+          // License gate: check desktop_email_attachments before downloading
+          let gateAllowed = true;
+          try {
+            const client = supabaseService.getClient();
+            const { data: { session } } = await client.auth.getSession();
+            if (session?.user?.id) {
+              const membership = await supabaseService.getActiveOrganizationMembership(session.user.id);
+              if (membership?.organization_id) {
+                const access = await featureGateService.checkFeature(membership.organization_id, "desktop_email_attachments");
+                gateAllowed = access.allowed;
+              }
+            }
+          } catch (gateError) {
+            // Fail-open: if gate check fails, allow download
+            logService.warn("Feature gate check failed for attachment download, allowing (fail-open)", "Transactions", {
+              error: gateError instanceof Error ? gateError.message : "Unknown",
+            });
+          }
+
+          if (!gateAllowed) {
+            return {
+              success: true,
+              data: [],
+              downloadBlocked: true,
+              reason: "Email attachment downloads are not available on your current plan.",
+            };
+          }
+
+          // Offline check: if no internet, return helpful error instead of failing
+          try {
+            if (!net.isOnline()) {
+              return {
+                success: true,
+                data: [],
+                downloadRequired: true,
+                offline: true,
+                reason: "Attachments cannot be downloaded while offline. Please connect to the internet and try again.",
+              };
+            }
+          } catch {
+            // net.isOnline() may throw in some contexts; proceed with download attempt
+          }
+
           logService.info("On-demand attachment download triggered", "Transactions", {
             emailId, source: email.source, externalId: email.external_id,
           });

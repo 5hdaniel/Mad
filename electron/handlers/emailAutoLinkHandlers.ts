@@ -1,7 +1,8 @@
 // ============================================
 // EMAIL AUTO-LINK IPC HANDLERS
-// Handles: auto-link-texts, resync-auto-link
+// Handles: auto-link-texts, resync-auto-link, update-address-filter
 // Extracted from emailSyncHandlers.ts (TASK-2065)
+// BACKLOG-1364: Added update-address-filter handler
 // ============================================
 
 import { ipcMain } from "electron";
@@ -117,6 +118,8 @@ export function registerEmailAutoLinkHandlers(): void {
       let totalMessagesLinked = 0;
       let totalAlreadyLinked = 0;
       let totalErrors = 0;
+      // BACKLOG-1364: Collect address filter message from auto-link results
+      let addressFilterMessage: string | undefined;
 
       for (const assignment of contactAssignments) {
         try {
@@ -134,6 +137,11 @@ export function registerEmailAutoLinkHandlers(): void {
           totalMessagesLinked += result.messagesLinked;
           totalAlreadyLinked += result.alreadyLinked;
           totalErrors += result.errors;
+
+          // BACKLOG-1364: Capture the address filter message (same for all contacts on a transaction)
+          if (result.addressFilterMessage && !addressFilterMessage) {
+            addressFilterMessage = result.addressFilterMessage;
+          }
 
           logService.debug(
             "Re-sync auto-link complete for contact",
@@ -173,7 +181,105 @@ export function registerEmailAutoLinkHandlers(): void {
         totalMessagesLinked,
         totalAlreadyLinked,
         totalErrors,
+        addressFilterMessage,
         results,
+      };
+    }, { module: "Transactions" }),
+  );
+
+  // BACKLOG-1364: Update address filter toggle and re-run auto-link
+  ipcMain.handle(
+    "transactions:update-address-filter",
+    wrapHandler(async (
+      event: IpcMainInvokeEvent,
+      transactionId: string,
+      skipAddressFilter: boolean,
+    ): Promise<TransactionResponse> => {
+      logService.info("Updating address filter setting", "Transactions", {
+        transactionId,
+        skipAddressFilter,
+      });
+
+      // Validate transaction ID
+      const validatedTransactionId = validateTransactionId(transactionId);
+      if (!validatedTransactionId) {
+        throw new ValidationError(
+          "Transaction ID validation failed",
+          "transactionId",
+        );
+      }
+
+      // Update the skip_address_filter column
+      await transactionService.updateTransaction(validatedTransactionId, {
+        id: validatedTransactionId,
+        skip_address_filter: skipAddressFilter ? 1 : 0,
+      });
+
+      // Re-run auto-link for all contacts on this transaction with the new setting
+      const transactionDetails = await transactionService.getTransactionWithContacts(
+        validatedTransactionId,
+      );
+
+      if (!transactionDetails) {
+        return {
+          success: true,
+          message: "Address filter updated, but transaction not found for re-link",
+        };
+      }
+
+      const contactAssignments = transactionDetails.contact_assignments || [];
+
+      let totalEmailsLinked = 0;
+      let totalMessagesLinked = 0;
+      let totalAlreadyLinked = 0;
+      let totalErrors = 0;
+      let addressFilterMessage: string | undefined;
+
+      for (const assignment of contactAssignments) {
+        try {
+          const result = await autoLinkCommunicationsForContact({
+            contactId: assignment.contact_id,
+            transactionId: validatedTransactionId,
+          });
+
+          totalEmailsLinked += result.emailsLinked;
+          totalMessagesLinked += result.messagesLinked;
+          totalAlreadyLinked += result.alreadyLinked;
+          totalErrors += result.errors;
+
+          if (result.addressFilterMessage && !addressFilterMessage) {
+            addressFilterMessage = result.addressFilterMessage;
+          }
+        } catch (error) {
+          totalErrors++;
+          logService.warn(
+            `Re-link after filter toggle failed for contact ${assignment.contact_id}`,
+            "Transactions",
+            {
+              error: error instanceof Error ? error.message : "Unknown",
+            }
+          );
+        }
+      }
+
+      logService.info("Address filter update + re-link complete", "Transactions", {
+        transactionId: validatedTransactionId,
+        skipAddressFilter,
+        contactsProcessed: contactAssignments.length,
+        totalEmailsLinked,
+        totalMessagesLinked,
+        totalAlreadyLinked,
+        totalErrors,
+      });
+
+      return {
+        success: true,
+        contactsProcessed: contactAssignments.length,
+        totalEmailsLinked,
+        totalMessagesLinked,
+        totalAlreadyLinked,
+        totalErrors,
+        addressFilterMessage,
       };
     }, { module: "Transactions" }),
   );
