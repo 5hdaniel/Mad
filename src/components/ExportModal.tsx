@@ -47,7 +47,7 @@ function ExportModal({
 
   const [contentType, setContentType] = useState<"both" | "emails" | "texts">("both");
   const [attachmentType, setAttachmentType] = useState<"all" | "email" | "text" | "none">("all");
-  const [exportFormat, setExportFormat] = useState("folder"); // folder, pdf, excel, csv, json, txt_eml
+  const [exportFormat, setExportFormat] = useState("folder"); // folder, pdf, combined-pdf, excel, csv, json, txt_eml
   const [emailExportMode, setEmailExportMode] = useState<"thread" | "individual">("thread");
   const [exporting, setExporting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -68,7 +68,7 @@ function ExportModal({
   const canAttachText = isAllowed("desktop_text_attachments");
 
   // Formats that are currently implemented
-  const implementedFormats = ["pdf", "folder"];
+  const implementedFormats = ["pdf", "folder", "combined-pdf"];
 
   // Load user preferences to set default export format
   useEffect(() => {
@@ -185,14 +185,17 @@ function ExportModal({
         // Use enhanced export for single-file formats
         // Pass dates to enable date range filtering for PDF exports
         // summaryOnly: true for "pdf" format means only report + indexes (no full content)
+        // "combined-pdf" uses the same enhanced export with summaryOnly: false for full content
+        const actualFormat = exportFormat === "combined-pdf" ? "pdf" : exportFormat;
+        const summaryOnly = exportFormat === "pdf"; // "pdf" = summary only, "combined-pdf" = full
         result = await window.api.transactions.exportEnhanced(
           transaction.id,
           {
-            exportFormat,
+            exportFormat: actualFormat,
             contentType: contentType === "emails" ? "email" : contentType === "texts" ? "text" : "both",
             startDate,
             endDate,
-            summaryOnly: exportFormat === "pdf",
+            summaryOnly,
           } as Parameters<typeof window.api.transactions.exportEnhanced>[1],
         );
       }
@@ -487,7 +490,7 @@ function ExportModal({
                 <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">
                   Format
                 </label>
-                <div className="grid grid-cols-3 gap-3">
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                   <button
                     onClick={() => setExportFormat("folder")}
                     className={`px-4 py-3 rounded-lg font-medium transition-all text-left ${
@@ -521,14 +524,19 @@ function ExportModal({
                       Transaction report only
                     </div>
                   </button>
+                  {/* One PDF - Combined export */}
                   <button
-                    disabled
-                    className="px-4 py-3 rounded-lg font-medium text-left bg-gray-50 text-gray-400 cursor-not-allowed border border-gray-200"
+                    onClick={() => setExportFormat("combined-pdf")}
+                    disabled={!canExportEmail && !canExportText}
+                    className={`px-4 py-3 rounded-lg font-medium transition-all text-left ${
+                      !canExportEmail && !canExportText
+                        ? "bg-gray-50 text-gray-400 cursor-not-allowed border border-gray-200"
+                        : exportFormat === "combined-pdf"
+                          ? "bg-purple-500 text-white shadow-md"
+                          : "bg-gray-100 text-gray-700 hover:bg-gray-200"
+                    }`}
                   >
-                    <div className="flex items-center justify-between">
-                      <span className="font-semibold text-sm">One PDF</span>
-                      <span className="text-xs bg-gray-200 text-gray-500 px-2 py-0.5 rounded">Coming Soon</span>
-                    </div>
+                    <div className="font-semibold text-sm">One PDF</div>
                     <div className="text-xs opacity-80 mt-0.5">Combined PDF with all content</div>
                   </button>
                 </div>
@@ -564,6 +572,13 @@ function ExportModal({
                 <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">
                   Attachments
                 </label>
+
+                {/* Info note - right under the section header, before the buttons */}
+                <p className="text-xs text-gray-500 flex items-start gap-1.5 mb-2">
+                  <span className="shrink-0 mt-px">i</span>
+                  <span>Attachments are exported as separate files in an /attachments folder, not embedded in the PDF.</span>
+                </p>
+
                 <div className="flex flex-wrap gap-2">
                   {/* All - requires both attachment licenses */}
                   <button
@@ -635,26 +650,43 @@ function ExportModal({
                   </button>
                 </div>
 
-                {/* Info notes */}
-                <div className="mt-3 space-y-2">
-                  <p className="text-xs text-gray-500 flex items-start gap-1.5">
-                    <span className="shrink-0 mt-px">i</span>
-                    <span>Attachments are exported as separate files in an /attachments folder, not embedded in the PDF.</span>
+                {/* Upgrade note - stays below the buttons, shown conditionally */}
+                {(!canAttachEmail || !canAttachText) && (
+                  <p className="mt-3 text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 flex items-start gap-1.5">
+                    <span className="shrink-0 mt-px">&#128274;</span>
+                    <span>
+                      {!canAttachEmail && !canAttachText
+                        ? "Email and Text attachments require add-on licenses. Upgrade to include."
+                        : !canAttachEmail
+                          ? "Email attachments require the Email Attachments add-on. Upgrade to include."
+                          : "Text attachments require the Text Attachments add-on. Upgrade to include."
+                      }
+                    </span>
                   </p>
-                  {(!canAttachEmail || !canAttachText) && (
-                    <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 flex items-start gap-1.5">
-                      <span className="shrink-0 mt-px">&#128274;</span>
-                      <span>
-                        {!canAttachEmail && !canAttachText
-                          ? "Email and Text attachments require add-on licenses. Upgrade to include."
-                          : !canAttachEmail
-                            ? "Email attachments require the Email Attachments add-on. Upgrade to include."
-                            : "Text attachments require the Text Attachments add-on. Upgrade to include."
-                        }
-                      </span>
-                    </p>
-                  )}
-                </div>
+                )}
+
+                {exportFormat === "folder" && (
+                  <div className="mt-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                    <p className="text-sm text-blue-800 font-medium">Audit Package includes:</p>
+                    <ul className="mt-2 text-xs text-blue-700 space-y-1">
+                      <li>Summary_Report.pdf - Transaction overview</li>
+                      <li>emails/ - Each email as individual PDF</li>
+                      <li>texts/ - Text conversations by contact</li>
+                      <li>attachments/ - All attachments with manifest</li>
+                    </ul>
+                  </div>
+                )}
+                {exportFormat === "combined-pdf" && (
+                  <div className="mt-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                    <p className="text-sm text-blue-800 font-medium">One PDF includes:</p>
+                    <ul className="mt-2 text-xs text-blue-700 space-y-1">
+                      <li>Summary report with transaction overview</li>
+                      {canExportEmail && <li>All email threads as formatted pages</li>}
+                      {canExportText && <li>All text conversations as formatted pages</li>}
+                      <li>Everything merged into a single PDF file</li>
+                    </ul>
+                  </div>
+                )}
               </div>
             </div>
           )}
@@ -664,7 +696,7 @@ function ExportModal({
             <div className="py-8 text-center">
               <div className="w-16 h-16 border-4 border-purple-600 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
               <h4 className="text-lg font-semibold text-gray-900 mb-2">
-                {exportFormat === "folder" ? "Creating Audit Package..." : "Exporting..."}
+                {exportFormat === "folder" ? "Creating Audit Package..." : exportFormat === "combined-pdf" ? "Creating Combined PDF..." : "Exporting..."}
               </h4>
               <p className="text-sm text-gray-600">
                 {exportProgress
@@ -718,7 +750,7 @@ function ExportModal({
                 Export Complete!
               </h4>
               <p className="text-sm text-gray-600 mb-6">
-                Your {exportFormat === "folder" ? "Audit Package" : "export"} has been saved successfully.
+                Your {exportFormat === "folder" ? "Audit Package" : exportFormat === "combined-pdf" ? "Combined PDF" : "export"} has been saved successfully.
               </p>
               {/* Buttons side by side */}
               <div className="flex justify-center gap-4">
