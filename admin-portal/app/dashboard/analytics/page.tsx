@@ -22,7 +22,11 @@ export const dynamic = 'force-dynamic';
  * Server component that fetches system-wide analytics data
  * and renders the dashboard sections.
  */
-export default async function AnalyticsPage() {
+export default async function AnalyticsPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ period?: string }>;
+}) {
   const { supabase, user } = await getAuthenticatedUser();
 
   if (!user) {
@@ -49,10 +53,15 @@ export default async function AnalyticsPage() {
     redirect('/dashboard?error=insufficient_permissions');
   }
 
+  // Parse version period filter from searchParams
+  const params = await searchParams;
+  const VALID_PERIODS: Record<string, number> = { '1': 1, '7': 7, '30': 30, '90': 90 };
+  const versionDays = VALID_PERIODS[params.period ?? ''] ?? 30;
+
   // Fetch all analytics data in parallel
   const [versionData, systemCounts, platformData, licenseData, phoneTypeData] =
     await Promise.all([
-      getVersionDistribution(supabase),
+      getVersionDistribution(supabase, versionDays),
       getSystemCounts(supabase),
       getPlatformBreakdown(supabase),
       getLicenseUtilization(supabase),
@@ -76,7 +85,7 @@ export default async function AnalyticsPage() {
       <SystemCounts data={systemCounts} />
 
       {/* Section 2: Version Distribution */}
-      <VersionDistribution data={versionData} />
+      <VersionDistribution data={versionData} activePeriod={versionDays} />
 
       {/* Section 3: Two-column layout for Platform + Phone Type */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
