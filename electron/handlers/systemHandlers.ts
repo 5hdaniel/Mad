@@ -19,6 +19,7 @@ const macOSPermissionHelper = require("../services/macOSPermissionHelper").defau
 import { databaseEncryptionService } from "../services/databaseEncryptionService";
 import databaseService from "../services/databaseService";
 import supabaseService from "../services/supabaseService";
+import { initializationBroadcaster } from "../services/initializationBroadcaster";
 import { initializeDatabase } from "./authHandlers";
 import { getAndClearPendingDeepLinkUser } from "../main";
 import { initializePool } from "../workers/contactWorkerPool";
@@ -706,6 +707,17 @@ export function registerSystemHandlers(): void {
     wrapHandler(async (): Promise<{ success: boolean; initialized: boolean }> => {
       const initialized = databaseService.isInitialized();
       return { success: true, initialized };
+    }, { module: "System" }),
+  );
+
+  /**
+   * Get current initialization stage (BACKLOG-1379: event-driven init protocol)
+   * Used by late-joining renderers to catch up on current init state
+   */
+  ipcMain.handle(
+    "system:get-init-stage",
+    wrapHandler(async () => {
+      return initializationBroadcaster.getCurrentStage();
     }, { module: "System" }),
   );
 
