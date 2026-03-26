@@ -83,6 +83,8 @@ PHASE A: SETUP (PM)
     - Valid statuses: pending, in_progress, testing, completed, deferred
 
 5.  PM → ENGINEER: Handoff task for planning (read-only exploration)
+    - Write `.claude/.current-task` with task context for metrics hook:
+      `echo '{"task_id": "TASK-XXXX", "agent_type": "engineer", "sprint_id": "SPRINT-XXX"}' > .claude/.current-task`
     - Use handoff message template
     - Specify: Task ID, task file path, branch name
     - Instruct engineer: "Plan only — explore codebase, write plan, do NOT edit production files"
@@ -190,27 +192,33 @@ PHASE D: PR, TEST & MERGE
 
 13. SR ENGINEER: Delete worktree
     - git worktree remove ../Mad-TASK-XXXX
+    - Clear `.claude/.current-task`: `echo '{}' > .claude/.current-task`
     - → PM: Task merged notification
 
 14. PM: Record effort metrics + mark Completed
     - Update Supabase: `SELECT pm_update_item_status('<uuid>', 'completed');`
     - Update sprint file In-Scope table: Status → `Completed`
     - (Optional) Update backlog CSV status → `Completed`
-    - Collect agent_ids from ALL handoff messages for this task
-    - Label each agent entry in tokens.csv:
-      python .claude/skills/log-metrics/log_metrics.py \
-        --label --agent-id <ID> -t <type> -i TASK-XXXX -d "<desc>"
-    - Aggregate totals:
-      python .claude/skills/log-metrics/sum_effort.py --task TASK-XXXX --pretty
-    - Copy aggregated totals to task file `## Actual Effort` section
+    - Reconcile metrics (verify all agents logged to Supabase):
+      ```sql
+      SELECT agent_id, agent_type, total_tokens, task_id
+      FROM pm_token_metrics WHERE task_id = 'TASK-XXXX' ORDER BY recorded_at;
+      ```
+    - If any agents are unlabeled, label them:
+      `SELECT pm_label_agent_metrics('<agent_id>', 'TASK-XXXX', 'engineer', 'Implementation');`
+    - Record task totals (auto-sums from metric rows):
+      `SELECT pm_record_task_tokens('<task_uuid>');`
     - Update sprint file In-Scope table `Actual Tokens` column
     - Collect issues from handoff messages → sprint file `## Issues Summary`
 
 15. PM: When ALL sprint tasks complete → Close sprint
     - Verify all tasks are complete
-    - Aggregate all task metrics for the sprint:
-      python .claude/skills/log-metrics/sum_effort.py --task TASK-XXXX --pretty
-      (repeat for each task)
+    - Aggregate all task metrics from Supabase:
+      ```sql
+      SELECT task_id, SUM(total_tokens) AS total, SUM(billable_tokens) AS billable
+      FROM pm_token_metrics WHERE sprint_id = '<sprint-uuid>'
+      GROUP BY task_id ORDER BY task_id;
+      ```
     - Populate sprint file `## Sprint Retrospective` section:
       - Estimation accuracy table (est vs actual per task)
       - Issues summary (aggregated from all task handoffs)
