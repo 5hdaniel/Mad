@@ -270,6 +270,14 @@ export interface WindowApiTransactions {
     message?: string;
     rateLimited?: boolean;
   }>;
+  /** BACKLOG-1362: Pre-cache emails from connected providers */
+  precacheEmails: (userId: string) => Promise<{
+    success: boolean;
+    emailsFetched?: number;
+    emailsStored?: number;
+    error?: string;
+    rateLimited?: boolean;
+  }>;
   /** Export transaction to organized folder structure */
   exportFolder: (transactionId: string, options?: {
     includeEmails?: boolean;

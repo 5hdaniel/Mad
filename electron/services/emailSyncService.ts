@@ -25,6 +25,7 @@ import { backfillMissingAttachments } from "../handlers/attachmentHandlers";
 import { isNetworkError } from "../utils/networkErrors";
 import { retryOnNetwork, networkResilienceService } from "./networkResilience";
 import { computeTransactionDateRange } from "../utils/emailDateRange";
+import { getEmailCacheDurationMonths, computeEmailCacheSinceDate } from "../utils/preferenceHelper";
 import {
   getContactEmailsForTransaction,
   resolveContactEmailsByQuery,
@@ -389,6 +390,8 @@ async function fetchStoreAndDedup(params: {
  * (validation + rate limiting + delegation) while service owns business logic.
  */
 class EmailSyncService {
+  private precacheInProgress = false;
+
   /**
    * Sync emails from provider(s) for a transaction, then auto-link communications.
    *
@@ -1032,6 +1035,224 @@ class EmailSyncService {
       emailsStored,
       autoLinkResult,
     };
+  }
+
+  // ============================================
+  // BACKLOG-1362: Bulk email pre-cache
+  // ============================================
+
+  /**
+   * BACKLOG-1362: Pre-cache emails from connected providers.
+   *
+   * Unlike syncTransactionEmails (which fetches per-contact for a transaction),
+   * this fetches ALL emails within the user's configured cache window
+   * (emailCache.durationMonths). It is incremental: if the local cache already
+   * has emails, only emails newer than the latest cached email are fetched.
+   *
+   * Called:
+   * - After onboarding email connection (via SyncOrchestrator)
+   * - Manually via "Re-cache Emails" button in Settings
+   *
+   * No auto-linking is performed here; that happens per-transaction.
+   */
+  async precacheEmails(
+    userId: string,
+    onProgress?: (percent: number) => void,
+  ): Promise<{ fetched: number; stored: number; error?: string }> {
+    if (this.precacheInProgress) {
+      logService.info("[EmailSync] Precache already in progress, skipping", "EmailSync");
+      return { fetched: 0, stored: 0, error: "Precache already in progress" };
+    }
+    this.precacheInProgress = true;
+    try {
+    logService.info("Starting email pre-cache", "EmailSyncService", { userId });
+
+    Sentry.addBreadcrumb({
+      category: "email_precache.start",
+      message: "Starting bulk email pre-cache",
+      level: "info",
+      data: { userId },
+    });
+
+    // Read user's cache duration preference
+    const cacheDurationMonths = await getEmailCacheDurationMonths(userId);
+    const cacheSinceDate = computeEmailCacheSinceDate(cacheDurationMonths);
+
+    // Incremental: find the latest cached email timestamp
+    const latestCachedRow = dbGet<{ latest: string | null }>(
+      "SELECT MAX(sent_at) as latest FROM emails WHERE user_id = ?",
+      [userId],
+    );
+    let fetchSinceDate = cacheSinceDate;
+    if (latestCachedRow?.latest) {
+      const latestCached = new Date(latestCachedRow.latest);
+      if (latestCached > cacheSinceDate) {
+        fetchSinceDate = latestCached;
+      }
+    }
+
+    logService.info("Email pre-cache date range computed", "EmailSyncService", {
+      cacheDurationMonths,
+      cacheSinceDate: cacheSinceDate.toISOString(),
+      fetchSinceDate: fetchSinceDate.toISOString(),
+      isIncremental: !!latestCachedRow?.latest,
+    });
+
+    const seenEmailIds = new Set<string>();
+    let totalFetched = 0;
+    let totalStored = 0;
+
+    // Check which providers are connected
+    const googleToken = await databaseService.getOAuthToken(userId, "google", "mailbox");
+    const microsoftToken = await databaseService.getOAuthToken(userId, "microsoft", "mailbox");
+
+    if (!googleToken && !microsoftToken) {
+      logService.info("No email provider connected, skipping pre-cache", "EmailSyncService");
+      return { fetched: 0, stored: 0 };
+    }
+
+    onProgress?.(10);
+
+    // Fetch from Outlook (no contact filter = all emails)
+    if (microsoftToken) {
+      try {
+        await retryOnNetwork(async () => {
+          const outlookReady = await outlookFetchService.initialize(userId);
+          if (outlookReady) {
+            // Fetch inbox emails (no contact filter fetches all)
+            const inboxResult = await fetchStoreAndDedup({
+              provider: "outlook",
+              fetchFn: () => outlookFetchService.searchEmails({
+                maxResults: EMAIL_FETCH_SAFETY_CAP,
+                after: fetchSinceDate,
+              }),
+              userId,
+              seenIds: seenEmailIds,
+              getAttachmentsFn: (msgId) => outlookFetchService.getAttachments(msgId),
+            });
+
+            // Also search all folders (sent, archives, custom folders)
+            let allFolderResult = { fetched: 0, stored: 0, errors: 0 };
+            try {
+              allFolderResult = await fetchStoreAndDedup({
+                provider: "outlook",
+                fetchFn: () => outlookFetchService.searchAllFolders({
+                  maxResults: EMAIL_FETCH_SAFETY_CAP,
+                  after: fetchSinceDate,
+                }),
+                userId,
+                seenIds: seenEmailIds,
+                getAttachmentsFn: (msgId) => outlookFetchService.getAttachments(msgId),
+              });
+            } catch (folderError) {
+              if (isNetworkError(folderError)) throw folderError;
+              logService.warn("Pre-cache: all-folders fetch failed, continuing", "EmailSyncService", {
+                error: folderError instanceof Error ? folderError.message : "Unknown",
+              });
+            }
+
+            totalFetched += inboxResult.fetched + allFolderResult.fetched;
+            totalStored += inboxResult.stored + allFolderResult.stored;
+
+            logService.info("Outlook pre-cache complete", "EmailSyncService", {
+              inboxFetched: inboxResult.fetched,
+              allFoldersFetched: allFolderResult.fetched,
+              totalStored: inboxResult.stored + allFolderResult.stored,
+            });
+          }
+        }, undefined, "OutlookPrecache");
+      } catch (outlookError) {
+        logService.warn("Outlook pre-cache failed", "EmailSyncService", {
+          error: outlookError instanceof Error ? outlookError.message : "Unknown",
+        });
+        // Don't fail entirely; continue to Gmail
+      }
+    }
+
+    onProgress?.(50);
+
+    // Fetch from Gmail (no contact filter = all emails)
+    if (googleToken) {
+      try {
+        await retryOnNetwork(async () => {
+          const gmailReady = await gmailFetchService.initialize(userId);
+          if (gmailReady) {
+            const gmailResult = await fetchStoreAndDedup({
+              provider: "gmail",
+              fetchFn: () => gmailFetchService.searchEmails({
+                maxResults: EMAIL_FETCH_SAFETY_CAP,
+                after: fetchSinceDate,
+              }),
+              userId,
+              seenIds: seenEmailIds,
+            });
+
+            // Also search all labels (archives, custom labels)
+            let allLabelResult = { fetched: 0, stored: 0, errors: 0 };
+            try {
+              allLabelResult = await fetchStoreAndDedup({
+                provider: "gmail",
+                fetchFn: () => gmailFetchService.searchAllLabels({
+                  maxResults: EMAIL_FETCH_SAFETY_CAP,
+                  after: fetchSinceDate,
+                }),
+                userId,
+                seenIds: seenEmailIds,
+              });
+            } catch (labelError) {
+              if (isNetworkError(labelError)) throw labelError;
+              logService.warn("Pre-cache: all-labels fetch failed, continuing", "EmailSyncService", {
+                error: labelError instanceof Error ? labelError.message : "Unknown",
+              });
+            }
+
+            totalFetched += gmailResult.fetched + allLabelResult.fetched;
+            totalStored += gmailResult.stored + allLabelResult.stored;
+
+            logService.info("Gmail pre-cache complete", "EmailSyncService", {
+              searchFetched: gmailResult.fetched,
+              allLabelsFetched: allLabelResult.fetched,
+              totalStored: gmailResult.stored + allLabelResult.stored,
+            });
+          }
+        }, undefined, "GmailPrecache");
+      } catch (gmailError) {
+        logService.warn("Gmail pre-cache failed", "EmailSyncService", {
+          error: gmailError instanceof Error ? gmailError.message : "Unknown",
+        });
+      }
+    }
+
+    onProgress?.(90);
+
+    // Backfill missing attachments for newly cached emails
+    try {
+      await backfillMissingAttachments(userId);
+    } catch (attError) {
+      logService.warn("Attachment backfill failed during pre-cache", "EmailSyncService", {
+        error: attError instanceof Error ? attError.message : "Unknown",
+      });
+    }
+
+    onProgress?.(100);
+
+    logService.info("Email pre-cache complete", "EmailSyncService", {
+      totalFetched,
+      totalStored,
+      userId,
+    });
+
+    Sentry.addBreadcrumb({
+      category: "email_precache.complete",
+      message: `Email pre-cache complete: ${totalFetched} fetched, ${totalStored} stored`,
+      level: "info",
+      data: { totalFetched, totalStored },
+    });
+
+    return { fetched: totalFetched, stored: totalStored };
+    } finally {
+      this.precacheInProgress = false;
+    }
   }
 
   /**

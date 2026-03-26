@@ -391,6 +391,17 @@ export const transactionBridge = {
     ipcRenderer.invoke("transactions:sync-and-fetch-emails", transactionId),
 
   /**
+   * BACKLOG-1362: Pre-cache emails from connected providers.
+   * Bulk-fetches ALL emails within the user's configured cache window
+   * into the local database. Incremental -- only fetches newer than
+   * what is already cached.
+   * @param userId - User ID to pre-cache emails for
+   * @returns Results with counts of fetched and stored emails
+   */
+  precacheEmails: (userId: string) =>
+    ipcRenderer.invoke("emails:precache", userId),
+
+  /**
    * Link emails to a transaction
    * @param emailIds - Array of email IDs to link
    * @param transactionId - Transaction ID to link to
