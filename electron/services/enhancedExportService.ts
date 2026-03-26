@@ -4,6 +4,7 @@ import { app } from "electron";
 import folderExportService from "./folderExportService";
 import logService from "./logService";
 import { Transaction, Communication } from "../types/models";
+import type { TransactionWithDetails } from "./transactionService/types";
 import { isEmailMessage, isTextMessage } from "../utils/channelHelpers";
 import { sanitizeFileSystemName } from "../utils/fileUtils";
 
@@ -36,7 +37,7 @@ class EnhancedExportService {
    * @returns Path to exported file/folder
    */
   async exportTransaction(
-    transaction: Transaction,
+    transaction: TransactionWithDetails,
     communications: Communication[],
     options: ExportOptions = {},
   ): Promise<string> {
@@ -312,7 +313,7 @@ class EnhancedExportService {
    * @private
    */
   private async _exportPDF(
-    transaction: Transaction,
+    transaction: TransactionWithDetails,
     communications: Communication[],
     summaryOnly: boolean = false,
   ): Promise<string> {

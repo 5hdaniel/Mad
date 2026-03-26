@@ -112,7 +112,7 @@ class FolderExportService {
    * Export transaction to organized folder structure
    */
   async exportTransactionToFolder(
-    transaction: Transaction,
+    transaction: TransactionWithDetails,
     communications: Communication[],
     options: FolderExportOptions
   ): Promise<string> {
@@ -817,7 +817,7 @@ class FolderExportService {
    * Export transaction to a single combined PDF
    */
   async exportTransactionToCombinedPDF(
-    transaction: Transaction,
+    transaction: TransactionWithDetails,
     communications: Communication[],
     outputPath: string,
     summaryOnly: boolean = false,
