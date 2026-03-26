@@ -128,6 +128,17 @@ jest.mock("../services/supabaseService", () => ({
   },
 }));
 
+// Mock initializationBroadcaster (BACKLOG-1381)
+const mockBroadcast = jest.fn();
+jest.mock("../services/initializationBroadcaster", () => ({
+  initializationBroadcaster: {
+    broadcast: mockBroadcast,
+    getCurrentStage: jest.fn().mockReturnValue({ stage: "idle" }),
+    setWindow: jest.fn(),
+    reset: jest.fn(),
+  },
+}));
+
 // Mock main module to prevent top-level side effects (deep link registration, etc.)
 jest.mock("../main", () => ({
   getAndClearPendingDeepLinkUser: jest.fn().mockReturnValue(null),
@@ -1050,6 +1061,43 @@ describe("System Handlers", () => {
         expect(mockShellShowItemInFolder).toHaveBeenCalledWith(
           "/Users/test/My Documents/export file.pdf",
         );
+      });
+    });
+  });
+
+  // BACKLOG-1381: InitializationBroadcaster integration tests
+  describe("InitializationBroadcaster integration", () => {
+    describe("system:get-init-stage", () => {
+      it("should be registered as a handler", () => {
+        const handler = registeredHandlers.get("system:get-init-stage");
+        expect(handler).toBeDefined();
+      });
+    });
+
+    describe("system:verify-user-in-local-db", () => {
+      it("should use databaseService.isInitialized() guard instead of isInitializationComplete()", async () => {
+        // When DB is not initialized, handler should return error
+        mockDatabaseService.isInitialized.mockReturnValue(false);
+
+        const handler = registeredHandlers.get("system:verify-user-in-local-db");
+        expect(handler).toBeDefined();
+        const result = await handler(mockEvent);
+
+        expect(result.success).toBe(false);
+        expect(result.error).toBe("Database not initialized");
+      });
+
+      it("should allow access when DB is initialized even if full init not complete", async () => {
+        // DB is initialized (ready for queries) but full init may not be complete
+        mockDatabaseService.isInitialized.mockReturnValue(true);
+
+        const handler = registeredHandlers.get("system:verify-user-in-local-db");
+        // Handler will try to ensureUserInLocalDb which needs supabase
+        // Just verify it doesn't fail on the guard check
+        const result = await handler(mockEvent);
+
+        // Should not fail with "Database not initialized" error
+        expect(result.error).not.toBe("Database not initialized");
       });
     });
   });

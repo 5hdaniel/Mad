@@ -15,7 +15,7 @@ import {
   ValidationError,
   validateUserId,
 } from "../utils/validation";
-import { isInitializationComplete, ensureUserInLocalDb } from "./systemHandlers";
+import { ensureUserInLocalDb } from "./systemHandlers";
 
 /**
  * Register all user settings IPC handlers
@@ -400,7 +400,10 @@ export function registerUserSettingsHandlers(): void {
     wrapHandler(async (): Promise<{ success: boolean; userId?: string; error?: string }> => {
       logService.info("verify-user-in-local-db handler called", "Settings");
 
-      if (!isInitializationComplete()) {
+      // BACKLOG-1381: Check DB readiness (not full init completion) to fix race condition.
+      // verify-user-in-local-db only needs the DB to be queryable, not the entire
+      // init sequence to be done. This alone prevents most "Account Setup Failed" errors.
+      if (!databaseService.isInitialized()) {
         logService.warn("verify-user-in-local-db: DB not initialized", "Settings");
         return { success: false, error: "Database not initialized" };
       }
