@@ -263,15 +263,27 @@ export function useAutoRefresh({
       return;
     }
     // Use module-level flag to prevent React strict mode from triggering twice
-    if (hasTriggeredAutoRefresh) return;
+    // BACKLOG-1367: Only treat as "triggered" if permissions are resolved.
+    // On macOS, if hasPermissions is still false (async check pending), allow
+    // the effect to re-fire when hasPermissions flips to true so messages
+    // are included in the sync. On non-macOS, permissions don't matter.
+    if (hasTriggeredAutoRefresh && (!isMacOS || hasPermissions)) return;
 
-    // Mark as triggered to prevent duplicate runs
-    hasTriggeredAutoRefresh = true;
+    // Mark as triggered only when permissions are resolved (or non-macOS).
+    // This prevents the stale-permission race: first trigger with
+    // hasPermissions=false won't lock out a retry when it becomes true.
+    if (!isMacOS || hasPermissions) {
+      hasTriggeredAutoRefresh = true;
+    }
 
     // Run refresh after delay to let UI settle
     const timeoutId = setTimeout(() => {
       // Skip if already imported this session (e.g., during onboarding via PermissionsStep)
-      if (hasMessagesImportTriggered()) {
+      // BACKLOG-1367: Only skip if messages would actually be included in this sync.
+      // When hasPermissions is false, messages won't be synced anyway, so don't
+      // let a prior flag block the entire auto-refresh.
+      const willSyncMessages = isMacOS && hasPermissions;
+      if (willSyncMessages && hasMessagesImportTriggered()) {
         Sentry.addBreadcrumb({
           category: 'sync',
           message: 'Auto-refresh skipped: messages import already triggered this session',
@@ -280,7 +292,10 @@ export function useAutoRefresh({
         });
         return;
       }
-      setMessagesImportTriggered();
+      // Only mark messages as triggered if we're actually going to sync them
+      if (willSyncMessages) {
+        setMessagesImportTriggered();
+      }
 
       Sentry.addBreadcrumb({
         category: 'sync',

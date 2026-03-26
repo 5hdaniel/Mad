@@ -703,6 +703,129 @@ describe("useAutoRefresh", () => {
     });
   });
 
+  describe("BACKLOG-1367: permission race condition", () => {
+    it("should re-trigger sync with messages when hasPermissions flips from false to true on macOS", async () => {
+      // Scenario: Onboarding completes with FDA already granted, but the async
+      // permission check hasn't resolved yet. hasPermissions starts as false.
+      (usePlatform as jest.Mock).mockReturnValue({ isMacOS: true });
+
+      const { rerender } = renderHook(
+        (props) => useAutoRefresh(props),
+        { initialProps: { ...defaultOptions, hasPermissions: false } }
+      );
+
+      // Let preferences load
+      await act(async () => {
+        await Promise.resolve();
+        await Promise.resolve();
+      });
+
+      // Auto-refresh fires after 1.5s delay with hasPermissions=false
+      await act(async () => {
+        jest.advanceTimersByTime(1500);
+        await Promise.resolve();
+      });
+
+      // First trigger: contacts + emails (no messages because hasPermissions=false)
+      expect(mockRequestSync).toHaveBeenCalledTimes(1);
+      expect(mockRequestSync).toHaveBeenCalledWith(
+        ['contacts', 'emails'],
+        'test-user-123'
+      );
+
+      mockRequestSync.mockClear();
+
+      // Now hasPermissions resolves to true
+      rerender({ ...defaultOptions, hasPermissions: true });
+
+      // The effect should re-fire and schedule another sync
+      await act(async () => {
+        jest.advanceTimersByTime(1500);
+        await Promise.resolve();
+      });
+
+      // Second trigger: should now include messages
+      expect(mockRequestSync).toHaveBeenCalledTimes(1);
+      expect(mockRequestSync).toHaveBeenCalledWith(
+        ['contacts', 'emails', 'messages'],
+        'test-user-123'
+      );
+    });
+
+    it("should NOT re-trigger when hasPermissions was already true on first sync", async () => {
+      (usePlatform as jest.Mock).mockReturnValue({ isMacOS: true });
+
+      renderHook(() => useAutoRefresh(defaultOptions));
+
+      // Let preferences load
+      await act(async () => {
+        await Promise.resolve();
+        await Promise.resolve();
+      });
+
+      // Auto-refresh fires with hasPermissions=true
+      await act(async () => {
+        jest.advanceTimersByTime(1500);
+        await Promise.resolve();
+      });
+
+      expect(mockRequestSync).toHaveBeenCalledTimes(1);
+      expect(mockRequestSync).toHaveBeenCalledWith(
+        ['contacts', 'emails', 'messages'],
+        'test-user-123'
+      );
+
+      mockRequestSync.mockClear();
+
+      // Further effect re-fires should be blocked
+      await act(async () => {
+        jest.advanceTimersByTime(5000);
+        await Promise.resolve();
+      });
+
+      expect(mockRequestSync).not.toHaveBeenCalled();
+    });
+
+    it("should not be affected by permission race on non-macOS", async () => {
+      (usePlatform as jest.Mock).mockReturnValue({ isMacOS: false });
+
+      const { rerender } = renderHook(
+        (props) => useAutoRefresh(props),
+        { initialProps: { ...defaultOptions, hasPermissions: false } }
+      );
+
+      // Let preferences load
+      await act(async () => {
+        await Promise.resolve();
+        await Promise.resolve();
+      });
+
+      await act(async () => {
+        jest.advanceTimersByTime(1500);
+        await Promise.resolve();
+      });
+
+      // Should trigger with contacts + emails (non-macOS never has messages)
+      expect(mockRequestSync).toHaveBeenCalledTimes(1);
+      expect(mockRequestSync).toHaveBeenCalledWith(
+        ['contacts', 'emails'],
+        'test-user-123'
+      );
+
+      mockRequestSync.mockClear();
+
+      // hasPermissions flips to true — should NOT re-trigger on non-macOS
+      rerender({ ...defaultOptions, hasPermissions: true });
+
+      await act(async () => {
+        jest.advanceTimersByTime(1500);
+        await Promise.resolve();
+      });
+
+      expect(mockRequestSync).not.toHaveBeenCalled();
+    });
+  });
+
   describe("cleanup", () => {
     it("should cancel pending timeout on unmount", async () => {
       const { unmount } = renderHook(() => useAutoRefresh(defaultOptions));
