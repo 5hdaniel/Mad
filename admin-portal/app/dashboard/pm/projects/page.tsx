@@ -21,7 +21,7 @@ export default function ProjectsPage() {
   const [projects, setProjects] = useState<PmProject[]>([]);
   const [loading, setLoading] = useState(true);
   const [showCreate, setShowCreate] = useState(false);
-  const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>('active');
 
   const loadProjects = useCallback(async () => {
     setLoading(true);
