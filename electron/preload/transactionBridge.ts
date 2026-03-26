@@ -31,6 +31,7 @@ export interface ExportEnhancedOptions {
   startDate?: string;
   endDate?: string;
   summaryOnly?: boolean; // If true, only export summary + indexes (no full content)
+  attachmentType?: "all" | "email" | "text" | "none";
 }
 
 /**

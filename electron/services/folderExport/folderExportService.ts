@@ -510,7 +510,7 @@ class FolderExportService {
    * Export attachments and create manifest
    * TASK-2050: Updated to include email attachment metadata in manifest
    */
-  private async exportAttachments(
+  async exportAttachments(
     transaction: Transaction,
     communications: Communication[],
     outputPath: string,

@@ -225,7 +225,7 @@ class EnhancedExportService {
       }
 
       // Use folderExportService's attachment export
-      await (folderExportService as any).exportAttachments(transaction, attachmentComms, attachmentsPath);
+      await folderExportService.exportAttachments(transaction, attachmentComms, attachmentsPath);
 
       return folderPath;
     } else {

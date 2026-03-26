@@ -79,7 +79,7 @@ function ExportModal({
     if (contentType === "emails" && attachmentType === "all") setAttachmentType("email");
     if (contentType === "texts" && attachmentType === "email") setAttachmentType("none");
     if (contentType === "texts" && attachmentType === "all") setAttachmentType("text");
-  }, [exportFormat, contentType]);
+  }, [exportFormat, contentType, attachmentType]);
 
   // Formats that are currently implemented
   const implementedFormats = ["pdf", "folder", "combined-pdf"];
@@ -211,7 +211,7 @@ function ExportModal({
             endDate,
             summaryOnly,
             attachmentType,
-          } as Parameters<typeof window.api.transactions.exportEnhanced>[1],
+          },
         );
       }
 
@@ -557,20 +557,29 @@ function ExportModal({
                 <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">
                   Content
                 </label>
-                <div className="flex gap-2">
+                <div className="flex flex-wrap gap-2">
                   {(["both", "emails", "texts"] as const).map((value) => {
                     const labels: Record<string, string> = { both: "Both", emails: "Emails Only", texts: "Texts Only" };
+                    const isDisabled = (value === "emails" && !canExportEmail) || (value === "texts" && !canExportText);
                     return (
                       <button
                         key={value}
-                        onClick={() => setContentType(value)}
+                        onClick={() => { if (!isDisabled) setContentType(value); }}
+                        disabled={isDisabled}
                         className={`px-4 py-2 rounded-full text-sm font-medium transition-all ${
                           contentType === value
                             ? "bg-purple-500 text-white shadow-sm"
-                            : "bg-gray-100 text-gray-700 hover:bg-gray-200"
+                            : isDisabled
+                              ? "bg-gray-50 text-gray-400 cursor-not-allowed border border-gray-200"
+                              : "bg-gray-100 text-gray-700 hover:bg-gray-200"
                         }`}
                       >
-                        {labels[value]}
+                        <span className="flex items-center gap-1.5">
+                          {labels[value]}
+                          {isDisabled && (
+                            <span className="text-xs bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded">Upgrade</span>
+                          )}
+                        </span>
                       </button>
                     );
                   })}
