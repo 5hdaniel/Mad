@@ -50,6 +50,7 @@ jest.mock("../services/supabaseService", () => ({
 // Mock deviceService
 jest.mock("../services/deviceService", () => ({
   getDeviceId: jest.fn().mockReturnValue("test-device-id"),
+  registerDevice: jest.fn().mockResolvedValue({ success: true }),
 }));
 
 // Mock databaseService
