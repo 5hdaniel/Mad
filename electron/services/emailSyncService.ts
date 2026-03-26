@@ -390,6 +390,8 @@ async function fetchStoreAndDedup(params: {
  * (validation + rate limiting + delegation) while service owns business logic.
  */
 class EmailSyncService {
+  private precacheInProgress = false;
+
   /**
    * Sync emails from provider(s) for a transaction, then auto-link communications.
    *
@@ -1057,6 +1059,12 @@ class EmailSyncService {
     userId: string,
     onProgress?: (percent: number) => void,
   ): Promise<{ fetched: number; stored: number; error?: string }> {
+    if (this.precacheInProgress) {
+      logService.info("[EmailSync] Precache already in progress, skipping", "EmailSync");
+      return { fetched: 0, stored: 0, error: "Precache already in progress" };
+    }
+    this.precacheInProgress = true;
+    try {
     logService.info("Starting email pre-cache", "EmailSyncService", { userId });
 
     Sentry.addBreadcrumb({
@@ -1242,6 +1250,9 @@ class EmailSyncService {
     });
 
     return { fetched: totalFetched, stored: totalStored };
+    } finally {
+      this.precacheInProgress = false;
+    }
   }
 
   /**

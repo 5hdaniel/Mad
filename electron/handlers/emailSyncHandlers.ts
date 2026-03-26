@@ -310,7 +310,7 @@ export function registerEmailSyncHandlers(
       }
 
       // Rate limit check - 30 second cooldown per user
-      const { allowed, remainingMs } = rateLimiters.sync.canExecute(
+      const { allowed, remainingMs } = rateLimiters.precache.canExecute(
         "emails:precache",
         validatedUserId,
       );

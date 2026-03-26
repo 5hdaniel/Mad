@@ -244,4 +244,10 @@ export const rateLimiters = {
    * 10 second cooldown - exports involve PDF generation and file I/O.
    */
   export: createIPCRateLimiter(10_000),
+
+  /**
+   * Rate limiter for email pre-cache operations.
+   * 30 second cooldown - bulk email fetch across all providers.
+   */
+  precache: createIPCRateLimiter(30_000),
 } as const;

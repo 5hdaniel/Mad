@@ -288,6 +288,7 @@ class SyncOrchestratorServiceClass {
       if (signal?.aborted) return;
       try {
         logger.info('[SyncOrchestrator] Starting email pre-cache after scan');
+        // TODO: Pass progress callback to precacheEmails to report 70-100% progress during precache
         await window.api.transactions.precacheEmails(userId);
         logger.info('[SyncOrchestrator] Email pre-cache complete');
       } catch (precacheError) {
