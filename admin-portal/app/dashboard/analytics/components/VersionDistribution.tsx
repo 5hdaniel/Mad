@@ -10,6 +10,7 @@
 
 import { useState } from 'react';
 import Link from 'next/link';
+import { useRouter, useSearchParams } from 'next/navigation';
 import {
   BarChart,
   Bar,
@@ -25,7 +26,15 @@ import type { VersionDistribution as VersionDistributionData } from '@/lib/analy
 
 interface Props {
   data: VersionDistributionData[];
+  activePeriod: number;
 }
+
+const PERIODS = [
+  { days: 1, label: '24h' },
+  { days: 7, label: '7d' },
+  { days: 30, label: '30d' },
+  { days: 90, label: '90d' },
+] as const;
 
 const COLORS = [
   '#0ea5e9', // primary-500
@@ -36,8 +45,20 @@ const COLORS = [
   '#7dd3fc', // primary-300
 ];
 
-export function VersionDistribution({ data }: Props) {
+export function VersionDistribution({ data, activePeriod }: Props) {
   const [expandedVersion, setExpandedVersion] = useState<string | null>(null);
+  const router = useRouter();
+  const searchParams = useSearchParams();
+
+  const setPeriod = (days: number) => {
+    const params = new URLSearchParams(searchParams.toString());
+    if (days === 30) {
+      params.delete('period');
+    } else {
+      params.set('period', String(days));
+    }
+    router.push(`?${params.toString()}`, { scroll: false });
+  };
 
   if (data.length === 0) {
     return (
@@ -61,11 +82,29 @@ export function VersionDistribution({ data }: Props) {
 
   return (
     <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-      <h3 className="text-lg font-semibold text-gray-900 mb-4">
-        Active Users by App Version
-      </h3>
+      <div className="flex items-center justify-between mb-4">
+        <h3 className="text-lg font-semibold text-gray-900">
+          Active Users by App Version
+        </h3>
+        <div className="flex items-center gap-1 bg-gray-100 rounded-lg p-0.5">
+          {PERIODS.map((p) => (
+            <button
+              key={p.days}
+              type="button"
+              onClick={() => setPeriod(p.days)}
+              className={`px-3 py-1 text-xs font-medium rounded-md transition-colors ${
+                activePeriod === p.days
+                  ? 'bg-white text-gray-900 shadow-sm'
+                  : 'text-gray-500 hover:text-gray-700'
+              }`}
+            >
+              {p.label}
+            </button>
+          ))}
+        </div>
+      </div>
       <p className="text-sm text-gray-500 mb-6">
-        Based on active devices seen in the last 30 days. Click a bar or row to see users.
+        Based on active devices seen in the last {activePeriod === 1 ? '24 hours' : `${activePeriod} days`}. Click a bar or row to see users.
       </p>
 
       {/* Bar Chart */}
