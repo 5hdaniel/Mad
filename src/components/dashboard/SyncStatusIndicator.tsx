@@ -203,24 +203,60 @@ export function SyncStatusIndicator({
     // Only show pending count styling/message for AI add-on users
     const hasPending = hasAIAddon && pendingCount > 0;
 
+    // Determine completion variant: error (amber) vs success (green/indigo)
+    // BACKLOG-1368: If any queue item had an error, show amber "completed with errors"
+    // instead of unconditionally showing green "Sync Complete"
+    const completionVariant: 'error' | 'pending' | 'success' =
+      hasError ? 'error' : hasPending ? 'pending' : 'success';
+
+    const completionStyles = {
+      error: {
+        card: 'bg-amber-50 border-amber-200',
+        iconBg: 'bg-amber-100',
+        title: 'text-amber-900',
+        subtitle: 'text-amber-700',
+        dismissBtn: 'text-amber-400 hover:text-amber-600 hover:bg-amber-100',
+      },
+      pending: {
+        card: 'bg-gradient-to-r from-indigo-50 to-purple-50 border-indigo-200',
+        iconBg: 'bg-indigo-100',
+        title: 'text-indigo-900',
+        subtitle: 'text-indigo-700',
+        dismissBtn: 'text-indigo-400 hover:text-indigo-600 hover:bg-indigo-100',
+      },
+      success: {
+        card: 'bg-green-50 border-green-200',
+        iconBg: 'bg-green-100',
+        title: 'text-green-800',
+        subtitle: 'text-green-600',
+        dismissBtn: 'text-green-400 hover:text-green-600 hover:bg-green-100',
+      },
+    };
+
+    const styles = completionStyles[completionVariant];
+
+    const completionTitle =
+      completionVariant === 'error' ? 'Sync Completed with Errors' :
+      completionVariant === 'pending' ? `${pendingCount} transaction${pendingCount !== 1 ? "s" : ""} found` :
+      'Sync Complete';
+
+    const completionSubtitle =
+      completionVariant === 'error' ? 'Some items failed to sync' :
+      completionVariant === 'pending' ? 'New transactions detected and ready for review' :
+      'All data synced successfully';
+
     return (
       <div
-        className={`${
-          hasPending
-            ? "bg-gradient-to-r from-indigo-50 to-purple-50 border-indigo-200"
-            : "bg-green-50 border-green-200"
-        } border rounded-xl p-4 mb-4 animate-fade-in`}
+        className={`${styles.card} border rounded-xl p-4 mb-4 animate-fade-in`}
         data-testid="sync-status-complete"
       >
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
             {/* Icon */}
             <div
-              className={`w-10 h-10 ${
-                hasPending ? "bg-indigo-100" : "bg-green-100"
-              } rounded-full flex items-center justify-center flex-shrink-0`}
+              className={`w-10 h-10 ${styles.iconBg} rounded-full flex items-center justify-center flex-shrink-0`}
             >
-              {hasPending ? (
+              {completionVariant === 'pending' ? (
                 <svg
                   className="w-5 h-5 text-indigo-600"
                   fill="none"
@@ -233,6 +269,21 @@ export function SyncStatusIndicator({
                     strokeLinejoin="round"
                     strokeWidth={2}
                     d="M5 3v4M3 5h4M6 17v4m-2-2h4m5-16l2.286 6.857L21 12l-5.714 2.143L13 21l-2.286-6.857L5 12l5.714-2.143L13 3z"
+                  />
+                </svg>
+              ) : completionVariant === 'error' ? (
+                <svg
+                  className="w-5 h-5 text-amber-600"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                  aria-hidden="true"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L4.082 16.5c-.77.833.192 2.5 1.732 2.5z"
                   />
                 </svg>
               ) : (
@@ -256,29 +307,21 @@ export function SyncStatusIndicator({
             {/* Message */}
             <div>
               <h3
-                className={`text-sm font-semibold ${
-                  hasPending ? "text-indigo-900" : "text-green-800"
-                }`}
+                className={`text-sm font-semibold ${styles.title}`}
               >
-                {hasPending
-                  ? `${pendingCount} transaction${pendingCount !== 1 ? "s" : ""} found`
-                  : "Sync Complete"}
+                {completionTitle}
               </h3>
               <p
-                className={`text-xs ${
-                  hasPending ? "text-indigo-700" : "text-green-600"
-                }`}
+                className={`text-xs ${styles.subtitle}`}
               >
-                {hasPending
-                  ? "New transactions detected and ready for review"
-                  : "All data synced successfully"}
+                {completionSubtitle}
               </p>
             </div>
           </div>
 
           {/* Actions */}
           <div className="flex items-center gap-2">
-            {hasPending && onViewPending && (
+            {completionVariant === 'pending' && onViewPending && (
               <button
                 onClick={onViewPending}
                 className="px-4 py-2 bg-indigo-500 hover:bg-indigo-600 text-white text-sm font-medium rounded-lg transition-colors shadow-sm"
@@ -288,11 +331,7 @@ export function SyncStatusIndicator({
             )}
             <button
               onClick={handleDismiss}
-              className={`p-2 ${
-                hasPending
-                  ? "text-indigo-400 hover:text-indigo-600 hover:bg-indigo-100"
-                  : "text-green-400 hover:text-green-600 hover:bg-green-100"
-              } rounded-lg transition-colors`}
+              className={`p-2 ${styles.dismissBtn} rounded-lg transition-colors`}
               title="Dismiss"
               aria-label="Dismiss notification"
             >
