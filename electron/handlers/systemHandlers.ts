@@ -523,6 +523,12 @@ export function registerSystemHandlers(): void {
           }
         }
 
+        // BACKLOG-1381: Broadcast creating-user stage before user verification/creation
+        initializationBroadcaster.broadcast({
+          stage: "creating-user",
+          message: "Setting up your account...",
+        });
+
         // ALWAYS verify user exists in local DB before returning success
         // This catches cases where pendingDeepLinkUser was null (non-deep-link auth flows)
         logService.debug("Running fallback user verification/creation", "System");
@@ -589,6 +595,13 @@ export function registerSystemHandlers(): void {
         }
 
         initializationComplete = true;
+
+        // BACKLOG-1381: Broadcast complete stage
+        initializationBroadcaster.broadcast({
+          stage: "complete",
+          message: "Ready",
+        });
+
         return {
           success: true,
           available: true,
@@ -599,6 +612,13 @@ export function registerSystemHandlers(): void {
           error instanceof Error
             ? error.message
             : "Database initialization failed. Please try again.";
+
+        // BACKLOG-1381: Broadcast error stage
+        initializationBroadcaster.broadcast({
+          stage: "error",
+          error: { message: errorMessage, retryable: true },
+        });
+
         logService.error("Database initialization failed", "System", {
           error: errorMessage,
         });
@@ -667,6 +687,12 @@ export function registerSystemHandlers(): void {
         initializationComplete = true;
         logService.debug("Database initialized successfully", "System");
 
+        // BACKLOG-1381: Broadcast complete stage (deferred DB init path)
+        initializationBroadcaster.broadcast({
+          stage: "complete",
+          message: "Ready",
+        });
+
         // TASK-1956: Initialize persistent worker pool for contact queries
         const poolDbPath2 = getDbPath();
         const poolEncKey2 = getEncryptionKey();
@@ -685,6 +711,13 @@ export function registerSystemHandlers(): void {
       } catch (error) {
         const errorMessage =
           error instanceof Error ? error.message : "Unknown error";
+
+        // BACKLOG-1381: Broadcast error stage (deferred DB init path)
+        initializationBroadcaster.broadcast({
+          stage: "error",
+          error: { message: errorMessage, retryable: true },
+        });
+
         logService.error("Database initialization failed", "System", {
           error: errorMessage,
         });
