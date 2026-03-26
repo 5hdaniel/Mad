@@ -222,6 +222,7 @@ function EmailBubble({
   onViewFull,
   attachments,
   loadingAttachments,
+  attachmentMessage,
   onPreviewAttachment,
   userEmail,
 }: {
@@ -231,6 +232,7 @@ function EmailBubble({
   onViewFull?: () => void;
   attachments: EmailAttachment[];
   loadingAttachments: boolean;
+  attachmentMessage?: string | null;
   onPreviewAttachment: (attachment: EmailAttachment) => void;
   userEmail?: string;
 }): React.ReactElement {
@@ -340,7 +342,9 @@ function EmailBubble({
                 <span className="font-medium">
                   {loadingAttachments
                     ? "Loading attachments..."
-                    : `${attachmentCount} attachment${attachmentCount !== 1 ? "s" : ""}`}
+                    : attachmentMessage
+                      ? attachmentMessage
+                      : `${attachmentCount} attachment${attachmentCount !== 1 ? "s" : ""}`}
                 </span>
               </button>
 
@@ -427,6 +431,8 @@ export function EmailThreadViewModal({
   // Map of email ID -> attachments
   const [attachmentsByEmail, setAttachmentsByEmail] = useState<Map<string, EmailAttachment[]>>(new Map());
   const [loadingAttachmentIds, setLoadingAttachmentIds] = useState<Set<string>>(new Set());
+  // BACKLOG-1369: Per-email attachment download status messages
+  const [attachmentMessagesByEmail, setAttachmentMessagesByEmail] = useState<Map<string, string>>(new Map());
   const [previewAttachment, setPreviewAttachment] = useState<EmailAttachment | null>(null);
 
   // TASK-1782: Fetch attachments for emails that have them
@@ -445,11 +451,19 @@ export function EmailThreadViewModal({
     emailsWithAttachments.forEach(email => {
       transactionsApi
         .getEmailAttachments(email.id)
-        .then((result: { success: boolean; data?: EmailAttachment[]; error?: string }) => {
+        .then((result: { success: boolean; data?: EmailAttachment[]; error?: string; downloadBlocked?: boolean; offline?: boolean; downloadRequired?: boolean; reason?: string }) => {
           if (result.success && result.data) {
             setAttachmentsByEmail(prev => {
               const next = new Map(prev);
               next.set(email.id, result.data!);
+              return next;
+            });
+          }
+          // BACKLOG-1369: Handle blocked/offline scenarios
+          if (result.downloadBlocked || result.offline) {
+            setAttachmentMessagesByEmail(prev => {
+              const next = new Map(prev);
+              next.set(email.id, result.reason || "Attachments are not available.");
               return next;
             });
           }
@@ -547,6 +561,7 @@ export function EmailThreadViewModal({
               onViewFull={onViewEmail ? () => onViewEmail(email) : undefined}
               attachments={attachmentsByEmail.get(email.id) || []}
               loadingAttachments={loadingAttachmentIds.has(email.id)}
+              attachmentMessage={attachmentMessagesByEmail.get(email.id)}
               onPreviewAttachment={setPreviewAttachment}
               userEmail={userEmail}
             />

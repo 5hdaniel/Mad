@@ -338,6 +338,10 @@ export interface WindowApiTransactions {
       storage_path: string | null;
     }>;
     error?: string;
+    downloadBlocked?: boolean;
+    offline?: boolean;
+    downloadRequired?: boolean;
+    reason?: string;
   }>;
   /** Backfill missing email attachments */
   backfillAttachments: (userId: string) => Promise<{
