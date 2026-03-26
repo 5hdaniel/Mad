@@ -304,6 +304,45 @@ export const systemBridge = {
       error?: string;
     }>,
 
+  // Initialization stage events (BACKLOG-1379: event-driven init protocol)
+
+  /**
+   * Subscribe to initialization stage change events.
+   * Returns a cleanup function to unsubscribe.
+   * @param callback - Called when initialization stage changes
+   * @returns Cleanup function that removes the listener
+   */
+  onInitStage: (
+    callback: (event: {
+      stage: string;
+      progress?: number;
+      message?: string;
+      error?: { message: string; retryable: boolean };
+    }) => void,
+  ) => {
+    const handler = (
+      _event: Electron.IpcRendererEvent,
+      data: {
+        stage: string;
+        progress?: number;
+        message?: string;
+        error?: { message: string; retryable: boolean };
+      },
+    ) => {
+      callback(data);
+    };
+    ipcRenderer.on("system:init-stage", handler);
+    return () => {
+      ipcRenderer.removeListener("system:init-stage", handler);
+    };
+  },
+
+  /**
+   * Get the current initialization stage (for late-joining renderers).
+   * @returns Current init stage event
+   */
+  getInitStage: () => ipcRenderer.invoke("system:get-init-stage"),
+
   // Spread dev-only diagnostics (empty object in production)
   ...devDiagnostics,
 };

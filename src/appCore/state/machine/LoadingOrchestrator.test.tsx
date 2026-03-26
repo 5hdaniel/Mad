@@ -20,6 +20,13 @@ import type { AppState } from "./types";
 // MOCK SETUP
 // ============================================
 
+// Mock Sentry (BACKLOG-1382: LoadingOrchestrator now imports Sentry for init stage breadcrumbs)
+jest.mock("@sentry/electron/renderer", () => ({
+  addBreadcrumb: jest.fn(),
+  setTag: jest.fn(),
+  captureMessage: jest.fn(),
+}));
+
 jest.mock("../../../contexts/NetworkContext", () => ({
   useNetwork: () => ({
     isOnline: true,
@@ -41,6 +48,8 @@ const mockApi = {
   system: {
     hasEncryptionKeyStore: jest.fn(),
     initializeSecureStorage: jest.fn(),
+    onInitStage: jest.fn(),
+    getInitStage: jest.fn(),
   },
 };
 
@@ -65,6 +74,9 @@ beforeEach(() => {
   mockApi.system.initializeSecureStorage.mockReturnValue(new Promise(() => {}));
   mockApi.auth.getCurrentUser.mockReturnValue(new Promise(() => {}));
   mockApi.auth.preValidateSession.mockReturnValue(new Promise(() => {}));
+  // Default onInitStage returns a cleanup function (BACKLOG-1382)
+  mockApi.system.onInitStage.mockReturnValue(jest.fn());
+  mockApi.system.getInitStage.mockReturnValue(new Promise(() => {}));
 });
 
 // ============================================
@@ -642,5 +654,137 @@ describe("LoadingOrchestrator preload bridge race condition", () => {
       },
       { timeout: 3000 }
     );
+  });
+
+  // ============================================
+  // INIT STAGE SUBSCRIPTION (BACKLOG-1382)
+  // ============================================
+
+  describe("init stage subscription", () => {
+    it("subscribes to onInitStage during initializing-db phase", async () => {
+      const mockCleanup = jest.fn();
+      mockApi.system.onInitStage.mockReturnValue(mockCleanup);
+
+      // Start in initializing-db phase
+      const initDbState: AppState = {
+        status: "loading",
+        phase: "initializing-db",
+      };
+
+      render(
+        <TestWrapper initialState={initDbState}>
+          <div data-testid="children">App Content</div>
+        </TestWrapper>
+      );
+
+      await waitFor(() => {
+        expect(mockApi.system.onInitStage).toHaveBeenCalledTimes(1);
+        expect(mockApi.system.onInitStage).toHaveBeenCalledWith(expect.any(Function));
+      });
+    });
+
+    it("does not subscribe when not in initializing-db phase", () => {
+      mockApi.system.onInitStage.mockReturnValue(jest.fn());
+
+      // Start in checking-storage phase
+      const checkingState: AppState = {
+        status: "loading",
+        phase: "checking-storage",
+      };
+
+      render(
+        <TestWrapper initialState={checkingState}>
+          <div data-testid="children">App Content</div>
+        </TestWrapper>
+      );
+
+      // onInitStage should not be called during checking-storage phase
+      expect(mockApi.system.onInitStage).not.toHaveBeenCalled();
+    });
+
+    it("calls cleanup when component unmounts", async () => {
+      const mockCleanup = jest.fn();
+      mockApi.system.onInitStage.mockReturnValue(mockCleanup);
+
+      const initDbState: AppState = {
+        status: "loading",
+        phase: "initializing-db",
+      };
+
+      const { unmount } = render(
+        <TestWrapper initialState={initDbState}>
+          <div data-testid="children">App Content</div>
+        </TestWrapper>
+      );
+
+      await waitFor(() => {
+        expect(mockApi.system.onInitStage).toHaveBeenCalledTimes(1);
+      });
+
+      unmount();
+
+      expect(mockCleanup).toHaveBeenCalledTimes(1);
+    });
+
+    it("dispatches INIT_STAGE_RECEIVED when event is received", async () => {
+      let capturedCallback: ((event: Record<string, unknown>) => void) | null = null;
+      mockApi.system.onInitStage.mockImplementation((cb: (event: Record<string, unknown>) => void) => {
+        capturedCallback = cb;
+        return jest.fn();
+      });
+
+      const initDbState: AppState = {
+        status: "loading",
+        phase: "initializing-db",
+      };
+
+      render(
+        <TestWrapper initialState={initDbState}>
+          <div data-testid="children">App Content</div>
+        </TestWrapper>
+      );
+
+      await waitFor(() => {
+        expect(capturedCallback).not.toBeNull();
+      });
+
+      // Simulate receiving an init stage event
+      capturedCallback!({ stage: "db-opening", message: "Opening database..." });
+
+      // The component should show the stage-specific message
+      await waitFor(() => {
+        expect(screen.getByText("Checking security...")).toBeInTheDocument();
+      });
+    });
+
+    it("shows migration progress when migrating stage is received", async () => {
+      let capturedCallback: ((event: Record<string, unknown>) => void) | null = null;
+      mockApi.system.onInitStage.mockImplementation((cb: (event: Record<string, unknown>) => void) => {
+        capturedCallback = cb;
+        return jest.fn();
+      });
+
+      const initDbState: AppState = {
+        status: "loading",
+        phase: "initializing-db",
+      };
+
+      render(
+        <TestWrapper initialState={initDbState}>
+          <div data-testid="children">App Content</div>
+        </TestWrapper>
+      );
+
+      await waitFor(() => {
+        expect(capturedCallback).not.toBeNull();
+      });
+
+      // Simulate receiving a migration event with progress
+      capturedCallback!({ stage: "migrating", progress: 42, message: "Running migrations..." });
+
+      await waitFor(() => {
+        expect(screen.getByText("Updating database... 42%")).toBeInTheDocument();
+      });
+    });
   });
 });

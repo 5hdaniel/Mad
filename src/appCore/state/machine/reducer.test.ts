@@ -1521,3 +1521,151 @@ describe("appStateReducer - Immutability", () => {
     expect(result).toBe(state);
   });
 });
+
+// ============================================
+// INIT_STAGE_RECEIVED TESTS (BACKLOG-1382)
+// ============================================
+
+describe("INIT_STAGE_RECEIVED", () => {
+  it("updates initStage on loading state", () => {
+    const state: LoadingState = {
+      status: "loading",
+      phase: "initializing-db",
+    };
+
+    const result = appStateReducer(state, {
+      type: "INIT_STAGE_RECEIVED",
+      payload: { stage: "db-opening", message: "Opening database..." },
+    });
+
+    expect(result).toEqual({
+      status: "loading",
+      phase: "initializing-db",
+      initStage: "db-opening",
+      initMessage: "Opening database...",
+      migrationProgress: undefined,
+    });
+  });
+
+  it("updates migrationProgress when stage is migrating", () => {
+    const state: LoadingState = {
+      status: "loading",
+      phase: "initializing-db",
+    };
+
+    const result = appStateReducer(state, {
+      type: "INIT_STAGE_RECEIVED",
+      payload: { stage: "migrating", progress: 50, message: "Running migrations..." },
+    });
+
+    expect(result).toEqual({
+      status: "loading",
+      phase: "initializing-db",
+      initStage: "migrating",
+      migrationProgress: 50,
+      initMessage: "Running migrations...",
+    });
+  });
+
+  it("preserves existing loading state fields", () => {
+    const state: LoadingState = {
+      status: "loading",
+      phase: "initializing-db",
+      progress: 25,
+      deferredDbInit: false,
+    };
+
+    const result = appStateReducer(state, {
+      type: "INIT_STAGE_RECEIVED",
+      payload: { stage: "db-ready" },
+    });
+
+    const resultLoading = result as LoadingState;
+    expect(resultLoading.status).toBe("loading");
+    expect(resultLoading.phase).toBe("initializing-db");
+    expect(resultLoading.progress).toBe(25);
+    expect(resultLoading.deferredDbInit).toBe(false);
+    expect(resultLoading.initStage).toBe("db-ready");
+  });
+
+  it("is ignored when not in loading state (onboarding)", () => {
+    const state: AppState = {
+      status: "onboarding",
+      step: "phone-type",
+      user: mockUser,
+      platform: mockMacOSPlatform,
+      completedSteps: [],
+    };
+
+    const result = appStateReducer(state, {
+      type: "INIT_STAGE_RECEIVED",
+      payload: { stage: "db-opening" },
+    });
+
+    expect(result).toBe(state);
+  });
+
+  it("is ignored when in unauthenticated state", () => {
+    const state: AppState = { status: "unauthenticated" };
+
+    const result = appStateReducer(state, {
+      type: "INIT_STAGE_RECEIVED",
+      payload: { stage: "db-opening" },
+    });
+
+    expect(result).toBe(state);
+  });
+
+  it("is ignored when in ready state", () => {
+    const state: ReadyState = {
+      status: "ready",
+      user: mockUser,
+      platform: mockMacOSPlatform,
+      userData: mockCompleteUserData,
+    };
+
+    const result = appStateReducer(state, {
+      type: "INIT_STAGE_RECEIVED",
+      payload: { stage: "complete" },
+    });
+
+    expect(result).toBe(state);
+  });
+
+  it("handles error payload without affecting state transitions", () => {
+    const state: LoadingState = {
+      status: "loading",
+      phase: "initializing-db",
+    };
+
+    const result = appStateReducer(state, {
+      type: "INIT_STAGE_RECEIVED",
+      payload: {
+        stage: "error",
+        error: { message: "Migration failed", retryable: true },
+      },
+    });
+
+    const resultLoading = result as LoadingState;
+    expect(resultLoading.initStage).toBe("error");
+    // Error in payload is metadata only — does NOT change state machine status
+    expect(resultLoading.status).toBe("loading");
+    expect(resultLoading.phase).toBe("initializing-db");
+  });
+
+  it("works during any loading phase, not just initializing-db", () => {
+    const state: LoadingState = {
+      status: "loading",
+      phase: "checking-storage",
+    };
+
+    const result = appStateReducer(state, {
+      type: "INIT_STAGE_RECEIVED",
+      payload: { stage: "idle" },
+    });
+
+    const resultLoading = result as LoadingState;
+    expect(resultLoading.initStage).toBe("idle");
+    expect(resultLoading.phase).toBe("checking-storage");
+  });
+});
