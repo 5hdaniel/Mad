@@ -13,10 +13,17 @@ import { SupabaseClient } from '@supabase/supabase-js';
 
 // ─── Types ───────────────────────────────────────────────────────
 
+export interface VersionUser {
+  id: string;
+  email: string | null;
+  display_name: string | null;
+}
+
 export interface VersionDistribution {
   app_version: string;
   user_count: number;
   adoption_pct: number;
+  users: VersionUser[];
 }
 
 export interface SystemCounts {
@@ -62,6 +69,26 @@ function thirtyDaysAgo(): string {
  * Fetches only app_version and user_id (two columns, no payloads),
  * then aggregates in JS. For 10K+ devices, migrate to an RPC.
  */
+/**
+ * Compare two semver strings numerically (e.g. "2.9.1" < "2.10.1").
+ * Non-semver strings like "Unknown" sort to the end.
+ */
+function compareSemver(a: string, b: string): number {
+  const partsA = a.split('.').map(Number);
+  const partsB = b.split('.').map(Number);
+  const isNumA = partsA.every((n) => !isNaN(n));
+  const isNumB = partsB.every((n) => !isNaN(n));
+  // Non-numeric versions (e.g. "Unknown") sort to the end
+  if (!isNumA && !isNumB) return a.localeCompare(b);
+  if (!isNumA) return 1;
+  if (!isNumB) return -1;
+  for (let i = 0; i < Math.max(partsA.length, partsB.length); i++) {
+    const diff = (partsA[i] ?? 0) - (partsB[i] ?? 0);
+    if (diff !== 0) return diff;
+  }
+  return 0;
+}
+
 export async function getVersionDistribution(
   supabase: SupabaseClient
 ): Promise<VersionDistribution[]> {
@@ -76,6 +103,7 @@ export async function getVersionDistribution(
     return [];
   }
 
+  // Collect unique user IDs per version
   const versionMap = new Map<string, Set<string>>();
   for (const d of devices) {
     const version = d.app_version || 'Unknown';
@@ -85,16 +113,34 @@ export async function getVersionDistribution(
 
   const totalActive = new Set(devices.map((d) => d.user_id)).size || 1;
 
+  // Fetch user details for all unique user IDs
+  const allUserIds = [...new Set(devices.map((d) => d.user_id))];
+  const { data: usersData } = await supabase
+    .from('users')
+    .select('id, email, display_name')
+    .in('id', allUserIds);
+
+  const userLookup = new Map<string, VersionUser>();
+  for (const u of usersData ?? []) {
+    userLookup.set(u.id, { id: u.id, email: u.email, display_name: u.display_name });
+  }
+
   const results: VersionDistribution[] = [];
-  for (const [version, users] of versionMap) {
+  for (const [version, userIds] of versionMap) {
+    const users: VersionUser[] = [...userIds].map(
+      (uid) => userLookup.get(uid) ?? { id: uid, email: null, display_name: null }
+    );
+    users.sort((a, b) => (a.display_name ?? a.email ?? '').localeCompare(b.display_name ?? b.email ?? ''));
     results.push({
       app_version: version,
-      user_count: users.size,
-      adoption_pct: Math.round((users.size / totalActive) * 100),
+      user_count: users.length,
+      adoption_pct: Math.round((users.length / totalActive) * 100),
+      users,
     });
   }
 
-  results.sort((a, b) => b.app_version.localeCompare(a.app_version));
+  // Sort old → newest, "Unknown" at the end
+  results.sort((a, b) => compareSemver(a.app_version, b.app_version));
   return results;
 }
 
