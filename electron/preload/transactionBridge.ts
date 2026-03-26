@@ -40,6 +40,7 @@ export interface ExportFolderOptions {
   includeEmails?: boolean;
   includeTexts?: boolean;
   includeAttachments?: boolean;
+  contentType?: "both" | "emails" | "texts";
 }
 
 export const transactionBridge = {

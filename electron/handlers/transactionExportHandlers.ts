@@ -27,6 +27,7 @@ import {
   validateFilePath,
   sanitizeObject,
 } from "../utils/validation";
+import { isEmailMessage, isTextMessage } from "../utils/channelHelpers";
 
 interface ExportOptions {
   exportFormat?: string;
@@ -219,6 +220,7 @@ export function registerTransactionExportHandlers(
         includeTexts?: boolean;
         includeAttachments?: boolean;
         emailExportMode?: "thread" | "individual";
+        contentType?: "both" | "emails" | "texts";
       };
 
       // Get transaction details with communications
@@ -257,6 +259,31 @@ export function registerTransactionExportHandlers(
           startDate: startDate,
           endDate: endDate,
         });
+      }
+
+      // Filter communications by content type (emails only / texts only)
+      const contentTypeFilter = sanitizedOptions.contentType || "both";
+      if (contentTypeFilter !== "both") {
+        const beforeFilter = communications.length;
+        if (contentTypeFilter === "emails") {
+          communications = communications.filter((comm: any) => isEmailMessage(comm));
+        } else if (contentTypeFilter === "texts") {
+          communications = communications.filter((comm: any) => isTextMessage(comm));
+        }
+        logService.info("Filtered communications by content type", "Transactions", {
+          contentType: contentTypeFilter,
+          before: beforeFilter,
+          after: communications.length,
+        });
+
+        // Return early with a helpful message if no communications match the filter
+        if (communications.length === 0) {
+          const typeLabel = contentTypeFilter === "emails" ? "email" : "text";
+          return {
+            success: false,
+            error: `No ${typeLabel} communications found for this transaction in the selected date range.`,
+          };
+        }
       }
 
       // Export to folder structure

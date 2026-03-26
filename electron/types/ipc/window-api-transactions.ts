@@ -283,6 +283,7 @@ export interface WindowApiTransactions {
     includeEmails?: boolean;
     includeTexts?: boolean;
     includeAttachments?: boolean;
+    contentType?: "both" | "emails" | "texts";
   }) => Promise<{
     success: boolean;
     path?: string;

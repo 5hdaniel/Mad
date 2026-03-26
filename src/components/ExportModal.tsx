@@ -45,7 +45,7 @@ function ExportModal({
       : "",
   );
 
-  const [contentType] = useState("both"); // text, email, both
+  const [contentType, setContentType] = useState<"both" | "emails" | "texts">("both");
   const [exportFormat, setExportFormat] = useState("folder"); // folder, pdf, excel, csv, json, txt_eml
   const [emailExportMode, setEmailExportMode] = useState<"thread" | "individual">("thread");
   const [exporting, setExporting] = useState(false);
@@ -150,15 +150,16 @@ function ExportModal({
         // Use folder export for comprehensive audit package
         // Note: Type cast needed due to type inference issue with window.d.ts
         const exportFolderFn = (window.api.transactions as unknown as {
-          exportFolder: (id: string, opts: { includeEmails: boolean; includeTexts: boolean; includeAttachments: boolean; emailExportMode?: "thread" | "individual"; startDate?: string; endDate?: string }) => Promise<{ success: boolean; path?: string; error?: string }>;
+          exportFolder: (id: string, opts: { includeEmails: boolean; includeTexts: boolean; includeAttachments: boolean; emailExportMode?: "thread" | "individual"; startDate?: string; endDate?: string; contentType?: "both" | "emails" | "texts" }) => Promise<{ success: boolean; path?: string; error?: string }>;
         }).exportFolder;
         result = await exportFolderFn(transaction.id, {
-          includeEmails: contentType === "email" || contentType === "both",
-          includeTexts: contentType === "text" || contentType === "both",
+          includeEmails: contentType === "emails" || contentType === "both",
+          includeTexts: contentType === "texts" || contentType === "both",
           includeAttachments: true,
           emailExportMode,
           startDate,
           endDate,
+          contentType,
         });
       } else {
         // Use enhanced export for single-file formats
@@ -168,6 +169,7 @@ function ExportModal({
           transaction.id,
           {
             exportFormat,
+            contentType: contentType === "emails" ? "email" : contentType === "texts" ? "text" : "both",
             startDate,
             endDate,
             summaryOnly: exportFormat === "pdf",
@@ -467,9 +469,9 @@ function ExportModal({
                 <div className="grid grid-cols-2 gap-3">
                   {/* Active export formats */}
                   <button
-                    onClick={() => setExportFormat("folder")}
+                    onClick={() => { setExportFormat("folder"); setContentType("both"); }}
                     className={`px-4 py-3 rounded-lg font-medium transition-all text-left ${
-                      exportFormat === "folder"
+                      exportFormat === "folder" && contentType === "both"
                         ? "bg-purple-500 text-white shadow-md"
                         : "bg-gray-100 text-gray-700 hover:bg-gray-200"
                     }`}
@@ -487,9 +489,9 @@ function ExportModal({
                     </div>
                   </button>
                   <button
-                    onClick={() => setExportFormat("pdf")}
+                    onClick={() => { setExportFormat("pdf"); setContentType("both"); }}
                     className={`px-4 py-3 rounded-lg font-medium transition-all text-left ${
-                      exportFormat === "pdf"
+                      exportFormat === "pdf" && contentType === "both"
                         ? "bg-purple-500 text-white shadow-md"
                         : "bg-gray-100 text-gray-700 hover:bg-gray-200"
                     }`}
@@ -510,30 +512,58 @@ function ExportModal({
                     </div>
                     <div className="text-xs opacity-80">Combined PDF with all content</div>
                   </button>
-                  {/* Emails Only - Coming Soon */}
+                  {/* Emails Only - license-gated behind email_export */}
                   <button
-                    disabled
-                    className="px-4 py-3 rounded-lg font-medium text-left bg-gray-50 text-gray-400 cursor-not-allowed border border-gray-200"
+                    onClick={() => {
+                      if (canExportEmail) {
+                        setContentType("emails");
+                        setExportFormat("folder");
+                      }
+                    }}
+                    disabled={!canExportEmail}
+                    className={`px-4 py-3 rounded-lg font-medium transition-all text-left ${
+                      contentType === "emails"
+                        ? "bg-purple-500 text-white shadow-md"
+                        : canExportEmail
+                          ? "bg-gray-100 text-gray-700 hover:bg-gray-200"
+                          : "bg-gray-50 text-gray-400 cursor-not-allowed border border-gray-200"
+                    }`}
                   >
                     <div className="flex items-center justify-between">
                       <span className="font-semibold">Emails Only</span>
-                      <span className="text-xs bg-gray-200 text-gray-500 px-2 py-0.5 rounded">Coming Soon</span>
+                      {!canExportEmail && (
+                        <span className="text-xs bg-amber-100 text-amber-700 px-2 py-0.5 rounded">Upgrade</span>
+                      )}
                     </div>
                     <div className="text-xs opacity-80">Export only email communications</div>
                   </button>
-                  {/* Texts Only - Coming Soon */}
+                  {/* Texts Only - license-gated behind text_export */}
                   <button
-                    disabled
-                    className="px-4 py-3 rounded-lg font-medium text-left bg-gray-50 text-gray-400 cursor-not-allowed border border-gray-200"
+                    onClick={() => {
+                      if (canExportText) {
+                        setContentType("texts");
+                        setExportFormat("folder");
+                      }
+                    }}
+                    disabled={!canExportText}
+                    className={`px-4 py-3 rounded-lg font-medium transition-all text-left ${
+                      contentType === "texts"
+                        ? "bg-purple-500 text-white shadow-md"
+                        : canExportText
+                          ? "bg-gray-100 text-gray-700 hover:bg-gray-200"
+                          : "bg-gray-50 text-gray-400 cursor-not-allowed border border-gray-200"
+                    }`}
                   >
                     <div className="flex items-center justify-between">
                       <span className="font-semibold">Texts Only</span>
-                      <span className="text-xs bg-gray-200 text-gray-500 px-2 py-0.5 rounded">Coming Soon</span>
+                      {!canExportText && (
+                        <span className="text-xs bg-amber-100 text-amber-700 px-2 py-0.5 rounded">Upgrade</span>
+                      )}
                     </div>
                     <div className="text-xs opacity-80">Export only text messages</div>
                   </button>
                 </div>
-                {exportFormat === "folder" && (
+                {exportFormat === "folder" && contentType === "both" && (
                   <div className="mt-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
                     <p className="text-sm text-blue-800 font-medium">Audit Package includes:</p>
                     <ul className="mt-2 text-xs text-blue-700 space-y-1">
@@ -541,6 +571,25 @@ function ExportModal({
                       <li>emails/ - Each email as individual PDF</li>
                       <li>texts/ - Text conversations by contact</li>
                       <li>attachments/ - All attachments with manifest</li>
+                    </ul>
+                  </div>
+                )}
+                {contentType === "emails" && (
+                  <div className="mt-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                    <p className="text-sm text-blue-800 font-medium">Emails Only export includes:</p>
+                    <ul className="mt-2 text-xs text-blue-700 space-y-1">
+                      <li>Summary_Report.pdf - Transaction overview</li>
+                      <li>emails/ - Each email as individual PDF</li>
+                      <li>attachments/ - Email attachments with manifest</li>
+                    </ul>
+                  </div>
+                )}
+                {contentType === "texts" && (
+                  <div className="mt-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                    <p className="text-sm text-blue-800 font-medium">Texts Only export includes:</p>
+                    <ul className="mt-2 text-xs text-blue-700 space-y-1">
+                      <li>Summary_Report.pdf - Transaction overview</li>
+                      <li>texts/ - Text conversations by contact</li>
                     </ul>
                   </div>
                 )}
