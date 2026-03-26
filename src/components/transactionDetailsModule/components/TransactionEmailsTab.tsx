@@ -382,11 +382,6 @@ export function TransactionEmailsTab({
                   When ON, only emails mentioning the property address are linked. When OFF, all emails from assigned contacts are included. Existing linked emails are never removed.
                 </p>
               )}
-            {propertyAddress && !skipAddressFilter && (
-              <span className="text-xs text-gray-400 truncate max-w-[200px]" title={propertyAddress}>
-                ({propertyAddress})
-              </span>
-            )}
           </div>
           <button
             type="button"
