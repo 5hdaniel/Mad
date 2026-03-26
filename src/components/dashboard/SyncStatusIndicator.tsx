@@ -144,7 +144,9 @@ export function SyncStatusIndicator({
       wasSyncingRef.current = false;
 
       // Only auto-dismiss if tour is NOT active (TASK-2081)
-      if (!isTourActive) {
+      // BACKLOG-1368: Do NOT auto-dismiss if there were errors — user needs time to read
+      const hasErrors = queue.some(item => item.status === 'error');
+      if (!isTourActive && !hasErrors) {
         autoDismissTimerRef.current = setTimeout(() => {
           setShowCompletion(false);
           setDismissed(true);
@@ -240,8 +242,9 @@ export function SyncStatusIndicator({
       completionVariant === 'pending' ? `${pendingCount} transaction${pendingCount !== 1 ? "s" : ""} found` :
       'Sync Complete';
 
+    const errorItems = queue.filter(item => item.status === 'error').map(item => item.type);
     const completionSubtitle =
-      completionVariant === 'error' ? 'Some items failed to sync' :
+      completionVariant === 'error' ? `Failed: ${errorItems.join(', ')}` :
       completionVariant === 'pending' ? 'New transactions detected and ready for review' :
       'All data synced successfully';
 
@@ -316,6 +319,11 @@ export function SyncStatusIndicator({
               >
                 {completionSubtitle}
               </p>
+              {completionVariant === 'error' && (
+                <p className="text-xs text-amber-600 mt-1">
+                  If this persists, please <button type="button" onClick={() => window.api?.shell?.openExternal?.('https://app.keeprcompliance.com/support/new')} className="underline hover:text-amber-800">submit a support ticket</button>.
+                </p>
+              )}
             </div>
           </div>
 
