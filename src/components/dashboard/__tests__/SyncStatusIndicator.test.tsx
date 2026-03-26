@@ -318,6 +318,103 @@ describe("SyncStatusIndicator", () => {
       expect(screen.queryByText("Review Now")).not.toBeInTheDocument();
     });
 
+    it("should show amber completion when sync finishes with errors (BACKLOG-1368)", () => {
+      mockIsAllowed.mockImplementation((key: string) => key !== "ai_detection");
+      // Start with running state - contacts error, emails running
+      const runningQueue = [
+        createSyncItem('contacts', 'error', 0, 'Auth token expired'),
+        createSyncItem('emails', 'running', 50),
+      ];
+      mockUseSyncOrchestrator.mockReturnValue(createOrchestratorState(runningQueue, true, 25));
+
+      const { rerender } = render(<SyncStatusIndicator />);
+
+      // Transition to not syncing - contacts still has error, emails complete
+      const doneQueue = [
+        createSyncItem('contacts', 'error', 0, 'Auth token expired'),
+        createSyncItem('emails', 'complete', 100),
+      ];
+      mockUseSyncOrchestrator.mockReturnValue(createOrchestratorState(doneQueue, false, 50));
+      rerender(<SyncStatusIndicator />);
+
+      // Should show amber "completed with errors", NOT green "Sync Complete"
+      expect(screen.getByTestId("sync-status-complete")).toBeInTheDocument();
+      expect(screen.getByText("Sync Completed with Errors")).toBeInTheDocument();
+      expect(screen.getByText("Failed: contacts")).toBeInTheDocument();
+      expect(screen.queryByText("Sync Complete")).not.toBeInTheDocument();
+      expect(screen.queryByText("All data synced successfully")).not.toBeInTheDocument();
+    });
+
+    it("should show amber completion card styling when errors exist (BACKLOG-1368)", () => {
+      mockIsAllowed.mockImplementation((key: string) => key !== "ai_detection");
+      // Start with running state
+      const runningQueue = [
+        createSyncItem('contacts', 'error', 0, 'Failed'),
+        createSyncItem('emails', 'running', 50),
+      ];
+      mockUseSyncOrchestrator.mockReturnValue(createOrchestratorState(runningQueue, true, 25));
+
+      const { rerender } = render(<SyncStatusIndicator />);
+
+      // Transition to not syncing
+      const doneQueue = [
+        createSyncItem('contacts', 'error', 0, 'Failed'),
+        createSyncItem('emails', 'complete', 100),
+      ];
+      mockUseSyncOrchestrator.mockReturnValue(createOrchestratorState(doneQueue, false, 50));
+      rerender(<SyncStatusIndicator />);
+
+      const card = screen.getByTestId("sync-status-complete");
+      expect(card).toHaveClass("bg-amber-50", "border-amber-200");
+    });
+
+    it("should show green completion when all items succeed (no errors)", () => {
+      mockIsAllowed.mockImplementation((key: string) => key !== "ai_detection");
+      // Start with running state
+      const runningQueue = [
+        createSyncItem('contacts', 'running', 50),
+        createSyncItem('emails', 'pending', 0),
+      ];
+      mockUseSyncOrchestrator.mockReturnValue(createOrchestratorState(runningQueue, true, 25));
+
+      const { rerender } = render(<SyncStatusIndicator />);
+
+      // Transition to not syncing - all complete, no errors
+      const doneQueue = [
+        createSyncItem('contacts', 'complete', 100),
+        createSyncItem('emails', 'complete', 100),
+      ];
+      mockUseSyncOrchestrator.mockReturnValue(createOrchestratorState(doneQueue, false, 100));
+      rerender(<SyncStatusIndicator />);
+
+      const card = screen.getByTestId("sync-status-complete");
+      expect(card).toHaveClass("bg-green-50", "border-green-200");
+      expect(screen.getByText("Sync Complete")).toBeInTheDocument();
+      expect(screen.getByText("All data synced successfully")).toBeInTheDocument();
+    });
+
+    it("should show amber completion even when queue is empty but hasError was true (BACKLOG-1368)", () => {
+      mockIsAllowed.mockImplementation((key: string) => key !== "ai_detection");
+      // Start with running state - one item errors
+      const runningQueue = [
+        createSyncItem('contacts', 'error', 0, 'Failed'),
+        createSyncItem('emails', 'running', 50),
+      ];
+      mockUseSyncOrchestrator.mockReturnValue(createOrchestratorState(runningQueue, true, 25));
+
+      const { rerender } = render(<SyncStatusIndicator />);
+
+      // Transition to not syncing - queue still has error item
+      const doneQueue = [
+        createSyncItem('contacts', 'error', 0, 'Failed'),
+        createSyncItem('emails', 'complete', 100),
+      ];
+      mockUseSyncOrchestrator.mockReturnValue(createOrchestratorState(doneQueue, false, 50));
+      rerender(<SyncStatusIndicator />);
+
+      expect(screen.getByText("Sync Completed with Errors")).toBeInTheDocument();
+    });
+
     it("should auto-dismiss completion after 3 seconds", () => {
       mockIsAllowed.mockImplementation((key: string) => key !== "ai_detection");
       // Start with running state

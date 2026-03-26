@@ -44,7 +44,7 @@ Object.defineProperty(global, 'window', {
     api: {
       preferences: { get: jest.fn() },
       contacts: { syncExternal: jest.fn(), syncOutlookContacts: jest.fn(), forceReimport: jest.fn() },
-      transactions: { scan: jest.fn() },
+      transactions: { scan: jest.fn(), precacheEmails: jest.fn().mockResolvedValue({ success: true }) },
       messages: { importMacOSMessages: jest.fn(), onImportProgress: jest.fn() },
       notification: { send: jest.fn() },
       system: { reindexDatabase: jest.fn() },

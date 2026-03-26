@@ -4,6 +4,7 @@ import { app } from "electron";
 import folderExportService from "./folderExportService";
 import logService from "./logService";
 import { Transaction, Communication } from "../types/models";
+import type { TransactionWithDetails } from "./transactionService/types";
 import { isEmailMessage, isTextMessage } from "../utils/channelHelpers";
 import { sanitizeFileSystemName } from "../utils/fileUtils";
 
@@ -23,6 +24,7 @@ interface ExportOptions {
   startDate?: string;
   endDate?: string;
   summaryOnly?: boolean; // If true, only export summary + indexes (no full content)
+  attachmentType?: "all" | "email" | "text" | "none";
 }
 
 class EnhancedExportService {
@@ -36,7 +38,7 @@ class EnhancedExportService {
    * @returns Path to exported file/folder
    */
   async exportTransaction(
-    transaction: Transaction,
+    transaction: TransactionWithDetails,
     communications: Communication[],
     options: ExportOptions = {},
   ): Promise<string> {
@@ -46,6 +48,7 @@ class EnhancedExportService {
       startDate: optionStartDate,
       endDate: optionEndDate,
       summaryOnly = false,
+      attachmentType = "none",
     } = options;
 
     try {
@@ -83,13 +86,6 @@ class EnhancedExportService {
         );
       }
 
-      // IMPORTANT: Verify address relevance to prevent cross-transaction contamination
-      // This ensures that contacts working on multiple transactions don't get mixed emails
-      filteredComms = this._filterByAddressRelevance(
-        filteredComms,
-        transaction.property_address,
-      );
-
       // Filter by content type
       filteredComms = this._filterByContentType(filteredComms, contentType);
 
@@ -101,7 +97,7 @@ class EnhancedExportService {
       });
 
       logService.info(
-        `[Enhanced Export] Filtered to ${filteredComms.length} communications (verified address relevance)`,
+        `[Enhanced Export] Filtered to ${filteredComms.length} communications`,
         "EnhancedExport",
       );
 
@@ -109,7 +105,7 @@ class EnhancedExportService {
       let exportPath: string;
       switch (exportFormat) {
         case "pdf":
-          exportPath = await this._exportPDF(transaction, filteredComms, summaryOnly);
+          exportPath = await this._exportPDF(transaction, filteredComms, summaryOnly, attachmentType);
           break;
         case "excel":
         case "csv":
@@ -185,150 +181,68 @@ class EnhancedExportService {
   }
 
   /**
-   * Filter communications by address relevance
-   * CRITICAL: Prevents cross-transaction contamination when contacts work on multiple properties
-   * Example: Inspector working on 4 different transactions should only show emails for THIS property
-   * @private
-   */
-  private _filterByAddressRelevance(
-    communications: Communication[],
-    propertyAddress?: string,
-  ): Communication[] {
-    if (!propertyAddress) {
-      logService.warn(
-        "[Enhanced Export] No property address provided, skipping address verification",
-        "EnhancedExport",
-      );
-      return communications;
-    }
-
-    // Normalize the property address for matching
-    const normalizedAddress = this._normalizeAddress(propertyAddress);
-    const addressParts = this._extractAddressParts(normalizedAddress);
-
-    return communications.filter((comm) => {
-      // IMPORTANT: Text messages are linked by contact relationship, not content matching
-      // They should always be included - the user explicitly linked these messages
-      // to this transaction via contact assignment, so address filtering doesn't apply
-      // Check for all text message types: sms, imessage, and legacy "text"
-      const commType = comm.communication_type?.toLowerCase();
-      if (commType === "sms" || commType === "imessage" || commType === "text") {
-        return true;
-      }
-
-      // For emails: Check subject and body for address references
-      const subject = (comm.subject || "").toLowerCase();
-      const body = (comm.body_plain || comm.body || "").toLowerCase();
-      const combinedContent = `${subject} ${body}`;
-
-      // Check if ANY part of the address is mentioned in the communication
-      const hasAddressReference = addressParts.some((part) => {
-        if (part.length < 3) return false; // Skip very short parts
-        return combinedContent.includes(part);
-      });
-
-      if (hasAddressReference) {
-        return true;
-      }
-
-      // If no direct match, check if it's in the parties_involved or keywords_detected
-      // (These might have been extracted during email scanning)
-      if (comm.parties_involved) {
-        const parties = comm.parties_involved.toLowerCase();
-        if (
-          addressParts.some(
-            (part) => part.length >= 3 && parties.includes(part),
-          )
-        ) {
-          return true;
-        }
-      }
-
-      if (comm.keywords_detected) {
-        const keywords = Array.isArray(comm.keywords_detected)
-          ? comm.keywords_detected.join(" ").toLowerCase()
-          : (comm.keywords_detected as string).toLowerCase();
-        if (
-          addressParts.some(
-            (part) => part.length >= 3 && keywords.includes(part),
-          )
-        ) {
-          return true;
-        }
-      }
-
-      // Log filtered out emails for debugging
-      logService.info(
-        `[Enhanced Export] Filtered out email (no address match): "${comm.subject}" from ${comm.sender}`,
-        "EnhancedExport",
-      );
-      return false;
-    });
-  }
-
-  /**
-   * Normalize address for comparison (lowercase, remove extra spaces)
-   * @private
-   */
-  private _normalizeAddress(address: string): string {
-    return address.toLowerCase().replace(/\s+/g, " ").trim();
-  }
-
-  /**
-   * Extract searchable parts from an address
-   * Examples:
-   *   "123 Main St, Anytown, CA 12345" → ["123", "main", "st", "anytown", "ca", "12345", "123 main", "main st"]
-   * @private
-   */
-  private _extractAddressParts(normalizedAddress: string): string[] {
-    const parts: string[] = [];
-
-    // Remove common separators and split
-    const words = normalizedAddress
-      .replace(/[,\.]/g, " ")
-      .split(/\s+/)
-      .filter((w) => w.length > 0);
-
-    // Add individual words
-    parts.push(...words);
-
-    // Add 2-word combinations (street number + street name, etc)
-    for (let i = 0; i < words.length - 1; i++) {
-      parts.push(`${words[i]} ${words[i + 1]}`);
-    }
-
-    // Add 3-word combinations for better matching
-    for (let i = 0; i < words.length - 2; i++) {
-      parts.push(`${words[i]} ${words[i + 1]} ${words[i + 2]}`);
-    }
-
-    return parts;
-  }
-
-  /**
    * Export as PDF using folder export service's combined PDF functionality
    * This generates individual PDFs (summary, emails, texts) and combines them
    * into a single document for a comprehensive audit report
    * @private
    */
   private async _exportPDF(
-    transaction: Transaction,
+    transaction: TransactionWithDetails,
     communications: Communication[],
     summaryOnly: boolean = false,
+    attachmentType: "all" | "email" | "text" | "none" = "none",
   ): Promise<string> {
     const downloadsPath = app.getPath("downloads");
-    const suffix = summaryOnly ? "Summary" : "Full";
-    const fileName = sanitizeFileSystemName(
-      `Transaction_${suffix}_${transaction.property_address}_${Date.now()}.pdf`,
-    );
-    const outputPath = path.join(downloadsPath, fileName);
+    const needsAttachments = !summaryOnly && attachmentType !== "none";
 
-    return await folderExportService.exportTransactionToCombinedPDF(
-      transaction,
-      communications,
-      outputPath,
-      summaryOnly,
-    );
+    if (needsAttachments) {
+      // Create a folder: PDF + attachments subfolder
+      const folderName = sanitizeFileSystemName(
+        `Transaction_${transaction.property_address}_${Date.now()}`,
+      );
+      const folderPath = path.join(downloadsPath, folderName);
+      await fs.mkdir(folderPath, { recursive: true });
+
+      // Generate the combined PDF inside the folder
+      const pdfPath = path.join(folderPath, "Combined_Report.pdf");
+      await folderExportService.exportTransactionToCombinedPDF(
+        transaction,
+        communications,
+        pdfPath,
+        summaryOnly,
+      );
+
+      // Export attachments into an /attachments subfolder
+      const attachmentsPath = path.join(folderPath, "attachments");
+      await fs.mkdir(attachmentsPath, { recursive: true });
+
+      // Filter communications by attachment type
+      let attachmentComms = communications;
+      if (attachmentType === "email") {
+        attachmentComms = communications.filter((c) => isEmailMessage(c));
+      } else if (attachmentType === "text") {
+        attachmentComms = communications.filter((c) => isTextMessage(c));
+      }
+
+      // Use folderExportService's attachment export
+      await folderExportService.exportAttachments(transaction, attachmentComms, attachmentsPath);
+
+      return folderPath;
+    } else {
+      // Simple PDF file, no attachments
+      const suffix = summaryOnly ? "Summary" : "Full";
+      const fileName = sanitizeFileSystemName(
+        `Transaction_${suffix}_${transaction.property_address}_${Date.now()}.pdf`,
+      );
+      const outputPath = path.join(downloadsPath, fileName);
+
+      return await folderExportService.exportTransactionToCombinedPDF(
+        transaction,
+        communications,
+        outputPath,
+        summaryOnly,
+      );
+    }
   }
 
   /**

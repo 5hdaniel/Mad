@@ -29,6 +29,7 @@ import logService from "../logService";
 import databaseService from "../databaseService";
 import { getUserById } from "../db/userDbService";
 import type { Transaction, Communication } from "../../types/models";
+import type { TransactionWithDetails } from "../transactionService/types";
 import type { FolderExportProgress } from "../../types/ipc";
 import { isEmailMessage, isTextMessage } from "../../utils/channelHelpers";
 import {
@@ -66,6 +67,7 @@ export interface FolderExportOptions {
   includeEmails: boolean;
   includeTexts: boolean;
   includeAttachments: boolean;
+  attachmentType?: "all" | "email" | "text" | "none";
   emailExportMode?: "thread" | "individual";
   onProgress?: (progress: FolderExportProgress) => void;
 }
@@ -111,11 +113,11 @@ class FolderExportService {
    * Export transaction to organized folder structure
    */
   async exportTransactionToFolder(
-    transaction: Transaction,
+    transaction: TransactionWithDetails,
     communications: Communication[],
     options: FolderExportOptions
   ): Promise<string> {
-    const { includeEmails, includeTexts, includeAttachments, emailExportMode, onProgress } = options;
+    const { includeEmails, includeTexts, includeAttachments, attachmentType = "all", emailExportMode, onProgress } = options;
 
     try {
       logService.info("[Folder Export] Starting folder export", "FolderExport", {
@@ -305,7 +307,7 @@ class FolderExportService {
       }
 
       // Export attachments with manifest
-      if (includeAttachments) {
+      if (includeAttachments && attachmentType !== "none") {
         onProgress?.({
           stage: "attachments",
           current: 0,
@@ -313,8 +315,17 @@ class FolderExportService {
           message: "Collecting attachments...",
         });
 
-        const allCommunications = [...emails, ...texts];
-        await this.exportAttachments(transaction, allCommunications, attachmentsPath, emailAttachmentResult);
+        // Filter communications based on attachmentType
+        let attachmentComms: typeof emails;
+        if (attachmentType === "email") {
+          attachmentComms = [...emails];
+        } else if (attachmentType === "text") {
+          attachmentComms = [...texts];
+        } else {
+          // "all" — include both
+          attachmentComms = [...emails, ...texts];
+        }
+        await this.exportAttachments(transaction, attachmentComms, attachmentsPath, attachmentType === "text" ? undefined : emailAttachmentResult);
 
         onProgress?.({
           stage: "attachments",
@@ -343,7 +354,7 @@ class FolderExportService {
    * Generate summary PDF for the transaction
    */
   private async generateSummaryPDF(
-    transaction: Transaction,
+    transaction: TransactionWithDetails,
     communications: Communication[],
     basePath: string,
     phoneNameMap?: Record<string, string>
@@ -499,7 +510,7 @@ class FolderExportService {
    * Export attachments and create manifest
    * TASK-2050: Updated to include email attachment metadata in manifest
    */
-  private async exportAttachments(
+  async exportAttachments(
     transaction: Transaction,
     communications: Communication[],
     outputPath: string,
@@ -816,7 +827,7 @@ class FolderExportService {
    * Export transaction to a single combined PDF
    */
   async exportTransactionToCombinedPDF(
-    transaction: Transaction,
+    transaction: TransactionWithDetails,
     communications: Communication[],
     outputPath: string,
     summaryOnly: boolean = false,

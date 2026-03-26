@@ -9,8 +9,12 @@
 import path from "path";
 import fs from "fs/promises";
 import fsSync from "fs";
+import { net } from "electron";
 import databaseService from "../databaseService";
 import logService from "../logService";
+import emailAttachmentService from "../emailAttachmentService";
+import gmailFetchService from "../gmailFetchService";
+import outlookFetchService from "../outlookFetchService";
 import type { Communication } from "../../types/models";
 import { isEmailMessage } from "../../utils/channelHelpers";
 import { getThreadKey } from "./textExportHelpers";
@@ -112,17 +116,142 @@ export interface AttachmentExportResult {
 }
 
 /**
+ * BACKLOG-1369: Download missing email attachments on-demand before export.
+ * Finds emails with has_attachments flag but no local attachment records,
+ * then fetches them from the provider.
+ */
+async function downloadMissingAttachmentsForExport(
+  emails: Communication[],
+): Promise<void> {
+  // Check network connectivity
+  let isOnline = true;
+  try {
+    isOnline = net.isOnline();
+  } catch {
+    // net.isOnline() may not be available in all contexts
+  }
+
+  if (!isOnline) {
+    logService.warn(
+      "[Folder Export] Cannot download missing attachments: device is offline",
+      "FolderExport"
+    );
+    return;
+  }
+
+  const db = databaseService.getRawDatabase();
+  const emailsNeedingDownload: { id: string; external_id: string; source: string; user_id: string }[] = [];
+
+  for (const email of emails) {
+    if (!isEmailMessage(email) || !email.id) continue;
+    // Check if this email has attachments but no records downloaded yet
+    if (!email.has_attachments) continue;
+
+    const existingCount = db.prepare(
+      "SELECT COUNT(*) as cnt FROM attachments WHERE email_id = ?"
+    ).get(email.id) as { cnt: number };
+
+    if (existingCount.cnt === 0) {
+      // Need to look up the email record for external_id and source
+      const emailRecord = db.prepare(
+        "SELECT id, external_id, source, user_id FROM emails WHERE id = ?"
+      ).get(email.id) as { id: string; external_id: string; source: string; user_id: string } | undefined;
+
+      if (emailRecord?.external_id && emailRecord?.source) {
+        emailsNeedingDownload.push(emailRecord);
+      }
+    }
+  }
+
+  if (emailsNeedingDownload.length === 0) return;
+
+  logService.info(
+    `[Folder Export] Downloading attachments for ${emailsNeedingDownload.length} emails before export`,
+    "FolderExport"
+  );
+
+  // Group by source for efficient provider initialization
+  const outlookEmails = emailsNeedingDownload.filter(e => e.source === "outlook");
+  const gmailEmails = emailsNeedingDownload.filter(e => e.source === "gmail");
+
+  if (outlookEmails.length > 0) {
+    try {
+      const isReady = await outlookFetchService.initialize(outlookEmails[0].user_id);
+      if (isReady) {
+        for (const email of outlookEmails) {
+          try {
+            const graphAttachments = await outlookFetchService.getAttachments(email.external_id);
+            if (graphAttachments.length > 0) {
+              await emailAttachmentService.downloadEmailAttachments(
+                email.user_id, email.id, email.external_id, "outlook",
+                graphAttachments.map((att: { id: string; name: string; contentType: string; size: number }) => ({
+                  filename: att.name || "attachment",
+                  mimeType: att.contentType || "application/octet-stream",
+                  size: att.size || 0,
+                  attachmentId: att.id,
+                })),
+              );
+            }
+          } catch (err) {
+            logService.warn("[Folder Export] Failed to download Outlook attachment for export", "FolderExport", {
+              emailId: email.id, error: err instanceof Error ? err.message : "Unknown",
+            });
+          }
+        }
+      }
+    } catch (err) {
+      logService.warn("[Folder Export] Outlook init failed for attachment download", "FolderExport", {
+        error: err instanceof Error ? err.message : "Unknown",
+      });
+    }
+  }
+
+  if (gmailEmails.length > 0) {
+    try {
+      const isReady = await gmailFetchService.initialize(gmailEmails[0].user_id);
+      if (isReady) {
+        for (const email of gmailEmails) {
+          try {
+            const fullEmail = await gmailFetchService.getEmailById(email.external_id);
+            if (fullEmail.attachments && fullEmail.attachments.length > 0) {
+              await emailAttachmentService.downloadEmailAttachments(
+                email.user_id, email.id, email.external_id, "gmail",
+                fullEmail.attachments.map((att: { filename?: string; name?: string; mimeType?: string; contentType?: string; size?: number; attachmentId?: string; id?: string }) => ({
+                  filename: att.filename || att.name || "attachment",
+                  mimeType: att.mimeType || att.contentType || "application/octet-stream",
+                  size: att.size || 0,
+                  attachmentId: att.attachmentId || att.id || "",
+                })),
+              );
+            }
+          } catch (err) {
+            logService.warn("[Folder Export] Failed to download Gmail attachment for export", "FolderExport", {
+              emailId: email.id, error: err instanceof Error ? err.message : "Unknown",
+            });
+          }
+        }
+      }
+    } catch (err) {
+      logService.warn("[Folder Export] Gmail init failed for attachment download", "FolderExport", {
+        error: err instanceof Error ? err.message : "Unknown",
+      });
+    }
+  }
+}
+
+/**
  * TASK-2050: Export email attachments into per-thread subdirectories.
  *
  * Creates structure:
  *   emails/<thread-dir>/attachments/<filename>
  *
  * For each email in the provided communications:
- * 1. Look up attachments in the local database via email_id
- * 2. Copy attachment files from local cache to the export directory
- * 3. Handle filename conflicts for duplicates within the same thread
- * 4. Skip missing/inaccessible attachments gracefully
- * 5. Log warning if total size exceeds 50MB
+ * 1. Download any missing attachments on-demand (BACKLOG-1369)
+ * 2. Look up attachments in the local database via email_id
+ * 3. Copy attachment files from local cache to the export directory
+ * 4. Handle filename conflicts for duplicates within the same thread
+ * 5. Skip missing/inaccessible attachments gracefully
+ * 6. Log warning if total size exceeds 50MB
  */
 export async function exportEmailAttachmentsToThreadDirs(
   emails: Communication[],
@@ -136,6 +265,15 @@ export async function exportEmailAttachmentsToThreadDirs(
     errors: [],
     items: [],
   };
+
+  // BACKLOG-1369: Download any missing email attachments before export
+  try {
+    await downloadMissingAttachmentsForExport(emails);
+  } catch (err) {
+    logService.warn("[Folder Export] Pre-export attachment download failed", "FolderExport", {
+      error: err instanceof Error ? err.message : "Unknown",
+    });
+  }
 
   // Group emails by thread for directory structure
   // Use getThreadKey() for alignment with exportEmailThreads() in folderExportService

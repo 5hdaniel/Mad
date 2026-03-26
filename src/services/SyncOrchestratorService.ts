@@ -275,11 +275,31 @@ class SyncOrchestratorServiceClass {
     this.registerSyncFunction('emails', async (userId, onProgress, _options, signal) => {
       logger.info('[SyncOrchestrator] Starting emails sync');
       onProgress(0);
+
+      // AI scan (non-fatal — precache should run regardless)
       if (signal?.aborted) return;
-      const result = await window.api.transactions.scan(userId);
-      if (!result.success) {
-        throw new Error(result.error || 'Email sync failed');
+      try {
+        const result = await window.api.transactions.scan(userId);
+        if (!result.success) {
+          logger.warn('[SyncOrchestrator] AI email scan failed (non-fatal):', result.error);
+        }
+      } catch (scanError) {
+        logger.warn('[SyncOrchestrator] AI email scan threw (non-fatal):', scanError);
       }
+      onProgress(50);
+
+      // BACKLOG-1362: Pre-cache emails from connected providers.
+      // Independent of AI scan — runs for all users with email connected.
+      if (signal?.aborted) return;
+      try {
+        logger.info('[SyncOrchestrator] Starting email pre-cache');
+        // TODO: Pass progress callback to precacheEmails to report 50-100% progress during precache
+        await window.api.transactions.precacheEmails(userId);
+        logger.info('[SyncOrchestrator] Email pre-cache complete');
+      } catch (precacheError) {
+        logger.warn('[SyncOrchestrator] Email pre-cache failed (non-fatal):', precacheError);
+      }
+
       onProgress(100);
       logger.info('[SyncOrchestrator] Emails sync complete');
     });

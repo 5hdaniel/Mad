@@ -23,7 +23,12 @@ jest.mock("../../services/logService", () => ({
   },
 }));
 
-import { isContactSourceEnabled } from "../preferenceHelper";
+import {
+  isContactSourceEnabled,
+  getEmailCacheDurationMonths,
+  computeEmailCacheSinceDate,
+} from "../preferenceHelper";
+import logService from "../../services/logService";
 
 describe("preferenceHelper", () => {
   beforeEach(() => {
@@ -162,6 +167,94 @@ describe("preferenceHelper", () => {
 
       const result = await isContactSourceEnabled("user-1", "direct", "outlookContacts", true);
       expect(result).toBe(true); // undefined is not boolean, uses default
+    });
+  });
+
+  describe("getEmailCacheDurationMonths", () => {
+    it("should return stored value when emailCache.durationMonths is a valid positive number", async () => {
+      mockGetPreferences.mockResolvedValue({
+        emailCache: { durationMonths: 6 },
+      });
+
+      const result = await getEmailCacheDurationMonths("user-1");
+      expect(result).toBe(6);
+    });
+
+    it("should fall back to 3 when preference key is missing", async () => {
+      mockGetPreferences.mockResolvedValue({});
+
+      const result = await getEmailCacheDurationMonths("user-1");
+      expect(result).toBe(3);
+    });
+
+    it("should fall back to 3 when value is not a number", async () => {
+      mockGetPreferences.mockResolvedValue({
+        emailCache: { durationMonths: "6" },
+      });
+
+      const result = await getEmailCacheDurationMonths("user-1");
+      expect(result).toBe(3);
+    });
+
+    it("should fall back to 3 when value is zero", async () => {
+      mockGetPreferences.mockResolvedValue({
+        emailCache: { durationMonths: 0 },
+      });
+
+      const result = await getEmailCacheDurationMonths("user-1");
+      expect(result).toBe(3);
+    });
+
+    it("should fall back to 3 when value is negative", async () => {
+      mockGetPreferences.mockResolvedValue({
+        emailCache: { durationMonths: -2 },
+      });
+
+      const result = await getEmailCacheDurationMonths("user-1");
+      expect(result).toBe(3);
+    });
+
+    it("should fall back to 3 and log warning when getPreferences throws", async () => {
+      mockGetPreferences.mockRejectedValue(new Error("DB unavailable"));
+
+      const result = await getEmailCacheDurationMonths("user-1");
+      expect(result).toBe(3);
+      expect(logService.warn).toHaveBeenCalledWith(
+        expect.stringContaining("Could not load email cache duration"),
+        "Preferences",
+        expect.objectContaining({ userId: "user-1" }),
+      );
+    });
+  });
+
+  describe("computeEmailCacheSinceDate", () => {
+    it("should return a date approximately N months in the past", () => {
+      const durationMonths = 6;
+      const before = Date.now();
+      const result = computeEmailCacheSinceDate(durationMonths);
+      const after = Date.now();
+
+      const expectedMs = durationMonths * 30 * 24 * 60 * 60 * 1000;
+      const toleranceMs = 24 * 60 * 60 * 1000; // 1 day
+
+      // The result should be approximately expectedMs ago
+      const resultAge = before - result.getTime();
+      expect(resultAge).toBeGreaterThanOrEqual(expectedMs - toleranceMs);
+      expect(resultAge).toBeLessThanOrEqual(expectedMs + toleranceMs);
+
+      // Also verify it's a valid Date
+      expect(result).toBeInstanceOf(Date);
+      expect(isNaN(result.getTime())).toBe(false);
+    });
+
+    it("should return a date very close to now for durationMonths = 0", () => {
+      const before = Date.now();
+      const result = computeEmailCacheSinceDate(0);
+      const after = Date.now();
+
+      // With 0 months, the date should be essentially now
+      expect(result.getTime()).toBeGreaterThanOrEqual(before);
+      expect(result.getTime()).toBeLessThanOrEqual(after);
     });
   });
 });

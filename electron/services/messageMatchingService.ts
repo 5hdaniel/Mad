@@ -14,7 +14,7 @@
 import crypto from "crypto";
 import { dbAll, dbRun, dbGet } from "./db/core/dbConnection";
 import logService from "./logService";
-import { normalizeAddress, contentContainsAddress, withAddressFallback, type NormalizedAddress } from "../utils/addressNormalization";
+import { normalizeAddress, contentContainsAddress, type NormalizedAddress } from "../utils/addressNormalization";
 
 /**
  * Result of matching a message to a contact
@@ -670,8 +670,9 @@ export async function autoLinkEmailsToTransaction(
   try {
     // 1. Get the transaction to verify it exists, get user_id and address
     // TASK-2087: Also fetch property_address and property_street for address filtering
-    const txnSql = "SELECT user_id, property_address, property_street FROM transactions WHERE id = ?";
-    const transaction = dbGet<{ user_id: string; property_address: string | null; property_street: string | null }>(txnSql, [transactionId]);
+    // BACKLOG-1364: Also fetch skip_address_filter for per-transaction toggle
+    const txnSql = "SELECT user_id, property_address, property_street, skip_address_filter FROM transactions WHERE id = ?";
+    const transaction = dbGet<{ user_id: string; property_address: string | null; property_street: string | null; skip_address_filter: number | null }>(txnSql, [transactionId]);
 
     if (!transaction) {
       result.errors.push(`Transaction ${transactionId} not found`);
@@ -702,26 +703,47 @@ export async function autoLinkEmailsToTransaction(
     );
 
     // 3. Find matching emails
-    // TASK-2087: Use withAddressFallback to apply address filter with automatic fallback.
-    // The query function fetches all matches, then post-filters by address content.
-    // Pass countWithFilter to prevent fallback when matching emails exist but are already linked.
-    const matches = await withAddressFallback(
-      async (addr) => {
-        const allMatches = await findEmailsByAddresses(userId, contactEmails, transactionId);
-        if (!addr || allMatches.length === 0) return allMatches;
+    // BACKLOG-1364: When skip_address_filter is ON, link ALL emails from contacts (no address filter).
+    // When OFF (default), apply address filter WITHOUT silent fallback — if 0 emails match,
+    // return 0 results with a log message suggesting the user turn off the filter.
+    const skipAddressFilter = transaction.skip_address_filter === 1;
+    let matches: MessageMatch[];
+
+    if (skipAddressFilter) {
+      // Skip address filtering — get all emails from contacts regardless of content
+      matches = await findEmailsByAddresses(userId, contactEmails, transactionId);
+      logService.debug(
+        `Address filter SKIPPED (user toggle): ${matches.length} unfiltered emails found`,
+        "MessageMatchingService"
+      );
+    } else {
+      // Apply address filter (default behavior) — NO silent fallback (BACKLOG-1364)
+      const allMatches = await findEmailsByAddresses(userId, contactEmails, transactionId);
+      if (!txnNormalizedAddress || allMatches.length === 0) {
+        matches = allMatches;
+      } else {
         const filteredIds = await filterEmailMatchesByAddress(
           allMatches.map(m => m.messageId),
-          addr
+          txnNormalizedAddress
         );
-        return filteredIds.size > 0
+        matches = filteredIds.size > 0
           ? allMatches.filter(m => filteredIds.has(m.messageId))
           : [];
-      },
-      txnNormalizedAddress,
-      (msg) => logService.debug(msg, "MessageMatchingService"),
-      "emails",
-      async (addr) => countAllEmailsMatchingAddress(userId, contactEmails, transactionId, addr)
-    );
+      }
+
+      // If filter is ON and 0 emails found, log a message instead of silently widening
+      if (matches.length === 0 && txnNormalizedAddress && contactEmails.length > 0) {
+        logService.debug(
+          `Address filter ON, 0 emails matched "${txnNormalizedAddress.full}" — no silent fallback (BACKLOG-1364). User can turn off filter to widen search.`,
+          "MessageMatchingService"
+        );
+      } else if (matches.length > 0 && txnNormalizedAddress) {
+        logService.debug(
+          `Address filter applied: ${matches.length} emails matched "${txnNormalizedAddress.full}"`,
+          "MessageMatchingService"
+        );
+      }
+    }
 
     logService.info(
       `Found ${matches.length} emails to link for transaction ${transactionId}`,
@@ -788,91 +810,6 @@ export async function autoLinkEmailsToTransaction(
     );
     return result;
   }
-}
-
-/**
- * Count ALL emails (including already-linked) from the given contacts that
- * match the address content. Used by `withAddressFallback` to determine
- * whether the address filter is valid.
- *
- * If this returns > 0 but the main filtered query returns 0, it means
- * matching emails exist but are all already linked — the fallback should
- * NOT trigger.
- */
-async function countAllEmailsMatchingAddress(
-  userId: string,
-  contactEmails: Array<{ contactId: string; email: string }>,
-  transactionId: string,
-  normalizedAddress: NormalizedAddress
-): Promise<number> {
-  if (contactEmails.length === 0) return 0;
-
-  // Build a map of normalized emails
-  const emailToContact = new Map<string, string>();
-  for (const { contactId, email } of contactEmails) {
-    if (email) {
-      emailToContact.set(email.toLowerCase().trim(), contactId);
-    }
-  }
-  if (emailToContact.size === 0) return 0;
-
-  // Query ALL email messages for this user from these contacts
-  // (no exclusion of already-linked messages — that's the point)
-  const sql = `
-    SELECT
-      m.id,
-      m.sender,
-      m.recipients,
-      m.subject,
-      m.body_text
-    FROM messages m
-    WHERE m.user_id = ?
-      AND m.channel = 'email'
-      AND m.duplicate_of IS NULL
-  `;
-
-  const messages = dbAll<{
-    id: string;
-    sender: string | null;
-    recipients: string | null;
-    subject: string | null;
-    body_text: string | null;
-  }>(sql, [userId]);
-
-  let count = 0;
-  for (const msg of messages) {
-    // Check if this email belongs to one of our contacts
-    let isFromContact = false;
-    if (msg.sender) {
-      const normalizedSender = msg.sender.toLowerCase().trim();
-      const emailMatch = normalizedSender.match(/<([^>]+)>/);
-      const emailToCheck = emailMatch ? emailMatch[1] : normalizedSender;
-      if (emailToContact.has(emailToCheck)) isFromContact = true;
-    }
-    if (!isFromContact && msg.recipients) {
-      const recipientList = msg.recipients.split(/[,;]/).map(r => r.trim().toLowerCase());
-      for (const recipient of recipientList) {
-        const emailMatch = recipient.match(/<([^>]+)>/);
-        const emailToCheck = emailMatch ? emailMatch[1] : recipient;
-        if (emailToContact.has(emailToCheck)) {
-          isFromContact = true;
-          break;
-        }
-      }
-    }
-
-    if (!isFromContact) continue;
-
-    // Check if the email content mentions the address
-    if (
-      contentContainsAddress(msg.subject, normalizedAddress) ||
-      contentContainsAddress(msg.body_text, normalizedAddress)
-    ) {
-      count++;
-    }
-  }
-
-  return count;
 }
 
 /**

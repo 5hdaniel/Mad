@@ -31,6 +31,7 @@ export interface ExportEnhancedOptions {
   startDate?: string;
   endDate?: string;
   summaryOnly?: boolean; // If true, only export summary + indexes (no full content)
+  attachmentType?: "all" | "email" | "text" | "none";
 }
 
 /**
@@ -40,6 +41,8 @@ export interface ExportFolderOptions {
   includeEmails?: boolean;
   includeTexts?: boolean;
   includeAttachments?: boolean;
+  contentType?: "both" | "emails" | "texts";
+  attachmentType?: "all" | "email" | "text" | "none";
 }
 
 export const transactionBridge = {
@@ -381,6 +384,17 @@ export const transactionBridge = {
     ipcRenderer.invoke("transactions:resync-auto-link", transactionId),
 
   /**
+   * BACKLOG-1364: Update the address filter toggle for a transaction and re-run auto-link.
+   * When skipAddressFilter is true, ALL emails from assigned contacts are linked.
+   * When false (default), only emails mentioning the property address are linked.
+   * @param transactionId - Transaction ID to update
+   * @param skipAddressFilter - true to skip address filtering, false to enable it
+   * @returns Results with counts of newly linked communications after re-link
+   */
+  updateAddressFilter: (transactionId: string, skipAddressFilter: boolean) =>
+    ipcRenderer.invoke("transactions:update-address-filter", transactionId, skipAddressFilter),
+
+  /**
    * Sync emails from provider (Gmail/Outlook) for a transaction.
    * BACKLOG-457: Fetches NEW emails from connected email provider based on
    * contact email addresses, stores them, then runs auto-link.
@@ -389,6 +403,17 @@ export const transactionBridge = {
    */
   syncAndFetchEmails: (transactionId: string) =>
     ipcRenderer.invoke("transactions:sync-and-fetch-emails", transactionId),
+
+  /**
+   * BACKLOG-1362: Pre-cache emails from connected providers.
+   * Bulk-fetches ALL emails within the user's configured cache window
+   * into the local database. Incremental -- only fetches newer than
+   * what is already cached.
+   * @param userId - User ID to pre-cache emails for
+   * @returns Results with counts of fetched and stored emails
+   */
+  precacheEmails: (userId: string) =>
+    ipcRenderer.invoke("emails:precache", userId),
 
   /**
    * Link emails to a transaction

@@ -95,6 +95,13 @@ const mockPrepare = jest.fn();
 const mockGetRawDatabase = jest.fn();
 const mockGetAttachmentsForEmailExport = jest.fn();
 
+// Mock googleapis before any imports that depend on it (BACKLOG-1369: attachmentHelpers now imports emailAttachmentService → gmailFetchService → googleapis)
+jest.mock("googleapis", () => ({
+  google: { gmail: jest.fn() },
+  gmail_v1: {},
+  Auth: {},
+}));
+
 jest.mock("../databaseService", () => ({
   __esModule: true,
   default: {

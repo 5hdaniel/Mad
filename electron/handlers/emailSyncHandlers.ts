@@ -289,4 +289,51 @@ export function registerEmailSyncHandlers(
       });
     }, { module: "Transactions" }),
   );
+
+  // ============================================
+  // BACKLOG-1362: Email pre-cache handler
+  // Bulk-fetches emails from connected providers into local cache.
+  // Rate limited: 30 second cooldown to prevent abuse.
+  // ============================================
+  ipcMain.handle(
+    "emails:precache",
+    wrapHandler(async (
+      event: IpcMainInvokeEvent,
+      userId: string,
+    ): Promise<TransactionResponse> => {
+      logService.info("Email pre-cache requested", "Transactions", { userId });
+
+      // Validate input
+      const validatedUserId = validateUserId(userId);
+      if (!validatedUserId) {
+        throw new ValidationError("User ID validation failed", "userId");
+      }
+
+      // Rate limit check - 30 second cooldown per user
+      const { allowed, remainingMs } = rateLimiters.precache.canExecute(
+        "emails:precache",
+        validatedUserId,
+      );
+      if (!allowed && remainingMs !== undefined) {
+        const seconds = Math.ceil(remainingMs / 1000);
+        logService.warn(
+          `Rate limited emails:precache for user ${validatedUserId}. Retry in ${seconds}s`,
+          "Transactions",
+        );
+        return {
+          success: false,
+          error: `Please wait ${seconds} seconds before re-caching.`,
+          rateLimited: true,
+        };
+      }
+
+      const result = await emailSyncService.precacheEmails(validatedUserId);
+
+      return {
+        success: true,
+        emailsFetched: result.fetched,
+        emailsStored: result.stored,
+      };
+    }, { module: "Transactions" }),
+  );
 }

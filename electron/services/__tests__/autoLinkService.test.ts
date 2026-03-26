@@ -478,8 +478,8 @@ describe("autoLinkService", () => {
         expect(firstCallParams).toContain("%oak%");
       });
 
-      it("should fall back to unfiltered results when address filter returns no emails", async () => {
-        // Set up: transaction has address, but first query returns no results (address filter too strict)
+      it("should return 0 results when address filter matches nothing (no silent fallback - BACKLOG-1364)", async () => {
+        // BACKLOG-1364: No more silent fallback — when address filter returns 0, return 0
         let emailCallCount = 0;
         mockDbGet.mockImplementation((sql: string) => {
           if (sql.includes("FROM contacts")) return { id: mockContactId };
@@ -491,6 +491,7 @@ describe("autoLinkService", () => {
               closed_at: null,
               property_address: "123 Oak Street, Portland, OR 97201",
               property_street: null,
+              skip_address_filter: 0,
             };
           }
           if (sql.includes("FROM users_local")) return { email: "user@example.com" };
@@ -504,10 +505,8 @@ describe("autoLinkService", () => {
           if (sql.includes("FROM contact_phones")) return [];
           if (sql.includes("FROM emails e")) {
             emailCallCount++;
-            // First call (with address filter): no results
-            if (emailCallCount === 1) return [];
-            // Second call (fallback without address filter): returns results
-            return [{ id: "email-1" }, { id: "email-2" }];
+            // Address filter returns no results
+            return [];
           }
           return [];
         });
@@ -517,10 +516,10 @@ describe("autoLinkService", () => {
           transactionId: mockTransactionId,
         });
 
-        // Should have fallen back and linked the unfiltered results
-        expect(result.emailsLinked).toBe(2);
-        // Email query should have been called twice (with filter, then without)
-        expect(emailCallCount).toBe(2);
+        // BACKLOG-1364: No fallback — 0 results when address filter finds nothing
+        expect(result.emailsLinked).toBe(0);
+        // Email query called once (no fallback retry)
+        expect(emailCallCount).toBe(1);
       });
 
       it("should skip address filter when transaction has no property_address", async () => {
@@ -594,17 +593,9 @@ describe("autoLinkService", () => {
         expect(firstCallParams).toContain("%elm%");
       });
 
-      it("should fall back to unfiltered when matching emails are already linked (BACKLOG-1340)", async () => {
-        // BACKLOG-1340 FIX:
-        // 1. Transaction has address "456 Maple Drive"
-        // 2. Email matching "456 maple" exists but is already linked to this transaction
-        // 3. findEmailsByContactEmails returns 0 unlinked results (email is linked, c.id IS NULL filters it)
-        // 4. PREVIOUS behavior: countEmailsMatchingAddress > 0 suppressed the fallback
-        // 5. NEW behavior: fallback ALWAYS runs when 0 unlinked results, to catch non-address emails
-
-        // Track calls to find query vs count query
+      it("should NOT fall back when matching emails are already linked (BACKLOG-1364)", async () => {
+        // BACKLOG-1364: No fallback behavior — address filter ON, 0 unlinked results = 0 linked
         let findEmailCallCount = 0;
-        let countCallCount = 0;
 
         mockDbGet.mockImplementation((sql: string) => {
           if (sql.includes("FROM contacts")) return { id: mockContactId };
@@ -616,16 +607,12 @@ describe("autoLinkService", () => {
               closed_at: null,
               property_address: "456 Maple Drive, Portland, OR",
               property_street: null,
+              skip_address_filter: 0,
             };
           }
           if (sql.includes("FROM users_local")) return { email: "user@example.com" };
           if (sql.includes("FROM emails WHERE id")) return { user_id: mockUserId };
           if (sql.includes("FROM communications") && sql.includes("email_id")) return null;
-          // Count query: returns 1 matching email (the already-linked one)
-          if (sql.includes("COUNT(*)")) {
-            countCallCount++;
-            return { cnt: 1 };
-          }
           return null;
         });
 
@@ -634,8 +621,7 @@ describe("autoLinkService", () => {
           if (sql.includes("FROM contact_phones")) return [];
           if (sql.includes("FROM emails e")) {
             findEmailCallCount++;
-            // First call (with address filter): 0 unlinked results
-            // Second call (fallback, no address filter): also 0 (all emails are linked)
+            // Address filter returns 0 unlinked results (all emails already linked)
             return [];
           }
           return [];
@@ -648,10 +634,8 @@ describe("autoLinkService", () => {
 
         // Should NOT have linked anything (all matching emails are already linked)
         expect(result.emailsLinked).toBe(0);
-        // BACKLOG-1340: findEmailsByContactEmails is now called TWICE (with address, then fallback without)
-        expect(findEmailCallCount).toBe(2);
-        // countEmailsMatchingAddress should have been called for diagnostic logging
-        expect(countCallCount).toBe(1);
+        // BACKLOG-1364: findEmailsByContactEmails called once (no fallback)
+        expect(findEmailCallCount).toBe(1);
         // No dbRun calls (no emails to link)
         expect(mockDbRun).not.toHaveBeenCalled();
       });
