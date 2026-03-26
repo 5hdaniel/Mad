@@ -46,7 +46,7 @@ import { formatTokens } from '@/lib/pm-utils';
 // ---------------------------------------------------------------------------
 
 const PRIORITY_ORDER: Record<string, number> = { critical: 0, high: 1, medium: 2, low: 3 };
-const STATUS_ORDER: Record<string, number> = { blocked: 0, in_progress: 1, testing: 2, reopened: 3, pending: 4, deferred: 5, completed: 6, obsolete: 7 };
+const STATUS_ORDER: Record<string, number> = { pending: 0, in_progress: 1, testing: 2, reopened: 3, blocked: 4, completed: 5, deferred: 6, obsolete: 7 };
 const TYPE_ORDER: Record<string, number> = { epic: 0, feature: 1, bug: 2, spike: 3, chore: 4 };
 
 function sortItems(items: PmBacklogItem[], col: SortableColumn | null, dir: SortDirection): PmBacklogItem[] {
