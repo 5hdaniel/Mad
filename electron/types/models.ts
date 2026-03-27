@@ -282,6 +282,10 @@ export interface Contact {
   total_messages?: number; // Optional for backwards compat
   tags?: string; // JSON array: ["VIP", "past_client", "lead"]
 
+  // Auto-role (BACKLOG-1355)
+  /** Default role for auto-fill when assigning contact to transactions */
+  default_role?: string;
+
   // Metadata
   metadata?: string; // JSON
   created_at: string;

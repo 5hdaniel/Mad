@@ -143,6 +143,9 @@ CREATE TABLE IF NOT EXISTS contacts (
   -- Import tracking
   is_imported INTEGER DEFAULT 1,         -- 1 = imported contact, 0 = manually created
 
+  -- Auto-role (BACKLOG-1355)
+  default_role TEXT,                     -- Most-recently-assigned role for auto-fill
+
   -- Metadata
   metadata TEXT,                         -- JSON for additional notes/data
   created_at DATETIME DEFAULT CURRENT_TIMESTAMP,

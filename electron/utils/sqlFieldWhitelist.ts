@@ -83,6 +83,7 @@ export const TABLE_FIELDS = {
     "total_messages",
     "tags",
     "is_imported",
+    "default_role",
     "metadata",
     "created_at",
     "updated_at",
