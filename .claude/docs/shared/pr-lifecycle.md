@@ -55,9 +55,9 @@ gh pr view 123 --json state --jq '.state'
 # If it says OPEN, the task is NOT complete
 ```
 
-### Rule 2: Engineer MUST Merge After SR Approval
+### Rule 2: SR Engineer MUST Merge After Approval
 
-After SR Engineer approves a PR, the Engineer MUST:
+After SR Engineer approves a PR and the user has tested/approved, the SR Engineer MUST:
 
 1. **Merge immediately** (do not wait, do not move to next task)
    ```bash
@@ -136,27 +136,28 @@ A CLOSED (not merged) PR means the work was ABANDONED. This should trigger inves
 
 ## Workflow Integration
 
-### For Engineers
-
-After SR approval, your workflow is:
-
-```
-1. SR Engineer approves PR
-2. You merge: gh pr merge <PR> --merge
-3. You verify: gh pr view <PR> --json state
-4. ONLY THEN: Mark task complete in task file
-5. ONLY THEN: Report to PM that task is done
-```
-
 ### For SR Engineers
 
-After approving a PR, verify engineer merges it:
+After approving a PR and receiving user approval, you own the merge:
 
 ```
-1. Approve PR
-2. Instruct engineer to merge
-3. Before moving on, verify: gh pr view <PR> --json state
-4. If still OPEN after 5 minutes, follow up
+1. Review and approve PR
+2. Wait for user testing/approval (MANDATORY — never auto-merge)
+3. Merge: gh pr merge <PR> --merge
+4. Verify: gh pr view <PR> --json state — must show MERGED
+5. Notify PM that task is merged
+```
+
+### For Engineers
+
+After pushing your PR, your merge responsibility ends — SR Engineer owns the merge:
+
+```
+1. Push code, create PR, request SR review
+2. SR Engineer reviews and approves
+3. User tests and approves
+4. SR Engineer merges — NOT the Engineer
+5. ONLY THEN: Report to PM that task is done
 ```
 
 ### For PM

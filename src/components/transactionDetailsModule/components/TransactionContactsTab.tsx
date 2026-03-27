@@ -3,6 +3,7 @@
  * Contacts tab content showing AI suggestions and contact assignments
  */
 import React from "react";
+import { formatRoleLabel } from "../../../utils/transactionRoleUtils";
 import type { ResolvedSuggestedContact, ContactAssignment } from "../types";
 
 interface TransactionContactsTabProps {
@@ -215,7 +216,7 @@ function SuggestedContactCard({
         <div className="flex-1">
           <div className="flex items-center gap-2 mb-2">
             <span className="inline-block px-3 py-1 bg-purple-100 text-purple-800 text-xs font-semibold rounded-full">
-              {suggestion.role}
+              {formatRoleLabel(suggestion.role)}
             </span>
             {suggestion.is_primary && (
               <span className="inline-block px-2 py-1 bg-blue-100 text-blue-800 text-xs font-semibold rounded-full">
@@ -346,7 +347,7 @@ function ContactAssignmentCard({
         <div className="flex-1">
           <div className="flex items-center gap-2 mb-2">
             <span className="inline-block px-3 py-1 bg-green-100 text-green-800 text-xs font-semibold rounded-full">
-              {assignment.specific_role || assignment.role || "Unknown Role"}
+              {formatRoleLabel(assignment.specific_role || assignment.role || "Unknown Role")}
             </span>
             {assignment.is_primary === 1 && (
               <span className="inline-block px-2 py-1 bg-blue-100 text-blue-800 text-xs font-semibold rounded-full">

@@ -21,6 +21,7 @@ import {
   listProjects,
   listAssignableUsers,
 } from '@/lib/pm-queries';
+import TokenMetricsBreakdown from './TokenMetricsBreakdown';
 import type {
   PmBacklogItem,
   PmSprint,
@@ -495,6 +496,9 @@ export function TaskSidebar({ item, onUpdate }: TaskSidebarProps) {
           </div>
         </div>
       )}
+
+      {/* Token Metrics Breakdown */}
+      <TokenMetricsBreakdown taskId={item.id} />
 
       {/* Start Date */}
       <div className="px-4 py-3">

@@ -122,6 +122,64 @@ export function filterRolesByTransactionType(
 }
 
 /**
+ * Flip a contact's default_role to the equivalent role for the given transaction type.
+ *
+ * When a contact's default_role isn't valid for the current transaction type,
+ * this function returns the equivalent role on the other side.
+ *
+ * Flip mapping:
+ *   seller_agent <-> buyer_agent
+ *   listing_agent -> buyer_agent (one-way; listing_agent is seller-side specific)
+ *   seller <-> buyer
+ *
+ * @param defaultRole - The contact's default_role
+ * @param transactionType - The current transaction type ('purchase' | 'sale' | 'other')
+ * @returns The flipped role string if a valid flip exists, or null if no flip is possible
+ */
+export function flipRoleForTransactionType(
+  defaultRole: string,
+  transactionType: TransactionType,
+): string | null {
+  // Build the set of valid other-side roles for this transaction type
+  const purchaseRoles = new Set([
+    SPECIFIC_ROLES.SELLER_AGENT,
+    SPECIFIC_ROLES.LISTING_AGENT,
+    SPECIFIC_ROLES.SELLER,
+  ]);
+  const saleRoles = new Set([
+    SPECIFIC_ROLES.BUYER_AGENT,
+    SPECIFIC_ROLES.BUYER,
+  ]);
+
+  // Determine which roles are valid for this transaction type
+  const validRoles = transactionType === "purchase" ? purchaseRoles : saleRoles;
+
+  // If already valid, return as-is
+  if (validRoles.has(defaultRole)) {
+    return defaultRole;
+  }
+
+  // Define the flip map
+  const flipMap: Record<string, string> = {
+    [SPECIFIC_ROLES.SELLER_AGENT]: SPECIFIC_ROLES.BUYER_AGENT,
+    [SPECIFIC_ROLES.BUYER_AGENT]: SPECIFIC_ROLES.SELLER_AGENT,
+    [SPECIFIC_ROLES.LISTING_AGENT]: SPECIFIC_ROLES.BUYER_AGENT,
+    [SPECIFIC_ROLES.SELLER]: SPECIFIC_ROLES.BUYER,
+    [SPECIFIC_ROLES.BUYER]: SPECIFIC_ROLES.SELLER,
+  };
+
+  const flipped = flipMap[defaultRole];
+  if (!flipped) return null;
+
+  // Only return the flipped role if it's valid for this transaction type
+  if (validRoles.has(flipped)) {
+    return flipped;
+  }
+
+  return null;
+}
+
+/**
  * Get context message for transaction type
  *
  * @param transactionType - 'purchase' or 'sale'

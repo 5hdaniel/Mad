@@ -116,6 +116,17 @@ export const contactBridge = {
     ipcRenderer.invoke("contacts:resolve-handles", handles),
 
   /**
+   * Update the default_role on a contact (manual override)
+   * @param contactId - Contact ID to update
+   * @param role - New default role value
+   * @returns Update result
+   */
+  updateDefaultRole: (contactId: string, role: string): Promise<{
+    success: boolean;
+    error?: string;
+  }> => ipcRenderer.invoke("contacts:update-default-role", contactId, role),
+
+  /**
    * Search contacts at database level (for selection modal)
    * This enables searching beyond the initial LIMIT 200 contacts.
    * @param userId - User ID to search contacts for

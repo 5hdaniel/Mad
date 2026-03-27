@@ -71,6 +71,7 @@ export type TransactionStage =
   | "post_closing";
 
 // Participants
+/** @deprecated Use ContactRole instead — this legacy type does not match SPECIFIC_ROLES */
 export type ParticipantRole =
   | "buyer"
   | "seller"
@@ -86,6 +87,28 @@ export type ParticipantRole =
   | "tc"
   | "other"
   | "unknown";
+
+/** Canonical contact role type — matches SPECIFIC_ROLES in src/constants/contactRoles.ts */
+export type ContactRole =
+  | "client"
+  | "buyer"
+  | "seller"
+  | "buyer_agent"
+  | "seller_agent"
+  | "listing_agent"
+  | "appraiser"
+  | "inspector"
+  | "surveyor"
+  | "title_company"
+  | "escrow_officer"
+  | "mortgage_broker"
+  | "lender"
+  | "real_estate_attorney"
+  | "transaction_coordinator"
+  | "insurance_agent"
+  | "hoa_management"
+  | "condo_management"
+  | "other";
 
 // Export & Audit
 export type ExportStatus = "not_exported" | "exported" | "re_export_needed";
@@ -258,6 +281,10 @@ export interface Contact {
   last_outbound_at?: string;
   total_messages?: number; // Optional for backwards compat
   tags?: string; // JSON array: ["VIP", "past_client", "lead"]
+
+  // Auto-role (BACKLOG-1355)
+  /** Default role for auto-fill when assigning contact to transactions */
+  default_role?: string;
 
   // Metadata
   metadata?: string; // JSON
@@ -626,8 +653,10 @@ export interface TransactionParticipant {
   transaction_id: string;
   contact_id: string;
 
-  // Role
-  role?: ParticipantRole;
+  // Role — stores SPECIFIC_ROLES values (ContactRole) for new writes
+  role?: string;
+  specific_role?: string;
+  role_category?: string;
 
   // Confidence & Source
   confidence?: number;

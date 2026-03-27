@@ -10,6 +10,7 @@ import { dbGet, dbAll, dbRun, ensureDb } from "./core/dbConnection";
 import { validateFields } from "../../utils/sqlFieldWhitelist";
 
 // Transaction contact association data
+// Note: `role` now stores SPECIFIC_ROLES values (ContactRole) — normalized from specific_role on writes
 export interface TransactionContactData {
   contact_id: string;
   role?: string;
@@ -76,6 +77,14 @@ export async function linkContactToTransaction(
   ];
 
   dbRun(sql, params);
+
+  // Auto-update contact default_role
+  if (role) {
+    dbRun(
+      `UPDATE contacts SET default_role = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?`,
+      [role, contactId]
+    );
+  }
 }
 
 /**
@@ -86,6 +95,11 @@ export async function assignContactToTransaction(
   transactionId: string,
   data: TransactionContactData,
 ): Promise<string> {
+  // Normalize: keep role in sync with specific_role (canonical source)
+  if (data.specific_role) {
+    data.role = data.specific_role;
+  }
+
   // First check if this contact is already assigned to this transaction
   const existingCheck = `
     SELECT id FROM transaction_contacts
@@ -111,6 +125,15 @@ export async function assignContactToTransaction(
       data.notes || null,
       existing.id,
     ]);
+
+    // Auto-update contact default_role
+    if (data.specific_role) {
+      dbRun(
+        `UPDATE contacts SET default_role = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?`,
+        [data.specific_role, data.contact_id]
+      );
+    }
+
     return existing.id;
   }
 
@@ -134,6 +157,15 @@ export async function assignContactToTransaction(
   ];
 
   dbRun(sql, params);
+
+  // Auto-update contact default_role
+  if (data.specific_role) {
+    dbRun(
+      `UPDATE contacts SET default_role = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?`,
+      [data.specific_role, data.contact_id]
+    );
+  }
+
   return id;
 }
 
@@ -259,6 +291,14 @@ export async function updateContactRole(
   `;
 
   dbRun(sql, values);
+
+  // Auto-update contact default_role
+  if (updates.specific_role || updates.role) {
+    dbRun(
+      `UPDATE contacts SET default_role = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?`,
+      [updates.specific_role || updates.role, contactId]
+    );
+  }
 }
 
 /**
@@ -339,6 +379,12 @@ export async function batchUpdateContactAssignments(
             op.notes || null,
             existing.id,
           );
+
+          // Auto-update contact default_role
+          if (op.specificRole || op.role) {
+            db.prepare(`UPDATE contacts SET default_role = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?`)
+              .run(op.specificRole || op.role, op.contactId);
+          }
         } else {
           // Insert new assignment
           const id = crypto.randomUUID();
@@ -357,6 +403,12 @@ export async function batchUpdateContactAssignments(
             op.isPrimary ? 1 : 0,
             op.notes || null,
           );
+
+          // Auto-update contact default_role
+          if (op.specificRole || op.role) {
+            db.prepare(`UPDATE contacts SET default_role = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?`)
+              .run(op.specificRole || op.role, op.contactId);
+          }
         }
       }
     }

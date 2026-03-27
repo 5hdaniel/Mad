@@ -27,16 +27,17 @@ All sprint tasks require metrics tracking for:
 - **Duration**: Time from first to last message in transcript (auto-captured)
 - **API Calls**: Number of API roundtrips (auto-captured)
 
-**How to access:**
-```bash
-# View metrics summary
-python .claude/skills/log-metrics/log_metrics.py --summary
+**Storage:**
+- **Primary**: Supabase `pm_token_metrics` table (auto-captured by SubagentStop hook)
+- **Backup**: `.claude/metrics/tokens.csv` (append-only, never queried in workflow)
 
-# View CSV directly
-cat .claude/metrics/tokens.csv
+**How to access (via MCP):**
+```sql
+-- Query metrics for a task
+SELECT * FROM pm_token_metrics WHERE task_id = 'TASK-XXXX' ORDER BY recorded_at;
 
-# Find specific agent's data
-grep "<agent_id>" .claude/metrics/tokens.csv
+-- Aggregate totals
+SELECT SUM(total_tokens), SUM(billable_tokens) FROM pm_token_metrics WHERE task_id = 'TASK-XXXX';
 ```
 
 ---
@@ -47,7 +48,7 @@ Understanding the difference between token metrics:
 
 | Metric | Formula | Use For |
 |--------|---------|---------|
-| **Billable Tokens** | output + cache_create | PM estimates, variance analysis |
+| **Billable Tokens** | input + output + cache_create | PM estimates, variance analysis |
 | **Total Tokens** | input + output + cache_read + cache_create | Context usage, debugging |
 
 ### Why Billable vs Total?
@@ -98,17 +99,11 @@ Engineer Agent ID: <agent_id from Task tool output>
 
 ### Metrics (Auto-Captured)
 
-**From SubagentStop hook** - Run: `grep "<agent_id>" .claude/metrics/tokens.csv`
-
-| Metric | Value |
-|--------|-------|
-| **Total Tokens** | X |
-| Duration | X seconds |
-| API Calls | X |
-| Input Tokens | X |
-| Output Tokens | X |
-| Cache Read | X |
-| Cache Create | X |
+**Auto-captured to Supabase by SubagentStop hook.** Query via MCP:
+```sql
+SELECT total_tokens, billable_tokens, duration_ms, api_calls, input_tokens, output_tokens, cache_read_tokens, cache_creation_tokens
+FROM pm_token_metrics WHERE agent_id = '<agent_id>';
+```
 
 **Variance:** PM Est ~XK vs Actual ~XK (X% over/under)
 ```
@@ -117,18 +112,12 @@ Engineer Agent ID: <agent_id from Task tool output>
 
 ## SR Engineer Metrics (Task File)
 
-SR Engineer captures their agent_id when reviewing:
+SR Engineer metrics are auto-captured to Supabase by the SubagentStop hook:
 
 ```markdown
-### Agent ID
+### Metrics (Auto-Captured to Supabase)
 
-```
-SR Engineer Agent ID: <agent_id from Task tool output>
-```
-
-### Metrics (Auto-Captured)
-
-**From SubagentStop hook** - Run: `grep "<agent_id>" .claude/metrics/tokens.csv`
+Query: `SELECT total_tokens, duration_ms, api_calls FROM pm_token_metrics WHERE agent_id = '<agent_id>';`
 
 | Metric | Value |
 |--------|-------|

@@ -25,6 +25,8 @@ export interface ContactRoleRowProps {
   onClick?: () => void;
   /** Whether this row has a validation error (missing role) */
   hasError?: boolean;
+  /** Whether the current role was auto-filled from contact default_role (BACKLOG-1355) */
+  isAutoFilled?: boolean;
   /** Additional CSS classes */
   className?: string;
 }
@@ -90,6 +92,7 @@ export function ContactRoleRow({
   onRemove,
   onClick,
   hasError = false,
+  isAutoFilled = false,
   className = "",
 }: ContactRoleRowProps): React.ReactElement {
   const displayName = getDisplayName(contact);
@@ -151,20 +154,30 @@ export function ContactRoleRow({
 
       {/* Role Dropdown and Remove Button - wrap together on small screens */}
       <div className="flex items-center gap-2 flex-shrink-0">
-        <select
-          className="px-3 py-2 text-sm border border-gray-300 rounded-lg bg-white focus:ring-2 focus:ring-purple-500 focus:border-purple-500 focus:outline-none min-w-[140px]"
-          value={currentRole}
-          onChange={(e) => onRoleChange(e.target.value)}
-          aria-label={`Role for ${displayName}`}
-          data-testid={`role-select-${contact.id}`}
-        >
-          <option value="">Select role...</option>
-          {roleOptions.map((option) => (
-            <option key={option.value} value={option.value}>
-              {option.label}
-            </option>
-          ))}
-        </select>
+        <div className="flex items-center gap-1">
+          <select
+            className="px-3 py-2 text-sm border border-gray-300 rounded-lg bg-white text-gray-900 focus:ring-2 focus:ring-purple-500 focus:border-purple-500 focus:outline-none min-w-[140px]"
+            value={currentRole}
+            onChange={(e) => onRoleChange(e.target.value)}
+            aria-label={`Role for ${displayName}`}
+            data-testid={`role-select-${contact.id}`}
+          >
+            <option value="">Select role...</option>
+            {roleOptions.map((option) => (
+              <option key={option.value} value={option.value}>
+                {option.label}
+              </option>
+            ))}
+          </select>
+          {isAutoFilled && (
+            <span
+              className="text-xs text-purple-500 ml-1 font-medium"
+              data-testid={`auto-filled-badge-${contact.id}`}
+            >
+              (Auto)
+            </span>
+          )}
+        </div>
 
         {/* Remove Button */}
         {onRemove && (

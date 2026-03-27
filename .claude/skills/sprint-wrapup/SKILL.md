@@ -103,30 +103,36 @@ SET status = 'completed', completed_at = NOW(), updated_at = NOW()
 WHERE item_number IN (<backlog numbers for sprint tasks>);
 ```
 
-### 6. Record Metrics (Supabase)
+### 6. Record Metrics (Supabase — Primary)
 
-Check that agent metrics were captured in `pm_token_metrics`:
+Verify all agents logged metrics and record task totals:
 
 ```sql
 -- Check metrics for this sprint's tasks
-SELECT task_id, agent_type, total_tokens, cost_usd, duration_ms, description
+SELECT task_id, agent_type, total_tokens, billable_tokens, duration_ms, description
 FROM pm_token_metrics
-WHERE task_id IN ('TASK-XXXX', 'TASK-YYYY')
-ORDER BY recorded_at;
+WHERE sprint_id = '<sprint-uuid>'
+ORDER BY task_id, recorded_at;
 
--- If local tokens.csv has unlabeled entries, insert them
-INSERT INTO pm_token_metrics (
-  agent_id, agent_type, task_id, description,
-  input_tokens, output_tokens, total_tokens,
-  cost_usd, duration_ms, model, recorded_at
-) VALUES (...);
+-- Gap detection: find tasks with zero metric records
+-- WARNING: This joins on legacy_id. If legacy_id is NULL, tasks silently show zero rows (false positive).
+-- Fix: UPDATE pm_backlog_items SET legacy_id = 'TASK-' || item_number WHERE sprint_id = '<sprint-uuid>' AND legacy_id IS NULL;
+-- Incident ref: SPRINT-T — NULL legacy_id made all metrics invisible.
+SELECT t.legacy_id AS task_id, COUNT(m.id) AS metric_rows
+FROM pm_tasks t
+LEFT JOIN pm_token_metrics m ON m.task_id = t.legacy_id
+WHERE t.sprint_id = '<sprint-uuid>' AND t.deleted_at IS NULL
+GROUP BY t.legacy_id
+HAVING COUNT(m.id) = 0;
+
+-- Label any unlabeled rows (if .current-task was not set)
+SELECT pm_label_agent_metrics('<agent_id>', 'TASK-XXXX', 'engineer', 'Implementation');
+
+-- Record task totals (auto-sums from metric rows)
+SELECT pm_record_task_tokens('<task_uuid>');
 ```
 
-Also check the local CSV as fallback:
-```bash
-python .claude/skills/log-metrics/query_metrics.py --since <sprint-start-date>
-python .claude/skills/log-metrics/sum_effort.py --task TASK-XXXX
-```
+If failed Supabase pushes exist, check `~/.claude/metrics/failed-payloads.jsonl` and replay via `pm_log_agent_metrics` RPC.
 
 ### 7. Generate Sprint Summary
 

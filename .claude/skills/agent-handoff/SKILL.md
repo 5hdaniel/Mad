@@ -14,19 +14,23 @@ This skill defines how agents hand off work during sprint task execution. Read t
 ### PM Agent Steps
 | Step | Action | Status Update | Hand Off To |
 |------|--------|---------------|-------------|
+| 0 | Write `.current-task` with sprint context | — | - (before any agent work) |
 | 1 | Verify task file exists with context | — | - (abort if missing) |
-| 2-4 | Setup (worktree, branch, status) | CSV + Sprint → `In Progress` | - |
+| 2-4 | Setup (worktree, branch, status) | Task + Item → `in_progress` | - |
 | 5 | Task ready for planning | — | Engineer (read-only exploration) |
 | 8 | Plan reviewed | Sprint notes: "Plan approved" | Engineer (implement) or User (if rejected) |
-| 11 | Implementation reviewed | CSV + Sprint → `Testing` | SR Engineer (create PR) |
-| 14 | After PR merged | CSV + Sprint → `Completed` | Record effort metrics |
+| 11 | Implementation reviewed | Task + Item → `testing` | SR Engineer (create PR) |
+| 14 | After PR merged | Task + Item → `completed` | Record effort metrics |
 | 15 | All tasks complete | Sprint → `Completed` | Close sprint |
 
 **Status updates at every transition (in order):**
-1. Supabase RPC: `pm_update_item_status('<uuid>', '<status>')` — source of truth
-2. `.claude/plans/sprints/SPRINT-XXX.md` — In-Scope table Status column
-3. `.claude/plans/backlog/items/BACKLOG-XXX.md` — if detail file exists, update status there too
-4. (Optional) `.claude/plans/backlog/data/backlog.csv` — backward compatibility
+1. Supabase RPC: `pm_update_task_status('<task_uuid>', '<status>')` — task-level status
+2. Supabase RPC: `pm_update_item_status('<backlog_item_uuid>', '<status>')` — backlog item status
+3. `.claude/plans/sprints/SPRINT-XXX.md` — In-Scope table Status column
+4. `.claude/plans/backlog/items/BACKLOG-XXX.md` — if detail file exists, update status there too
+5. (Optional) `.claude/plans/backlog/data/backlog.csv` — backward compatibility
+
+**IMPORTANT:** Both RPCs are required. `pm_update_task_status` updates the sprint task; `pm_update_item_status` updates the parent backlog item. Skipping either leaves the dashboard out of sync.
 
 **Valid statuses (Supabase):** `pending`, `in_progress`, `testing`, `completed`, `deferred`
 
@@ -57,6 +61,19 @@ Sprint Task Lifecycle
 
 PHASE A: SETUP (PM)
 -------------------
+0.  PM: Write .current-task with sprint context (BEFORE any agent work)
+    - This is the FIRST thing PM does — before planning, before spawning any agent
+    - **CRITICAL: sprint_id MUST be the sprint UUID (not the name)**
+      The track-agent-tokens hook writes sprint_id directly to pm_token_metrics.
+      Using the name (e.g., "SPRINT-T") instead of the UUID breaks sprint-level metrics queries.
+    - echo '{"agent_type": "pm", "sprint_id": "<sprint-uuid>", "description": "Sprint setup"}' > .claude/.current-task
+    - Update .current-task BEFORE EVERY agent invocation with the correct agent_type:
+      * Before Engineer: {"task_id": "TASK-XXXX", "agent_type": "engineer", "sprint_id": "<sprint-uuid>"}
+      * Before SR Engineer: {"task_id": "TASK-XXXX", "agent_type": "sr-engineer", "sprint_id": "<sprint-uuid>"}
+      * Before QA: {"agent_type": "qa", "sprint_id": "<sprint-uuid>", "description": "Sprint QA"}
+      * Sprint-level work (no task): omit task_id, include sprint_id + description
+    - This ensures every subagent's token usage is captured with correct attribution
+
 1a. PM: Create integration branch (if not already created for this sprint)
     - git checkout develop && git pull origin develop
     - git checkout -b int/<sprint-name>
@@ -77,12 +94,16 @@ PHASE A: SETUP (PM)
     - If sequential: git checkout -b feature/TASK-XXXX int/<sprint-name>
 
 4.  PM: Update task status to "In Progress"
-    - Update Supabase via RPC: `SELECT pm_update_item_status('<uuid>', 'in_progress');`
+    - Update Supabase (BOTH RPCs required):
+      `SELECT pm_update_task_status('<task_uuid>', 'in_progress');`
+      `SELECT pm_update_item_status('<backlog_item_uuid>', 'in_progress');`
     - Update sprint file In-Scope table: Status → `In Progress`
     - (Optional) Update backlog CSV status column → `In Progress`
     - Valid statuses: pending, in_progress, testing, completed, deferred
 
 5.  PM → ENGINEER: Handoff task for planning (read-only exploration)
+    - Write `.claude/.current-task` with task context for metrics hook:
+      `echo '{"task_id": "TASK-XXXX", "agent_type": "engineer", "sprint_id": "<sprint-uuid>"}' > .claude/.current-task`
     - Use handoff message template
     - Specify: Task ID, task file path, branch name
     - Instruct engineer: "Plan only — explore codebase, write plan, do NOT edit production files"
@@ -116,7 +137,9 @@ PHASE B: PLANNING
     │   - Update sprint file notes: "Plan approved, implementing"
     │   - Handoff with approval context
     └─ If rejected → Notify user, END
-        - Update Supabase: `SELECT pm_update_item_status('<uuid>', 'deferred');`
+        - Update Supabase (BOTH RPCs required):
+          `SELECT pm_update_task_status('<task_uuid>', 'deferred');`
+          `SELECT pm_update_item_status('<backlog_item_uuid>', 'deferred');`
         - (Optional) Update backlog CSV status → `Deferred`
         - Document reason in task file
 
@@ -150,7 +173,9 @@ PHASE C: IMPLEMENTATION
         - Document rejection reason
 
 11. PM: Update status
-    - Update Supabase: `SELECT pm_update_item_status('<uuid>', 'testing');`
+    - Update Supabase (BOTH RPCs required):
+      `SELECT pm_update_task_status('<task_uuid>', 'testing');`
+      `SELECT pm_update_item_status('<backlog_item_uuid>', 'testing');`
     - Update sprint file In-Scope table: Status → `Testing`
     - (Optional) Update backlog CSV status → `Testing`
     - → SR ENGINEER: Create PR (Step 12)
@@ -190,27 +215,35 @@ PHASE D: PR, TEST & MERGE
 
 13. SR ENGINEER: Delete worktree
     - git worktree remove ../Mad-TASK-XXXX
+    - Clear `.claude/.current-task`: `echo '{}' > .claude/.current-task`
     - → PM: Task merged notification
 
 14. PM: Record effort metrics + mark Completed
-    - Update Supabase: `SELECT pm_update_item_status('<uuid>', 'completed');`
+    - Update Supabase (BOTH RPCs required):
+      `SELECT pm_update_task_status('<task_uuid>', 'completed');`
+      `SELECT pm_update_item_status('<backlog_item_uuid>', 'completed');`
     - Update sprint file In-Scope table: Status → `Completed`
     - (Optional) Update backlog CSV status → `Completed`
-    - Collect agent_ids from ALL handoff messages for this task
-    - Label each agent entry in tokens.csv:
-      python .claude/skills/log-metrics/log_metrics.py \
-        --label --agent-id <ID> -t <type> -i TASK-XXXX -d "<desc>"
-    - Aggregate totals:
-      python .claude/skills/log-metrics/sum_effort.py --task TASK-XXXX --pretty
-    - Copy aggregated totals to task file `## Actual Effort` section
+    - Reconcile metrics (verify all agents logged to Supabase):
+      ```sql
+      SELECT agent_id, agent_type, total_tokens, task_id
+      FROM pm_token_metrics WHERE task_id = 'TASK-XXXX' ORDER BY recorded_at;
+      ```
+    - If any agents are unlabeled, label them:
+      `SELECT pm_label_agent_metrics('<agent_id>', 'TASK-XXXX', 'engineer', 'Implementation');`
+    - Record task totals (auto-sums from metric rows):
+      `SELECT pm_record_task_tokens('<task_uuid>');`
     - Update sprint file In-Scope table `Actual Tokens` column
     - Collect issues from handoff messages → sprint file `## Issues Summary`
 
 15. PM: When ALL sprint tasks complete → Close sprint
     - Verify all tasks are complete
-    - Aggregate all task metrics for the sprint:
-      python .claude/skills/log-metrics/sum_effort.py --task TASK-XXXX --pretty
-      (repeat for each task)
+    - Aggregate all task metrics from Supabase:
+      ```sql
+      SELECT task_id, SUM(total_tokens) AS total, SUM(billable_tokens) AS billable
+      FROM pm_token_metrics WHERE sprint_id = '<sprint-uuid>'
+      GROUP BY task_id ORDER BY task_id;
+      ```
     - Populate sprint file `## Sprint Retrospective` section:
       - Estimation accuracy table (est vs actual per task)
       - Issues summary (aggregated from all task handoffs)
@@ -321,11 +354,17 @@ If nothing went wrong, explicitly state in handoff:
 
 ## Supabase RPC Quick Reference
 
-All status updates should use Supabase RPCs via the `mcp__supabase__execute_sql` tool:
+All status updates should use Supabase RPCs via the `mcp__supabase__execute_sql` tool.
+**BOTH RPCs are required at every status transition:**
 
 ```sql
--- Update item status (Steps 4, 8, 11, 14)
-SELECT pm_update_item_status('<uuid>', 'in_progress');
+-- Update BOTH task and item status (Steps 4, 8, 11, 14)
+SELECT pm_update_task_status('<task_uuid>', 'in_progress');
+SELECT pm_update_item_status('<backlog_item_uuid>', 'in_progress');
+
+-- Look up task by legacy ID to get both UUIDs
+SELECT pm_get_task_by_legacy_id('TASK-XXXX');
+-- Returns: task UUID + backlog_item_id (use both for subsequent calls)
 
 -- Look up item by legacy ID to get UUID
 SELECT pm_get_item_by_legacy_id('BACKLOG-746');

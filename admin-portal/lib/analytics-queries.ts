@@ -55,9 +55,9 @@ export interface PhoneTypeBreakdown {
 
 // ─── Helpers ─────────────────────────────────────────────────────
 
-function thirtyDaysAgo(): string {
+function daysAgo(days: number): string {
   const d = new Date();
-  d.setDate(d.getDate() - 30);
+  d.setDate(d.getDate() - days);
   return d.toISOString();
 }
 
@@ -90,13 +90,14 @@ function compareSemver(a: string, b: string): number {
 }
 
 export async function getVersionDistribution(
-  supabase: SupabaseClient
+  supabase: SupabaseClient,
+  days = 30
 ): Promise<VersionDistribution[]> {
   const { data: devices, error } = await supabase
     .from('devices')
     .select('app_version, user_id')
     .eq('is_active', true)
-    .gte('last_seen_at', thirtyDaysAgo());
+    .gte('last_seen_at', daysAgo(days));
 
   if (error || !devices) {
     console.error('getVersionDistribution error:', error?.message);
@@ -150,7 +151,7 @@ export async function getVersionDistribution(
 export async function getSystemCounts(
   supabase: SupabaseClient
 ): Promise<SystemCounts> {
-  const cutoff = thirtyDaysAgo();
+  const cutoff = daysAgo(30);
 
   const [devicesResult, orgsResult, totalUsersResult, activeDevicesResult] =
     await Promise.all([

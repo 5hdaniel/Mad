@@ -218,6 +218,7 @@ jest.mock("@sentry/electron/main", () => ({
 // Mock deviceService
 jest.mock("../services/deviceService", () => ({
   getDeviceId: jest.fn().mockReturnValue("test-device-id"),
+  registerDevice: jest.fn().mockResolvedValue({ success: true }),
 }));
 
 // NOTE: We do NOT mock the handler modules (googleAuthHandlers, microsoftAuthHandlers, etc.)

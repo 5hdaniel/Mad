@@ -371,22 +371,24 @@ gh pr create --base int/<sprint-name> --title "..." --body "..."
    - Use the `senior-engineer-pr-lead` agent
    - This is a PR review, different from the plan review in Step 2
 
-### Merge and Verify
+### Merge (SR Engineer Responsibility)
 
-**CRITICAL: A PR is NOT complete until MERGED.**
+**CRITICAL: A PR is NOT complete until MERGED. The SR Engineer owns the merge — NOT the Engineer.**
+
+After SR Engineer approves and user tests/approves:
 
 ```bash
-# Merge after SR approval
+# SR Engineer merges (not the Engineer)
 gh pr merge <PR-NUMBER> --merge
 
-# Verify merge state - MUST show "MERGED"
+# SR Engineer verifies merge state - MUST show "MERGED"
 gh pr view <PR-NUMBER> --json state --jq '.state'
 ```
 
 | Result | Meaning | Action |
 |--------|---------|--------|
-| `MERGED` | Success - notify PM | Proceed to Step 6 |
-| `OPEN` | Merge failed | Investigate and retry |
+| `MERGED` | Success - SR notifies PM | Proceed to Step 6 |
+| `OPEN` | Merge failed | SR Engineer investigates and retries |
 | `CLOSED` | PR closed without merge | Work is LOST - escalate |
 
 ### When Merge is Blocked by Branch Protection

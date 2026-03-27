@@ -193,6 +193,21 @@ export const contactService = {
   },
 
   /**
+   * Update the default_role on a contact
+   */
+  async updateDefaultRole(
+    contactId: string,
+    role: string
+  ): Promise<ApiResult> {
+    try {
+      const result = await window.api.contacts.updateDefaultRole(contactId, role);
+      return { success: result.success, error: result.error };
+    } catch (error) {
+      return { success: false, error: getErrorMessage(error) };
+    }
+  },
+
+  /**
    * Import multiple contacts
    */
   async import(

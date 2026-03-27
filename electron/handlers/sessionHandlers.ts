@@ -16,7 +16,7 @@ import auditService from "../services/auditService";
 import logService from "../services/logService";
 import { setSyncUserId } from "./syncHandlers";
 import failureLogService from "../services/failureLogService";
-import { getDeviceId } from "../services/deviceService";
+import { getDeviceId, registerDevice } from "../services/deviceService";
 
 // Import validation utilities
 import {
@@ -1007,6 +1007,14 @@ async function handleGetCurrentUser(): Promise<CurrentUserResponse> {
         requiresTerms,
       }
     );
+
+    // Update device record (app_version, last_seen_at) on every session restore
+    // Fire-and-forget so it doesn't block app startup
+    registerDevice(user.id).catch((err) => {
+      logService.warn("Device registration on session restore failed", "SessionHandlers", {
+        error: err instanceof Error ? err.message : "Unknown",
+      });
+    });
 
     return {
       success: true,
