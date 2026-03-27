@@ -63,11 +63,14 @@ PHASE A: SETUP (PM)
 -------------------
 0.  PM: Write .current-task with sprint context (BEFORE any agent work)
     - This is the FIRST thing PM does — before planning, before spawning any agent
-    - echo '{"agent_type": "pm", "sprint_id": "SPRINT-XXX", "description": "Sprint setup"}' > .claude/.current-task
+    - **CRITICAL: sprint_id MUST be the sprint UUID (not the name)**
+      The track-agent-tokens hook writes sprint_id directly to pm_token_metrics.
+      Using the name (e.g., "SPRINT-T") instead of the UUID breaks sprint-level metrics queries.
+    - echo '{"agent_type": "pm", "sprint_id": "<sprint-uuid>", "description": "Sprint setup"}' > .claude/.current-task
     - Update .current-task BEFORE EVERY agent invocation with the correct agent_type:
-      * Before Engineer: {"task_id": "TASK-XXXX", "agent_type": "engineer", "sprint_id": "SPRINT-XXX"}
-      * Before SR Engineer: {"task_id": "TASK-XXXX", "agent_type": "sr-engineer", "sprint_id": "SPRINT-XXX"}
-      * Before QA: {"agent_type": "qa", "sprint_id": "SPRINT-XXX", "description": "Sprint QA"}
+      * Before Engineer: {"task_id": "TASK-XXXX", "agent_type": "engineer", "sprint_id": "<sprint-uuid>"}
+      * Before SR Engineer: {"task_id": "TASK-XXXX", "agent_type": "sr-engineer", "sprint_id": "<sprint-uuid>"}
+      * Before QA: {"agent_type": "qa", "sprint_id": "<sprint-uuid>", "description": "Sprint QA"}
       * Sprint-level work (no task): omit task_id, include sprint_id + description
     - This ensures every subagent's token usage is captured with correct attribution
 
@@ -100,7 +103,7 @@ PHASE A: SETUP (PM)
 
 5.  PM → ENGINEER: Handoff task for planning (read-only exploration)
     - Write `.claude/.current-task` with task context for metrics hook:
-      `echo '{"task_id": "TASK-XXXX", "agent_type": "engineer", "sprint_id": "SPRINT-XXX"}' > .claude/.current-task`
+      `echo '{"task_id": "TASK-XXXX", "agent_type": "engineer", "sprint_id": "<sprint-uuid>"}' > .claude/.current-task`
     - Use handoff message template
     - Specify: Task ID, task file path, branch name
     - Instruct engineer: "Plan only — explore codebase, write plan, do NOT edit production files"
