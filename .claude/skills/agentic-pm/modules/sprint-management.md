@@ -177,6 +177,10 @@ Estimates capture planning assumptions at sprint start. Changing them retroactiv
 - [ ] All task files created in `.claude/plans/tasks/`
 - [ ] **All task files specify PR target:** `int/<sprint-name>` (NOT develop)
 - [ ] Items assigned to sprint in Supabase: `SELECT pm_assign_to_sprint(p_item_id := '<uuid>', p_sprint_id := '<uuid>');`
+- [ ] **All task items have `legacy_id` set:** `UPDATE pm_backlog_items SET legacy_id = 'TASK-' || item_number WHERE sprint_id = '<sprint-uuid>' AND legacy_id IS NULL;`
+  - The admin portal's token breakdown UI joins `pm_token_metrics.task_id` against `pm_backlog_items.legacy_id`
+  - Without this, effort metrics won't show on the task detail page
+  - **Incident ref:** SPRINT-T — all 8 tasks had NULL legacy_id, metrics invisible in admin portal
 - [ ] INDEX.md updated with sprint assignment
 - [ ] Worktrees ready for parallel tasks (BACKLOG-132)
 

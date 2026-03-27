@@ -88,8 +88,11 @@ Use this skill when the user asks for any of:
 
    **PM must write `.current-task` before each agent invocation:**
    ```bash
-   echo '{"task_id": "TASK-XXXX", "agent_type": "engineer", "sprint_id": "SPRINT-XXX"}' > .claude/.current-task
+   echo '{"task_id": "TASK-XXXX", "agent_type": "engineer", "sprint_id": "<sprint-uuid>"}' > .claude/.current-task
    ```
+   **CRITICAL: `sprint_id` must be the sprint UUID from `pm_sprints.id`, NOT the sprint name.**
+   Using the name (e.g., "SPRINT-T") causes NULL sprint_id in pm_token_metrics.
+   Incident ref: SPRINT-T — all metrics had NULL sprint_id.
 
    PM estimates in tokens only.
 

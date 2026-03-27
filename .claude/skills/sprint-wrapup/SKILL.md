@@ -115,6 +115,9 @@ WHERE sprint_id = '<sprint-uuid>'
 ORDER BY task_id, recorded_at;
 
 -- Gap detection: find tasks with zero metric records
+-- WARNING: This joins on legacy_id. If legacy_id is NULL, tasks silently show zero rows (false positive).
+-- Fix: UPDATE pm_backlog_items SET legacy_id = 'TASK-' || item_number WHERE sprint_id = '<sprint-uuid>' AND legacy_id IS NULL;
+-- Incident ref: SPRINT-T — NULL legacy_id made all metrics invisible.
 SELECT t.legacy_id AS task_id, COUNT(m.id) AS metric_rows
 FROM pm_tasks t
 LEFT JOIN pm_token_metrics m ON m.task_id = t.legacy_id

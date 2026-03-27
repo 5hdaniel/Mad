@@ -20,8 +20,10 @@ SubagentStop hook fires
 
 **PM writes `.claude/.current-task` before invoking each agent** (Step 5 of agent-handoff):
 ```json
-{"task_id": "TASK-2226", "agent_type": "engineer", "sprint_id": "SPRINT-139"}
+{"task_id": "TASK-2226", "agent_type": "engineer", "sprint_id": "<sprint-uuid>"}
 ```
+**CRITICAL: `sprint_id` must be the UUID from `pm_sprints.id`, NOT the sprint name (e.g., "SPRINT-139").**
+Using the name causes NULL sprint_id in pm_token_metrics. Incident ref: SPRINT-T.
 
 This eliminates the manual `--label` step — the hook writes task context at insert time.
 
@@ -125,6 +127,11 @@ HAVING COUNT(m.id) = 0;
 ```
 
 Any results indicate tasks that completed with zero metric records.
+
+**WARNING:** This query joins on `legacy_id`. If `legacy_id` is NULL on pm_tasks entries,
+those tasks silently show zero metric rows (false positive). Ensure all tasks have `legacy_id` set:
+`UPDATE pm_backlog_items SET legacy_id = 'TASK-' || item_number WHERE sprint_id = '<sprint-uuid>' AND legacy_id IS NULL;`
+Incident ref: SPRINT-T — all tasks had NULL legacy_id, metrics invisible in admin portal.
 
 ---
 
