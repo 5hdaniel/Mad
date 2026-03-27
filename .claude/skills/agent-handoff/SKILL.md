@@ -14,6 +14,7 @@ This skill defines how agents hand off work during sprint task execution. Read t
 ### PM Agent Steps
 | Step | Action | Status Update | Hand Off To |
 |------|--------|---------------|-------------|
+| 0 | Write `.current-task` with sprint context | — | - (before any agent work) |
 | 1 | Verify task file exists with context | — | - (abort if missing) |
 | 2-4 | Setup (worktree, branch, status) | Task + Item → `in_progress` | - |
 | 5 | Task ready for planning | — | Engineer (read-only exploration) |
@@ -60,6 +61,16 @@ Sprint Task Lifecycle
 
 PHASE A: SETUP (PM)
 -------------------
+0.  PM: Write .current-task with sprint context (BEFORE any agent work)
+    - This is the FIRST thing PM does — before planning, before spawning any agent
+    - echo '{"agent_type": "pm", "sprint_id": "SPRINT-XXX", "description": "Sprint setup"}' > .claude/.current-task
+    - Update .current-task BEFORE EVERY agent invocation with the correct agent_type:
+      * Before Engineer: {"task_id": "TASK-XXXX", "agent_type": "engineer", "sprint_id": "SPRINT-XXX"}
+      * Before SR Engineer: {"task_id": "TASK-XXXX", "agent_type": "sr-engineer", "sprint_id": "SPRINT-XXX"}
+      * Before QA: {"agent_type": "qa", "sprint_id": "SPRINT-XXX", "description": "Sprint QA"}
+      * Sprint-level work (no task): omit task_id, include sprint_id + description
+    - This ensures every subagent's token usage is captured with correct attribution
+
 1a. PM: Create integration branch (if not already created for this sprint)
     - git checkout develop && git pull origin develop
     - git checkout -b int/<sprint-name>
