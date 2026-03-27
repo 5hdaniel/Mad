@@ -31,12 +31,14 @@ CURRENT_TASK_FILE="${CLAUDE_PROJECT_DIR:-.}/.claude/.current-task"
 TASK_ID=""
 AGENT_TYPE=""
 SPRINT_ID=""
+DESCRIPTION=""
 
 if [ -f "$CURRENT_TASK_FILE" ]; then
   TASK_ID=$(jq -r '.task_id // ""' "$CURRENT_TASK_FILE" 2>/dev/null)
   AGENT_TYPE=$(jq -r '.agent_type // ""' "$CURRENT_TASK_FILE" 2>/dev/null)
   SPRINT_ID=$(jq -r '.sprint_id // ""' "$CURRENT_TASK_FILE" 2>/dev/null)
-  echo "[HOOK] Read task context: task=$TASK_ID type=$AGENT_TYPE sprint=$SPRINT_ID" >> "$DEBUG_LOG"
+  DESCRIPTION=$(jq -r '.description // ""' "$CURRENT_TASK_FILE" 2>/dev/null)
+  echo "[HOOK] Read task context: task=$TASK_ID type=$AGENT_TYPE sprint=$SPRINT_ID desc=$DESCRIPTION" >> "$DEBUG_LOG"
 else
   echo "[HOOK] WARNING: No .current-task file at $CURRENT_TASK_FILE — metrics will have no task linkage" >> "$DEBUG_LOG"
 fi
@@ -112,9 +114,21 @@ MODEL=$(jq -r '[.message.model // empty] | first // "unknown"' "$TRANSCRIPT_PATH
 # ============================================================
 # PRIMARY: Push to Supabase
 # ============================================================
+# Try env vars first, then fall back to config file
 SUPABASE_URL="${PM_SUPABASE_URL:-}"
 SUPABASE_KEY="${PM_SUPABASE_KEY:-}"
 SUPABASE_SUCCESS=false
+
+if [ -z "$SUPABASE_URL" ] || [ -z "$SUPABASE_KEY" ]; then
+  HOOK_ENV="${CLAUDE_PROJECT_DIR:-.}/.claude/hooks/.env"
+  if [ -f "$HOOK_ENV" ]; then
+    # shellcheck source=/dev/null
+    source "$HOOK_ENV"
+    SUPABASE_URL="${PM_SUPABASE_URL:-}"
+    SUPABASE_KEY="${PM_SUPABASE_KEY:-}"
+    echo "[HOOK] Loaded credentials from $HOOK_ENV" >> "$DEBUG_LOG"
+  fi
+fi
 
 if [ -n "$SUPABASE_URL" ] && [ -n "$SUPABASE_KEY" ]; then
   # Build JSON payload with jq to prevent injection
@@ -122,6 +136,8 @@ if [ -n "$SUPABASE_URL" ] && [ -n "$SUPABASE_KEY" ]; then
     --arg agent_id "$AGENT_ID" \
     --arg agent_type "$AGENT_TYPE" \
     --arg task_id "$TASK_ID" \
+    --arg description "$DESCRIPTION" \
+    --arg sprint_id "$SPRINT_ID" \
     --argjson input "$TOTAL_INPUT" \
     --argjson output "$TOTAL_OUTPUT" \
     --argjson cache_read "$TOTAL_CACHE_READ" \
@@ -135,6 +151,8 @@ if [ -n "$SUPABASE_URL" ] && [ -n "$SUPABASE_KEY" ]; then
       p_agent_id: $agent_id,
       p_agent_type: (if $agent_type == "" then null else $agent_type end),
       p_task_id: (if $task_id == "" then null else $task_id end),
+      p_description: (if $description == "" then null else $description end),
+      p_sprint_id: (if $sprint_id == "" then null else $sprint_id end),
       p_input_tokens: $input,
       p_output_tokens: $output,
       p_cache_read: $cache_read,
