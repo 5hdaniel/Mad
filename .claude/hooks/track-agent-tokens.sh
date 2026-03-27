@@ -117,6 +117,7 @@ MODEL=$(jq -r '[.message.model // empty] | first // "unknown"' "$TRANSCRIPT_PATH
 # Try env vars first, then fall back to config file
 SUPABASE_URL="${PM_SUPABASE_URL:-}"
 SUPABASE_KEY="${PM_SUPABASE_KEY:-}"
+SUPABASE_SUCCESS=false
 
 if [ -z "$SUPABASE_URL" ] || [ -z "$SUPABASE_KEY" ]; then
   HOOK_ENV="${CLAUDE_PROJECT_DIR:-.}/.claude/hooks/.env"
@@ -128,8 +129,6 @@ if [ -z "$SUPABASE_URL" ] || [ -z "$SUPABASE_KEY" ]; then
     echo "[HOOK] Loaded credentials from $HOOK_ENV" >> "$DEBUG_LOG"
   fi
 fi
-
-SUPABASE_SUCCESS=false
 
 if [ -n "$SUPABASE_URL" ] && [ -n "$SUPABASE_KEY" ]; then
   # Build JSON payload with jq to prevent injection
