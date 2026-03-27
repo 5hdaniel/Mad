@@ -166,6 +166,7 @@ async function main() {
   } catch (error) {
     console.error('');
     const sanitizedMessage = String(error.message).replace(/[\r\n]/g, ' ').replace(/[\x00-\x1f\x7f]/g, '');
+    // CodeQL: js/log-injection — Error message sanitized (\r\n and control chars stripped) before logging
     console.error('Error:', sanitizedMessage);
     console.error('');
     console.error('You may need to manually download and extract:');

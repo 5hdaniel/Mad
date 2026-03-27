@@ -578,23 +578,22 @@ class OutlookService {
             }
 
             // Remove all HTML tags (iterative to handle malformed HTML like <img src=">" onerror="...">)
+            // CodeQL: js/bad-tag-filter — while-loop handles nested/overlapping tags;
+            // output is written to plain-text file, not rendered as HTML
             prev = '';
             while (bodyText !== prev) {
               prev = bodyText;
               bodyText = bodyText.replace(/<[^>]+>/g, "");
             }
 
-            // Decode HTML entities for readable text output (loop for nested entities)
-            prev = '';
-            while (bodyText !== prev) {
-              prev = bodyText;
-              bodyText = bodyText
-                .replace(/&nbsp;/g, " ")
-                .replace(/&amp;/g, "&")
-                .replace(/&lt;/g, "<")
-                .replace(/&gt;/g, ">")
-                .replace(/&quot;/g, '"');
-            }
+            // Decode HTML entities for readable text output (single-pass only;
+            // a while-loop here would double-unescape e.g. &amp;lt; → &lt; → <)
+            bodyText = bodyText
+              .replace(/&nbsp;/g, " ")
+              .replace(/&amp;/g, "&")
+              .replace(/&lt;/g, "<")
+              .replace(/&gt;/g, ">")
+              .replace(/&quot;/g, '"');
 
             bodyText = bodyText.trim();
           }

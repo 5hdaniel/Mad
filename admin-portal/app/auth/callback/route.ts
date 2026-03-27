@@ -52,62 +52,66 @@ export async function GET(request: Request) {
   const rawNext = searchParams.get('next') ?? '/dashboard';
   const next = /^\/[a-zA-Z0-9\-_\/\?\&\=\#\.]+$/.test(rawNext) ? rawNext : '/dashboard';
 
-  if (code) {
-    const supabase = await createClient();
-    const { error } = await supabase.auth.exchangeCodeForSession(code);
-
-    if (error) {
-      console.error('Auth exchange error:', error);
-      // Log failed auth exchange
-      await logAuthEvent(supabase, 'auth.login_failed', 'auth', 'unknown', {
-        error: error.message,
-        source: 'admin_portal',
-        stage: 'code_exchange',
-      }, request);
-      return NextResponse.redirect(`${origin}/login?error=auth_failed`);
-    }
-
-    // Get authenticated user
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-
-    if (user) {
-      // Log successful login
-      await logAuthEvent(supabase, 'auth.login', 'user', user.id, {
-        email: user.email,
-        source: 'admin_portal',
-        provider: user.app_metadata?.provider || 'unknown',
-      }, request);
-
-      // Process any pending internal invitation for this user
-      const oauthProvider = user.app_metadata?.provider ?? 'azure';
-      await processPendingInvitation(supabase, user.id, user.email ?? '', oauthProvider);
-
-      // Check for internal role
-      const { data: internalRole } = await supabase
-        .from('internal_roles')
-        .select('role_id')
-        .eq('user_id', user.id)
-        .single();
-
-      if (internalRole) {
-        // User has internal role - redirect to dashboard
-        return NextResponse.redirect(`${origin}${next}`);
-      }
-
-      // User does not have an internal role - sign them out and reject
-      await logAuthEvent(supabase, 'auth.login_denied', 'user', user.id, {
-        email: user.email,
-        source: 'admin_portal',
-        reason: 'no_internal_role',
-      }, request);
-      await supabase.auth.signOut();
-      return NextResponse.redirect(`${origin}/login?error=not_authorized`);
-    }
+  // Early return when no code is provided (CodeQL alert #232).
+  // Ensures the auth flow is not wrapped inside a user-controlled condition.
+  if (!code) {
+    return NextResponse.redirect(`${origin}/login?error=no_code`);
   }
 
-  // No code provided or auth failed
+  const supabase = await createClient();
+  const { error } = await supabase.auth.exchangeCodeForSession(code);
+
+  if (error) {
+    console.error('Auth exchange error:', error);
+    // Log failed auth exchange
+    await logAuthEvent(supabase, 'auth.login_failed', 'auth', 'unknown', {
+      error: error.message,
+      source: 'admin_portal',
+      stage: 'code_exchange',
+    }, request);
+    return NextResponse.redirect(`${origin}/login?error=auth_failed`);
+  }
+
+  // Get authenticated user
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (user) {
+    // Log successful login
+    await logAuthEvent(supabase, 'auth.login', 'user', user.id, {
+      email: user.email,
+      source: 'admin_portal',
+      provider: user.app_metadata?.provider || 'unknown',
+    }, request);
+
+    // Process any pending internal invitation for this user
+    const oauthProvider = user.app_metadata?.provider ?? 'azure';
+    await processPendingInvitation(supabase, user.id, user.email ?? '', oauthProvider);
+
+    // Check for internal role
+    const { data: internalRole } = await supabase
+      .from('internal_roles')
+      .select('role_id')
+      .eq('user_id', user.id)
+      .single();
+
+    if (internalRole) {
+      // User has internal role - redirect to dashboard
+      return NextResponse.redirect(`${origin}${next}`);
+    }
+
+    // User does not have an internal role - sign them out and reject
+    await logAuthEvent(supabase, 'auth.login_denied', 'user', user.id, {
+      email: user.email,
+      source: 'admin_portal',
+      reason: 'no_internal_role',
+    }, request);
+    await supabase.auth.signOut();
+    return NextResponse.redirect(`${origin}/login?error=not_authorized`);
+  }
+
+  // Auth succeeded but no user returned
   return NextResponse.redirect(`${origin}/login?error=auth_failed`);
 }
 

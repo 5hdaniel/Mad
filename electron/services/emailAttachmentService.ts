@@ -309,7 +309,9 @@ class EmailAttachmentService {
     const fileExists = existingHashes.has(contentHash);
 
     if (!fileExists) {
-      // Write downloaded data to disk (data is from HTTP source, validated by content hash)
+      // CodeQL: js/http-to-file-access — This service intentionally downloads email
+      // attachments to local storage. Mitigations: path traversal validation (line 301-306),
+      // content-hash-based filenames, filename sanitization, deduplication.
       await fs.writeFile(resolvedStoragePath, data);
       existingHashes.add(contentHash);
     }

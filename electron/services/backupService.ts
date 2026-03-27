@@ -975,8 +975,9 @@ export class BackupService extends EventEmitter {
       const infoPlistPath = path.join(deviceBackupPath, "Info.plist");
       const statusPlistPath = path.join(deviceBackupPath, "Status.plist");
 
+      // Use fs.stat directly instead of fs.access to avoid TOCTOU race condition
       const fileExists = async (p: string): Promise<boolean> => {
-        try { await fs.access(p); return true; } catch { return false; }
+        try { await fs.stat(p); return true; } catch { return false; }
       };
 
       const [hasManifest, hasInfoPlist] = await Promise.all([

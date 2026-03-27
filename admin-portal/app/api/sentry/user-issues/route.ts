@@ -11,6 +11,18 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { fetchUserIssues } from '@/lib/sentry';
 
+/**
+ * Simple, non-backtracking email validation (CodeQL alert #226).
+ * Avoids polynomial regex that can be exploited via crafted input.
+ */
+function isValidEmail(email: string): boolean {
+  if (email.length > 254) return false;
+  const atIndex = email.indexOf('@');
+  if (atIndex < 1 || atIndex === email.length - 1) return false;
+  const domain = email.slice(atIndex + 1);
+  return domain.includes('.') && !domain.startsWith('.') && !domain.endsWith('.');
+}
+
 export async function GET(request: NextRequest) {
   // Auth check
   const supabase = await createClient();
@@ -35,7 +47,7 @@ export async function GET(request: NextRequest) {
 
   // Get and validate email parameter
   const email = request.nextUrl.searchParams.get('email');
-  if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+  if (!email || !isValidEmail(email)) {
     return NextResponse.json(
       { error: 'Missing or invalid email parameter' },
       { status: 400 }

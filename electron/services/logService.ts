@@ -168,6 +168,8 @@ export class LogService {
     }
 
     return new Promise((resolve, reject) => {
+      // CodeQL: js/http-to-file-access — This is a logging service; writing log entries
+      // to file is its expected behavior. Input is sanitized by sanitizeForLog().
       fs.appendFile(this.logFilePath!, formattedEntry + "\n", (error) => {
         if (error) {
           console.error("Failed to write to log file:", error);
@@ -183,6 +185,8 @@ export class LogService {
    * Write log entry to console
    */
   private writeToConsole(level: LogLevel, formattedEntry: string): void {
+    // CodeQL: js/log-injection — All input is sanitized by sanitizeForLog() (strips \r\n
+    // and control characters) in formatLogEntry() before reaching these console calls.
     switch (level) {
       case "debug":
         console.debug(formattedEntry);
