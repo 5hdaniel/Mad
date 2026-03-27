@@ -50,12 +50,20 @@ export interface ContactSourcePreferences {
 }
 
 /**
+ * Contact auto-role preferences (TASK-1397)
+ */
+export interface ContactAutoRolePreferences {
+  enabled?: boolean;
+}
+
+/**
  * User preferences object
  */
 export interface UserPreferences {
   messages?: MessagesPreferences;
   audit?: AuditPreferences;
   contactSources?: ContactSourcePreferences;
+  contactAutoRole?: ContactAutoRolePreferences;
   [key: string]: unknown;
 }
 
@@ -138,6 +146,42 @@ export const settingsService = {
   async setPhoneType(userId: string, phoneType: PhoneType): Promise<ApiResult> {
     try {
       const result = await window.api.user.setPhoneType(userId, phoneType);
+      return { success: result.success, error: result.error };
+    } catch (error) {
+      return { success: false, error: getErrorMessage(error) };
+    }
+  },
+
+  // ============================================
+  // CONTACT AUTO-ROLE METHODS (TASK-1397)
+  // ============================================
+
+  /**
+   * Get whether contact auto-role is enabled (defaults to false)
+   */
+  async getContactAutoRoleEnabled(userId: string): Promise<boolean> {
+    try {
+      const result = await this.getPreferences(userId);
+      if (result.success && result.data) {
+        return result.data.contactAutoRole?.enabled === true;
+      }
+      return false;
+    } catch {
+      return false;
+    }
+  },
+
+  /**
+   * Set contact auto-role enabled/disabled
+   */
+  async setContactAutoRoleEnabled(
+    userId: string,
+    enabled: boolean
+  ): Promise<ApiResult<void>> {
+    try {
+      const result = await this.updatePreferences(userId, {
+        contactAutoRole: { enabled },
+      });
       return { success: result.success, error: result.error };
     } catch (error) {
       return { success: false, error: getErrorMessage(error) };

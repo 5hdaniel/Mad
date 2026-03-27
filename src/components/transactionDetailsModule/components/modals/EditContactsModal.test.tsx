@@ -147,7 +147,7 @@ jest.mock("../../../shared/ContactRoleRow", () => ({
   ),
 }));
 
-// Mock contactService
+// Mock contactService and settingsService
 jest.mock("../../../../services", () => ({
   contactService: {
     create: jest.fn().mockResolvedValue({
@@ -161,6 +161,9 @@ jest.mock("../../../../services", () => ({
         source: "manual",
       },
     }),
+  },
+  settingsService: {
+    getContactAutoRoleEnabled: jest.fn().mockResolvedValue(false),
   },
 }));
 

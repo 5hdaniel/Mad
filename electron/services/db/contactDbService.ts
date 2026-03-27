@@ -1014,7 +1014,7 @@ export async function updateContact(
   contactId: string,
   updates: Partial<Contact>,
 ): Promise<void> {
-  const allowedFields = ["display_name", "company", "title"];
+  const allowedFields = ["display_name", "company", "title", "default_role"];
   const fields: string[] = [];
   const values: unknown[] = [];
 

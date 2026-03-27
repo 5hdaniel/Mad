@@ -291,7 +291,12 @@ function generateContactsSection(contacts?: TransactionContactResult[]): string 
   const contactItems = contacts
     .map((c) => {
       const name = escapeHtml(c.contact_name || "Unknown");
-      const role = c.specific_role || c.role || "";
+      const rawRole = c.specific_role || c.role || "";
+      // Format role: "REAL_ESTATE_ATTORNEY" -> "Real Estate Attorney"
+      const role = rawRole
+        .split("_")
+        .map((w) => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase())
+        .join(" ");
       const roleHtml = role ? `<span class="contact-role">${escapeHtml(role)}</span>` : "";
 
       const details: string[] = [];

@@ -38,6 +38,9 @@ export const ContactSchema = z.object({
   total_messages: z.number().nullable().optional(),
   tags: z.string().nullable().optional(), // JSON array
 
+  // Auto-role (BACKLOG-1355)
+  default_role: z.string().nullable().optional(),
+
   // Metadata
   metadata: z.string().nullable().optional(), // JSON
   created_at: TimestampSchema,

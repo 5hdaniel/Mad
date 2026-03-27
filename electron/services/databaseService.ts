@@ -753,6 +753,16 @@ class DatabaseService implements IDatabaseService {
         }
       },
     },
+    {
+      version: 35,
+      description: "Add default_role column to contacts for auto-role feature (BACKLOG-1355)",
+      migrate: (d) => {
+        const info = d.prepare("PRAGMA table_info(contacts)").all() as { name: string }[];
+        if (!info.some((c) => c.name === "default_role")) {
+          d.exec("ALTER TABLE contacts ADD COLUMN default_role TEXT");
+        }
+      },
+    },
   ];
 
   static validateNoDuplicateVersions(migrations: MigrationEntry[]): void {
