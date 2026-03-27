@@ -154,11 +154,11 @@ class SupabaseStorageService {
       // Resolve and check local file
       const absolutePath = resolveAttachmentPath(localPath);
 
-      // Get file stats directly, handling ENOENT to avoid TOCTOU race
-      let fileSizeBytes: number;
+      // Read file into buffer first, then validate size — avoids TOCTOU race
+      // between a separate stat() and readFile()
+      let fileBuffer: Buffer;
       try {
-        const stats = fs.statSync(absolutePath);
-        fileSizeBytes = stats.size;
+        fileBuffer = await fs.promises.readFile(absolutePath);
       } catch (err: unknown) {
         if (err && typeof err === "object" && "code" in err && (err as { code: string }).code === "ENOENT") {
           const error = `File not found: ${absolutePath}`;
@@ -183,6 +183,8 @@ class SupabaseStorageService {
         }
         throw err;
       }
+
+      const fileSizeBytes = fileBuffer.length;
 
       // Check file size
       if (fileSizeBytes > MAX_FILE_SIZE) {
@@ -213,9 +215,6 @@ class SupabaseStorageService {
         percentage: 0,
         status: "uploading",
       });
-
-      // Read file into buffer
-      const fileBuffer = await fs.promises.readFile(absolutePath);
       const mimeType = getMimeType(filename);
 
       logService.debug(
