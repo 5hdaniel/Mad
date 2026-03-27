@@ -61,6 +61,9 @@ export interface PreferencesResult {
     audit?: {
       startDateDefault?: "auto" | "manual";
     };
+    contactAutoRole?: {
+      enabled?: boolean;
+    };
   };
 }
 
