@@ -23,6 +23,7 @@ import { ContactFormModal } from "../../../contact";
 import type { RoleOption } from "../../../shared/ContactRoleRow";
 import {
   filterRolesByTransactionType,
+  flipRoleForTransactionType,
   getRoleDisplayName,
 } from "../../../../utils/transactionRoleUtils";
 import { contactService, settingsService } from "../../../../services";
@@ -201,19 +202,24 @@ export function EditContactsModal({
   // BACKLOG-1355: Auto-fill role for a newly added contact
   const handleAutoFillForContact = useCallback((contactId: string, contact: ExtendedContact) => {
     if (!autoRoleEnabled || !contact.default_role) return;
-    if (!validRoles.has(contact.default_role)) return;
 
-    // Assign the default role
+    // Use default_role directly if valid, otherwise try flipping to equivalent role
+    const effectiveRole = validRoles.has(contact.default_role)
+      ? contact.default_role
+      : flipRoleForTransactionType(contact.default_role, transactionType);
+    if (!effectiveRole) return;
+
+    // Assign the effective role
     setRoleAssignments((prev) => {
       const updated = { ...prev };
-      updated[contact.default_role!] = [
-        ...(updated[contact.default_role!] || []),
+      updated[effectiveRole] = [
+        ...(updated[effectiveRole] || []),
         contactId,
       ];
       return updated;
     });
     setAutoFilledContactIds((prev) => new Set(prev).add(contactId));
-  }, [autoRoleEnabled, validRoles]);
+  }, [autoRoleEnabled, validRoles, transactionType]);
 
   // BACKLOG-1355: Clear auto-filled status when user manually changes role
   const handleClearAutoFilled = useCallback((contactId: string) => {

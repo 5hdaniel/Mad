@@ -15,6 +15,7 @@ import React, { useState, useMemo, useCallback, useEffect, useRef } from "react"
 import { AUDIT_WORKFLOW_STEPS } from "../../constants/contactRoles";
 import {
   filterRolesByTransactionType,
+  flipRoleForTransactionType,
   getRoleDisplayName,
   type TransactionType,
 } from "../../utils/transactionRoleUtils";
@@ -229,9 +230,12 @@ function ContactAssignmentStep({
 
         // Check if the default_role is a valid option for this transaction type
         const isValidRole = roleOptions.some((opt) => opt.value === contact.default_role);
-        if (!isValidRole) return;
+        const effectiveRole = isValidRole
+          ? contact.default_role
+          : flipRoleForTransactionType(contact.default_role, transactionType as TransactionType);
+        if (!effectiveRole) return;
 
-        onAssignContact(contact.default_role, contact.id, false, "");
+        onAssignContact(effectiveRole, contact.id, false, "");
         newAutoFilled.add(contact.id);
       });
 
