@@ -61,3 +61,6 @@ nul
 mad.db
 backlog-dashboard.html
 erd-diagram.html
+
+# Playwright reports
+playwright-report/
