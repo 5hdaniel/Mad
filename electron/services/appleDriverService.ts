@@ -7,7 +7,7 @@
  * The drivers are bundled with the app but only installed with user consent.
  */
 
-import { exec, spawn } from "child_process";
+import { exec, execFile, spawn } from "child_process";
 import { promisify } from "util";
 import path from "path";
 import fs from "fs";
@@ -17,6 +17,7 @@ import log from "electron-log";
 import * as Sentry from "@sentry/electron/main";
 
 const execAsync = promisify(exec);
+const execFileAsync = promisify(execFile);
 
 // Apple iTunes download URL (contains the drivers we need)
 const ITUNES_DOWNLOAD_URL = "https://www.apple.com/itunes/download/win64";
@@ -814,15 +815,16 @@ async function extractMsiFromInstaller(
     log.info("[AppleDriverService] Extracting iTunes installer...");
 
     // Method 1: Try 7-Zip (most reliable for iTunes installer)
+    // Uses execFileAsync (argument array) instead of execAsync (shell string)
+    // to avoid shell interpretation of interpolated paths (CodeQL: js/shell-command-injection-from-environment).
     const sevenZipPath = find7Zip();
     if (sevenZipPath) {
       log.info("[AppleDriverService] Found 7-Zip at:", sevenZipPath);
       try {
-        await execAsync(
-          `"${validateShellPath(sevenZipPath)}" x "${safeInstallerPath}" -o"${safeOutputDir}" -y`,
-          {
-            timeout: 120000,
-          },
+        await execFileAsync(
+          sevenZipPath,
+          ["x", safeInstallerPath, `-o${safeOutputDir}`, "-y"],
+          { timeout: 120000 },
         );
         log.info("[AppleDriverService] 7-Zip extraction successful");
       } catch (err) {
@@ -835,8 +837,9 @@ async function extractMsiFromInstaller(
 
       // Method 2: Try running installer with /extract (some Apple installers support this)
       try {
-        await execAsync(
-          `"${safeInstallerPath}" /extract "${safeOutputDir}"`,
+        await execFileAsync(
+          safeInstallerPath,
+          ["/extract", safeOutputDir],
           { timeout: 120000 },
         );
         log.info("[AppleDriverService] /extract flag worked");
@@ -845,8 +848,9 @@ async function extractMsiFromInstaller(
 
         // Method 3: Try expand command (works for some archive types)
         try {
-          await execAsync(
-            `expand "${safeInstallerPath}" -F:* "${safeOutputDir}"`,
+          await execFileAsync(
+            "expand",
+            [safeInstallerPath, "-F:*", safeOutputDir],
             { timeout: 120000 },
           );
           log.info("[AppleDriverService] expand command worked");
@@ -855,8 +859,9 @@ async function extractMsiFromInstaller(
 
           // Method 4: Try 7z command from PATH
           try {
-            await execAsync(
-              `7z x "${safeInstallerPath}" -o"${safeOutputDir}" -y`,
+            await execFileAsync(
+              "7z",
+              ["x", safeInstallerPath, `-o${safeOutputDir}`, "-y"],
               { timeout: 120000 },
             );
             log.info("[AppleDriverService] 7z from PATH worked");
