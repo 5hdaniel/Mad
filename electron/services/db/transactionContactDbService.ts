@@ -291,6 +291,14 @@ export async function updateContactRole(
   `;
 
   dbRun(sql, values);
+
+  // Auto-update contact default_role
+  if (updates.specific_role || updates.role) {
+    dbRun(
+      `UPDATE contacts SET default_role = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?`,
+      [updates.specific_role || updates.role, contactId]
+    );
+  }
 }
 
 /**
@@ -371,6 +379,12 @@ export async function batchUpdateContactAssignments(
             op.notes || null,
             existing.id,
           );
+
+          // Auto-update contact default_role
+          if (op.specificRole || op.role) {
+            db.prepare(`UPDATE contacts SET default_role = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?`)
+              .run(op.specificRole || op.role, op.contactId);
+          }
         } else {
           // Insert new assignment
           const id = crypto.randomUUID();
@@ -389,6 +403,12 @@ export async function batchUpdateContactAssignments(
             op.isPrimary ? 1 : 0,
             op.notes || null,
           );
+
+          // Auto-update contact default_role
+          if (op.specificRole || op.role) {
+            db.prepare(`UPDATE contacts SET default_role = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?`)
+              .run(op.specificRole || op.role, op.contactId);
+          }
         }
       }
     }
