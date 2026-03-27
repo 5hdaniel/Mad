@@ -77,6 +77,14 @@ export async function linkContactToTransaction(
   ];
 
   dbRun(sql, params);
+
+  // Auto-update contact default_role
+  if (role) {
+    dbRun(
+      `UPDATE contacts SET default_role = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?`,
+      [role, contactId]
+    );
+  }
 }
 
 /**
@@ -117,6 +125,15 @@ export async function assignContactToTransaction(
       data.notes || null,
       existing.id,
     ]);
+
+    // Auto-update contact default_role
+    if (data.specific_role) {
+      dbRun(
+        `UPDATE contacts SET default_role = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?`,
+        [data.specific_role, data.contact_id]
+      );
+    }
+
     return existing.id;
   }
 
@@ -140,6 +157,15 @@ export async function assignContactToTransaction(
   ];
 
   dbRun(sql, params);
+
+  // Auto-update contact default_role
+  if (data.specific_role) {
+    dbRun(
+      `UPDATE contacts SET default_role = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?`,
+      [data.specific_role, data.contact_id]
+    );
+  }
+
   return id;
 }
 

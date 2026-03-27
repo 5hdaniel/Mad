@@ -22,7 +22,7 @@ import auditService from "../services/auditService";
 import logService from "../services/logService";
 import * as externalContactDb from "../services/db/externalContactDbService";
 import { queryContacts, isPoolReady } from "../workers/contactWorkerPool";
-import { dbAll, dbGet } from "../services/db/core/dbConnection";
+import { dbAll, dbGet, dbRun } from "../services/db/core/dbConnection";
 import type { Contact, Transaction, ContactSource } from "../types/models";
 
 // Import validation utilities
@@ -1765,6 +1765,57 @@ export function registerContactHandlers(mainWindow: BrowserWindow): void {
           "google_contacts_sync",
           error instanceof Error ? error.message : "Unknown error"
         );
+        return {
+          success: false,
+          error: error instanceof Error ? error.message : "Unknown error",
+        };
+      }
+    },
+  );
+
+  // Update contact default_role (manual override)
+  ipcMain.handle(
+    "contacts:update-default-role",
+    async (
+      event: IpcMainInvokeEvent,
+      contactId: string,
+      role: string,
+    ): Promise<ContactResponse> => {
+      try {
+        const validatedContactId = validateContactId(contactId);
+        if (!validatedContactId) {
+          throw new ValidationError(
+            "Contact ID validation failed",
+            "contactId",
+          );
+        }
+        const validatedRole = validateString(role, "role");
+        if (!validatedRole) {
+          throw new ValidationError("Role validation failed", "role");
+        }
+
+        dbRun(
+          `UPDATE contacts SET default_role = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?`,
+          [validatedRole, validatedContactId]
+        );
+
+        logService.info("Contact default_role updated", "Contacts", {
+          contactId: validatedContactId,
+          role: validatedRole,
+        });
+
+        return { success: true };
+      } catch (error) {
+        logService.error("Update contact default_role failed", "Contacts", {
+          contactId,
+          error: error instanceof Error ? error.message : "Unknown error",
+        });
+        if (error instanceof ValidationError) {
+          return {
+            success: false,
+            error: `Validation error: ${error.message}`,
+          };
+        }
         return {
           success: false,
           error: error instanceof Error ? error.message : "Unknown error",

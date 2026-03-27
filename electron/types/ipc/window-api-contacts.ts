@@ -119,6 +119,11 @@ export interface WindowApiContacts {
     names: Record<string, string>;
     error?: string;
   }>;
+  /** Update the default_role on a contact (manual override) */
+  updateDefaultRole: (contactId: string, role: string) => Promise<{
+    success: boolean;
+    error?: string;
+  }>;
   /** Search contacts at database level (for selection modal) */
   searchContacts: (userId: string, query: string) => Promise<{
     success: boolean;
