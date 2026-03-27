@@ -293,10 +293,10 @@ export async function updateContactRole(
   dbRun(sql, values);
 
   // Auto-update contact default_role
-  if (updates.specific_role) {
+  if (updates.specific_role || updates.role) {
     dbRun(
       `UPDATE contacts SET default_role = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?`,
-      [updates.specific_role, contactId]
+      [updates.specific_role || updates.role, contactId]
     );
   }
 }
