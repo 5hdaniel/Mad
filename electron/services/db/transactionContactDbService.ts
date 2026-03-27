@@ -10,6 +10,7 @@ import { dbGet, dbAll, dbRun, ensureDb } from "./core/dbConnection";
 import { validateFields } from "../../utils/sqlFieldWhitelist";
 
 // Transaction contact association data
+// Note: `role` now stores SPECIFIC_ROLES values (ContactRole) — normalized from specific_role on writes
 export interface TransactionContactData {
   contact_id: string;
   role?: string;
@@ -86,6 +87,11 @@ export async function assignContactToTransaction(
   transactionId: string,
   data: TransactionContactData,
 ): Promise<string> {
+  // Normalize: keep role in sync with specific_role (canonical source)
+  if (data.specific_role) {
+    data.role = data.specific_role;
+  }
+
   // First check if this contact is already assigned to this transaction
   const existingCheck = `
     SELECT id FROM transaction_contacts
