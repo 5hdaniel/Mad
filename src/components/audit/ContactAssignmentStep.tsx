@@ -11,7 +11,7 @@
  * and passed as props to prevent duplicate API calls when switching
  * between steps 2 and 3.
  */
-import React, { useState, useMemo, useCallback } from "react";
+import React, { useState, useMemo, useCallback, useEffect, useRef } from "react";
 import { AUDIT_WORKFLOW_STEPS } from "../../constants/contactRoles";
 import {
   filterRolesByTransactionType,
@@ -26,7 +26,7 @@ import type { RoleOption } from "../shared/ContactRoleRow";
 import type { ContactAssignments } from "../../hooks/useAuditTransaction";
 import type { Contact } from "../../../electron/types/models";
 import type { ExtendedContact } from "../../types/components";
-import { contactService } from "../../services";
+import { contactService, settingsService } from "../../services";
 import logger from '../../utils/logger';
 
 interface ContactAssignmentStepProps {
@@ -85,6 +85,8 @@ function toExtendedContact(contact: Contact): ExtendedContact {
     // BACKLOG-1270: Preserve all emails/phones through the selection flow
     allEmails: (contact as unknown as { allEmails?: string[] }).allEmails,
     allPhones: (contact as unknown as { allPhones?: string[] }).allPhones,
+    // BACKLOG-1355: Preserve default_role for auto-fill
+    default_role: contact.default_role,
   };
 }
 
@@ -115,6 +117,22 @@ function ContactAssignmentStep({
 
   // Track imported contact IDs for visual feedback
   const [addedContactIds, setAddedContactIds] = useState<Set<string>>(new Set());
+
+  // BACKLOG-1355: Auto-fill role state
+  const [autoRoleEnabled, setAutoRoleEnabled] = useState(false);
+  const [autoFilledContactIds, setAutoFilledContactIds] = useState<Set<string>>(new Set());
+  const autoFillAppliedRef = useRef(false);
+
+  // Load auto-role setting on mount
+  useEffect(() => {
+    let cancelled = false;
+    settingsService.getContactAutoRoleEnabled(userId).then((enabled) => {
+      if (!cancelled) setAutoRoleEnabled(enabled);
+    }).catch((err) => {
+      logger.error("Failed to load auto-role setting:", err);
+    });
+    return () => { cancelled = true; };
+  }, [userId]);
 
   // Convert contacts to ExtendedContact format for components
   const extendedContacts = useMemo(
@@ -191,6 +209,45 @@ function ContactAssignmentStep({
     return allRoles;
   }, [transactionType]);
 
+  // BACKLOG-1355: Auto-fill roles when entering step 3
+  useEffect(() => {
+    if (step !== 3 || !autoRoleEnabled || autoFillAppliedRef.current) return;
+
+    // Mark as applied so we don't re-run on re-renders
+    autoFillAppliedRef.current = true;
+
+    const newAutoFilled = new Set<string>();
+    extendedContacts
+      .filter((c) => selectedContactIds.includes(c.id))
+      .forEach((contact) => {
+        // Only auto-fill if contact has a default_role and no role assigned yet
+        if (!contact.default_role) return;
+        const hasRole = Object.values(contactAssignments).some(
+          (assignments) => assignments.some((a) => a.contactId === contact.id)
+        );
+        if (hasRole) return;
+
+        // Check if the default_role is a valid option for this transaction type
+        const isValidRole = roleOptions.some((opt) => opt.value === contact.default_role);
+        if (!isValidRole) return;
+
+        onAssignContact(contact.default_role, contact.id, false, "");
+        newAutoFilled.add(contact.id);
+      });
+
+    if (newAutoFilled.size > 0) {
+      setAutoFilledContactIds(newAutoFilled);
+    }
+  }, [step, autoRoleEnabled, extendedContacts, selectedContactIds, contactAssignments, roleOptions, onAssignContact]);
+
+  // Reset auto-fill tracking when going back from step 3
+  useEffect(() => {
+    if (step !== 3) {
+      autoFillAppliedRef.current = false;
+      setAutoFilledContactIds(new Set());
+    }
+  }, [step]);
+
   // Get selected contacts for step 2
   const selectedContacts = useMemo(() => {
     return extendedContacts.filter((c) => selectedContactIds.includes(c.id));
@@ -255,6 +312,14 @@ function ContactAssignmentStep({
       if (newRole) {
         onAssignContact(newRole, contactId, false, "");
       }
+
+      // BACKLOG-1355: Clear auto-filled status when user manually changes role
+      setAutoFilledContactIds((prev) => {
+        if (!prev.has(contactId)) return prev;
+        const next = new Set(prev);
+        next.delete(contactId);
+        return next;
+      });
     },
     [contactAssignments, onAssignContact, onRemoveContact]
   );
@@ -377,6 +442,7 @@ function ContactAssignmentStep({
                     onRoleChange={(role) => handleRoleChange(contact.id, role)}
                     onRemove={() => handleRemoveFromStep3(contact.id)}
                     onClick={() => handleContactClick(contact)}
+                    isAutoFilled={autoFilledContactIds.has(contact.id)}
                   />
                 ))}
               </div>
