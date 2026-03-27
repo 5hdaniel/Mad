@@ -34,6 +34,10 @@ export function GeneralSettings({ userId, initialPreferences }: GeneralSettingsP
     const val = (initialPreferences?.export as { emailExportMode?: string } | undefined)?.emailExportMode;
     return (val === "thread" || val === "individual") ? val : "thread";
   });
+  const [autoRoleEnabled, setAutoRoleEnabled] = useState<boolean>(() => {
+    const val = initialPreferences?.contactAutoRole?.enabled;
+    return typeof val === "boolean" ? val : false;
+  });
   const [updateStatus, setUpdateStatus] = useState<'idle' | 'checking' | 'up-to-date' | 'available' | 'error'>('idle');
   const [updateVersion, setUpdateVersion] = useState<string>('');
 
@@ -227,6 +231,43 @@ export function GeneralSettings({ userId, initialPreferences }: GeneralSettingsP
             className="mt-3 px-3 py-1.5 text-xs font-medium text-blue-600 bg-blue-50 hover:bg-blue-100 rounded border border-blue-200 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
           >
             Test Notification
+          </button>
+        </div>
+
+        {/* Auto-fill Contact Roles (TASK-1397) */}
+        <div className="flex items-center justify-between p-4 bg-gray-50 rounded-lg border border-gray-200">
+          <div className="flex-1">
+            <h4 className="text-sm font-medium text-gray-900">
+              Auto-fill Contact Roles
+            </h4>
+            <p className="text-xs text-gray-600 mt-1">
+              Automatically assign roles to contacts based on their most recent transaction
+            </p>
+          </div>
+          <button
+            onClick={async () => {
+              const newValue = !autoRoleEnabled;
+              setAutoRoleEnabled(newValue);
+              try {
+                await settingsService.updatePreferences(userId, {
+                  contactAutoRole: { enabled: newValue },
+                });
+              } catch {
+                setAutoRoleEnabled(!newValue);
+              }
+            }}
+            className={`ml-4 relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
+              autoRoleEnabled ? "bg-blue-500" : "bg-gray-300"
+            }`}
+            role="switch"
+            aria-checked={autoRoleEnabled}
+            aria-label="Auto-fill contact roles"
+          >
+            <span
+              className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                autoRoleEnabled ? "translate-x-6" : "translate-x-1"
+              }`}
+            />
           </button>
         </div>
 

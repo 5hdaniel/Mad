@@ -78,6 +78,7 @@ export interface ContactFormData {
   title: string;
   emails?: ContactEmailEntry[];
   phones?: ContactPhoneEntry[];
+  defaultRole?: string;
 }
 
 /**

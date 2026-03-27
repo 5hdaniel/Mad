@@ -1,5 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback } from "react";
 import { ExtendedContact, ContactFormData, ContactEmailEntry, ContactPhoneEntry } from "../types";
+import { ROLE_DISPLAY_NAMES } from "../../../constants/contactRoles";
+import { contactService } from "../../../services/contactService";
 
 interface ContactFormModalProps {
   userId: string;
@@ -26,6 +28,7 @@ function ContactFormModal({
     title: contact?.title || "",
     emails: [],
     phones: [],
+    defaultRole: contact?.default_role || "",
   });
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | undefined>(undefined);
@@ -210,7 +213,9 @@ function ContactFormModal({
       const cleanEmails = (formData.emails || []).filter((e) => e.email.trim());
       const cleanPhones = (formData.phones || []).filter((p) => p.phone.trim());
 
-      let result;
+      let result: { success: boolean; error?: string };
+      let savedContactId: string | undefined;
+
       if (contact && !isExternalContact) {
         // Update existing contact with multi-entry arrays
         const payload: Record<string, unknown> = {
@@ -222,6 +227,7 @@ function ContactFormModal({
         };
 
         result = await window.api.contacts.update(contact.id, payload);
+        savedContactId = contact.id;
       } else {
         // Create new contact — extract primary email/phone + allEmails/allPhones
         const primaryEmail = cleanEmails.find((e) => e.is_primary)?.email || cleanEmails[0]?.email || "";
@@ -236,13 +242,20 @@ function ContactFormModal({
           allPhones: cleanPhones.map((p) => p.phone),
         };
 
-        result = await window.api.contacts.create(
+        const createResult = await window.api.contacts.create(
           userId,
           payload,
         );
+        result = createResult;
+        savedContactId = createResult.contact?.id;
       }
 
       if (result.success) {
+        // Update default_role if we have a contact ID
+        if (savedContactId) {
+          const roleToSave = formData.defaultRole || "";
+          await contactService.updateDefaultRole(savedContactId, roleToSave);
+        }
         onSuccess();
       } else {
         setError(result.error || "Failed to save contact");
@@ -478,6 +491,28 @@ function ContactFormModal({
               className={inputClass}
               placeholder="Real Estate Agent"
             />
+          </div>
+
+          {/* Default Role */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Default Role
+            </label>
+            <select
+              value={formData.defaultRole || ""}
+              onChange={(e) => handleChange("defaultRole", e.target.value)}
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500 text-gray-900 bg-white"
+            >
+              <option value="">None</option>
+              {Object.entries(ROLE_DISPLAY_NAMES).map(([value, label]) => (
+                <option key={value} value={value}>
+                  {label}
+                </option>
+              ))}
+            </select>
+            <p className="mt-1 text-xs text-gray-500">
+              Auto-filled when assigning this contact to transactions
+            </p>
           </div>
 
           {/* Error */}

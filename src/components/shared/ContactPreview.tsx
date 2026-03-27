@@ -1,5 +1,6 @@
 import React from "react";
 import { SourcePill, ImportStatusPill, mapToSourcePillSource } from "./SourcePill";
+import { formatRoleLabel } from "../../utils/transactionRoleUtils";
 import type { ExtendedContact } from "../../types/components";
 
 /**
@@ -218,7 +219,7 @@ export function ContactPreview({
                       {txn.property_address}
                     </span>
                     <span className="text-gray-500 ml-2 flex-shrink-0">
-                      {txn.role}
+                      {formatRoleLabel(txn.role)}
                     </span>
                   </div>
                 ))}
