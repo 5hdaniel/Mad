@@ -81,30 +81,26 @@ Use this skill when the user asks for any of:
 
 2. **Data-Driven Estimation**: Before creating ANY task estimates, consult `.claude/plans/backlog/INDEX.md` → "Estimation Accuracy Analysis" section. Apply category adjustment factors (e.g., refactor tasks use × 0.5 multiplier). Never estimate from scratch—use historical data.
 
-3. **Metrics Tracking**: ALL task assignments MUST include metrics tracking requirements. Metrics are now **auto-captured** via SubagentStop hook:
-   - **Total Tokens**: Captured automatically from agent transcript
-   - **Duration**: Captured automatically (start to end time)
-   - **API Calls**: Captured automatically
+3. **Metrics Tracking**: Metrics are **auto-captured by SubagentStop hook → Supabase** (`pm_token_metrics` table). CSV is append-only backup.
+   - **Total Tokens, Duration, API Calls**: Captured automatically from agent transcript
+   - **Task linkage**: Hook reads `.claude/.current-task` (written by PM at Step 5)
+   - **Billable formula**: `input + output + cache_create` (generated column in DB)
 
-   Engineers must record their `agent_id` immediately when the Task tool returns, then retrieve metrics from `.claude/metrics/tokens.csv`.
-
-   Use `/log-metrics` skill to manually log work with agent_type, task_id, and description for better tracking.
-
-   PM estimates in tokens only. Self-reported metrics are deprecated.
-
-4. **Metrics Management Scripts**: For Step 14 (Record effort metrics), use the scripts in `.claude/skills/log-metrics/`:
-
-   | Script | Purpose | Example |
-   |--------|---------|---------|
-   | `query_metrics.py` | Filter entries | `--task TASK-1234` or `--since 2026-01-30` |
-   | `sum_effort.py` | Aggregate totals | `--task TASK-1234` (for Step 14) |
-   | `log_metrics.py` | Append entry | `--agent-type X --task-id Y --input Z` |
-
-   **Step 14 Example:**
+   **PM must write `.current-task` before each agent invocation:**
    ```bash
-   python .claude/skills/log-metrics/sum_effort.py --task TASK-1234
-   # Returns: {"total_tokens": 125000, "billable_tokens": 45000, ...}
+   echo '{"task_id": "TASK-XXXX", "agent_type": "engineer", "sprint_id": "SPRINT-XXX"}' > .claude/.current-task
    ```
+
+   PM estimates in tokens only.
+
+4. **Metrics Queries**: For Step 14 (Record effort metrics), query Supabase via MCP:
+
+   | Need | SQL |
+   |------|-----|
+   | Task totals | `SELECT SUM(total_tokens), SUM(billable_tokens) FROM pm_token_metrics WHERE task_id = 'TASK-XXXX'` |
+   | Label unlabeled | `SELECT pm_label_agent_metrics('<agent_id>', 'TASK-XXXX', 'engineer', 'desc')` |
+   | Record + rollup | `SELECT pm_record_task_tokens('<task_uuid>')` — auto-sums from metric rows |
+   | Sprint totals | `SELECT task_id, SUM(total_tokens) FROM pm_token_metrics WHERE sprint_id = '<uuid>' GROUP BY task_id` |
 
 ## Progressive disclosure (how to use the bundled modules)
 

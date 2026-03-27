@@ -1,168 +1,154 @@
 ---
 name: log-metrics
-description: Log agent work metrics to tokens.csv for tracking effort and costs.
+description: Query and manage agent metrics in Supabase pm_token_metrics table. CSV is append-only backup.
 ---
 
 # Log Metrics Skill
 
-Log agent work metrics to the centralized tokens.csv file.
+Agent metrics are **auto-captured by the SubagentStop hook** to Supabase `pm_token_metrics` (primary) and `tokens.csv` (backup). Manual logging is rarely needed.
 
-## Usage
+## How Metrics Flow
 
-Type `/log-metrics` to log your work session metrics.
-
-## When to Use
-
-All agents (engineer, PM, SR Engineer, QA, etc.) should log their metrics:
-- **At the end of a task** - When completing a task/PR
-- **At handoff** - When passing work to another agent
-- **At session end** - When finishing a work session
-
-## Action
-
-Run the Python script with your metrics:
-
-```bash
-python /Users/daniel/Documents/Mad/.claude/skills/log-metrics/log_metrics.py \
-  --agent-type <TYPE> \
-  --task-id <TASK_ID> \
-  --description "<DESCRIPTION>" \
-  --input <INPUT_TOKENS> \
-  --output <OUTPUT_TOKENS> \
-  --duration <SECONDS>
+```
+SubagentStop hook fires
+    │
+    ├─ Reads .claude/.current-task (task_id, agent_type, sprint_id)
+    ├─ Writes to Supabase via pm_log_agent_metrics RPC (PRIMARY)
+    ├─ Writes to tokens.csv (BACKUP — append-only, never queried)
+    └─ On Supabase failure: saves to ~/.claude/metrics/failed-payloads.jsonl
 ```
 
-### Arguments
-
-| Argument | Required | Description |
-|----------|----------|-------------|
-| `--agent-type`, `-t` | Yes | One of: `engineer`, `pm`, `sr-engineer`, `qa`, `explore`, `fix`, `main` |
-| `--task-id`, `-i` | No | Task ID (e.g., `TASK-1184`, `PR-588`, `BACKLOG-497`) |
-| `--description`, `-d` | No | Brief description of work done |
-| `--input` | No | Input tokens used |
-| `--output` | No | Output tokens used |
-| `--cache-read` | No | Cache read tokens |
-| `--cache-create` | No | Cache create tokens |
-| `--api-calls` | No | Number of API calls made |
-| `--duration` | No | Duration in seconds |
-
-### View Summary
-
-```bash
-python /Users/daniel/Documents/Mad/.claude/skills/log-metrics/log_metrics.py --summary
-```
-
-## Examples
-
-### Engineer completing a task:
-```bash
-python .claude/skills/log-metrics/log_metrics.py \
-  -t engineer \
-  -i TASK-1184 \
-  -d "Implemented database maintenance button" \
-  --input 45000 --output 12000 --duration 1200
-```
-
-### PM creating sprint plan:
-```bash
-python .claude/skills/log-metrics/log_metrics.py \
-  -t pm \
-  -i SPRINT-053 \
-  -d "Created sprint plan and tasks" \
-  --input 8000 --output 3000 --duration 600
-```
-
-### SR Engineer reviewing PR:
-```bash
-python .claude/skills/log-metrics/log_metrics.py \
-  -t sr-engineer \
-  -i PR-588 \
-  -d "Reviewed and merged" \
-  --input 15000 --output 2000 --duration 300
-```
-
-## Available Scripts
-
-This skill provides three scripts for metrics management:
-
-### 1. `log_metrics.py` - Append Entry
-
-Logs a new metrics entry to tokens.csv (documented above).
-
-### 2. `query_metrics.py` - Query/Filter Entries
-
-Filter and search existing entries.
-
-```bash
-# By task ID
-python .claude/skills/log-metrics/query_metrics.py --task TASK-1234
-
-# By agent type
-python .claude/skills/log-metrics/query_metrics.py --agent-type engineer
-
-# By date range
-python .claude/skills/log-metrics/query_metrics.py --since 2026-01-30
-
-# Combine filters
-python .claude/skills/log-metrics/query_metrics.py --task TASK-1234 --since 2026-01-30
-
-# Output as JSON
-python .claude/skills/log-metrics/query_metrics.py --task TASK-1234 --json
-
-# Count only
-python .claude/skills/log-metrics/query_metrics.py --agent-type engineer --count
-```
-
-### 3. `sum_effort.py` - Aggregate Totals
-
-Calculate total effort for a task, session, or sprint prefix. **Used by PM in Step 14 of agent handoff workflow.**
-
-```bash
-# Task totals (for PM Step 14)
-python .claude/skills/log-metrics/sum_effort.py --task TASK-1234
-
-# Sprint prefix (all TASK-17XX)
-python .claude/skills/log-metrics/sum_effort.py --task-prefix TASK-17
-
-# Session totals
-python .claude/skills/log-metrics/sum_effort.py --session-id abc123
-
-# Pretty print
-python .claude/skills/log-metrics/sum_effort.py --task TASK-1234 --pretty
-```
-
-**Output (JSON):**
+**PM writes `.claude/.current-task` before invoking each agent** (Step 5 of agent-handoff):
 ```json
-{
-  "task_id": "TASK-1234",
-  "input_tokens": 45000,
-  "output_tokens": 12000,
-  "billable_tokens": 57000,
-  "total_tokens": 125000,
-  "api_calls": 87,
-  "duration_secs": 3600,
-  "agent_sessions": 5,
-  "entries": 12
-}
+{"task_id": "TASK-2226", "agent_type": "engineer", "sprint_id": "SPRINT-139"}
 ```
+
+This eliminates the manual `--label` step — the hook writes task context at insert time.
+
+## Querying Metrics (via MCP)
+
+All metric queries use SQL via `mcp__supabase__execute_sql`:
+
+### Task totals (replaces `sum_effort.py`)
+```sql
+SELECT
+  task_id,
+  SUM(input_tokens) AS input_tokens,
+  SUM(output_tokens) AS output_tokens,
+  SUM(cache_read_tokens) AS cache_read_tokens,
+  SUM(cache_creation_tokens) AS cache_creation_tokens,
+  SUM(total_tokens) AS total_tokens,
+  SUM(billable_tokens) AS billable_tokens,
+  SUM(api_calls) AS api_calls,
+  SUM(duration_ms) / 1000 AS duration_secs,
+  COUNT(DISTINCT agent_id) AS agent_sessions,
+  COUNT(*) AS entries
+FROM pm_token_metrics
+WHERE task_id = 'TASK-XXXX'
+GROUP BY task_id;
+```
+
+### Filter by agent type, date, session (replaces `query_metrics.py`)
+```sql
+-- By agent type
+SELECT * FROM pm_token_metrics WHERE agent_type = 'engineer' ORDER BY recorded_at DESC;
+
+-- By date range
+SELECT * FROM pm_token_metrics WHERE recorded_at >= '2026-03-01' ORDER BY recorded_at;
+
+-- By session
+SELECT * FROM pm_token_metrics WHERE session_id = '<uuid>' ORDER BY recorded_at;
+
+-- Combined
+SELECT * FROM pm_token_metrics
+WHERE task_id = 'TASK-XXXX' AND recorded_at >= '2026-03-01'
+ORDER BY recorded_at;
+```
+
+### Sprint-level aggregation
+```sql
+SELECT
+  sprint_id,
+  SUM(total_tokens) AS total_tokens,
+  SUM(billable_tokens) AS billable_tokens,
+  COUNT(DISTINCT task_id) AS tasks,
+  COUNT(DISTINCT agent_id) AS agents
+FROM pm_token_metrics
+WHERE sprint_id = '<sprint-uuid>'
+GROUP BY sprint_id;
+```
+
+## Labeling Unlabeled Rows
+
+If the hook fired without `.current-task` context, use the labeling RPC:
+
+```sql
+SELECT pm_label_agent_metrics('<agent_id>', 'TASK-XXXX', 'engineer', 'Implementation');
+```
+
+This finds the most recent unlabeled row for that agent_id and sets task_id, agent_type, description, plus resolves task_uuid, backlog_item_id, sprint_id FKs.
+
+## Recording Task Totals (Step 14)
+
+PM calls this at Step 14 — it auto-sums from metric rows:
+
+```sql
+-- Auto-compute from pm_token_metrics (preferred — no manual total needed)
+SELECT pm_record_task_tokens('<task_uuid>');
+
+-- Or with explicit total (backward compatible)
+SELECT pm_record_task_tokens('<task_uuid>', 150000);
+```
+
+## Reconciliation (Step 14 pre-flight)
+
+Before recording task totals, verify all agents logged:
+
+```sql
+SELECT agent_id, agent_type, total_tokens, task_id
+FROM pm_token_metrics
+WHERE task_id = 'TASK-XXXX'
+ORDER BY recorded_at;
+```
+
+Compare agent_id count against handoff chain. If any are missing, check `~/.claude/metrics/failed-payloads.jsonl` for failed pushes.
+
+## Gap Detection (Sprint Close)
+
+```sql
+SELECT t.legacy_id AS task_id, COUNT(m.id) AS metric_rows
+FROM pm_tasks t
+LEFT JOIN pm_token_metrics m ON m.task_id = t.legacy_id
+WHERE t.sprint_id = '<sprint-uuid>' AND t.deleted_at IS NULL
+GROUP BY t.legacy_id
+HAVING COUNT(m.id) = 0;
+```
+
+Any results indicate tasks that completed with zero metric records.
 
 ---
 
-## CSV Location
+## Deprecated: Python Scripts
 
-Metrics are stored in: `.claude/metrics/tokens.csv`
+The following scripts remain on disk for historical CSV queries but are **not used in the current workflow**:
 
-## Supabase Alternative
+| Script | Replaced By |
+|--------|-------------|
+| `log_metrics.py` | Auto-capture via SubagentStop hook |
+| `log_metrics.py --label` | `pm_label_agent_metrics` RPC |
+| `query_metrics.py` | SQL via MCP |
+| `sum_effort.py` | SQL via MCP / `pm_record_task_tokens` auto-sum |
 
-The `pm_token_metrics` table exists in Supabase as an alternative storage for metrics data. The CSV-based `log_metrics.py` script continues to work and remains the primary method for logging metrics during agent workflows. Supabase metrics can be queried via:
+## Billable Tokens Formula
 
-```sql
--- Query metrics from Supabase
-SELECT * FROM pm_token_metrics WHERE task_id = 'TASK-1234' ORDER BY created_at;
-```
+**Standardized**: `billable = input + output + cache_create`
 
-## CSV Columns
+This is a generated column in Supabase (`billable_tokens`), computed automatically. Cache reads are excluded (much cheaper, tracked separately as `cache_read_tokens`).
 
-```
-timestamp,session_id,agent_id,agent_type,task_id,description,input_tokens,output_tokens,cache_read,cache_create,billable_tokens,total_tokens,api_calls,duration_secs,started_at,ended_at
-```
+## Storage
+
+| Store | Role | Location |
+|-------|------|----------|
+| **Supabase** | Primary (source of truth) | `pm_token_metrics` table |
+| **CSV** | Backup (append-only, never queried) | `.claude/metrics/tokens.csv` |
+| **Failed payloads** | Replay queue | `~/.claude/metrics/failed-payloads.jsonl` |
