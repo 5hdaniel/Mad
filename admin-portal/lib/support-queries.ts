@@ -39,8 +39,15 @@ import type {
  * Strip HTML tags and markdown formatting from text for plain-text preview.
  */
 function stripHtmlAndMarkdown(text: string): string {
+  // Loop HTML tag removal until stable to prevent bypass via nested
+  // constructs like `<scr<script>ipt>` (CodeQL alert #249).
+  let prev = '';
+  while (prev !== text) {
+    prev = text;
+    text = text.replace(/<[^>]*>/g, '');
+  }
+
   return text
-    .replace(/<[^>]*>/g, '') // Remove HTML tags
     .replace(/\*\*(.*?)\*\*/g, '$1') // Bold **text**
     .replace(/\*(.*?)\*/g, '$1') // Italic *text*
     .replace(/#{1,6}\s/g, '') // Headers
