@@ -15,10 +15,13 @@ import "@testing-library/jest-dom";
 import ContactAssignmentStep from "./ContactAssignmentStep";
 import type { Contact } from "../../../electron/types/models";
 
-// Mock contactService
+// Mock contactService and settingsService
 jest.mock("../../services", () => ({
   contactService: {
     create: jest.fn(),
+  },
+  settingsService: {
+    getContactAutoRoleEnabled: jest.fn().mockResolvedValue(false),
   },
 }));
 

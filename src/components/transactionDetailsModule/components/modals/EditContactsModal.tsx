@@ -8,7 +8,7 @@
  * @see TASK-1765: EditContactsModal 2-Screen Flow Redesign
  * @see BACKLOG-418: Redesign Contact Selection UX (Select First, Assign Roles Second)
  */
-import React, { useState, useEffect, useMemo, useCallback } from "react";
+import React, { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import type { Transaction } from "@/types";
 import type { ExtendedContact } from "../../../../types/components";
 import { ROLE_TO_CATEGORY, AUDIT_WORKFLOW_STEPS } from "../../../../constants/contactRoles";
@@ -25,7 +25,7 @@ import {
   filterRolesByTransactionType,
   getRoleDisplayName,
 } from "../../../../utils/transactionRoleUtils";
-import { contactService } from "../../../../services";
+import { contactService, settingsService } from "../../../../services";
 // Category filtering is now handled by ContactSearchList with its built-in pill-style filters
 import { sortByRecentCommunication } from "../../../../utils/contactSortUtils";
 import logger from '../../../../utils/logger';
@@ -124,6 +124,21 @@ export function EditContactsModal({
     ContactAssignment[]
   >([]);
 
+  // BACKLOG-1355: Auto-fill role state
+  const [autoRoleEnabled, setAutoRoleEnabled] = useState(false);
+  const [autoFilledContactIds, setAutoFilledContactIds] = useState<Set<string>>(new Set());
+
+  // Load auto-role setting on mount
+  useEffect(() => {
+    let cancelled = false;
+    settingsService.getContactAutoRoleEnabled(transaction.user_id).then((enabled) => {
+      if (!cancelled) setAutoRoleEnabled(enabled);
+    }).catch((err) => {
+      logger.error("Failed to load auto-role setting:", err);
+    });
+    return () => { cancelled = true; };
+  }, [transaction.user_id]);
+
   // Load existing contact assignments on mount
   useEffect(() => {
     loadContactAssignments();
@@ -168,6 +183,48 @@ export function EditContactsModal({
     }
   };
 
+  // BACKLOG-1355: Build role options at parent level for auto-fill validation
+  const transactionType = (transaction.transaction_type as "purchase" | "sale" | "other") || "purchase";
+  const validRoles = useMemo((): Set<string> => {
+    const roles = new Set<string>();
+    AUDIT_WORKFLOW_STEPS.forEach((wfStep) => {
+      const filteredRoles = filterRolesByTransactionType(
+        wfStep.roles as RoleConfig[],
+        transactionType,
+        wfStep.title
+      );
+      filteredRoles.forEach((rc) => roles.add(rc.role));
+    });
+    return roles;
+  }, [transactionType]);
+
+  // BACKLOG-1355: Auto-fill role for a newly added contact
+  const handleAutoFillForContact = useCallback((contactId: string, contact: ExtendedContact) => {
+    if (!autoRoleEnabled || !contact.default_role) return;
+    if (!validRoles.has(contact.default_role)) return;
+
+    // Assign the default role
+    setRoleAssignments((prev) => {
+      const updated = { ...prev };
+      updated[contact.default_role!] = [
+        ...(updated[contact.default_role!] || []),
+        contactId,
+      ];
+      return updated;
+    });
+    setAutoFilledContactIds((prev) => new Set(prev).add(contactId));
+  }, [autoRoleEnabled, validRoles]);
+
+  // BACKLOG-1355: Clear auto-filled status when user manually changes role
+  const handleClearAutoFilled = useCallback((contactId: string) => {
+    setAutoFilledContactIds((prev) => {
+      if (!prev.has(contactId)) return prev;
+      const next = new Set(prev);
+      next.delete(contactId);
+      return next;
+    });
+  }, []);
+
   // Remove a contact from the transaction
   const handleRemoveContact = useCallback((contactId: string) => {
     // Remove from assignedContactIds
@@ -183,6 +240,14 @@ export function EditContactsModal({
         }
       }
       return updated;
+    });
+
+    // BACKLOG-1355: Clear auto-filled status
+    setAutoFilledContactIds((prev) => {
+      if (!prev.has(contactId)) return prev;
+      const next = new Set(prev);
+      next.delete(contactId);
+      return next;
     });
   }, []);
 
@@ -343,10 +408,7 @@ export function EditContactsModal({
               </div>
             ) : (
               <Screen1Content
-                transactionType={
-                  (transaction.transaction_type as "purchase" | "sale" | "other") ||
-                  "purchase"
-                }
+                transactionType={transactionType}
                 assignedContactIds={assignedContactIds}
                 roleAssignments={roleAssignments}
                 onRoleAssignmentsChange={(assignments) => {
@@ -362,6 +424,8 @@ export function EditContactsModal({
                   setShowEditModal(true);
                 }}
                 contactsWithoutRoles={contactsWithoutRoles}
+                autoFilledContactIds={autoFilledContactIds}
+                onClearAutoFilled={handleClearAutoFilled}
               />
             )}
 
@@ -410,11 +474,15 @@ export function EditContactsModal({
             <Screen2Overlay
               assignedContactIds={assignedContactIds}
               onClose={() => setShowAddModal(false)}
-              onAddContact={(contactId) => {
+              onAddContact={(contactId, contact) => {
                 // Add the contact to assigned list
                 setAssignedContactIds((prev) =>
                   prev.includes(contactId) ? prev : [...prev, contactId]
                 );
+                // BACKLOG-1355: Auto-fill role for newly added contact
+                if (contact) {
+                  handleAutoFillForContact(contactId, contact);
+                }
               }}
             />
           )}
@@ -438,6 +506,10 @@ interface Screen1ContentProps {
   onEditContact?: (contact: ExtendedContact) => void;
   /** Contacts that are missing roles (for validation highlighting) */
   contactsWithoutRoles?: Set<string>;
+  /** BACKLOG-1355: Set of contact IDs whose roles were auto-filled */
+  autoFilledContactIds?: Set<string>;
+  /** BACKLOG-1355: Callback to clear auto-filled status when user manually changes role */
+  onClearAutoFilled?: (contactId: string) => void;
 }
 
 /**
@@ -452,6 +524,8 @@ function Screen1Content({
   onRemoveContact,
   onEditContact,
   contactsWithoutRoles = new Set(),
+  autoFilledContactIds = new Set(),
+  onClearAutoFilled,
 }: Screen1ContentProps): React.ReactElement {
   const { contacts, loading: contactsLoading, error: contactsError } = useContacts();
 
@@ -530,8 +604,13 @@ function Screen1Content({
       });
 
       onRoleAssignmentsChange(newAssignments);
+
+      // BACKLOG-1355: Clear auto-filled status when user manually changes role
+      if (onClearAutoFilled) {
+        onClearAutoFilled(contactId);
+      }
     },
-    [roleAssignments, onRoleAssignmentsChange]
+    [roleAssignments, onRoleAssignmentsChange, onClearAutoFilled]
   );
 
   if (contactsLoading) {
@@ -629,6 +708,7 @@ function Screen1Content({
             onRemove={() => onRemoveContact(contact.id)}
             onClick={() => setPreviewContact(contact)}
             hasError={contactsWithoutRoles.has(contact.id)}
+            isAutoFilled={autoFilledContactIds.has(contact.id)}
           />
         ))}
       </div>
@@ -658,7 +738,7 @@ function Screen1Content({
 interface Screen2OverlayProps {
   assignedContactIds: string[];
   onClose: () => void;
-  onAddContact: (contactId: string) => void;
+  onAddContact: (contactId: string, contact?: ExtendedContact) => void;
 }
 
 /**
@@ -784,19 +864,24 @@ function Screen2Overlay({
         });
 
         if (result.success && result.data) {
+          const importedContact = result.data as ExtendedContact;
+          // Preserve default_role from original contact onto imported contact
+          if (contact.default_role && !importedContact.default_role) {
+            importedContact.default_role = contact.default_role;
+          }
           // Add the imported contact to the transaction
-          onAddContact(result.data.id);
+          onAddContact(importedContact.id, importedContact);
           // Mark as added for visual feedback
           setAddedContactIds((prev) => new Set(prev).add(contact.id));
           // Silent refresh so Screen1 can find the new contact
           silentRefresh();
-          return result.data as ExtendedContact;
+          return importedContact;
         }
 
         throw new Error(result.error || "Failed to import contact");
       } else {
         // Database contact: add directly to transaction
-        onAddContact(contact.id);
+        onAddContact(contact.id, contact);
         // Mark as added for visual feedback
         setAddedContactIds((prev) => new Set(prev).add(contact.id));
         return contact;
