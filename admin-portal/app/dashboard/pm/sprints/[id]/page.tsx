@@ -26,6 +26,7 @@ import {
   Info,
 } from 'lucide-react';
 import { getSprintDetail, listItems, deleteSprint, updateSprintField } from '@/lib/pm-queries';
+import TokenMetricsBreakdown from '../../components/TokenMetricsBreakdown';
 import { usePermissions } from '@/components/providers/PermissionsProvider';
 import { PERMISSIONS } from '@/lib/permissions';
 import type {
@@ -489,6 +490,11 @@ export default function SprintDetailPage() {
             })()}
           </div>
         </div>
+      </div>
+
+      {/* Token Metrics Breakdown by Agent Type */}
+      <div className="bg-white rounded-lg border border-gray-200 p-6 mb-6">
+        <TokenMetricsBreakdown sprintId={sprint.id} defaultExpanded />
       </div>
 
       {/* Sprint Items Table */}

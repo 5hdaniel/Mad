@@ -552,6 +552,32 @@ export interface AgentMetricResult {
   metric_id: string;
 }
 
+export interface TokenMetricRow {
+  id: string;
+  agent_id: string;
+  agent_type: string | null;
+  task_id: string | null;
+  description: string | null;
+  input_tokens: number;
+  output_tokens: number;
+  cache_read_tokens: number;
+  cache_creation_tokens: number;
+  total_tokens: number;
+  billable_tokens: number;
+  duration_ms: number;
+  api_calls: number;
+  model: string | null;
+  recorded_at: string;
+}
+
+export interface TokenMetricsSummary {
+  agent_type: string;
+  runs: number;
+  total_tokens: number;
+  billable_tokens: number;
+  duration_ms: number;
+}
+
 // ---------------------------------------------------------------------------
 // Typed field names for update operations
 // ---------------------------------------------------------------------------

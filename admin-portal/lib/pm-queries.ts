@@ -961,3 +961,57 @@ function validateSprintDetailResponse(data: unknown): SprintDetailResponse {
   }
   return d as unknown as SprintDetailResponse;
 }
+
+// ---------------------------------------------------------------------------
+// Token Metrics Queries — breakdown by agent type for tasks/sprints
+// ---------------------------------------------------------------------------
+
+import type { TokenMetricRow, TokenMetricsSummary } from './pm-types';
+
+/** Fetch raw metric rows for a task (by legacy_id like 'TASK-2316'). */
+export async function getTaskMetrics(taskId: string): Promise<TokenMetricRow[]> {
+  const supabase = createClient();
+  const { data, error } = await supabase
+    .from('pm_token_metrics')
+    .select('id, agent_id, agent_type, task_id, description, input_tokens, output_tokens, cache_read_tokens, cache_creation_tokens, total_tokens, billable_tokens, duration_ms, api_calls, model, recorded_at')
+    .eq('task_id', taskId)
+    .order('recorded_at', { ascending: true });
+  if (error) throw error;
+  return (data ?? []) as TokenMetricRow[];
+}
+
+/** Fetch raw metric rows for a sprint (by sprint UUID). */
+export async function getSprintMetrics(sprintId: string): Promise<TokenMetricRow[]> {
+  const supabase = createClient();
+  const { data, error } = await supabase
+    .from('pm_token_metrics')
+    .select('id, agent_id, agent_type, task_id, description, input_tokens, output_tokens, cache_read_tokens, cache_creation_tokens, total_tokens, billable_tokens, duration_ms, api_calls, model, recorded_at')
+    .eq('sprint_id', sprintId)
+    .order('recorded_at', { ascending: true });
+  if (error) throw error;
+  return (data ?? []) as TokenMetricRow[];
+}
+
+/** Summarize metrics by agent_type for a set of rows. */
+export function summarizeByAgentType(rows: TokenMetricRow[]): TokenMetricsSummary[] {
+  const map = new Map<string, TokenMetricsSummary>();
+  for (const row of rows) {
+    const type = row.agent_type ?? 'unknown';
+    const existing = map.get(type);
+    if (existing) {
+      existing.runs += 1;
+      existing.total_tokens += row.total_tokens;
+      existing.billable_tokens += row.billable_tokens;
+      existing.duration_ms += row.duration_ms;
+    } else {
+      map.set(type, {
+        agent_type: type,
+        runs: 1,
+        total_tokens: row.total_tokens,
+        billable_tokens: row.billable_tokens,
+        duration_ms: row.duration_ms,
+      });
+    }
+  }
+  return Array.from(map.values()).sort((a, b) => b.total_tokens - a.total_tokens);
+}
