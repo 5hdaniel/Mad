@@ -245,6 +245,7 @@
     "tar": ">=7.5.11",
     "next": ">=15.5.13",
     "underscore": ">=1.13.8",
-    "@tootallnate/once": ">=3.0.1"
+    "@tootallnate/once": ">=3.0.1",
+    "handlebars": ">=4.7.9"
   }
 }
