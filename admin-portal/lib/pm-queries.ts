@@ -968,13 +968,35 @@ function validateSprintDetailResponse(data: unknown): SprintDetailResponse {
 
 import type { TokenMetricRow, TokenMetricsSummary } from './pm-types';
 
-/** Fetch raw metric rows for a task (by legacy_id like 'TASK-2316'). */
-export async function getTaskMetrics(taskId: string): Promise<TokenMetricRow[]> {
+/** Fetch raw metric rows for a backlog item — looks up child task legacy_ids and queries by those. */
+export async function getTaskMetrics(backlogItemId: string): Promise<TokenMetricRow[]> {
   const supabase = createClient();
+
+  // First get child task legacy_ids for this backlog item
+  const { data: tasks } = await supabase
+    .from('pm_tasks')
+    .select('legacy_id')
+    .eq('backlog_item_id', backlogItemId)
+    .not('legacy_id', 'is', null);
+
+  const taskIds = (tasks ?? []).map(t => t.legacy_id).filter(Boolean) as string[];
+
+  // Also try the backlog item's own legacy_id (in case metrics are stored against it)
+  const { data: item } = await supabase
+    .from('pm_backlog_items')
+    .select('legacy_id')
+    .eq('id', backlogItemId)
+    .single();
+
+  if (item?.legacy_id) taskIds.push(item.legacy_id);
+
+  if (taskIds.length === 0) return [];
+
+  // Query metrics for all related task_ids
   const { data, error } = await supabase
     .from('pm_token_metrics')
     .select('id, agent_id, agent_type, task_id, description, input_tokens, output_tokens, cache_read_tokens, cache_creation_tokens, total_tokens, billable_tokens, duration_ms, api_calls, model, recorded_at')
-    .eq('task_id', taskId)
+    .in('task_id', taskIds)
     .order('recorded_at', { ascending: true });
   if (error) throw error;
   return (data ?? []) as TokenMetricRow[];

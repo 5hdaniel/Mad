@@ -498,9 +498,7 @@ export function TaskSidebar({ item, onUpdate }: TaskSidebarProps) {
       )}
 
       {/* Token Metrics Breakdown */}
-      {item.legacy_id && (
-        <TokenMetricsBreakdown taskId={item.legacy_id} />
-      )}
+      <TokenMetricsBreakdown taskId={item.id} />
 
       {/* Start Date */}
       <div className="px-4 py-3">
