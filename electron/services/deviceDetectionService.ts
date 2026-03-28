@@ -675,7 +675,7 @@ export class DeviceDetectionService extends EventEmitter {
   private async checkCorporateUsbRestrictions(): Promise<void> {
     try {
       // Check Apple Mobile Device USB Driver service status
-      let usbDriverStatus = "unknown";
+      let usbDriverStatus: string;
       try {
         const { stdout: scOutput } = await execAsync(
           'sc query "Apple Mobile Device USB Driver"',

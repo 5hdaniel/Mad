@@ -14,7 +14,6 @@ import logService from "../services/logService";
 import { autoLinkCommunicationsForContact } from "../services/autoLinkService";
 import emailSyncService from "../services/emailSyncService";
 import databaseService from "../services/databaseService";
-import { dbGet } from "../services/db/core/dbConnection";
 import { wrapHandler } from "../utils/wrapHandler";
 import type {
   Transaction,

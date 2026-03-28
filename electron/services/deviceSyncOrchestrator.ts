@@ -869,8 +869,8 @@ export class DeviceSyncOrchestrator extends EventEmitter {
         // Optionally resolve sender names in messages
         messages: conv.messages.map((msg) => {
           if (!msg.isFromMe && msg.handle) {
-            const lookup = this.contactsParser.lookupByHandle(msg.handle);
-            // We don't modify the message handle, but the UI can use contacts for display
+            // Lookup performed for side effects; UI can use contacts for display
+            this.contactsParser.lookupByHandle(msg.handle);
           }
           return msg;
         }),

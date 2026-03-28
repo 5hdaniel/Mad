@@ -23,8 +23,6 @@ jest.mock("../logService", () => ({
   },
 }));
 
-const mockAxios = axios as jest.Mocked<typeof axios>;
-
 const mockDatabaseService = databaseService as jest.Mocked<
   typeof databaseService
 >;

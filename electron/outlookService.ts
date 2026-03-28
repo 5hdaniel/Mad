@@ -392,7 +392,7 @@ class OutlookService {
           } else {
             break;
           }
-        } while (nextLink && pageCount < maxPages);
+        } while (true);
 
         emailsToFetch = matchingEmailIds.slice(0, maxResults);
       }

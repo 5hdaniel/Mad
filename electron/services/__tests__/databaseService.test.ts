@@ -1735,16 +1735,9 @@ describe("DatabaseService", () => {
 
   describe("Migration validation helpers", () => {
     it("validateNoDuplicateVersions should detect duplicates", async () => {
-      const { default: dbModule } = await import("../databaseService");
-      const DatabaseService = dbModule.constructor as typeof import("../databaseService").default.constructor & {
-        validateNoDuplicateVersions: (migrations: Array<{ version: number; description: string; migrate: () => void }>) => void;
-      };
-
-      // Access static method via the class
       const mod = await import("../databaseService");
-      const cls = (mod.default as unknown as { constructor: { validateNoDuplicateVersions: (m: Array<{ version: number }>) => void } }).constructor;
 
-      // Instead, test via the exported class
+      // Test via the exported class
       expect(() => {
         // We know the class has static methods -- access directly from prototype chain
         const svc = mod.default as unknown as Record<string, unknown>;

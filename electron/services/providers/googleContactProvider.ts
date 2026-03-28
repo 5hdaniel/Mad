@@ -28,7 +28,6 @@ import type { OAuthToken } from '../../types/models';
 // CONSTANTS
 // ============================================
 
-const CONTACTS_READONLY_SCOPE = 'https://www.googleapis.com/auth/contacts.readonly';
 const PERSON_FIELDS = 'names,emailAddresses,phoneNumbers,organizations';
 const PAGE_SIZE = 1000;
 
