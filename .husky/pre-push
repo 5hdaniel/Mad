@@ -4,7 +4,7 @@
 # Blocks push if affected tests fail; succeeds silently if no tests match
 
 # Get the remote tracking branch to compare against
-upstream=$(git rev-parse --abbrev-ref @{upstream} 2>/dev/null)
+upstream=$(git rev-parse --abbrev-ref @{upstream} 2>/dev/null || true)
 if [ -z "$upstream" ]; then
   # No upstream set — compare against the merge base with origin/develop
   upstream="origin/develop"
