@@ -353,7 +353,7 @@ export function EditTransactionModal({
                   onChange={(e) =>
                     handleChange("property_address", e.target.value)
                   }
-                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-gray-900 bg-white min-h-[44px]"
                 />
               </div>
 
@@ -404,10 +404,10 @@ export function EditTransactionModal({
                     onChange={(e) =>
                       handleChange("started_at", e.target.value)
                     }
-                    className={`w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${
+                    className={`w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-gray-900 min-h-[44px] ${
                       !formData.started_at
                         ? "border-red-300 bg-red-50"
-                        : "border-gray-300"
+                        : "border-gray-300 bg-white"
                     }`}
                     required
                   />
@@ -425,7 +425,7 @@ export function EditTransactionModal({
                     onChange={(e) =>
                       handleChange("closed_at", e.target.value)
                     }
-                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-gray-900 bg-white min-h-[44px]"
                   />
                 </div>
               </div>
@@ -441,7 +441,7 @@ export function EditTransactionModal({
                     value={formData.sale_price}
                     onChange={(e) => handleChange("sale_price", e.target.value)}
                     placeholder="0"
-                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-gray-900 bg-white min-h-[44px]"
                   />
                 </div>
                 <div>
@@ -455,7 +455,7 @@ export function EditTransactionModal({
                       handleChange("listing_price", e.target.value)
                     }
                     placeholder="0"
-                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-gray-900 bg-white min-h-[44px]"
                   />
                 </div>
               </div>

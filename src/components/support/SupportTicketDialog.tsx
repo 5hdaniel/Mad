@@ -237,7 +237,7 @@ export function SupportTicketDialog({
                   value={formName}
                   onChange={(e) => setFormName(e.target.value)}
                   placeholder="Your name"
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm text-gray-900 bg-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
+                  className="w-full px-3 py-2.5 border border-gray-300 rounded-lg text-sm text-gray-900 bg-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none min-h-[44px]"
                   required
                   maxLength={100}
                 />
@@ -255,7 +255,7 @@ export function SupportTicketDialog({
                   value={formEmail}
                   onChange={(e) => setFormEmail(e.target.value)}
                   placeholder="Your email address"
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm text-gray-900 bg-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
+                  className="w-full px-3 py-2.5 border border-gray-300 rounded-lg text-sm text-gray-900 bg-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none min-h-[44px]"
                   required
                   maxLength={200}
                 />
@@ -277,7 +277,7 @@ export function SupportTicketDialog({
               value={subject}
               onChange={(e) => setSubject(e.target.value)}
               placeholder="Brief summary of your issue"
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm text-gray-900 bg-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
+              className="w-full px-3 py-2.5 border border-gray-300 rounded-lg text-sm text-gray-900 bg-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none min-h-[44px]"
               required
               maxLength={200}
             />
@@ -296,7 +296,7 @@ export function SupportTicketDialog({
               value={description}
               onChange={(e) => setDescription(e.target.value)}
               placeholder="Please describe the issue in detail. What were you trying to do? What happened instead?"
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm text-gray-900 bg-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none resize-none"
+              className="w-full px-3 py-2.5 border border-gray-300 rounded-lg text-sm text-gray-900 bg-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none resize-none"
               rows={4}
               required
               maxLength={5000}
@@ -316,7 +316,7 @@ export function SupportTicketDialog({
                 id="support-priority"
                 value={priority}
                 onChange={(e) => setPriority(e.target.value as TicketPriority)}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm text-gray-900 bg-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
+                className="w-full px-3 py-2.5 border border-gray-300 rounded-lg text-sm text-gray-900 bg-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none min-h-[44px]"
               >
                 {PRIORITY_OPTIONS.map((opt) => (
                   <option key={opt.value} value={opt.value}>
@@ -339,7 +339,7 @@ export function SupportTicketDialog({
                 onChange={(e) =>
                   setCategoryId(e.target.value || null)
                 }
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm text-gray-900 bg-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
+                className="w-full px-3 py-2.5 border border-gray-300 rounded-lg text-sm text-gray-900 bg-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none min-h-[44px]"
               >
                 <option value="">Select category...</option>
                 {topCategories.map((cat) => (

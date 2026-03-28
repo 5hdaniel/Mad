@@ -341,18 +341,18 @@ export function AttachEmailsModal({
               placeholder="Search by name, email, subject, or content..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full pl-10 pr-10 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              className="w-full pl-10 pr-10 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-gray-900 bg-white min-h-[44px]"
               data-testid="search-input"
             />
             {/* Search icon or loading spinner */}
             {searching ? (
               <div
-                className="w-5 h-5 absolute left-3 top-2.5 border-2 border-blue-600 border-t-transparent rounded-full animate-spin"
+                className="w-5 h-5 absolute left-3 top-1/2 -translate-y-1/2 border-2 border-blue-600 border-t-transparent rounded-full animate-spin"
                 data-testid="search-spinner"
               />
             ) : (
               <svg
-                className="w-5 h-5 text-gray-400 absolute left-3 top-2.5"
+                className="w-5 h-5 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2"
                 fill="none"
                 stroke="currentColor"
                 viewBox="0 0 24 24"
@@ -369,7 +369,7 @@ export function AttachEmailsModal({
               type="date"
               value={afterDate}
               onChange={(e) => setAfterDate(e.target.value)}
-              className="px-2 py-1 text-sm border border-gray-300 rounded focus:ring-2 focus:ring-blue-500"
+              className="px-3 py-2.5 text-sm border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 text-gray-900 bg-white min-h-[44px]"
               data-testid="after-date-input"
             />
             <span className="text-gray-400">to</span>
@@ -377,7 +377,7 @@ export function AttachEmailsModal({
               type="date"
               value={beforeDate}
               onChange={(e) => setBeforeDate(e.target.value)}
-              className="px-2 py-1 text-sm border border-gray-300 rounded focus:ring-2 focus:ring-blue-500"
+              className="px-3 py-2.5 text-sm border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 text-gray-900 bg-white min-h-[44px]"
               data-testid="before-date-input"
             />
             {(auditStartDate || auditEndDate) && (

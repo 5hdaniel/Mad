@@ -356,7 +356,7 @@ export function ConversationViewModal({
                 type="checkbox"
                 checked={showAuditPeriodOnly}
                 onChange={(e) => setShowAuditPeriodOnly(e.target.checked)}
-                className="w-4 h-4 rounded border-gray-300 text-green-500 focus:ring-green-500"
+                className="w-5 h-5 rounded border-gray-300 text-green-500 focus:ring-green-500"
               />
               <span className="text-sm text-gray-700">
                 Show audit period only ({formatDateRangeLabel(parsedStartDate, parsedEndDate)})

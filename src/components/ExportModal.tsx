@@ -405,7 +405,7 @@ function ExportModal({
                     type="date"
                     value={startDate}
                     onChange={(e) => setStartDate(e.target.value)}
-                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500"
+                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500 text-gray-900 bg-white min-h-[44px]"
                   />
                   <p className="mt-1 text-xs text-gray-500">
                     When did you sign the representation agreement with the
@@ -437,7 +437,7 @@ function ExportModal({
                     type="date"
                     value={closingDate}
                     onChange={(e) => setClosingDate(e.target.value)}
-                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500"
+                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500 text-gray-900 bg-white min-h-[44px]"
                   />
                   <p className="mt-1 text-xs text-gray-500">
                     Scheduled closing date (optional)
@@ -455,7 +455,7 @@ function ExportModal({
                     type="date"
                     value={endDate}
                     onChange={(e) => setEndDate(e.target.value)}
-                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500"
+                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500 text-gray-900 bg-white min-h-[44px]"
                   />
                   <p className="mt-1 text-xs text-gray-500">
                     When did the transaction end? (Used to filter communications)

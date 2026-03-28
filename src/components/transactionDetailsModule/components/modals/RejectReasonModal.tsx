@@ -51,7 +51,7 @@ export function RejectReasonModal({
             value={rejectReason}
             onChange={(e) => onRejectReasonChange(e.target.value)}
             placeholder="e.g., Not a real estate transaction, duplicate entry..."
-            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-red-500 resize-none"
+            className="w-full px-3 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-red-500 resize-none text-gray-900 bg-white"
             rows={3}
           />
         </div>

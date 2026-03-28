@@ -98,7 +98,7 @@ export function TransactionsToolbar({
             placeholder="Search by address..."
             value={searchQuery}
             onChange={(e) => onSearchChange(e.target.value)}
-            className="w-full h-10 pl-10 pr-4 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+            className="w-full h-11 pl-10 pr-4 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-gray-900 bg-white"
           />
           <svg
             className="w-5 h-5 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2"
@@ -118,7 +118,7 @@ export function TransactionsToolbar({
         {/* Filter tabs + action buttons - no wrap, shrink to fit */}
         <div className="flex items-center gap-2 min-w-0">
           {/* Status Filter Toggle */}
-          <div className="inline-flex items-center bg-gray-200 rounded-lg p-1 min-w-0 h-10">
+          <div className="inline-flex items-center bg-gray-200 rounded-lg p-1 min-w-0 h-11">
             <button
               onClick={() => onStatusFilterChange("active")}
               className={`px-2 sm:px-4 py-2 rounded-md font-medium transition-all text-sm whitespace-nowrap ${
@@ -154,7 +154,7 @@ export function TransactionsToolbar({
           {/* Edit Mode Button */}
           <button
             onClick={onToggleSelectionMode}
-            className={`px-2 sm:px-4 py-2 h-10 rounded-lg font-semibold transition-all flex items-center gap-1 sm:gap-2 text-sm whitespace-nowrap ${
+            className={`px-2 sm:px-4 py-2 h-11 rounded-lg font-semibold transition-all flex items-center gap-1 sm:gap-2 text-sm whitespace-nowrap ${
               selectionMode
                 ? "bg-purple-500 text-white hover:bg-purple-600 shadow-md"
                 : "bg-gray-200 text-gray-700 hover:bg-gray-300"
@@ -179,7 +179,7 @@ export function TransactionsToolbar({
           {/* Audit New Transaction Button */}
           <button
             onClick={handleNewTransaction}
-            className="px-2 sm:px-4 py-2 h-10 rounded-lg font-semibold transition-all bg-green-500 text-white hover:bg-green-600 shadow-md hover:shadow-lg flex items-center gap-1 sm:gap-2 text-sm whitespace-nowrap"
+            className="px-2 sm:px-4 py-2 h-11 rounded-lg font-semibold transition-all bg-green-500 text-white hover:bg-green-600 shadow-md hover:shadow-lg flex items-center gap-1 sm:gap-2 text-sm whitespace-nowrap"
           >
             <svg
               className="w-5 h-5"

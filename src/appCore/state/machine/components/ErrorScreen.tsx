@@ -140,7 +140,7 @@ export function ErrorScreen({
               value={feedback}
               onChange={(e) => setFeedback(e.target.value)}
               placeholder="What were you doing when this happened?"
-              className="w-full p-3 border border-gray-300 rounded-lg mb-3 text-sm resize-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              className="w-full p-3 border border-gray-300 rounded-lg mb-3 text-sm resize-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-gray-900 bg-white"
               rows={3}
               disabled={isSubmitting}
             />
