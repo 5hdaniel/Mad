@@ -99,6 +99,7 @@ export default function GlobalError({
               >
                 Try again
               </button>
+              {/* eslint-disable-next-line @next/next/no-html-link-for-pages -- global error boundary cannot use next/link */}
               <a
                 href="/"
                 style={{
