@@ -94,3 +94,6 @@ export { registerTransactionHandlers, cleanupTransactionHandlers } from "./trans
 
 // System handlers compat (TASK-2263: migrated from electron/ root)
 export { registerSystemHandlers as registerSystemHandlersCompat } from "./systemHandlersCompat";
+
+// Local sync handlers (TASK-1429: Android Companion)
+export { registerLocalSyncHandlers, cleanupLocalSyncHandlers } from "./localSyncHandlers";

@@ -109,6 +109,7 @@ import { registerLicenseHandlers } from "./handlers/licenseHandlers";
 import { registerFeatureGateHandlers } from "./handlers/featureGateHandlers";
 import { registerPreAuthValidationHandler } from "./handlers/preAuthValidationHandler";
 import { registerSupportTicketHandlers } from "./handlers/supportTicketHandlers";
+import { registerLocalSyncHandlers, cleanupLocalSyncHandlers } from "./handlers/localSyncHandlers";
 import { registerPairingHandlers, cleanupPairingHandlers } from "./handlers/pairingHandlers";
 import { LLMConfigService } from "./services/llm/llmConfigService";
 
@@ -1069,6 +1070,7 @@ app.whenReady().then(async () => {
   registerCcpaHandlers();
   registerFailureLogHandlers();
   registerSupportTicketHandlers();
+  registerLocalSyncHandlers();
 
   // Android companion pairing (TASK-1428)
   registerPairingHandlers();
@@ -1119,6 +1121,8 @@ app.on("before-quit", () => {
   cleanupSyncHandlers();
   // Clean up transaction handlers (submission sync)
   cleanupTransactionHandlers();
+  // Clean up local sync server (TASK-1429: Android Companion)
+  cleanupLocalSyncHandlers();
   // Clean up pairing sessions (TASK-1428)
   cleanupPairingHandlers();
 });
