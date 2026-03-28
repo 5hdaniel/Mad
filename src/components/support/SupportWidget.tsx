@@ -115,7 +115,7 @@ export function SupportWidget({
       <button
         onClick={handleOpen}
         data-support-widget
-        className="fixed bottom-4 left-4 z-[70] w-10 h-10 rounded-full bg-blue-500 hover:bg-blue-600 text-white font-bold text-lg shadow-lg hover:shadow-xl transition-all flex items-center justify-center no-drag-region"
+        className="fixed bottom-[4.5rem] left-4 lg:bottom-4 z-[70] w-10 h-10 rounded-full bg-blue-500 hover:bg-blue-600 text-white font-bold text-lg shadow-lg hover:shadow-xl transition-all flex items-center justify-center no-drag-region"
         title="Contact Support"
         aria-label="Open support dialog"
       >
