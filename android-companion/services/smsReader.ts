@@ -48,6 +48,25 @@ const SMS_TYPE_INBOX = "1";
 const SMS_TYPE_SENT = "2";
 
 /**
+ * Get a reference to the native SMS module.
+ *
+ * The react-native-get-sms-android library registers itself as "Sms"
+ * (see SmsModule.java getName()). Earlier code incorrectly referenced
+ * "SmsAndroid" which resolved to undefined, silently returning zero
+ * messages on every read.
+ *
+ * Fix: BACKLOG-1448
+ */
+function getSmsNativeModule(): typeof NativeModules.Sms | null {
+  const mod = NativeModules.Sms;
+  if (!mod) {
+    console.warn("[SmsReader] Sms native module not available");
+    return null;
+  }
+  return mod;
+}
+
+/**
  * Read SMS messages from the Android content provider.
  *
  * @param sinceTimestamp - Unix timestamp (ms) — only reads messages newer than this
@@ -59,14 +78,17 @@ export async function readSmsMessages(
   maxCount: number = 100
 ): Promise<SyncMessage[]> {
   if (Platform.OS !== "android") {
+    console.log("[SmsReader] Skipping — not Android");
     return [];
   }
 
-  const SmsAndroid = NativeModules.SmsAndroid;
-  if (!SmsAndroid) {
-    console.warn("[SmsReader] SmsAndroid native module not available");
+  if (!getSmsNativeModule()) {
     return [];
   }
+
+  console.log(
+    `[SmsReader] Reading SMS since=${sinceTimestamp} (${sinceTimestamp > 0 ? new Date(sinceTimestamp).toISOString() : "epoch"}) maxCount=${maxCount}`
+  );
 
   // Read from both inbox and sent
   const [inboxMessages, sentMessages] = await Promise.all([
@@ -78,6 +100,10 @@ export async function readSmsMessages(
   const allMessages = [...inboxMessages, ...sentMessages];
   allMessages.sort((a, b) => a.timestamp - b.timestamp);
 
+  console.log(
+    `[SmsReader] Found ${inboxMessages.length} inbox + ${sentMessages.length} sent = ${allMessages.length} total`
+  );
+
   return allMessages;
 }
 
@@ -86,8 +112,8 @@ export async function readSmsMessages(
  */
 function readBox(filter: SmsFilter): Promise<SyncMessage[]> {
   return new Promise((resolve) => {
-    const SmsAndroid = NativeModules.SmsAndroid;
-    if (!SmsAndroid) {
+    const smsModule = getSmsNativeModule();
+    if (!smsModule) {
       resolve([]);
       return;
     }
@@ -102,7 +128,12 @@ function readBox(filter: SmsFilter): Promise<SyncMessage[]> {
       jsonFilter.minDate = filter.minDate;
     }
 
-    SmsAndroid.list(
+    console.log(
+      `[SmsReader] Querying ${filter.box} with filter:`,
+      JSON.stringify(jsonFilter)
+    );
+
+    smsModule.list(
       JSON.stringify(jsonFilter),
       (fail: string) => {
         console.error(`[SmsReader] Failed to read ${filter.box}:`, fail);
@@ -114,6 +145,9 @@ function readBox(filter: SmsFilter): Promise<SyncMessage[]> {
           const messages = records
             .filter((r) => r.address && r.body)
             .map((r) => rawToSyncMessage(r));
+          console.log(
+            `[SmsReader] ${filter.box}: ${records.length} raw records -> ${messages.length} valid messages`
+          );
           resolve(messages);
         } catch (err) {
           console.error(`[SmsReader] Failed to parse ${filter.box}:`, err);
@@ -155,8 +189,8 @@ export async function getUnreadSmsCount(): Promise<number> {
     return 0;
   }
 
-  const SmsAndroid = NativeModules.SmsAndroid;
-  if (!SmsAndroid) {
+  const smsModule = getSmsNativeModule();
+  if (!smsModule) {
     return 0;
   }
 
@@ -167,7 +201,7 @@ export async function getUnreadSmsCount(): Promise<number> {
       maxCount: 1000,
     });
 
-    SmsAndroid.list(
+    smsModule.list(
       jsonFilter,
       () => resolve(0),
       (count: number) => resolve(count)
