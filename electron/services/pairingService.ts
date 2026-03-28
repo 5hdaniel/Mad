@@ -1,0 +1,186 @@
+// ============================================
+// PAIRING SERVICE
+// Generates QR codes for Android companion pairing
+// ============================================
+
+import crypto from "crypto";
+import os from "os";
+import QRCode from "qrcode";
+import log from "electron-log";
+
+/**
+ * Data encoded in the QR code for pairing
+ */
+export interface PairingQRData {
+  ip: string;
+  port: number;
+  secret: string;
+  deviceName: string;
+}
+
+/**
+ * Result returned when generating a QR code
+ */
+export interface PairingQRResult {
+  qrDataUrl: string;
+  pairingInfo: PairingQRData;
+}
+
+/**
+ * A paired device session stored in memory
+ */
+export interface PairedDevice {
+  deviceId: string;
+  deviceName: string;
+  secret: string;
+  pairedAt: string;
+  lastSeen: string;
+}
+
+/**
+ * Status of the pairing system
+ */
+export interface PairingStatus {
+  isPaired: boolean;
+  devices: PairedDevice[];
+}
+
+/**
+ * Gets the first non-internal IPv4 address from network interfaces.
+ * Falls back to "127.0.0.1" if no external interface is found.
+ */
+function getLocalIPAddress(): string {
+  const interfaces = os.networkInterfaces();
+  for (const name of Object.keys(interfaces)) {
+    const addresses = interfaces[name];
+    if (!addresses) continue;
+    for (const addr of addresses) {
+      // Skip internal (loopback) and non-IPv4 addresses
+      if (!addr.internal && addr.family === "IPv4") {
+        return addr.address;
+      }
+    }
+  }
+  return "127.0.0.1";
+}
+
+/**
+ * PairingService manages QR code generation and paired device sessions.
+ *
+ * - Generates a shared secret + QR code data URL for the Android companion to scan
+ * - Stores active pairing sessions in memory (Map of deviceId -> PairedDevice)
+ * - The actual HTTP transport server is handled by TASK-1429
+ */
+class PairingService {
+  /** Active paired devices, keyed by deviceId */
+  private pairedDevices: Map<string, PairedDevice> = new Map();
+
+  /**
+   * Generates a QR code for pairing with the Android companion app.
+   *
+   * The QR code encodes JSON with:
+   * - ip: The local network IP address
+   * - port: A random high port (OS-assigned via port 0 pattern, picked here as random high port)
+   * - secret: A 32-byte hex-encoded shared secret
+   * - deviceName: The hostname of this machine
+   *
+   * @returns QR code as a data URL and the pairing info
+   */
+  async generateQR(): Promise<PairingQRResult> {
+    const secret = crypto.randomBytes(32).toString("hex");
+    const ip = getLocalIPAddress();
+    // Pick a random high port in the ephemeral range (49152-65535)
+    // The actual server binding (port 0 for OS assignment) is TASK-1429's responsibility
+    const port = 49152 + Math.floor(Math.random() * (65535 - 49152));
+    const deviceName = os.hostname();
+
+    const pairingInfo: PairingQRData = { ip, port, secret, deviceName };
+
+    log.info("[PairingService] Generating QR code", {
+      ip,
+      port,
+      deviceName,
+      secretPrefix: secret.substring(0, 8) + "...",
+    });
+
+    const qrDataUrl = await QRCode.toDataURL(JSON.stringify(pairingInfo), {
+      width: 300,
+      margin: 2,
+      errorCorrectionLevel: "M",
+    });
+
+    return { qrDataUrl, pairingInfo };
+  }
+
+  /**
+   * Returns the current pairing status including all paired devices.
+   */
+  getStatus(): PairingStatus {
+    const devices = Array.from(this.pairedDevices.values());
+    return {
+      isPaired: devices.length > 0,
+      devices,
+    };
+  }
+
+  /**
+   * Registers a new paired device. Called when the Android companion
+   * successfully connects using the shared secret.
+   *
+   * @param deviceId Unique identifier for the paired device
+   * @param deviceName Human-readable name of the paired device
+   * @param secret The shared secret used for this pairing
+   */
+  addPairedDevice(deviceId: string, deviceName: string, secret: string): void {
+    const now = new Date().toISOString();
+    this.pairedDevices.set(deviceId, {
+      deviceId,
+      deviceName,
+      secret,
+      pairedAt: now,
+      lastSeen: now,
+    });
+    log.info("[PairingService] Device paired:", { deviceId, deviceName });
+  }
+
+  /**
+   * Updates the lastSeen timestamp for a paired device.
+   *
+   * @param deviceId The device to update
+   */
+  updateLastSeen(deviceId: string): void {
+    const device = this.pairedDevices.get(deviceId);
+    if (device) {
+      device.lastSeen = new Date().toISOString();
+    }
+  }
+
+  /**
+   * Disconnects (removes) a paired device.
+   *
+   * @param deviceId The device to disconnect
+   * @returns true if the device was found and removed, false otherwise
+   */
+  disconnect(deviceId: string): boolean {
+    const existed = this.pairedDevices.has(deviceId);
+    if (existed) {
+      this.pairedDevices.delete(deviceId);
+      log.info("[PairingService] Device disconnected:", { deviceId });
+    }
+    return existed;
+  }
+
+  /**
+   * Disconnects all paired devices. Used during cleanup/shutdown.
+   */
+  disconnectAll(): void {
+    const count = this.pairedDevices.size;
+    this.pairedDevices.clear();
+    if (count > 0) {
+      log.info("[PairingService] All devices disconnected:", { count });
+    }
+  }
+}
+
+/** Singleton instance of the pairing service */
+export const pairingService = new PairingService();

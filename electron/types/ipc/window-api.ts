@@ -23,6 +23,7 @@ import type {
   WindowApiErrorLogging,
   WindowApiApp,
 } from "./window-api-services";
+import type { WindowApiPairing } from "./window-api-pairing";
 import type {
   WindowApiLicense,
   WindowApiDatabaseBackup,
@@ -80,6 +81,7 @@ export interface WindowApi extends WindowApiEvents {
   failureLog: WindowApiFailureLog;
   featureGate: WindowApiFeatureGate;
   support: WindowApiSupport;
+  pairing: WindowApiPairing;
 }
 
 // Note: The global Window augmentation (declare global) lives in src/window.d.ts
