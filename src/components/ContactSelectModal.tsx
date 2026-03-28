@@ -1,4 +1,5 @@
 import React, { useState, useRef, useEffect, useCallback } from "react";
+import { ResponsiveModal } from "./common/ResponsiveModal";
 import type { ExtendedContact } from "../types/components";
 import { ImportContactsModal, ContactFormModal } from "./contact";
 import { ContactPreview } from "./shared/ContactPreview";
@@ -254,8 +255,7 @@ function ContactSelectModal({
   };
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center z-[70] p-4">
-      <div className="bg-white rounded-xl shadow-2xl w-full max-w-3xl h-[70vh] max-h-[80vh] flex flex-col">
+    <ResponsiveModal onClose={onClose} zIndex="z-[70]" panelClassName="max-w-3xl sm:h-[70vh] sm:max-h-[80vh]">
         {/* Header */}
         <div className="flex-shrink-0 bg-gradient-to-r from-purple-500 to-pink-600 px-6 py-4 flex items-center justify-between rounded-t-xl">
           <div>
@@ -559,7 +559,6 @@ function ContactSelectModal({
             Add {selectedIds.length > 0 && `(${selectedIds.length})`}
           </button>
         </div>
-      </div>
 
       {/* Contact Preview Modal */}
       {previewContact && (
@@ -608,7 +607,7 @@ function ContactSelectModal({
           }}
         />
       )}
-    </div>
+    </ResponsiveModal>
   );
 }
 

@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback } from "react";
+import { ResponsiveModal } from "../../common/ResponsiveModal";
 import { ExtendedContact, ContactFormData, ContactEmailEntry, ContactPhoneEntry } from "../types";
 import { ROLE_DISPLAY_NAMES } from "../../../constants/contactRoles";
 import { contactService } from "../../../services/contactService";
@@ -273,13 +274,7 @@ function ContactFormModal({
     "w-full px-3 py-2.5 sm:py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500 text-gray-900 bg-white min-h-[44px]";
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-70 flex items-end sm:items-center justify-center z-[70] sm:p-4">
-      <div className="bg-white w-full h-full sm:h-auto sm:rounded-xl shadow-2xl sm:max-w-md sm:max-h-[90vh] flex flex-col">
-        {/* Mobile drag handle */}
-        <div className="sm:hidden flex justify-center pt-3 pb-1 bg-gradient-to-r from-purple-500 to-pink-600">
-          <div className="w-10 h-1 bg-white bg-opacity-40 rounded-full" />
-        </div>
-
+    <ResponsiveModal onClose={onClose} zIndex="z-[70]" panelClassName="max-w-md sm:max-h-[90vh]">
         {/* Header */}
         <div className="bg-gradient-to-r from-purple-500 to-pink-600 px-4 py-3 sm:px-6 sm:py-4 flex items-center justify-between sm:rounded-t-xl flex-shrink-0">
           <h3 className="text-lg font-bold text-white">
@@ -548,8 +543,7 @@ function ContactFormModal({
             {saving ? "Saving..." : contact ? "Update Contact" : "Add Contact"}
           </button>
         </div>
-      </div>
-    </div>
+    </ResponsiveModal>
   );
 }
 

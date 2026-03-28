@@ -11,6 +11,7 @@
  */
 
 import React, { useState } from "react";
+import { ResponsiveModal } from "../../../../components/common/ResponsiveModal";
 import type { AppError } from "../types";
 import { OfflineNotice } from "../../../../components/common/OfflineNotice";
 
@@ -190,8 +191,7 @@ export function ErrorScreen({
 
       {/* Reset Confirmation Dialog */}
       {showResetDialog && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-lg p-6 max-w-md w-full shadow-xl">
+        <ResponsiveModal onClose={() => setShowResetDialog(false)} overlayClassName="bg-black bg-opacity-50" panelClassName="max-w-md p-6">
             <h2 className="text-xl font-bold text-red-600 mb-4">
               Reset App Data
             </h2>
@@ -244,8 +244,7 @@ export function ErrorScreen({
                 {isResetting ? "Resetting..." : "Confirm Reset"}
               </button>
             </div>
-          </div>
-        </div>
+        </ResponsiveModal>
       )}
       </div>
     </div>

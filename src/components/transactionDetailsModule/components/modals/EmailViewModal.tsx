@@ -6,6 +6,7 @@
  */
 import React, { useState, useCallback, useMemo, useEffect } from "react";
 import DOMPurify from "dompurify";
+import { ResponsiveModal } from "../../../common/ResponsiveModal";
 import type { Communication } from "../../types";
 import { AttachmentPreviewModal } from "./AttachmentPreviewModal";
 import { formatFileSize } from "../../../../utils/formatUtils";
@@ -249,8 +250,7 @@ export function EmailViewModal({
   const showToggle = hasHtml && hasPlain;
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-70 flex items-end sm:items-center justify-center z-[90] sm:p-4">
-      <div className="bg-white sm:rounded-xl shadow-2xl w-full h-full sm:h-auto sm:max-w-3xl sm:max-h-[85vh] flex flex-col">
+    <ResponsiveModal onClose={onClose} zIndex="z-[90]" panelClassName="max-w-3xl max-h-[85vh]">
         {/* Email Header */}
         <div className="flex-shrink-0 bg-gradient-to-r from-blue-500 to-indigo-600 px-4 py-3 sm:px-6 sm:py-4 sm:rounded-t-xl">
           <div className="flex items-start justify-between">
@@ -445,7 +445,6 @@ export function EmailViewModal({
             </button>
           </div>
         </div>
-      </div>
 
       {/* TASK-1778: Attachment Preview Modal */}
       {previewAttachment && (
@@ -457,6 +456,6 @@ export function EmailViewModal({
           }}
         />
       )}
-    </div>
+    </ResponsiveModal>
   );
 }

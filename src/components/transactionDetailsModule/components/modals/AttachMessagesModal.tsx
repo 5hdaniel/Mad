@@ -4,6 +4,7 @@
  * Uses a contact-first approach for better performance with large message databases
  */
 import React, { useState, useEffect, useMemo } from "react";
+import { ResponsiveModal } from "../../../common/ResponsiveModal";
 import {
   groupMessagesByThread,
   sortThreadsByRecent,
@@ -402,11 +403,7 @@ export function AttachMessagesModal({
   };
 
   return (
-    <div
-      className="fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center z-[70] p-4"
-      data-testid="attach-messages-modal"
-    >
-      <div className="bg-white rounded-xl shadow-2xl w-full max-w-3xl max-h-[80vh] flex flex-col">
+    <ResponsiveModal onClose={onClose} zIndex="z-[70]" testId="attach-messages-modal" panelClassName="max-w-3xl sm:max-h-[80vh]">
         {/* Header */}
         <div className="flex-shrink-0 bg-gradient-to-r from-green-500 to-teal-600 px-6 py-4 flex items-center justify-between rounded-t-xl">
           <div className="flex items-center gap-3">
@@ -731,12 +728,10 @@ export function AttachMessagesModal({
             )}
           </div>
         </div>
-      </div>
 
       {/* Message Viewer Panel */}
       {viewingThreadId && threads.get(viewingThreadId) && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[80]">
-          <div className="bg-gray-100 w-full max-w-md h-[600px] rounded-2xl shadow-2xl flex flex-col overflow-hidden">
+        <ResponsiveModal onClose={() => setViewingThreadId(null)} zIndex="z-[80]" overlayClassName="bg-black bg-opacity-50" panelBg="bg-gray-100" panelClassName="max-w-md sm:h-[600px] sm:rounded-2xl sm:overflow-hidden">
             {/* Phone-style header */}
             <div className="bg-gradient-to-r from-blue-500 to-blue-600 px-4 py-3 flex items-center gap-3">
               <button
@@ -802,9 +797,8 @@ export function AttachMessagesModal({
                 Close
               </button>
             </div>
-          </div>
-        </div>
+        </ResponsiveModal>
       )}
-    </div>
+    </ResponsiveModal>
   );
 }

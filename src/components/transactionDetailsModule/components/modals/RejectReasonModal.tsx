@@ -3,6 +3,7 @@
  * Modal for entering rejection reason when rejecting a transaction
  */
 import React from "react";
+import { ResponsiveModal } from "../../../common/ResponsiveModal";
 
 interface RejectReasonModalProps {
   rejectReason: string;
@@ -20,8 +21,7 @@ export function RejectReasonModal({
   onReject,
 }: RejectReasonModalProps): React.ReactElement {
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center z-[70] p-4">
-      <div className="bg-white rounded-xl shadow-2xl max-w-md w-full p-6">
+    <ResponsiveModal onClose={onCancel} zIndex="z-[70]" panelClassName="max-w-md p-6">
         <div className="flex items-center gap-3 mb-3">
           <div className="w-12 h-12 rounded-full bg-red-100 flex items-center justify-center flex-shrink-0">
             <svg
@@ -78,7 +78,6 @@ export function RejectReasonModal({
             )}
           </button>
         </div>
-      </div>
-    </div>
+    </ResponsiveModal>
   );
 }

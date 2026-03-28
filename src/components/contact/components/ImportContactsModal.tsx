@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback } from "react";
+import { ResponsiveModal } from "../../common/ResponsiveModal";
 import { ExtendedContact } from "../types";
 import { OfflineNotice } from "../../common/OfflineNotice";
 
@@ -122,8 +123,7 @@ function ImportContactsModal({
   );
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center z-[60] p-4">
-      <div className="bg-white rounded-xl shadow-2xl max-w-4xl w-full max-h-[90vh] flex flex-col">
+    <ResponsiveModal onClose={onClose} zIndex="z-[60]" panelClassName="max-w-4xl sm:max-h-[90vh]">
         {/* Header */}
         <div className="bg-gradient-to-r from-purple-500 to-pink-600 px-6 py-4 flex items-center justify-between rounded-t-xl flex-shrink-0">
           <h3 className="text-lg font-bold text-white">Import Contacts</h3>
@@ -353,8 +353,7 @@ function ImportContactsModal({
               : `Import Selected (${selectedContacts.size})`}
           </button>
         </div>
-      </div>
-    </div>
+    </ResponsiveModal>
   );
 }
 

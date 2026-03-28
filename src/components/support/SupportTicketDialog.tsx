@@ -13,6 +13,7 @@
  */
 
 import React, { useState, useEffect } from "react";
+import { ResponsiveModal } from "../common/ResponsiveModal";
 import {
   useSupportTicket,
   type TicketPriority,
@@ -124,15 +125,7 @@ export function SupportTicketDialog({
   // Success state
   if (success) {
     return (
-      <div
-        data-support-widget
-        className="fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center z-[70] p-4"
-        onClick={handleClose}
-      >
-        <div
-          className="bg-white rounded-xl shadow-2xl w-full max-w-lg"
-          onClick={(e) => e.stopPropagation()}
-        >
+      <ResponsiveModal onClose={handleClose} zIndex="z-[70]" panelClassName="max-w-lg">
           <div className="p-8 text-center">
             <div className="mx-auto w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mb-4">
               <svg
@@ -169,8 +162,7 @@ export function SupportTicketDialog({
               Done
             </button>
           </div>
-        </div>
-      </div>
+      </ResponsiveModal>
     );
   }
 
@@ -178,15 +170,7 @@ export function SupportTicketDialog({
   const topCategories = categories.filter((c) => !c.parent_id);
 
   return (
-    <div
-      data-support-widget
-      className="fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center z-[70] p-4"
-      onClick={handleClose}
-    >
-      <div
-        className="bg-white rounded-xl shadow-2xl w-full max-w-lg max-h-[90vh] flex flex-col"
-        onClick={(e) => e.stopPropagation()}
-      >
+    <ResponsiveModal onClose={handleClose} zIndex="z-[70]" panelClassName="max-w-lg sm:max-h-[90vh]">
         {/* Header */}
         <div className="flex-shrink-0 bg-gradient-to-r from-blue-500 to-indigo-600 px-6 py-4 flex items-center justify-between rounded-t-xl">
           <div>
@@ -418,7 +402,6 @@ export function SupportTicketDialog({
             )}
           </button>
         </div>
-      </div>
-    </div>
+    </ResponsiveModal>
   );
 }

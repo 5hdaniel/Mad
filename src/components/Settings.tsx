@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef, useMemo } from "react";
+import { ResponsiveModal } from "./common/ResponsiveModal";
 import { LLMSettings } from "./settings/LLMSettings";
 import { MacOSMessagesImportSettings } from "./settings/MacOSMessagesImportSettings";
 import { ImportSourceSettings } from "./settings/ImportSourceSettings";
@@ -104,8 +105,7 @@ function Settings({ onClose, userId, onLogout, onEmailConnected, onEmailDisconne
   }, [userId]);
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-xl shadow-2xl max-w-3xl w-full max-h-[90vh] flex flex-col">
+    <ResponsiveModal onClose={onClose} overlayClassName="bg-black bg-opacity-50" panelClassName="max-w-3xl sm:max-h-[90vh]">
         {/* Header */}
         <div className="flex-shrink-0 bg-gradient-to-r from-blue-500 to-purple-600 px-6 py-4 flex items-center justify-between rounded-t-xl">
           <h2 className="text-xl font-bold text-white">Settings</h2>
@@ -200,8 +200,7 @@ function Settings({ onClose, userId, onLogout, onEmailConnected, onEmailDisconne
             Done
           </button>
         </div>
-      </div>
-    </div>
+    </ResponsiveModal>
   );
 }
 

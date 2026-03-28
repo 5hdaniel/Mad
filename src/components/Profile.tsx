@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from "react";
+import { ResponsiveModal } from "./common/ResponsiveModal";
 import type { Subscription } from "../../electron/types/models";
 import { useLicense } from "@/contexts/LicenseContext";
 import { useFeatureGate } from "@/hooks/useFeatureGate";
@@ -160,8 +161,7 @@ function Profile({
   };
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-xl shadow-2xl max-w-md w-full max-h-[90vh] flex flex-col overflow-hidden">
+    <ResponsiveModal onClose={onClose} overlayClassName="bg-black bg-opacity-50" panelClassName="max-w-md sm:max-h-[90vh] sm:overflow-hidden">
         {/* Header */}
         <div className="relative z-10 bg-gradient-to-r from-blue-500 to-purple-600 px-6 py-4 flex items-center justify-between rounded-t-xl flex-shrink-0">
           <h2 className="text-xl font-bold text-white">Account</h2>
@@ -441,8 +441,7 @@ function Profile({
             )}
           </div>
         </div>
-      </div>
-    </div>
+    </ResponsiveModal>
   );
 }
 
