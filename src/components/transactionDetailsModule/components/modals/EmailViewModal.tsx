@@ -249,13 +249,13 @@ export function EmailViewModal({
   const showToggle = hasHtml && hasPlain;
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center z-[90] p-4">
-      <div className="bg-white rounded-xl shadow-2xl max-w-3xl w-full max-h-[85vh] flex flex-col">
+    <div className="fixed inset-0 bg-black bg-opacity-70 flex items-end sm:items-center justify-center z-[90] sm:p-4">
+      <div className="bg-white sm:rounded-xl shadow-2xl w-full h-full sm:h-auto sm:max-w-3xl sm:max-h-[85vh] flex flex-col">
         {/* Email Header */}
-        <div className="flex-shrink-0 bg-gradient-to-r from-blue-500 to-indigo-600 px-6 py-4 rounded-t-xl">
+        <div className="flex-shrink-0 bg-gradient-to-r from-blue-500 to-indigo-600 px-4 py-3 sm:px-6 sm:py-4 sm:rounded-t-xl">
           <div className="flex items-start justify-between">
-            <div className="flex-1 pr-4">
-              <h3 className="text-lg font-bold text-white">
+            <div className="flex-1 pr-4 min-w-0">
+              <h3 className="text-base sm:text-lg font-bold text-white truncate">
                 {email.subject || "(No Subject)"}
               </h3>
               <p className="text-blue-100 text-sm mt-1">
@@ -287,23 +287,23 @@ export function EmailViewModal({
         </div>
 
         {/* Email Metadata */}
-        <div className="flex-shrink-0 px-6 py-4 border-b border-gray-200 bg-gray-50">
-          <div className="flex items-start justify-between">
-            <div className="space-y-2 flex-1">
+        <div className="flex-shrink-0 px-4 py-3 sm:px-6 sm:py-4 border-b border-gray-200 bg-gray-50">
+          <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
+            <div className="space-y-1 sm:space-y-2 flex-1 min-w-0">
               <div className="flex items-start gap-2">
-                <span className="text-sm font-medium text-gray-500 w-16">
+                <span className="text-sm font-medium text-gray-500 w-12 sm:w-16 flex-shrink-0">
                   From:
                 </span>
-                <span className="text-sm text-gray-900">
+                <span className="text-sm text-gray-900 break-all">
                   {email.sender || "Unknown"}
                 </span>
               </div>
               {email.recipients && (
                 <div className="flex items-start gap-2">
-                  <span className="text-sm font-medium text-gray-500 w-16">
+                  <span className="text-sm font-medium text-gray-500 w-12 sm:w-16 flex-shrink-0">
                     To:
                   </span>
-                  <span className="text-sm text-gray-900">
+                  <span className="text-sm text-gray-900 break-all">
                     {email.recipients}
                   </span>
                 </div>
@@ -312,7 +312,7 @@ export function EmailViewModal({
 
             {/* View Mode Toggle */}
             {showToggle && (
-              <div className="flex items-center gap-1 bg-gray-200 rounded-lg p-1">
+              <div className="flex items-center gap-1 bg-gray-200 rounded-lg p-1 self-start">
                 <button
                   onClick={() => setViewMode("html")}
                   className={`px-3 py-1 text-sm font-medium rounded-md transition-all ${
@@ -342,7 +342,7 @@ export function EmailViewModal({
 
         {/* TASK-1776: Collapsible Attachments Section */}
         {(email.has_attachments || attachments.length > 0) && (
-          <div className="flex-shrink-0 px-6 py-3 border-b border-gray-200 bg-white">
+          <div className="flex-shrink-0 px-4 py-3 sm:px-6 border-b border-gray-200 bg-white">
             <button
               onClick={() => setAttachmentsExpanded(!attachmentsExpanded)}
               className="flex items-center gap-2 text-sm text-gray-600 hover:text-gray-900 transition-colors"
@@ -369,17 +369,17 @@ export function EmailViewModal({
             </button>
 
             {attachmentsExpanded && attachments.length > 0 && (
-              <div className="mt-3 flex flex-wrap gap-2">
+              <div className="mt-3 flex flex-col sm:flex-row sm:flex-wrap gap-2">
                 {attachments.map((attachment) => (
                   <button
                     key={attachment.id}
                     onClick={() => setPreviewAttachment(attachment)}
-                    className="flex items-center gap-2 px-3 py-2 rounded-lg text-sm transition-colors bg-gray-100 hover:bg-gray-200 text-gray-700"
+                    className="flex items-center gap-2 px-3 py-2.5 sm:py-2 rounded-lg text-sm transition-colors bg-gray-100 hover:bg-gray-200 text-gray-700"
                     title={`Preview ${attachment.filename}`}
                     data-testid={`attachment-${attachment.id}`}
                   >
                     {getFileTypeIcon(attachment.mime_type)}
-                    <span className="truncate max-w-[150px]">{attachment.filename}</span>
+                    <span className="truncate max-w-[200px] sm:max-w-[150px]">{attachment.filename}</span>
                     {attachment.file_size_bytes && (
                       <span className="text-gray-500 text-xs flex-shrink-0">
                         {formatFileSize(attachment.file_size_bytes)}
@@ -416,11 +416,11 @@ export function EmailViewModal({
         </div>
 
         {/* Footer Actions */}
-        <div className="flex-shrink-0 px-6 py-4 border-t border-gray-200 bg-gray-50 rounded-b-xl">
-          <div className="flex items-center justify-between">
+        <div className="flex-shrink-0 px-4 py-3 sm:px-6 sm:py-4 border-t border-gray-200 bg-gray-50 sm:rounded-b-xl">
+          <div className="flex flex-col-reverse sm:flex-row items-stretch sm:items-center justify-between gap-2">
             <button
               onClick={onRemoveFromTransaction}
-              className="px-4 py-2 text-red-600 hover:bg-red-50 rounded-lg font-medium transition-all flex items-center gap-2"
+              className="px-4 py-2.5 sm:py-2 text-red-600 hover:bg-red-50 rounded-lg font-medium transition-all flex items-center justify-center gap-2"
             >
               <svg
                 className="w-4 h-4"
@@ -439,7 +439,7 @@ export function EmailViewModal({
             </button>
             <button
               onClick={onClose}
-              className="px-4 py-2 bg-gray-600 text-white hover:bg-gray-700 rounded-lg font-semibold transition-all"
+              className="px-4 py-2.5 sm:py-2 bg-gray-600 text-white hover:bg-gray-700 rounded-lg font-semibold transition-all"
             >
               Close
             </button>
