@@ -67,6 +67,8 @@ export interface LocalSyncResult {
   success: boolean;
   /** Number of messages accepted */
   messagesReceived?: number;
+  /** Number of messages stored in the database (excluding duplicates) */
+  messagesStored?: number;
   /** Error message if success is false */
   error?: string;
 }
@@ -81,6 +83,10 @@ export interface LocalSyncServerStatus {
   port: number | null;
   /** Local network IP address the server is bound to (null if not running) */
   address: string | null;
+  /** Total messages received since server started */
+  totalMessagesReceived: number;
+  /** Unix timestamp (ms) of last successful sync (null if no sync yet) */
+  lastSyncTimestamp: number | null;
 }
 
 /**
