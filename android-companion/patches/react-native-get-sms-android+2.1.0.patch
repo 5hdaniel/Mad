@@ -1,0 +1,53 @@
+diff --git a/node_modules/react-native-get-sms-android/android/build.gradle b/node_modules/react-native-get-sms-android/android/build.gradle
+index 0de40fc..7b24d93 100644
+--- a/node_modules/react-native-get-sms-android/android/build.gradle
++++ b/node_modules/react-native-get-sms-android/android/build.gradle
+@@ -2,7 +2,7 @@
+ buildscript {
+     repositories {
+         google()
+-        jcenter()
++        mavenCentral()
+     }
+ 
+     dependencies {
+@@ -17,6 +17,7 @@ def safeExtGet(prop, fallback) {
+ }
+ 
+ android {
++    namespace "com.react"
+     compileSdkVersion safeExtGet('compileSdkVersion', 28)
+ 
+     defaultConfig {
+@@ -25,7 +26,7 @@ android {
+         versionCode 1
+         versionName "1.0.0"
+     }
+-    lintOptions {
++    lint {
+         abortOnError false
+     }
+ }
+@@ -36,10 +37,9 @@ repositories {
+         // All of React Native (JS, Obj-C sources, Android binaries) is installed from npm
+         url "$rootDir/../node_modules/react-native/android"
+     }
+-    jcenter()
++    mavenCentral()
+ }
+ 
+ dependencies {
+     compileOnly "com.facebook.react:react-native:${safeExtGet('reactNativeVersion', '+')}"
+ }
+-  
+diff --git a/node_modules/react-native-get-sms-android/android/src/main/AndroidManifest.xml b/node_modules/react-native-get-sms-android/android/src/main/AndroidManifest.xml
+index 3473b6c..a2f47b6 100644
+--- a/node_modules/react-native-get-sms-android/android/src/main/AndroidManifest.xml
++++ b/node_modules/react-native-get-sms-android/android/src/main/AndroidManifest.xml
+@@ -1,5 +1,2 @@
+-
+-<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+-          package="com.react">
++<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+ </manifest>
+-

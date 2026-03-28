@@ -1,0 +1,20 @@
+diff --git a/node_modules/@react-native-async-storage/async-storage/android/build.gradle b/node_modules/@react-native-async-storage/async-storage/android/build.gradle
+index 4f80202..1c8e206 100644
+--- a/node_modules/@react-native-async-storage/async-storage/android/build.gradle
++++ b/node_modules/@react-native-async-storage/async-storage/android/build.gradle
+@@ -4,6 +4,7 @@ buildscript {
+     def kspVersion = ext.AsyncStorage.kspVersion
+ 
+     repositories {
++    maven { url "$projectDir/local_repo" }
+         google()
+         mavenCentral()
+     }
+@@ -78,6 +79,7 @@ android {
+ }
+ 
+ repositories {
++    maven { url "$projectDir/local_repo" }
+     mavenCentral()
+     google()
+ }
