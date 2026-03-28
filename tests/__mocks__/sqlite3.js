@@ -7,7 +7,6 @@ const mockDatabase = {
   all: jest.fn((sql, params, callback) => {
     if (typeof params === "function") {
       callback = params;
-      params = [];
     }
     if (callback) callback(null, []);
     return mockDatabase;
@@ -15,7 +14,6 @@ const mockDatabase = {
   get: jest.fn((sql, params, callback) => {
     if (typeof params === "function") {
       callback = params;
-      params = [];
     }
     if (callback) callback(null, null);
     return mockDatabase;
@@ -23,7 +21,6 @@ const mockDatabase = {
   run: jest.fn((sql, params, callback) => {
     if (typeof params === "function") {
       callback = params;
-      params = [];
     }
     if (callback) callback(null);
     return mockDatabase;
@@ -48,7 +45,6 @@ const mockDatabase = {
     run: jest.fn((params, callback) => {
       if (typeof params === "function") {
         callback = params;
-        params = [];
       }
       if (callback) callback(null);
     }),
@@ -62,7 +58,6 @@ const mockDatabase = {
 const Database = jest.fn((filename, mode, callback) => {
   if (typeof mode === "function") {
     callback = mode;
-    mode = undefined;
   }
   if (callback) {
     // Call async to simulate the real behavior
