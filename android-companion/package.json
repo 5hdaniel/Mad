@@ -9,7 +9,9 @@
     "web": "expo start --web"
   },
   "dependencies": {
+    "@react-native-async-storage/async-storage": "^3.0.2",
     "expo": "55.0.10-canary-20260327-0789fbc",
+    "expo-camera": "^55.0.12-canary-20260327-0789fbc",
     "expo-constants": "55.0.10-canary-20260327-0789fbc",
     "expo-linking": "55.0.10-canary-20260327-0789fbc",
     "expo-router": "55.0.9-canary-20260327-0789fbc",

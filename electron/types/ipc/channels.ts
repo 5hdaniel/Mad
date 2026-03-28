@@ -338,6 +338,47 @@ export interface IpcChannels {
     request: { userId: string };
     response: { success: boolean };
   };
+
+  // ============================================
+  // PAIRING CHANNELS (TASK-1428)
+  // ============================================
+  "pairing:generate-qr": {
+    request: void;
+    response: {
+      success: boolean;
+      error?: string;
+      result?: {
+        qrDataUrl: string;
+        pairingInfo: {
+          ip: string;
+          port: number;
+          secret: string;
+          deviceName: string;
+        };
+      };
+    };
+  };
+  "pairing:get-status": {
+    request: void;
+    response: {
+      success: boolean;
+      error?: string;
+      status?: {
+        isPaired: boolean;
+        devices: Array<{
+          deviceId: string;
+          deviceName: string;
+          secret: string;
+          pairedAt: string;
+          lastSeen: string;
+        }>;
+      };
+    };
+  };
+  "pairing:disconnect": {
+    request: { deviceId: string };
+    response: { success: boolean; error?: string };
+  };
 }
 
 // ============================================

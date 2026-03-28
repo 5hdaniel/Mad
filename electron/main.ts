@@ -110,6 +110,7 @@ import { registerFeatureGateHandlers } from "./handlers/featureGateHandlers";
 import { registerPreAuthValidationHandler } from "./handlers/preAuthValidationHandler";
 import { registerSupportTicketHandlers } from "./handlers/supportTicketHandlers";
 import { registerLocalSyncHandlers, cleanupLocalSyncHandlers } from "./handlers/localSyncHandlers";
+import { registerPairingHandlers, cleanupPairingHandlers } from "./handlers/pairingHandlers";
 import { LLMConfigService } from "./services/llm/llmConfigService";
 
 // Import license and device services for deep link auth validation (TASK-1507)
@@ -1071,6 +1072,9 @@ app.whenReady().then(async () => {
   registerSupportTicketHandlers();
   registerLocalSyncHandlers();
 
+  // Android companion pairing (TASK-1428)
+  registerPairingHandlers();
+
   // DEV-ONLY: Manual deep link handler for testing when protocol handler fails
   // Usage from DevTools console: window.api.system.manualDeepLink("keepr://callback?access_token=...&refresh_token=...")
   if (process.defaultApp) {
@@ -1119,6 +1123,8 @@ app.on("before-quit", () => {
   cleanupTransactionHandlers();
   // Clean up local sync server (TASK-1429: Android Companion)
   cleanupLocalSyncHandlers();
+  // Clean up pairing sessions (TASK-1428)
+  cleanupPairingHandlers();
 });
 
 app.on("activate", () => {
