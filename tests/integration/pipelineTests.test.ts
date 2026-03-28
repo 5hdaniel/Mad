@@ -7,7 +7,6 @@
 
 import { TestSandbox, createTestSandbox } from './testSandbox';
 import { MockGmailProvider, MockOutlookProvider } from './mockProviders';
-import { TEST_USER_ID } from './setup';
 import { getAllEmails, getStats } from '../../electron/services/__tests__/fixtures/fake-mailbox/emailFixtureService';
 
 describe('Integration: Email Sync Pipeline', () => {
@@ -343,10 +342,6 @@ describe('Integration: Full Pipeline E2E', () => {
 
       // Step 4: Validate results
       const comparisons = sandbox.compareClassifications();
-      const correctCount = comparisons.filter((c) => c.isCorrect).length;
-      const totalCount = comparisons.length;
-      const accuracy = (correctCount / totalCount) * 100;
-
       // Expect at least 40% accuracy on easy cases
       // Note: Pattern-based classification is simpler than AI detection
       // The goal is to demonstrate the framework works, not achieve high accuracy
@@ -544,8 +539,6 @@ describe('Integration: iOS Provider Error Handling', () => {
   it('should handle simulated iOS backup errors gracefully', async () => {
     const sandbox = new TestSandbox({ fixtures: 'sms' });
     await sandbox.setup();
-
-    const iosProvider = sandbox.getProviders().ios;
 
     // Create a new provider with error simulation
     const { MockiOSBackupProvider } = await import('./mockProviders');
