@@ -198,6 +198,38 @@ export const authBridge = {
     ipcRenderer.invoke("auth:dev:reset-onboarding", userId),
 
   // ==========================================
+  // OTP AUTH (TASK-1337)
+  // ==========================================
+
+  /**
+   * Send a 6-digit OTP verification code to the given email
+   * Calls Supabase signInWithOtp (no emailRedirectTo = sends code, not link)
+   * @param email - Email address to send the code to
+   * @returns Success status
+   */
+  otpSendCode: (email: string): Promise<{ success: boolean; error?: string }> =>
+    ipcRenderer.invoke("auth:otp:send-code", email),
+
+  /**
+   * Verify the 6-digit OTP code and complete login
+   * Runs full post-auth pipeline: license, device registration, session
+   * @param email - Email address used to request the code
+   * @param token - The 6-digit verification code
+   * @returns Login result with user, session, and subscription data
+   */
+  otpVerifyCode: (
+    email: string,
+    token: string,
+  ): Promise<{
+    success: boolean;
+    user?: import("../types/models").User;
+    sessionToken?: string;
+    subscription?: import("../types/models").Subscription;
+    isNewUser?: boolean;
+    error?: string;
+  }> => ipcRenderer.invoke("auth:otp:verify-code", email, token),
+
+  // ==========================================
   // DEEP LINK AUTH (TASK-1507)
   // ==========================================
 

@@ -45,6 +45,13 @@ export { registerCcpaHandlers } from "./ccpaHandlers";
 // Failure log handlers (TASK-2058)
 export { registerFailureLogHandlers } from "./failureLogHandlers";
 
+// OTP auth handlers (TASK-1337: passwordless email login)
+export {
+  registerOtpAuthHandlers,
+  handleOtpSendCode,
+  handleOtpVerifyCode,
+} from "./otpAuthHandlers";
+
 // Shared auth handlers
 export {
   registerSharedAuthHandlers,

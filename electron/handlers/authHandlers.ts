@@ -23,6 +23,7 @@ import { registerGoogleAuthHandlers } from "./googleAuthHandlers";
 import { registerMicrosoftAuthHandlers } from "./microsoftAuthHandlers";
 import { registerSessionHandlers } from "./sessionHandlers";
 import { registerSharedAuthHandlers } from "./sharedAuthHandlers";
+import { registerOtpAuthHandlers } from "./otpAuthHandlers";
 
 /**
  * Initialize database and audit service
@@ -59,6 +60,9 @@ export function registerAuthHandlers(mainWindow: BrowserWindow | null): void {
 
   // Shared handlers (pending login completion, mailbox disconnect)
   registerSharedAuthHandlers(mainWindow);
+
+  // OTP handlers (TASK-1337: passwordless email login)
+  registerOtpAuthHandlers(mainWindow);
 }
 
 // Re-export for backward compatibility

@@ -164,6 +164,45 @@ export const authService = {
   },
 
   // ============================================
+  // OTP LOGIN METHODS (TASK-1337)
+  // ============================================
+
+  /**
+   * Send a 6-digit OTP verification code to the given email
+   */
+  async otpSendCode(email: string): Promise<ApiResult> {
+    try {
+      const result = await window.api.auth.otpSendCode(email);
+      return { success: result.success, error: result.error };
+    } catch (error) {
+      return { success: false, error: getErrorMessage(error) };
+    }
+  },
+
+  /**
+   * Verify the 6-digit OTP code and complete login
+   */
+  async otpVerifyCode(email: string, token: string): Promise<ApiResult<LoginResult>> {
+    try {
+      const result = await window.api.auth.otpVerifyCode(email, token);
+      if (result.success && result.user && result.sessionToken) {
+        return {
+          success: true,
+          data: {
+            user: result.user,
+            sessionToken: result.sessionToken,
+            subscription: result.subscription,
+            isNewUser: result.isNewUser,
+          },
+        };
+      }
+      return { success: false, error: result.error || "Verification failed" };
+    } catch (error) {
+      return { success: false, error: getErrorMessage(error) };
+    }
+  },
+
+  // ============================================
   // SESSION METHODS
   // ============================================
 

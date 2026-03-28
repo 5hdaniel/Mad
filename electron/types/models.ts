@@ -11,7 +11,8 @@
 // Auth & User
 // Note: 'azure' is Microsoft's Azure AD provider - we accept it from Supabase
 // but normalize to 'microsoft' for local database storage (CHECK constraint)
-export type OAuthProvider = "google" | "microsoft" | "azure";
+// Note: 'email' is for OTP/magic link login (TASK-1337)
+export type OAuthProvider = "google" | "microsoft" | "azure" | "email";
 export type OAuthPurpose = "authentication" | "mailbox";
 export type SubscriptionTier = "free" | "pro" | "enterprise";
 export type SubscriptionStatus = "trial" | "active" | "cancelled" | "expired";

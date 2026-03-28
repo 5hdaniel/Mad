@@ -110,6 +110,29 @@ export interface WindowApiAuth {
   // TASK-2045: Sign out of all devices (global session invalidation)
   signOutAllDevices: () => Promise<{ success: boolean; error?: string }>;
 
+  // TASK-1337: OTP (passwordless) login
+  /**
+   * Send a 6-digit OTP verification code to the given email
+   * Calls Supabase signInWithOtp without emailRedirectTo
+   */
+  otpSendCode: (email: string) => Promise<{ success: boolean; error?: string }>;
+
+  /**
+   * Verify the 6-digit OTP code and complete login
+   * Runs full post-auth pipeline (license, device, session)
+   */
+  otpVerifyCode: (
+    email: string,
+    token: string,
+  ) => Promise<{
+    success: boolean;
+    user?: User;
+    sessionToken?: string;
+    subscription?: Subscription;
+    isNewUser?: boolean;
+    error?: string;
+  }>;
+
   // TASK-2062: Remote session validation
   validateRemoteSession: () => Promise<{ valid: boolean }>;
 

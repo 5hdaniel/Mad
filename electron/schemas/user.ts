@@ -11,7 +11,7 @@ import { TimestampSchema, OptionalTimestamp, UuidSchema } from './common';
 // ENUM SCHEMAS
 // ============================================
 
-export const OAuthProviderSchema = z.enum(['google', 'microsoft', 'azure']);
+export const OAuthProviderSchema = z.enum(['google', 'microsoft', 'azure', 'email']);
 export const SubscriptionTierSchema = z.enum(['free', 'pro', 'enterprise']);
 export const SubscriptionStatusSchema = z.enum(['trial', 'active', 'cancelled', 'expired']);
 export const ThemeSchema = z.enum(['light', 'dark', 'auto']);
