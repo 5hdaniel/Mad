@@ -19,15 +19,19 @@ export interface UseExportFlowReturn {
   conversations: Conversation[];
   selectedConversationIds: Set<string>;
   outlookConnected: boolean;
+  googleConnected: boolean;
 
   // Setters
   setExportResult: (result: AppExportResult | null) => void;
   setOutlookConnected: (value: boolean) => void;
+  setGoogleConnected: (value: boolean) => void;
 
   // Handlers
   handleExportComplete: (result: unknown) => void;
   handleOutlookExport: (selectedIds: Set<string>) => Promise<void>;
   handleOutlookCancel: () => void;
+  handleGoogleExport: (selectedIds: Set<string>) => Promise<void>;
+  handleGoogleCancel: () => void;
   handleStartOver: () => void;
   handleMicrosoftLogin: (userInfo: unknown) => void;
   handleMicrosoftSkip: () => void;
@@ -46,6 +50,7 @@ export function useExportFlow({
     Set<string>
   >(new Set());
   const [outlookConnected, setOutlookConnected] = useState<boolean>(false);
+  const [googleConnected, setGoogleConnected] = useState<boolean>(false);
 
   const handleExportComplete = useCallback(
     (result: unknown): void => {
@@ -70,6 +75,24 @@ export function useExportFlow({
   );
 
   const handleOutlookCancel = useCallback((): void => {
+    onSetCurrentStep("dashboard");
+  }, [onSetCurrentStep]);
+
+  const handleGoogleExport = useCallback(
+    async (selectedIds: Set<string>): Promise<void> => {
+      if (conversations.length === 0) {
+        const result = await window.api.messages.getConversations();
+        if (result.success && result.conversations) {
+          setConversations(result.conversations as Conversation[]);
+        }
+      }
+      setSelectedConversationIds(selectedIds);
+      onSetCurrentStep("google-export");
+    },
+    [conversations.length, onSetCurrentStep],
+  );
+
+  const handleGoogleCancel = useCallback((): void => {
     onSetCurrentStep("dashboard");
   }, [onSetCurrentStep]);
 
@@ -110,11 +133,15 @@ export function useExportFlow({
       conversations,
       selectedConversationIds,
       outlookConnected,
+      googleConnected,
       setExportResult,
       setOutlookConnected,
+      setGoogleConnected,
       handleExportComplete,
       handleOutlookExport,
       handleOutlookCancel,
+      handleGoogleExport,
+      handleGoogleCancel,
       handleStartOver,
       handleMicrosoftLogin,
       handleMicrosoftSkip,
@@ -125,9 +152,12 @@ export function useExportFlow({
       conversations,
       selectedConversationIds,
       outlookConnected,
+      googleConnected,
       handleExportComplete,
       handleOutlookExport,
       handleOutlookCancel,
+      handleGoogleExport,
+      handleGoogleCancel,
       handleStartOver,
       handleMicrosoftLogin,
       handleMicrosoftSkip,

@@ -6,23 +6,29 @@ import React from "react";
 
 interface ExportButtonsProps {
   outlookConnected: boolean;
+  googleConnected?: boolean;
   selectedCount: number;
   isExporting: boolean;
   onExportAll: () => void;
   onExportEmailsOnly: () => void;
   onExportTextsOnly: () => void;
   onConnectOutlook: () => void;
+  onGoogleExport?: () => void;
 }
 
 export function ExportButtons({
   outlookConnected,
+  googleConnected,
   selectedCount,
   isExporting,
   onExportAll,
   onExportEmailsOnly,
   onExportTextsOnly,
   onConnectOutlook,
+  onGoogleExport,
 }: ExportButtonsProps) {
+  // Determine if any email provider is connected
+  const hasEmailProvider = outlookConnected || googleConnected;
   return (
     <div
       className="border border-gray-300 rounded-lg p-4 bg-gray-50"
@@ -31,10 +37,10 @@ export function ExportButtons({
       <h3 className="text-sm font-semibold text-gray-700 mb-3">Export</h3>
       <div className="flex gap-3">
         {/* All (Messages + Emails) */}
-        {outlookConnected ? (
+        {hasEmailProvider ? (
           <button
             data-tour="export-all"
-            onClick={onExportAll}
+            onClick={googleConnected && onGoogleExport ? onGoogleExport : onExportAll}
             disabled={selectedCount === 0 || isExporting}
             className="flex-1 bg-primary text-white py-2.5 px-4 rounded-lg font-semibold hover:bg-blue-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
           >
@@ -77,10 +83,10 @@ export function ExportButtons({
         )}
 
         {/* Only Emails */}
-        {outlookConnected ? (
+        {hasEmailProvider ? (
           <button
             data-tour="export-emails"
-            onClick={onExportEmailsOnly}
+            onClick={googleConnected && onGoogleExport ? onGoogleExport : onExportEmailsOnly}
             disabled={selectedCount === 0 || isExporting}
             className="flex-1 bg-white border-2 border-gray-300 text-gray-700 py-2.5 px-4 rounded-lg font-semibold hover:bg-gray-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
           >

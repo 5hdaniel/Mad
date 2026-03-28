@@ -5,7 +5,7 @@
  * Extracted from AppRouter.tsx to reduce file size.
  */
 
-import type { AppStep, OutlookExportResults, AppExportResult } from "../state/types";
+import type { AppStep, OutlookExportResults, GoogleExportResults, AppExportResult } from "../state/types";
 
 /**
  * Feature flag for new onboarding architecture.
@@ -38,6 +38,25 @@ export function isOnboardingStep(step: string): boolean {
  */
 export function transformOutlookResults(
   results: OutlookExportResults | null
+): AppExportResult | null {
+  if (!results) {
+    return null;
+  }
+  return {
+    exportPath: results.exportPath,
+    results: results.results?.map((r) => ({
+      contactName: r.contactName,
+      success: r.success,
+    })),
+  };
+}
+
+/**
+ * Transform Google export results into the format expected by ExportComplete.
+ * (TASK-1416)
+ */
+export function transformGoogleResults(
+  results: GoogleExportResults | null
 ): AppExportResult | null {
   if (!results) {
     return null;

@@ -51,6 +51,8 @@ interface ConversationListProps {
   onOutlookExport: (selectedIds: Set<string>) => void;
   onConnectOutlook: () => void;
   outlookConnected: boolean;
+  onGoogleExport?: (selectedIds: Set<string>) => void;
+  googleConnected?: boolean;
 }
 
 function ConversationList({
@@ -58,6 +60,8 @@ function ConversationList({
   onOutlookExport,
   onConnectOutlook,
   outlookConnected,
+  onGoogleExport,
+  googleConnected,
 }: ConversationListProps) {
   // State management using custom hooks
   const { conversations, isLoading, error, reload } = useConversations();
@@ -120,6 +124,17 @@ function ConversationList({
 
     if (onOutlookExport) {
       onOutlookExport(selection.selectedIds);
+    }
+  };
+
+  const handleGoogleExport = (): void => {
+    if (selection.count === 0) {
+      alert("Please select at least one contact to export");
+      return;
+    }
+
+    if (onGoogleExport) {
+      onGoogleExport(selection.selectedIds);
     }
   };
 
@@ -207,12 +222,14 @@ function ConversationList({
         {/* Export Section */}
         <ExportButtons
           outlookConnected={outlookConnected}
+          googleConnected={googleConnected}
           selectedCount={selection.count}
           isExporting={isExporting}
           onExportAll={handleOutlookExport}
           onExportEmailsOnly={handleOutlookExport}
           onExportTextsOnly={handleExport}
           onConnectOutlook={onConnectOutlook}
+          onGoogleExport={handleGoogleExport}
         />
       </div>
 

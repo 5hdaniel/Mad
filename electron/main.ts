@@ -130,6 +130,7 @@ import {
   registerConversationHandlers,
   registerMessageImportHandlers,
   registerOutlookHandlers,
+  registerGoogleExportHandlers,
   registerUpdaterHandlers,
   registerErrorLoggingHandlers,
   registerResetHandlers,
@@ -1061,6 +1062,7 @@ app.whenReady().then(async () => {
   registerConversationHandlers(mainWindow!);
   registerMessageImportHandlers(mainWindow!);
   registerOutlookHandlers(mainWindow!);
+  registerGoogleExportHandlers(mainWindow!);
   registerUpdaterHandlers(mainWindow!);
   registerErrorLoggingHandlers();
   registerResetHandlers();

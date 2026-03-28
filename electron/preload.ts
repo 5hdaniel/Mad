@@ -48,6 +48,7 @@ import {
   syncBridge,
   eventBridge,
   outlookBridge,
+  googleExportBridge,
   updateBridge,
   messageBridge,
   licenseBridge,
@@ -114,6 +115,9 @@ contextBridge.exposeInMainWorld("api", {
 
   // Outlook integration (Microsoft 365)
   outlook: outlookBridge,
+
+  // Google export integration (TASK-1416)
+  googleExport: googleExportBridge,
 
   // Auto-update functionality
   update: updateBridge,

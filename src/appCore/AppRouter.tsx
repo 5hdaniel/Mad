@@ -17,6 +17,7 @@ import {
   isOnboardingStep,
   LoadingScreen,
   transformOutlookResults,
+  transformGoogleResults,
 } from "./routing";
 
 // BACKLOG-1096: Lazy-load route components not needed on initial render.
@@ -25,6 +26,7 @@ const OnboardingFlow = lazy(() =>
 );
 const ConversationList = lazy(() => import("../components/ConversationList"));
 const OutlookExport = lazy(() => import("../components/OutlookExport"));
+const GoogleExport = lazy(() => import("../components/GoogleExport"));
 const ExportComplete = lazy(() => import("../components/ExportComplete"));
 
 interface AppRouterProps {
@@ -37,12 +39,13 @@ export function AppRouter({ app }: AppRouterProps) {
     currentStep, isWindows, isOnline, isChecking, connectionError,
     currentUser, selectedPhoneType,
     hasEmailConnected, showSetupPromptDismissed, exportResult, conversations,
-    selectedConversationIds, outlookConnected,
+    selectedConversationIds, outlookConnected, googleConnected,
     // Handlers
     handleLoginSuccess, handleLoginPending, handleDeepLinkAuthSuccess,
     handleMicrosoftLogin, handleMicrosoftSkip, handleConnectOutlook,
     handleExportComplete, handleOutlookExport,
-    handleOutlookCancel, handleStartOver, setExportResult, handleRetryConnection,
+    handleOutlookCancel, handleGoogleExport, handleGoogleCancel,
+    handleStartOver, setExportResult, handleRetryConnection,
     openAuditTransaction, openTransactions, openContacts, goToStep,
     handleDismissSetupPrompt, setIsTourActive, openIPhoneSync, openSettings,
     handleLogout,
@@ -192,6 +195,8 @@ export function AppRouter({ app }: AppRouterProps) {
           onOutlookExport={handleOutlookExport}
           onConnectOutlook={handleConnectOutlook}
           outlookConnected={outlookConnected}
+          onGoogleExport={handleGoogleExport}
+          googleConnected={googleConnected}
         />
       </Suspense>
     );
@@ -209,6 +214,23 @@ export function AppRouter({ app }: AppRouterProps) {
             goToStep("complete");
           }}
           onCancel={handleOutlookCancel}
+        />
+      </Suspense>
+    );
+  }
+
+  // Google export (lazy-loaded, TASK-1416)
+  if (currentStep === "google-export") {
+    return (
+      <Suspense fallback={<LoadingScreen />}>
+        <GoogleExport
+          conversations={conversations}
+          selectedIds={selectedConversationIds}
+          onComplete={(results) => {
+            setExportResult(transformGoogleResults(results));
+            goToStep("complete");
+          }}
+          onCancel={handleGoogleCancel}
         />
       </Suspense>
     );

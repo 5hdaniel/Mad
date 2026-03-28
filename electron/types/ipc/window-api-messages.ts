@@ -60,6 +60,36 @@ export interface WindowApiMessages {
 }
 
 /**
+ * Google export integration methods (TASK-1416)
+ * Mirrors WindowApiOutlook for Gmail users
+ */
+export interface WindowApiGoogleExport {
+  initialize: () => Promise<{ success: boolean; error?: string }>;
+  isAuthenticated: () => Promise<boolean>;
+  exportEmails: (
+    contacts: Array<{
+      name: string;
+      chatId?: string;
+      emails?: string[];
+      phones?: string[];
+    }>,
+  ) => Promise<{
+    success: boolean;
+    error?: string;
+    canceled?: boolean;
+    exportPath?: string;
+    results?: Array<{
+      contactName: string;
+      success: boolean;
+      textMessageCount: number;
+      emailCount?: number;
+      error: string | null;
+    }>;
+  }>;
+  onExportProgress: (callback: (progress: unknown) => void) => () => void;
+}
+
+/**
  * Outlook integration methods (migrated from window.electron)
  */
 export interface WindowApiOutlook {

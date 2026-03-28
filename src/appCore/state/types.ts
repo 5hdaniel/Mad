@@ -24,6 +24,7 @@ export type AppStep =
   | "permissions"
   | "dashboard"
   | "outlook"
+  | "google-export"
   | "complete"
   | "contacts";
 
@@ -39,6 +40,21 @@ export interface AppExportResult {
 
 // Outlook-specific export results
 export interface OutlookExportResults {
+  success: boolean;
+  exportPath?: string;
+  results?: Array<{
+    contactName: string;
+    success: boolean;
+    textMessageCount: number;
+    emailCount?: number;
+    error: string | null;
+  }>;
+  error?: string;
+  canceled?: boolean;
+}
+
+// Google-specific export results (TASK-1416)
+export interface GoogleExportResults {
   success: boolean;
   exportPath?: string;
   results?: Array<{
@@ -153,6 +169,7 @@ export interface AppStateMachine {
   conversations: Conversation[];
   selectedConversationIds: Set<string>;
   outlookConnected: boolean;
+  googleConnected: boolean;
 
   // Modal state (grouped)
   modalState: ModalState;
@@ -291,6 +308,8 @@ export interface AppStateMachine {
   handleExportComplete: (result: unknown) => void;
   handleOutlookExport: (selectedIds: Set<string>) => Promise<void>;
   handleOutlookCancel: () => void;
+  handleGoogleExport: (selectedIds: Set<string>) => Promise<void>;
+  handleGoogleCancel: () => void;
   handleStartOver: () => void;
   setExportResult: (result: AppExportResult | null) => void;
 

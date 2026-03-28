@@ -13,6 +13,7 @@ export { llmBridge } from "./llmBridge";
 export { systemBridge } from "./systemBridge";
 export { deviceBridge, backupBridge, driverBridge, syncBridge } from "./deviceBridge";
 export { outlookBridge, updateBridge } from "./outlookBridge";
+export { googleExportBridge } from "./googleExportBridge";
 export { eventBridge } from "./eventBridge";
 export { messageBridge } from "./messageBridge";
 export { licenseBridge } from "./licenseBridge";

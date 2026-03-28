@@ -9,7 +9,7 @@ import type { WindowApiAuth } from "./window-api-auth";
 import type { WindowApiSystem } from "./window-api-system";
 import type { WindowApiContacts } from "./window-api-contacts";
 import type { WindowApiTransactions } from "./window-api-transactions";
-import type { WindowApiMessages, WindowApiOutlook } from "./window-api-messages";
+import type { WindowApiMessages, WindowApiOutlook, WindowApiGoogleExport } from "./window-api-messages";
 import type { WindowApiDevice, WindowApiBackup, WindowApiDrivers, WindowApiSync } from "./window-api-platform";
 import type {
   WindowApiPreferences,
@@ -67,6 +67,7 @@ export interface WindowApi extends WindowApiEvents {
   notification: WindowApiNotification;
   messages: WindowApiMessages;
   outlook: WindowApiOutlook;
+  googleExport: WindowApiGoogleExport;
   update: WindowApiUpdate;
   device?: WindowApiDevice;
   backup?: WindowApiBackup;

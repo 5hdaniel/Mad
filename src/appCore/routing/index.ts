@@ -10,4 +10,5 @@ export {
   ONBOARDING_STEPS,
   isOnboardingStep,
   transformOutlookResults,
+  transformGoogleResults,
 } from "./routeConfig";

@@ -92,9 +92,12 @@ interface ExportFlowReturn {
   conversations: Conversation[];
   selectedConversationIds: Set<string>;
   outlookConnected: boolean;
+  googleConnected: boolean;
   handleExportComplete: AppStateMachine["handleExportComplete"];
   handleOutlookExport: AppStateMachine["handleOutlookExport"];
   handleOutlookCancel: AppStateMachine["handleOutlookCancel"];
+  handleGoogleExport: AppStateMachine["handleGoogleExport"];
+  handleGoogleCancel: AppStateMachine["handleGoogleCancel"];
   handleStartOver: AppStateMachine["handleStartOver"];
   setExportResult: AppStateMachine["setExportResult"];
   handleMicrosoftLogin: AppStateMachine["handleMicrosoftLogin"];
@@ -172,7 +175,7 @@ export function constructStateProps(
   emailOnboardingApi: EmailOnboardingApiReturn,
   phoneTypeApi: PhoneTypeApiReturn,
   auth: Pick<AuthFlowReturn, "isNewUserFlow" | "pendingOAuthData" | "pendingOnboardingData">,
-  exportFlow: Pick<ExportFlowReturn, "exportResult" | "conversations" | "selectedConversationIds" | "outlookConnected">,
+  exportFlow: Pick<ExportFlowReturn, "exportResult" | "conversations" | "selectedConversationIds" | "outlookConnected" | "googleConnected">,
   modal: Pick<ModalFlowReturn, "modalState">,
   autoSync: AutoSyncReturn,
 ): Pick<
@@ -209,6 +212,7 @@ export function constructStateProps(
   | "conversations"
   | "selectedConversationIds"
   | "outlookConnected"
+  | "googleConnected"
   | "modalState"
   | "showSetupPromptDismissed"
   | "isTourActive"
@@ -271,6 +275,7 @@ export function constructStateProps(
     conversations: exportFlow.conversations,
     selectedConversationIds: exportFlow.selectedConversationIds,
     outlookConnected: exportFlow.outlookConnected,
+    googleConnected: exportFlow.googleConnected,
 
     // Modal state
     modalState: modal.modalState,
@@ -351,6 +356,8 @@ export function constructHandlers(
     | "handleExportComplete"
     | "handleOutlookExport"
     | "handleOutlookCancel"
+    | "handleGoogleExport"
+    | "handleGoogleCancel"
     | "handleStartOver"
     | "setExportResult"
     | "handleMicrosoftLogin"
@@ -389,6 +396,8 @@ export function constructHandlers(
   | "handleExportComplete"
   | "handleOutlookExport"
   | "handleOutlookCancel"
+  | "handleGoogleExport"
+  | "handleGoogleCancel"
   | "handleStartOver"
   | "setExportResult"
   | "handleMicrosoftLogin"
@@ -444,6 +453,8 @@ export function constructHandlers(
     handleExportComplete: exportFlow.handleExportComplete,
     handleOutlookExport: exportFlow.handleOutlookExport,
     handleOutlookCancel: exportFlow.handleOutlookCancel,
+    handleGoogleExport: exportFlow.handleGoogleExport,
+    handleGoogleCancel: exportFlow.handleGoogleCancel,
     handleStartOver: exportFlow.handleStartOver,
     setExportResult: exportFlow.setExportResult,
 

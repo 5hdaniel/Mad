@@ -173,6 +173,13 @@ if (typeof window !== 'undefined') {
       onDeviceCode: jest.fn(() => jest.fn()),
       onExportProgress: jest.fn(() => jest.fn()),
     },
+    // Google export integration (TASK-1416)
+    googleExport: {
+      initialize: jest.fn(),
+      isAuthenticated: jest.fn(),
+      exportEmails: jest.fn(),
+      onExportProgress: jest.fn(() => jest.fn()),
+    },
     // Desktop notification support (TASK-1972)
     notification: {
       isSupported: jest.fn().mockResolvedValue(true),
