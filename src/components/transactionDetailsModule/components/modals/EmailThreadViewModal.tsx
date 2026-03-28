@@ -512,10 +512,32 @@ export function EmailThreadViewModal({
   return (
     <ResponsiveModal onClose={onClose} zIndex="z-[80]" panelBg="bg-gray-50" panelClassName="max-w-xl sm:max-h-[85vh] sm:overflow-hidden">
         {/* Header */}
-        <div className="flex-shrink-0 bg-gradient-to-r from-blue-500 to-indigo-600 px-4 py-3 sm:px-5 sm:py-4">
-          <div className="flex items-start justify-between">
+        <div className="flex-shrink-0 bg-gradient-to-r from-blue-500 to-indigo-600 px-3 sm:px-6 pt-6 sm:pt-4 pb-3 sm:pb-4 sm:rounded-t-xl shadow-lg">
+          {/* Mobile */}
+          <div className="sm:hidden flex items-center justify-between">
+            <button
+              onClick={onClose}
+              className="text-white hover:bg-white hover:bg-opacity-20 rounded-lg px-2 py-2 transition-all flex items-center gap-1 font-medium text-sm flex-shrink-0"
+              aria-label="Close"
+            >
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
+              </svg>
+              Back
+            </button>
+            <div className="text-right min-w-0 ml-2">
+              <h3 className="text-base font-bold text-white truncate">
+                {thread.subject || "(No Subject)"}
+              </h3>
+              <span className="text-blue-100 text-xs">
+                {thread.emailCount} email{thread.emailCount !== 1 ? "s" : ""}
+              </span>
+            </div>
+          </div>
+          {/* Desktop */}
+          <div className="hidden sm:flex items-start justify-between">
             <div className="flex-1 pr-4 min-w-0">
-              <h3 className="text-base sm:text-lg font-bold text-white truncate">
+              <h3 className="text-lg font-bold text-white truncate">
                 {thread.subject || "(No Subject)"}
               </h3>
               <p className="text-blue-100 text-sm mt-1">
@@ -527,18 +549,8 @@ export function EmailThreadViewModal({
               className="text-white hover:bg-white hover:bg-opacity-20 rounded-full p-1 transition-all"
               aria-label="Close"
             >
-              <svg
-                className="w-6 h-6"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M6 18L18 6M6 6l12 12"
-                />
+              <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
               </svg>
             </button>
           </div>

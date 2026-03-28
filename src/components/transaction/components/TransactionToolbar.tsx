@@ -73,6 +73,15 @@ export interface TransactionToolbarProps {
  * - Scan progress indicator
  * - Error and success alerts
  */
+// Filter display config
+const FILTER_CONFIG: Record<FilterType, { label: string; shortLabel: string; color: string }> = {
+  all: { label: "All", shortLabel: "All", color: "text-purple-600" },
+  pending: { label: "Pending Review", shortLabel: "Pending", color: "text-amber-600" },
+  active: { label: "Active", shortLabel: "Active", color: "text-blue-600" },
+  closed: { label: "Closed", shortLabel: "Closed", color: "text-gray-800" },
+  rejected: { label: "Rejected", shortLabel: "Rejected", color: "text-red-600" },
+};
+
 function TransactionToolbar({
   transactionCount,
   onClose,
@@ -96,6 +105,19 @@ function TransactionToolbar({
 }: TransactionToolbarProps): React.ReactElement {
   const { isAllowed } = useFeatureGate();
   const hasAIAddon = isAllowed("ai_detection");
+
+  // Cycle through available filters on mobile tap
+  const cycleFilter = () => {
+    const filters: FilterType[] = hasAIAddon
+      ? ["all", "pending", "active", "closed", "rejected"]
+      : ["all", "active", "closed"];
+    const currentIndex = filters.indexOf(filter);
+    const nextIndex = (currentIndex + 1) % filters.length;
+    onFilterChange(filters[nextIndex]);
+  };
+
+  const currentFilterConfig = FILTER_CONFIG[filter];
+  const currentFilterCount = filterCounts[filter];
 
   return (
     <>
@@ -157,13 +179,25 @@ function TransactionToolbar({
             </svg>
           </div>
 
-          {/* Filter tabs + action buttons - scrollable on mobile */}
-          <div className="flex items-center gap-2 min-w-0 overflow-x-auto scrollbar-hide">
-            {/* Consolidated Filter Tabs */}
-            <div className="inline-flex items-center bg-gray-200 rounded-lg p-1 min-w-0 h-11 flex-shrink-0">
+          {/* Filter + action buttons */}
+          <div className="flex items-center gap-2 w-full sm:w-auto min-w-0">
+            {/* Mobile: compact cycling filter button */}
+            <button
+              onClick={cycleFilter}
+              className={`sm:hidden inline-flex items-center justify-center gap-1.5 bg-gray-200 rounded-lg px-3 h-10 font-medium text-sm whitespace-nowrap flex-1 ${currentFilterConfig.color}`}
+            >
+              {currentFilterConfig.shortLabel}
+              <span className="px-1.5 py-0.5 text-xs rounded-full bg-gray-300">{currentFilterCount}</span>
+              <svg className="w-3.5 h-3.5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+              </svg>
+            </button>
+
+            {/* Desktop: full filter tabs */}
+            <div className="hidden sm:inline-flex items-center bg-gray-200 rounded-lg p-1 min-w-0 h-11 flex-shrink-0">
               <button
                 onClick={() => onFilterChange("all")}
-                className={`px-2 sm:px-4 py-2 rounded-md font-medium transition-all text-sm whitespace-nowrap ${
+                className={`px-4 py-2 rounded-md font-medium transition-all text-sm whitespace-nowrap ${
                   filter === "all"
                     ? "bg-white text-purple-600 shadow-sm"
                     : "text-gray-600 hover:text-gray-900"
@@ -178,7 +212,7 @@ function TransactionToolbar({
               <FeatureGate requires="ai_addon">
                 <button
                   onClick={() => onFilterChange("pending")}
-                  className={`px-2 sm:px-4 py-2 rounded-md font-medium transition-all text-sm whitespace-nowrap ${
+                  className={`px-4 py-2 rounded-md font-medium transition-all text-sm whitespace-nowrap ${
                     filter === "pending"
                       ? "bg-white text-amber-600 shadow-sm"
                       : "text-gray-600 hover:text-gray-900"
@@ -194,7 +228,7 @@ function TransactionToolbar({
               </FeatureGate>
               <button
                 onClick={() => onFilterChange("active")}
-                className={`px-2 sm:px-4 py-2 rounded-md font-medium transition-all text-sm whitespace-nowrap ${
+                className={`px-4 py-2 rounded-md font-medium transition-all text-sm whitespace-nowrap ${
                   filter === "active"
                     ? "bg-white text-blue-600 shadow-sm"
                     : "text-gray-600 hover:text-gray-900"
@@ -207,7 +241,7 @@ function TransactionToolbar({
               </button>
               <button
                 onClick={() => onFilterChange("closed")}
-                className={`px-2 sm:px-4 py-2 rounded-md font-medium transition-all text-sm whitespace-nowrap ${
+                className={`px-4 py-2 rounded-md font-medium transition-all text-sm whitespace-nowrap ${
                   filter === "closed"
                     ? "bg-white text-gray-800 shadow-sm"
                     : "text-gray-600 hover:text-gray-900"
@@ -222,7 +256,7 @@ function TransactionToolbar({
               <FeatureGate requires="ai_addon">
                 <button
                   onClick={() => onFilterChange("rejected")}
-                  className={`px-2 sm:px-4 py-2 rounded-md font-medium transition-all text-sm whitespace-nowrap ${
+                  className={`px-4 py-2 rounded-md font-medium transition-all text-sm whitespace-nowrap ${
                     filter === "rejected"
                       ? "bg-white text-red-600 shadow-sm"
                       : "text-gray-600 hover:text-gray-900"
@@ -303,7 +337,7 @@ function TransactionToolbar({
             {/* Edit Button */}
             <button
               onClick={onToggleSelectionMode}
-              className={`px-2 sm:px-4 py-2 h-11 rounded-lg font-semibold transition-all flex items-center gap-1 sm:gap-2 text-sm whitespace-nowrap ${
+              className={`px-2 sm:px-4 py-2 h-11 rounded-lg font-semibold transition-all flex items-center justify-center gap-1 sm:gap-2 text-sm whitespace-nowrap flex-1 sm:flex-none ${
                 selectionMode
                   ? "bg-blue-500 text-white hover:bg-blue-600"
                   : "bg-gray-200 text-gray-700 hover:bg-gray-300"
@@ -328,7 +362,7 @@ function TransactionToolbar({
             {/* Audit New Transaction Button */}
             <button
               onClick={onNewTransaction}
-              className="px-2 sm:px-4 py-2 h-11 rounded-lg font-semibold transition-all bg-green-500 text-white hover:bg-green-600 shadow-md hover:shadow-lg flex items-center gap-1 sm:gap-2 text-sm whitespace-nowrap"
+              className="px-2 sm:px-4 py-2 h-11 rounded-lg font-semibold transition-all bg-green-500 text-white hover:bg-green-600 shadow-md hover:shadow-lg flex items-center justify-center gap-1 sm:gap-2 text-sm whitespace-nowrap flex-1 sm:flex-none"
             >
               <svg
                 className="w-5 h-5"

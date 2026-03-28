@@ -33,7 +33,6 @@ import { useToast } from "../hooks/useToast";
 import { ToastContainer } from "./Toast";
 import TransactionDetails from "./TransactionDetails";
 import {
-  TransactionListCard,
   TransactionsToolbar,
   TransactionMobileCard,
 } from "./transaction";
@@ -46,7 +45,7 @@ import {
 } from "./transaction/hooks";
 import type { Transaction } from "../../electron/types/models";
 import type { TransactionTab } from "./transactionDetailsModule/types";
-import { formatDate, formatCurrency } from "../utils/formatUtils";
+import { formatDate } from "../utils/formatUtils";
 
 // ============================================
 // TYPES
@@ -437,41 +436,19 @@ function Transactions({
             </div>
           </div>
         ) : (
-          <>
-            {/* Mobile card list (< 640px) */}
-            <div className="grid gap-3 sm:hidden">
-              {filteredTransactions.map((transaction: Transaction) => (
-                <TransactionMobileCard
-                  key={transaction.id}
-                  transaction={transaction}
-                  selectionMode={selectionMode}
-                  isSelected={isSelected(transaction.id)}
-                  onTransactionClick={() => handleTransactionClick(transaction)}
-                  onCheckboxClick={(e) => handleCheckboxClick(e, transaction.id)}
-                  formatDate={formatDate}
-                />
-              ))}
-            </div>
-
-            {/* Desktop card list (>= 640px) */}
-            <div className="hidden sm:grid gap-6">
-              {filteredTransactions.map((transaction: Transaction) => (
-                <TransactionListCard
-                  key={transaction.id}
-                  transaction={transaction}
-                  selectionMode={selectionMode}
-                  isSelected={isSelected(transaction.id)}
-                  onTransactionClick={handleTransactionClick}
-                  onCheckboxClick={handleCheckboxClick}
-                  onQuickExport={handleQuickExport}
-                  onMessagesClick={handleMessagesClick}
-                  onEmailsClick={handleEmailsClick}
-                  formatCurrency={formatCurrency}
-                  formatDate={formatDate}
-                />
-              ))}
-            </div>
-          </>
+          <div className="grid gap-3">
+            {filteredTransactions.map((transaction: Transaction) => (
+              <TransactionMobileCard
+                key={transaction.id}
+                transaction={transaction}
+                selectionMode={selectionMode}
+                isSelected={isSelected(transaction.id)}
+                onTransactionClick={() => handleTransactionClick(transaction)}
+                onCheckboxClick={(e) => handleCheckboxClick(e, transaction.id)}
+                formatDate={formatDate}
+              />
+            ))}
+          </div>
         )}
       </div>
 

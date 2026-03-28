@@ -31,6 +31,8 @@ interface SupportTicketDialogProps {
   userName: string;
   /** Auto-capture a screenshot when the dialog opens (used by the floating widget) */
   autoCaptureScreenshot?: boolean;
+  /** Pre-captured screenshot (base64) taken before the dialog opened */
+  initialScreenshot?: string | null;
   /** TASK-2319: Pre-fill the subject field (used when opened programmatically) */
   prefilledSubject?: string;
 }
@@ -51,6 +53,7 @@ export function SupportTicketDialog({
   userEmail,
   userName,
   autoCaptureScreenshot = false,
+  initialScreenshot = null,
   prefilledSubject = "",
 }: SupportTicketDialogProps): React.ReactElement {
   const {
@@ -68,7 +71,7 @@ export function SupportTicketDialog({
     removeScreenshot,
     submitTicket,
     reset,
-  } = useSupportTicket();
+  } = useSupportTicket(initialScreenshot);
 
   const [subject, setSubject] = useState(prefilledSubject);
   const [description, setDescription] = useState("");
@@ -90,12 +93,14 @@ export function SupportTicketDialog({
     collectDiagnostics();
   }, [collectDiagnostics]);
 
-  // Auto-capture screenshot when opened from the floating widget
+  // If a pre-captured screenshot was provided, skip auto-capture.
+  // Otherwise fall back to capturing now (which will show the dialog — legacy).
   useEffect(() => {
+    if (initialScreenshot) return;
     if (autoCaptureScreenshot) {
       captureScreenshot();
     }
-  }, [autoCaptureScreenshot, captureScreenshot]);
+  }, [autoCaptureScreenshot, initialScreenshot, captureScreenshot]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -172,32 +177,37 @@ export function SupportTicketDialog({
   return (
     <ResponsiveModal onClose={handleClose} zIndex="z-[70]" panelClassName="max-w-lg sm:max-h-[90vh]">
         {/* Header */}
-        <div className="flex-shrink-0 bg-gradient-to-r from-blue-500 to-indigo-600 px-6 py-4 flex items-center justify-between rounded-t-xl">
-          <div>
-            <h2 className="text-lg font-bold text-white">Contact Support</h2>
-            <p className="text-blue-100 text-sm">
-              Describe your issue and we&apos;ll help you out
-            </p>
-          </div>
-          <button
-            onClick={handleClose}
-            className="text-white hover:text-blue-200 transition-colors"
-          >
-            <svg
-              xmlns="http://www.w3.org/2000/svg"
-              className="h-5 w-5"
-              fill="none"
-              viewBox="0 0 24 24"
-              stroke="currentColor"
+        <div className="flex-shrink-0 bg-gradient-to-r from-blue-500 to-indigo-600 px-3 sm:px-6 pt-6 sm:pt-4 pb-3 sm:pb-4 sm:rounded-t-xl shadow-lg">
+          {/* Mobile */}
+          <div className="sm:hidden flex items-center justify-between">
+            <button
+              onClick={handleClose}
+              className="text-white hover:bg-white hover:bg-opacity-20 rounded-lg px-2 py-2 transition-all flex items-center gap-1 font-medium text-sm"
             >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M6 18L18 6M6 6l12 12"
-              />
-            </svg>
-          </button>
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
+              </svg>
+              Back
+            </button>
+            <h2 className="text-lg font-bold text-white">Support</h2>
+          </div>
+          {/* Desktop */}
+          <div className="hidden sm:flex items-center justify-between">
+            <div>
+              <h2 className="text-lg font-bold text-white">Contact Support</h2>
+              <p className="text-blue-100 text-sm">
+                Describe your issue and we&apos;ll help you out
+              </p>
+            </div>
+            <button
+              onClick={handleClose}
+              className="text-white hover:text-blue-200 transition-colors"
+            >
+              <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
+          </div>
         </div>
 
         {/* Body */}

@@ -71,6 +71,8 @@ export function TransactionsToolbar({
 }: TransactionsToolbarProps): React.ReactElement {
   const { canCreateTransaction, transactionCount: licenseTransactionCount, transactionLimit } = useLicense();
   const [showLimitModal, setShowLimitModal] = useState(false);
+  const [searchExpanded, setSearchExpanded] = useState(false);
+  const searchInputRef = React.useRef<HTMLInputElement>(null);
 
   const handleNewTransaction = () => {
     if (!canCreateTransaction) {
@@ -78,6 +80,25 @@ export function TransactionsToolbar({
       return;
     }
     onNewTransaction();
+  };
+
+  const handleExpandSearch = () => {
+    setSearchExpanded(true);
+    // Focus after render
+    setTimeout(() => searchInputRef.current?.focus(), 50);
+  };
+
+  const handleCollapseSearch = () => {
+    if (!searchQuery) {
+      setSearchExpanded(false);
+    }
+  };
+
+  const handleSearchKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === "Escape") {
+      onSearchChange("");
+      setSearchExpanded(false);
+    }
   };
 
   const activeCount = transactions.filter(
@@ -88,163 +109,153 @@ export function TransactionsToolbar({
   ).length;
 
   return (
-    <div className="flex-shrink-0 px-3 sm:px-6 py-3 sm:py-6 bg-white shadow-md">
-      {/* Responsive Toolbar: stacked on narrow, single row on wide */}
-      <div className="flex flex-col md:flex-row md:items-center gap-2 sm:gap-3">
-        {/* Search - full width on narrow, flex-1 on wide */}
-        <div className="w-full md:w-auto md:flex-1 relative">
-          <input
-            type="text"
-            placeholder="Search by address..."
-            value={searchQuery}
-            onChange={(e) => onSearchChange(e.target.value)}
-            className="w-full h-11 pl-10 pr-4 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-gray-900 bg-white"
-          />
-          <svg
-            className="w-5 h-5 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2"
-            fill="none"
-            stroke="currentColor"
-            viewBox="0 0 24 24"
-          >
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              strokeWidth={2}
-              d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
-            />
-          </svg>
-        </div>
-
-        {/* Filter tabs + action buttons - scrollable on mobile */}
-        <div className="flex items-center gap-2 min-w-0 overflow-x-auto scrollbar-hide">
-          {/* Status Filter Toggle */}
-          <div className="inline-flex items-center bg-gray-200 rounded-lg p-1 min-w-0 h-11">
+    <div className="flex-shrink-0 px-3 sm:px-6 py-3 bg-white shadow-md space-y-2">
+      {/* Row 1: Action buttons + collapsible search */}
+      <div className="flex items-center gap-2">
+        {searchExpanded ? (
+          /* Expanded search — takes over the row */
+          <div className="flex-1 relative flex items-center gap-2">
+            <div className="flex-1 relative">
+              <input
+                ref={searchInputRef}
+                type="text"
+                placeholder="Search by address..."
+                value={searchQuery}
+                onChange={(e) => onSearchChange(e.target.value)}
+                onBlur={handleCollapseSearch}
+                onKeyDown={handleSearchKeyDown}
+                className="w-full h-10 pl-10 pr-4 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-gray-900 bg-white text-sm"
+              />
+              <svg
+                className="w-5 h-5 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
+                />
+              </svg>
+            </div>
             <button
-              onClick={() => onStatusFilterChange("active")}
-              className={`px-2 sm:px-4 py-2 rounded-md font-medium transition-all text-sm whitespace-nowrap ${
-                statusFilter === "active"
-                  ? "bg-white text-blue-600 shadow-sm"
-                  : "text-gray-600 hover:text-gray-900"
-              }`}
+              onClick={() => { onSearchChange(""); setSearchExpanded(false); }}
+              className="flex-shrink-0 p-2 text-gray-400 hover:text-gray-600 rounded-lg hover:bg-gray-100 transition-colors"
+              aria-label="Close search"
             >
-              Active ({activeCount})
-            </button>
-            <button
-              onClick={() => onStatusFilterChange("closed")}
-              className={`px-2 sm:px-4 py-2 rounded-md font-medium transition-all text-sm whitespace-nowrap ${
-                statusFilter === "closed"
-                  ? "bg-white text-gray-800 shadow-sm"
-                  : "text-gray-600 hover:text-gray-900"
-              }`}
-            >
-              Closed ({closedCount})
-            </button>
-            <button
-              onClick={() => onStatusFilterChange("all")}
-              className={`px-2 sm:px-4 py-2 rounded-md font-medium transition-all text-sm whitespace-nowrap ${
-                statusFilter === "all"
-                  ? "bg-white text-purple-600 shadow-sm"
-                  : "text-gray-600 hover:text-gray-900"
-              }`}
-            >
-              All ({transactionCount})
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+              </svg>
             </button>
           </div>
+        ) : (
+          /* Collapsed state — search icon + Edit + New */
+          <>
+            {/* Search icon button */}
+            <button
+              onClick={handleExpandSearch}
+              className="p-2.5 h-10 w-10 rounded-lg border border-gray-300 text-gray-500 hover:text-gray-700 hover:bg-gray-50 transition-colors flex items-center justify-center flex-shrink-0"
+              aria-label="Search transactions"
+            >
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+              </svg>
+            </button>
 
-          {/* Edit Mode Button */}
+            <div className="flex-1" />
+
+            {/* Edit Mode Button */}
+            <button
+              onClick={onToggleSelectionMode}
+              className={`px-3 py-2 h-10 rounded-lg font-semibold transition-all flex items-center gap-1.5 text-sm whitespace-nowrap ${
+                selectionMode
+                  ? "bg-purple-500 text-white hover:bg-purple-600 shadow-md"
+                  : "bg-gray-200 text-gray-700 hover:bg-gray-300"
+              }`}
+            >
+              <svg className="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" />
+              </svg>
+              {selectionMode ? "Done" : "Edit"}
+            </button>
+
+            {/* New Transaction Button */}
+            <button
+              onClick={handleNewTransaction}
+              className="px-3 py-2 h-10 rounded-lg font-semibold transition-all bg-green-500 text-white hover:bg-green-600 shadow-md hover:shadow-lg flex items-center gap-1.5 text-sm whitespace-nowrap"
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+              </svg>
+              New
+            </button>
+
+            {/* Scan/Stop Button - AI add-on only */}
+            <FeatureGate requires="ai_addon">
+              {scanning ? (
+                <button
+                  onClick={onStopScan}
+                  className="px-3 py-2 h-10 rounded-lg font-semibold transition-all bg-red-500 text-white hover:bg-red-600 shadow-md flex items-center gap-1.5 text-sm whitespace-nowrap"
+                >
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                  Stop
+                </button>
+              ) : (
+                <button
+                  onClick={onStartScan}
+                  className="px-3 py-2 h-10 rounded-lg font-semibold transition-all bg-gradient-to-r from-blue-500 to-purple-600 text-white hover:from-blue-600 hover:to-purple-700 shadow-md flex items-center gap-1.5 text-sm whitespace-nowrap"
+                >
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                  </svg>
+                  Scan
+                </button>
+              )}
+            </FeatureGate>
+          </>
+        )}
+      </div>
+
+      {/* Row 2: Status filter tabs */}
+      <div className="flex items-center gap-2 overflow-x-auto scrollbar-hide">
+        <div className="inline-flex items-center bg-gray-200 rounded-lg p-1 h-9">
           <button
-            onClick={onToggleSelectionMode}
-            className={`px-2 sm:px-4 py-2 h-11 rounded-lg font-semibold transition-all flex items-center gap-1 sm:gap-2 text-sm whitespace-nowrap ${
-              selectionMode
-                ? "bg-purple-500 text-white hover:bg-purple-600 shadow-md"
-                : "bg-gray-200 text-gray-700 hover:bg-gray-300"
+            onClick={() => onStatusFilterChange("active")}
+            className={`px-3 py-1.5 rounded-md font-medium transition-all text-sm whitespace-nowrap ${
+              statusFilter === "active"
+                ? "bg-white text-blue-600 shadow-sm"
+                : "text-gray-600 hover:text-gray-900"
             }`}
           >
-            <svg
-              className="w-5 h-5 flex-shrink-0"
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4"
-              />
-            </svg>
-            {selectionMode ? "Done" : "Edit"}
+            Active
+            <span className="ml-1.5 px-1.5 py-0.5 text-xs rounded-full bg-blue-100 text-blue-700">{activeCount}</span>
           </button>
-
-          {/* Audit New Transaction Button */}
           <button
-            onClick={handleNewTransaction}
-            className="px-2 sm:px-4 py-2 h-11 rounded-lg font-semibold transition-all bg-green-500 text-white hover:bg-green-600 shadow-md hover:shadow-lg flex items-center gap-1 sm:gap-2 text-sm whitespace-nowrap"
+            onClick={() => onStatusFilterChange("closed")}
+            className={`px-3 py-1.5 rounded-md font-medium transition-all text-sm whitespace-nowrap ${
+              statusFilter === "closed"
+                ? "bg-white text-gray-800 shadow-sm"
+                : "text-gray-600 hover:text-gray-900"
+            }`}
           >
-            <svg
-              className="w-5 h-5"
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M12 6v6m0 0v6m0-6h6m-6 0H6"
-              />
-            </svg>
-            New Transaction
+            Closed
+            <span className="ml-1.5 px-1.5 py-0.5 text-xs rounded-full bg-gray-300">{closedCount}</span>
           </button>
-
-          {/* Scan/Stop Button - AI add-on only (BACKLOG-462) */}
-          <FeatureGate requires="ai_addon">
-            {scanning ? (
-              <button
-                onClick={onStopScan}
-                className="px-4 py-2 rounded-lg font-semibold transition-all bg-red-500 text-white hover:bg-red-600 shadow-md hover:shadow-lg"
-              >
-                <span className="flex items-center gap-2">
-                  <svg
-                    className="w-5 h-5"
-                    fill="none"
-                    stroke="currentColor"
-                    viewBox="0 0 24 24"
-                  >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth={2}
-                      d="M6 18L18 6M6 6l12 12"
-                    />
-                  </svg>
-                  Stop Scan
-                </span>
-              </button>
-            ) : (
-              <button
-                onClick={onStartScan}
-                className="px-4 py-2 rounded-lg font-semibold transition-all bg-gradient-to-r from-blue-500 to-purple-600 text-white hover:from-blue-600 hover:to-purple-700 shadow-md hover:shadow-lg"
-              >
-                <span className="flex items-center gap-2">
-                  <svg
-                    className="w-5 h-5"
-                    fill="none"
-                    stroke="currentColor"
-                    viewBox="0 0 24 24"
-                  >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth={2}
-                      d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
-                    />
-                  </svg>
-                  Auto Detect
-                </span>
-              </button>
-            )}
-          </FeatureGate>
+          <button
+            onClick={() => onStatusFilterChange("all")}
+            className={`px-3 py-1.5 rounded-md font-medium transition-all text-sm whitespace-nowrap ${
+              statusFilter === "all"
+                ? "bg-white text-purple-600 shadow-sm"
+                : "text-gray-600 hover:text-gray-900"
+            }`}
+          >
+            All
+            <span className="ml-1.5 px-1.5 py-0.5 text-xs rounded-full bg-gray-300">{transactionCount}</span>
+          </button>
         </div>
       </div>
 

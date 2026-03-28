@@ -9,6 +9,7 @@
  */
 import React from "react";
 import type { Transaction } from "@/types";
+import { formatAddress } from "@/utils/formatUtils";
 import { ManualEntryBadge } from "./TransactionStatusWrapper";
 import { SubmissionStatusBadge } from "../../transactionDetailsModule/components/SubmissionStatusBadge";
 
@@ -114,7 +115,7 @@ function TransactionMobileCardInner({
           {/* Row 1: Address + chevron */}
           <div className="flex items-start justify-between gap-2">
             <h3 className="font-semibold text-gray-900 text-sm leading-tight truncate">
-              {transaction.property_address}
+              {formatAddress(transaction.property_address)}
             </h3>
             <svg
               className="w-4 h-4 text-gray-400 flex-shrink-0 mt-0.5"

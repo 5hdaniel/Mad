@@ -164,9 +164,9 @@ export function ContactRow({
         </div>
       )}
 
-      {/* Avatar */}
+      {/* Avatar - hidden on mobile, visible on sm+ */}
       <div
-        className="flex-shrink-0 w-8 h-8 rounded-full bg-gradient-to-br from-purple-500 to-pink-600 flex items-center justify-center"
+        className="flex-shrink-0 w-8 h-8 rounded-full bg-gradient-to-br from-purple-500 to-pink-600 items-center justify-center hidden sm:flex"
         data-testid="contact-row-avatar"
       >
         <span className="text-white text-sm font-medium">{initial}</span>
@@ -181,11 +181,17 @@ export function ContactRow({
           >
             {displayName}
           </p>
-          <SourcePill
-            source={mapToSourcePillSource(contact.source, isExternal)}
-            size="sm"
-          />
-          {!isAdded && <ImportStatusPill isImported={!isExternal} size="sm" />}
+          <span className="hidden sm:inline-flex">
+            <SourcePill
+              source={mapToSourcePillSource(contact.source, isExternal)}
+              size="sm"
+            />
+          </span>
+          {!isAdded && (
+            <span className="hidden sm:inline-flex">
+              <ImportStatusPill isImported={!isExternal} size="sm" />
+            </span>
+          )}
         </div>
         {email && (
           <p

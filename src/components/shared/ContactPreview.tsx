@@ -113,7 +113,7 @@ export function ContactPreview({
   };
 
   return (
-    <ResponsiveModal onClose={onClose} overlayClassName="bg-black bg-opacity-50" testId="contact-preview-backdrop" panelClassName="max-w-md sm:max-h-[80vh]">
+    <ResponsiveModal onClose={onClose} overlayClassName="bg-black bg-opacity-50" testId="contact-preview-backdrop" panelClassName="max-w-md max-h-[80vh] !h-auto !w-[calc(100%-2rem)] rounded-xl shadow-2xl">
       <div data-testid="contact-preview-modal">
         {/* Header with close button */}
         <div className="flex justify-end p-3 sm:p-4">

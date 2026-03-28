@@ -369,25 +369,29 @@ export function EditContactsModal({
   return (
     <ResponsiveModal onClose={onClose} zIndex="z-[70]" panelClassName="max-w-4xl sm:h-[70vh] sm:max-h-[90vh] relative">
         {/* Header */}
-        <div className="flex-shrink-0 bg-gradient-to-r from-blue-500 to-indigo-600 px-6 py-4 flex items-center justify-between rounded-t-xl">
-          <h3 className="text-xl font-bold text-white">Edit Transaction Contacts</h3>
+        <div className="flex-shrink-0 bg-gradient-to-r from-blue-500 to-indigo-600 px-3 sm:px-6 pt-6 sm:pt-4 pb-3 sm:pb-4 flex items-center justify-between sm:rounded-t-xl shadow-lg">
+          {/* Mobile: back button + title right */}
           <button
             onClick={onClose}
-            className="text-white hover:bg-white hover:bg-opacity-20 rounded-full p-1 transition-all"
+            className="sm:hidden text-white hover:bg-white hover:bg-opacity-20 rounded-lg px-2 py-2 transition-all flex items-center gap-1 font-medium text-sm"
             data-testid="edit-contacts-modal-close"
           >
-            <svg
-              className="w-6 h-6"
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M6 18L18 6M6 6l12 12"
-              />
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
+            </svg>
+            Back
+          </button>
+          {/* Desktop: title left */}
+          <h3 className="hidden sm:block text-xl font-bold text-white">Edit Transaction Contacts</h3>
+          {/* Mobile: title right */}
+          <h3 className="sm:hidden text-lg font-bold text-white">Edit Contacts</h3>
+          {/* Desktop: X close */}
+          <button
+            onClick={onClose}
+            className="hidden sm:block text-white hover:bg-white hover:bg-opacity-20 rounded-full p-1 transition-all"
+          >
+            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
             </svg>
           </button>
         </div>
@@ -400,7 +404,7 @@ export function EditContactsModal({
           propertyAddress={transaction.property_address || ""}
         >
           {/* Content */}
-          <div className="flex-1 overflow-y-auto p-6">
+          <div className="flex-1 overflow-y-auto p-3 sm:p-6">
             {error && (
               <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg">
                 <p className="text-sm text-red-800">{error}</p>
@@ -915,27 +919,33 @@ function Screen2Overlay({
       data-testid="add-contacts-overlay"
     >
       {/* Header */}
-      <div className="flex-shrink-0 bg-gradient-to-r from-purple-500 to-pink-600 px-6 py-4 flex items-center justify-between rounded-t-xl">
-        <h3 className="text-xl font-bold text-white">Add Contacts</h3>
-        <button
-          onClick={onClose}
-          className="text-white hover:bg-white hover:bg-opacity-20 rounded-full p-1 transition-all"
-          data-testid="add-contacts-overlay-close"
-        >
-          <svg
-            className="w-6 h-6"
-            fill="none"
-            stroke="currentColor"
-            viewBox="0 0 24 24"
+      <div className="flex-shrink-0 bg-gradient-to-r from-purple-500 to-pink-600 px-3 sm:px-6 pt-6 sm:pt-4 pb-3 sm:pb-4 sm:rounded-t-xl shadow-lg">
+        {/* Mobile */}
+        <div className="sm:hidden flex items-center justify-between">
+          <button
+            onClick={onClose}
+            className="text-white hover:bg-white hover:bg-opacity-20 rounded-lg px-2 py-2 transition-all flex items-center gap-1 font-medium text-sm"
+            data-testid="add-contacts-overlay-close"
           >
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              strokeWidth={2}
-              d="M6 18L18 6M6 6l12 12"
-            />
-          </svg>
-        </button>
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
+            </svg>
+            Back
+          </button>
+          <h3 className="text-lg font-bold text-white">Add Contacts</h3>
+        </div>
+        {/* Desktop */}
+        <div className="hidden sm:flex items-center justify-between">
+          <h3 className="text-xl font-bold text-white">Add Contacts</h3>
+          <button
+            onClick={onClose}
+            className="text-white hover:bg-white hover:bg-opacity-20 rounded-full p-1 transition-all"
+          >
+            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
+        </div>
       </div>
 
       {/* ContactSearchList with built-in category filter (pill-style buttons) */}

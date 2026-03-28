@@ -74,7 +74,7 @@ export function ResponsiveModal({
       data-testid={testId}
     >
       <div
-        className={`${panelBg} flex flex-col w-full h-full overflow-y-auto sm:h-auto sm:max-h-[90vh] sm:rounded-xl sm:shadow-2xl ${panelClassName}`}
+        className={`${panelBg} flex flex-col w-full max-w-[100vw] h-full overflow-hidden sm:overflow-y-auto sm:h-auto sm:max-h-[90vh] sm:rounded-xl sm:shadow-2xl ${panelClassName}`}
       >
         {children}
       </div>

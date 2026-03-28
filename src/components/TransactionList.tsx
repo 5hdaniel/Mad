@@ -15,8 +15,6 @@ import { useToast } from "../hooks/useToast";
 import { useAppStateMachine } from "../appCore";
 import {
   // Components
-  TransactionStatusWrapper,
-  TransactionCard,
   TransactionToolbar,
   TransactionMobileCard,
   // Hooks
@@ -27,7 +25,7 @@ import {
   type TransactionFilter,
 } from "./transaction";
 import { OfflineNotice } from "./common/OfflineNotice";
-import { formatDate, formatCurrency } from "../utils/formatUtils";
+import { formatDate } from "../utils/formatUtils";
 
 interface TransactionListComponentProps {
   userId: string;
@@ -332,65 +330,19 @@ function TransactionList({
             </div>
           </div>
         ) : (
-          <>
-            {/* Mobile card list (< 640px) */}
-            <div className="grid gap-3 sm:hidden">
-              {filteredTransactions.map((transaction) => (
-                <TransactionMobileCard
-                  key={transaction.id}
-                  transaction={transaction}
-                  selectionMode={selectionMode}
-                  isSelected={isSelected(transaction.id)}
-                  onTransactionClick={() => handleTransactionClick(transaction)}
-                  onCheckboxClick={(e) => handleCheckboxClick(e, transaction.id)}
-                  formatDate={formatDate}
-                />
-              ))}
-            </div>
-
-            {/* Desktop card list (>= 640px) */}
-            <div className="hidden sm:grid gap-6">
-              {filteredTransactions.map((transaction) => {
-                const isPending = transaction.detection_status === "pending" || transaction.status === "pending";
-                const isRejected = transaction.detection_status === "rejected";
-
-                // Handle wrapper action button click based on status
-                const handleWrapperAction = (e: React.MouseEvent<HTMLButtonElement>) => {
-                  if (isPending) {
-                    // Open review modal for pending
-                    setPendingReviewTransaction(transaction);
-                  } else if (isRejected) {
-                    // Open details to restore for rejected
-                    setSelectedTransaction(transaction);
-                  } else {
-                    // Open export modal for active/closed
-                    handleQuickExport(transaction, e);
-                  }
-                };
-
-                // Wrap ALL transactions with the unified status wrapper
-                return (
-                  <TransactionStatusWrapper
-                    key={transaction.id}
-                    transaction={transaction}
-                    onActionClick={handleWrapperAction}
-                  >
-                    <TransactionCard
-                      transaction={transaction}
-                      selectionMode={selectionMode}
-                      isSelected={isSelected(transaction.id)}
-                      onTransactionClick={() => handleTransactionClick(transaction)}
-                      onCheckboxClick={(e) => handleCheckboxClick(e, transaction.id)}
-                      onMessagesClick={createMessagesClickHandler(transaction)}
-                      onEmailsClick={createEmailsClickHandler(transaction)}
-                      formatCurrency={formatCurrency}
-                      formatDate={formatDate}
-                    />
-                  </TransactionStatusWrapper>
-                );
-              })}
-            </div>
-          </>
+          <div className="grid gap-3">
+            {filteredTransactions.map((transaction) => (
+              <TransactionMobileCard
+                key={transaction.id}
+                transaction={transaction}
+                selectionMode={selectionMode}
+                isSelected={isSelected(transaction.id)}
+                onTransactionClick={() => handleTransactionClick(transaction)}
+                onCheckboxClick={(e) => handleCheckboxClick(e, transaction.id)}
+                formatDate={formatDate}
+              />
+            ))}
+          </div>
         )}
       </div>
 

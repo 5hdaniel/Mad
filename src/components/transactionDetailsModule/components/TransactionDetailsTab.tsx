@@ -7,6 +7,7 @@ import React, { useState } from "react";
 import type { Transaction } from "@/types";
 import type { ContactAssignment, ResolvedSuggestedContact } from "../types";
 import { getRoleDisplayName, type TransactionType } from "@/utils/transactionRoleUtils";
+import { formatAddress } from "@/utils/formatUtils";
 import { ContactPreview } from "../../shared/ContactPreview";
 import { ContactFormModal } from "../../contact";
 import type { ExtendedContact } from "../../../types/components";
@@ -195,9 +196,22 @@ export function TransactionDetailsTab({
           )}
         </div>
         <div className="bg-gray-50 border border-gray-200 rounded-lg p-4">
-          <div className="flex flex-wrap items-center gap-4">
+          <div className="flex flex-col sm:flex-row sm:flex-wrap sm:items-center gap-2 sm:gap-4">
             {/* Transaction Type Badge */}
             <div className="flex items-center gap-2">
+              {transaction.transaction_type === "purchase" ? (
+                <svg className="w-4 h-4 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" />
+                </svg>
+              ) : transaction.transaction_type === "sale" ? (
+                <svg className="w-4 h-4 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+              ) : (
+                <svg className="w-4 h-4 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                </svg>
+              )}
               <span className="text-sm text-gray-600">Type:</span>
               <span className={`inline-block px-3 py-1 text-sm font-semibold rounded-full ${typeInfo.color}`}>
                 {typeInfo.label}
@@ -206,7 +220,7 @@ export function TransactionDetailsTab({
             {/* Audit Period */}
             {auditPeriodText && (
               <>
-                <span className="text-gray-300">|</span>
+                <span className="text-gray-300 hidden sm:inline">|</span>
                 <div className="flex items-center gap-2">
                   <svg
                     className="w-4 h-4 text-gray-500"
@@ -229,7 +243,7 @@ export function TransactionDetailsTab({
             {/* Closing Date */}
             {closingDate && (
               <>
-                <span className="text-gray-300">|</span>
+                <span className="text-gray-300 hidden sm:inline">|</span>
                 <div className="flex items-center gap-2">
                   <span className="text-sm text-gray-600">Closing:</span>
                   <span className="text-sm font-medium text-gray-900">{closingDate}</span>
@@ -239,7 +253,7 @@ export function TransactionDetailsTab({
           </div>
           {/* Address Row */}
           {transaction.property_address && (
-            <div className="flex items-center gap-2 mt-3 pt-3 border-t border-gray-200">
+            <div className="flex items-start gap-2 mt-2 sm:mt-3 sm:pt-3 sm:border-t sm:border-gray-200">
               <svg
                 className="w-4 h-4 text-gray-500"
                 fill="none"
@@ -260,7 +274,20 @@ export function TransactionDetailsTab({
                 />
               </svg>
               <span className="text-sm text-gray-600">Address:</span>
-              <span className="text-sm font-medium text-gray-900">{transaction.property_address}</span>
+              <span className="text-sm font-medium text-gray-900 hidden sm:inline">{formatAddress(transaction.property_address)}</span>
+              <span className="text-sm font-medium text-gray-900 sm:hidden">
+                {(() => {
+                  const addr = formatAddress(transaction.property_address);
+                  const firstComma = addr.indexOf(",");
+                  if (firstComma === -1) return addr;
+                  return (
+                    <>
+                      {addr.slice(0, firstComma)}<br />
+                      {addr.slice(firstComma + 1).trim()}
+                    </>
+                  );
+                })()}
+              </span>
             </div>
           )}
         </div>
@@ -521,38 +548,46 @@ function ContactSummaryCard({
 
   return (
     <div
-      className={`bg-gray-50 border border-gray-200 rounded-lg px-4 py-3 flex items-center justify-between${onClick ? " cursor-pointer hover:bg-gray-100 hover:border-gray-300 transition-colors" : ""}`}
+      className={`bg-gray-50 border border-gray-200 rounded-lg px-4 py-3${onClick ? " cursor-pointer hover:bg-gray-100 hover:border-gray-300 transition-colors" : ""}`}
       onClick={onClick}
       role={onClick ? "button" : undefined}
       tabIndex={onClick ? 0 : undefined}
       onKeyDown={onClick ? (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onClick(); } } : undefined}
       data-testid={`contact-summary-card-${assignment.contact_id}`}
     >
+      {/* Mobile: name + role on top, details below */}
+      {/* Desktop: single row with avatar, info, role badge right */}
       <div className="flex items-center gap-3">
-        {/* Avatar */}
-        <div className="w-10 h-10 bg-gradient-to-br from-blue-500 to-purple-600 rounded-full flex items-center justify-center text-white font-bold flex-shrink-0">
+        {/* Avatar - hidden on mobile */}
+        <div className="w-10 h-10 bg-gradient-to-br from-blue-500 to-purple-600 rounded-full items-center justify-center text-white font-bold flex-shrink-0 hidden sm:flex">
           {name.charAt(0).toUpperCase()}
         </div>
         {/* Info */}
-        <div>
-          <div className="flex items-center gap-2">
-            <span className={`font-semibold text-gray-900${onClick ? " hover:text-purple-700" : ""}`}>{name}</span>
-            {isPrimary && (
-              <span className="inline-block px-2 py-0.5 bg-blue-100 text-blue-800 text-xs font-medium rounded-full">
-                Primary
-              </span>
-            )}
+        <div className="flex-1 min-w-0 space-y-0.5">
+          <div className="flex items-center justify-between gap-2">
+            <div className="flex items-center gap-2 min-w-0">
+              <span className={`font-semibold text-gray-900 truncate${onClick ? " hover:text-purple-700" : ""}`}>{name}</span>
+              {isPrimary && (
+                <span className="inline-block px-2 py-0.5 bg-blue-100 text-blue-800 text-xs font-medium rounded-full flex-shrink-0">
+                  Primary
+                </span>
+              )}
+            </div>
+            {/* Role badge */}
+            <span className="inline-block px-3 py-1 bg-green-100 text-green-800 text-xs font-semibold rounded-full flex-shrink-0">
+              {getRoleDisplayName(role, transactionType)}
+            </span>
           </div>
-          <div className="flex items-center gap-2 text-sm text-gray-600">
+          <div className="flex flex-col sm:flex-row sm:items-center gap-0.5 sm:gap-2 text-sm text-gray-600">
             {email && (
-              <span className="flex items-center gap-1">
+              <span className="flex items-center gap-1 truncate">
                 {email}
                 {emailCount > 1 && (
                   <span className="text-xs text-blue-600 font-medium">+{emailCount - 1}</span>
                 )}
               </span>
             )}
-            {email && phone && <span className="text-gray-300">|</span>}
+            {email && phone && <span className="text-gray-300 hidden sm:inline">|</span>}
             {phone && (
               <span className="flex items-center gap-1">
                 {phone}
@@ -567,10 +602,6 @@ function ContactSummaryCard({
           )}
         </div>
       </div>
-      {/* Role badge */}
-      <span className="inline-block px-3 py-1 bg-green-100 text-green-800 text-xs font-semibold rounded-full">
-        {getRoleDisplayName(role, transactionType)}
-      </span>
     </div>
   );
 }

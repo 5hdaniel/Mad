@@ -276,32 +276,40 @@ function ContactFormModal({
   return (
     <ResponsiveModal onClose={onClose} zIndex="z-[70]" panelClassName="max-w-md sm:max-h-[90vh]">
         {/* Header */}
-        <div className="bg-gradient-to-r from-purple-500 to-pink-600 px-4 py-3 sm:px-6 sm:py-4 flex items-center justify-between sm:rounded-t-xl flex-shrink-0">
-          <h3 className="text-lg font-bold text-white">
-            {contact ? "Edit Contact" : "Add New Contact"}
-          </h3>
-          <button
-            onClick={onClose}
-            className="text-white hover:bg-white hover:bg-opacity-20 rounded-full p-1 transition-all"
-          >
-            <svg
-              className="w-5 h-5"
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
+        <div className="bg-gradient-to-r from-purple-500 to-pink-600 px-3 sm:px-6 pt-6 sm:pt-4 pb-3 sm:pb-4 sm:rounded-t-xl flex-shrink-0 shadow-lg">
+          {/* Mobile */}
+          <div className="sm:hidden flex items-center justify-between">
+            <button
+              onClick={onClose}
+              className="text-white hover:bg-white hover:bg-opacity-20 rounded-lg px-2 py-2 transition-all flex items-center gap-1 font-medium text-sm"
             >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M6 18L18 6M6 6l12 12"
-              />
-            </svg>
-          </button>
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
+              </svg>
+              Back
+            </button>
+            <h3 className="text-lg font-bold text-white">
+              {contact ? "Edit Contact" : "Add Contact"}
+            </h3>
+          </div>
+          {/* Desktop */}
+          <div className="hidden sm:flex items-center justify-between">
+            <h3 className="text-lg font-bold text-white">
+              {contact ? "Edit Contact" : "Add New Contact"}
+            </h3>
+            <button
+              onClick={onClose}
+              className="text-white hover:bg-white hover:bg-opacity-20 rounded-full p-1 transition-all"
+            >
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
+          </div>
         </div>
 
         {/* Form (scrollable) */}
-        <div className="p-4 sm:p-6 space-y-4 overflow-y-auto flex-1">
+        <div className="p-3 sm:p-6 space-y-4 overflow-y-auto flex-1">
           {/* Missing contact info warning */}
           {showMissingInfoWarning && (
             <div className="p-3 bg-amber-50 border border-amber-200 rounded-lg">

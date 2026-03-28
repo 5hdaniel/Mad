@@ -5,6 +5,7 @@
 import React from "react";
 import type { Transaction } from "@/types";
 import { FeatureGate } from "@/components/common/FeatureGate";
+import { formatAddress } from "@/utils/formatUtils";
 import { useNetwork } from "@/contexts/NetworkContext";
 
 interface TransactionHeaderProps {
@@ -62,7 +63,7 @@ export function TransactionHeader({
   };
 
   // Split address into street and city/state/zip for two-line display
-  const formatAddress = (address: string) => {
+  const splitAddress = (address: string) => {
     if (!address) return { street: "", cityStateZip: "" };
 
     // Try to split at the first comma (street, city state zip)
@@ -77,9 +78,9 @@ export function TransactionHeader({
     return { street, cityStateZip };
   };
 
-  const { street, cityStateZip } = formatAddress(transaction.property_address);
+  const { street, cityStateZip } = splitAddress(formatAddress(transaction.property_address));
 
-  // Close button component to avoid duplication
+  // Close button (X) for desktop
   const CloseButton = ({ className = "" }: { className?: string }) => (
     <button
       onClick={onClose}
@@ -101,72 +102,93 @@ export function TransactionHeader({
     </button>
   );
 
+  // Render the correct action buttons based on transaction state
+  const renderActions = () => {
+    if (isPendingReview) {
+      return (
+        <PendingReviewActions
+          isRejecting={isRejecting}
+          isApproving={isApproving}
+          onShowRejectReasonModal={onShowRejectReasonModal}
+          onShowEditModal={onShowEditModal}
+          onApprove={onApprove}
+        />
+      );
+    }
+    if (isRejected) {
+      return (
+        <RejectedActions
+          isRestoring={isRestoring}
+          onRestore={onRestore}
+          onShowDeleteConfirm={onShowDeleteConfirm}
+        />
+      );
+    }
+    return (
+      <ActiveActions
+        transaction={transaction}
+        isSubmitting={isSubmitting}
+        onShowEditModal={onShowEditModal}
+        onShowSubmitModal={onShowSubmitModal}
+        onShowExportModal={onShowExportModal}
+        onShowDeleteConfirm={onShowDeleteConfirm}
+      />
+    );
+  };
+
   return (
     <div
-      className={`flex-shrink-0 px-3 sm:px-6 py-3 sm:py-4 sm:rounded-t-xl ${getHeaderStyle()}`}
+      className={`flex-shrink-0 px-3 sm:px-6 pt-6 sm:pt-4 pb-3 sm:pb-4 sm:rounded-t-xl ${getHeaderStyle()}`}
     >
-      {/* Container: stacked on mobile, row on desktop */}
-      <div className="flex flex-col sm:flex-row sm:flex-nowrap sm:items-center justify-between gap-2 sm:gap-1 overflow-hidden">
-        {/* Title/Address section */}
-        <div className="flex items-center justify-between flex-1 min-w-0 overflow-hidden">
-          {/* Left side: Title + Address */}
-          <div className="min-w-0">
-            <div className="flex items-center gap-2">
-              <h3 className="text-base sm:text-xl font-bold text-white">{getHeaderTitle()}</h3>
-              {isPendingReview && (
-                <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-white/20 text-white">
-                  Pending Review
-                </span>
-              )}
-              {isRejected && (
-                <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-white/20 text-white">
-                  Rejected
-                </span>
-              )}
-            </div>
-            <div className={`text-xs sm:text-sm ${getHeaderTextStyle()} truncate`}>
-              <p className="truncate">{street}</p>
-              {cityStateZip && <p className="truncate">{cityStateZip}</p>}
+      {/* Mobile header: matches Transactions page layout */}
+      <div className="sm:hidden">
+        <div className="flex items-center justify-between">
+          <button
+            onClick={onClose}
+            className="text-white hover:bg-white hover:bg-opacity-20 rounded-lg px-2 py-2 transition-all flex items-center gap-1 font-medium text-sm"
+          >
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
+            </svg>
+            Back
+          </button>
+          <div className="text-right">
+            <h3 className="text-lg font-bold text-white">{getHeaderTitle()}</h3>
+            {/* Action buttons under the title */}
+            <div className="flex flex-nowrap items-center gap-2 justify-end mt-1">
+              {renderActions()}
             </div>
           </div>
+        </div>
+      </div>
 
-          {/* Close button on mobile top-right */}
-          <div className="sm:hidden flex-shrink-0">
-            <CloseButton />
+      {/* Desktop header: title + address + actions + close */}
+      <div className="hidden sm:flex sm:flex-row sm:flex-nowrap sm:items-center justify-between gap-1 overflow-hidden">
+        {/* Title/Address section */}
+        <div className="flex-1 min-w-0 overflow-hidden">
+          <div className="flex items-center gap-2">
+            <h3 className="text-xl font-bold text-white">{getHeaderTitle()}</h3>
+            {isPendingReview && (
+              <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-white/20 text-white">
+                Pending Review
+              </span>
+            )}
+            {isRejected && (
+              <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-white/20 text-white">
+                Rejected
+              </span>
+            )}
+          </div>
+          <div className={`text-sm ${getHeaderTextStyle()} truncate`}>
+            <p className="truncate">{street}</p>
+            {cityStateZip && <p className="truncate">{cityStateZip}</p>}
           </div>
         </div>
 
-        {/* Action buttons - scrollable on mobile, row on desktop */}
-        <div className="flex flex-nowrap items-center gap-2 justify-end flex-shrink-0 overflow-x-auto scrollbar-hide">
-          {isPendingReview ? (
-            <PendingReviewActions
-              isRejecting={isRejecting}
-              isApproving={isApproving}
-              onShowRejectReasonModal={onShowRejectReasonModal}
-              onShowEditModal={onShowEditModal}
-              onApprove={onApprove}
-            />
-          ) : isRejected ? (
-            <RejectedActions
-              isRestoring={isRestoring}
-              onRestore={onRestore}
-              onShowDeleteConfirm={onShowDeleteConfirm}
-            />
-          ) : (
-            <ActiveActions
-              transaction={transaction}
-              isSubmitting={isSubmitting}
-              onShowEditModal={onShowEditModal}
-              onShowSubmitModal={onShowSubmitModal}
-              onShowExportModal={onShowExportModal}
-              onShowDeleteConfirm={onShowDeleteConfirm}
-            />
-          )}
-
-          {/* Close button - desktop only (mobile close is in title row) */}
-          <div className="hidden sm:block">
-            <CloseButton />
-          </div>
+        {/* Action buttons + close */}
+        <div className="flex flex-nowrap items-center gap-2 justify-end flex-shrink-0">
+          {renderActions()}
+          <CloseButton />
         </div>
       </div>
     </div>

@@ -8,6 +8,10 @@
       /* Electron window drag regions - must bypass PostCSS/autoprefixer */
       .drag-region { -webkit-app-region: drag; app-region: drag; }
       .no-drag-region { -webkit-app-region: no-drag; app-region: no-drag; }
+      /* Disable drag region on small screens so back buttons stay clickable */
+      @media (max-width: 639px) {
+        .drag-region { -webkit-app-region: no-drag; app-region: no-drag; }
+      }
     </style>
   </head>
   <body>
