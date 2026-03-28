@@ -13,7 +13,7 @@
  * - pruneOldEntries(): Retention policy enforcement
  */
 
-import { dbRun, dbAll, dbGet, dbExec, ensureDb } from "./db/core/dbConnection";
+import { dbRun, dbAll, dbGet, dbExec } from "./db/core/dbConnection";
 import logService from "./logService";
 
 /** Shape of a failure log entry as stored in SQLite */

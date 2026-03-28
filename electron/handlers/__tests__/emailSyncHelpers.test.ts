@@ -54,9 +54,7 @@ describe("computeEmailFetchSinceDate", () => {
   });
 
   it("should fall back to 2 years ago when no dates available", () => {
-    const before = new Date();
     const result = computeEmailFetchSinceDate({});
-    const after = new Date();
 
     // Should be approximately 2 years ago (within a few seconds tolerance)
     const twoYearsAgo = new Date();

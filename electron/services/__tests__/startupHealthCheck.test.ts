@@ -99,8 +99,6 @@ describe("startupHealthCheck", () => {
       // Temporarily make require throw for the native module
       // The module is globally mocked via jest.config, so we need to
       // simulate a failure by mocking the require call
-      const originalRequire = jest.requireActual;
-
       // We can't easily make `require()` throw for a mocked module,
       // so we test the error path by calling the function directly
       // after verifying the success path works.

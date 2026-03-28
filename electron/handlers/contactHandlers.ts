@@ -36,7 +36,6 @@ import {
 import { normalizePhoneNumber } from "../utils/phoneNormalization";
 import { getValidUserId } from "../utils/userIdHelper";
 import { isContactSourceEnabled } from "../utils/preferenceHelper";
-import outlookFetchService from "../services/outlookFetchService";
 import contactSyncService from "../services/contactSyncService";
 import { OutlookContactProvider } from "../services/providers/outlookContactProvider";
 import { GoogleContactProvider } from "../services/providers/googleContactProvider";

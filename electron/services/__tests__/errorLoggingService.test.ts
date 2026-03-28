@@ -3,7 +3,7 @@
  * TASK-1800: Production Error Logging to Supabase
  */
 
-import ErrorLoggingService, { getErrorLoggingService } from "../errorLoggingService";
+import { getErrorLoggingService } from "../errorLoggingService";
 
 // Mock dependencies
 jest.mock("../supabaseService", () => ({
