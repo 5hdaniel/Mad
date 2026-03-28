@@ -4,6 +4,7 @@
  * Supports inline display of image/GIF attachments (TASK-1012).
  */
 import React, { useEffect, useState, useRef } from "react";
+import { ResponsiveModal } from "../../../common/ResponsiveModal";
 import type { MessageLike } from "../MessageThreadCard";
 import { parseDateSafe } from "../../../../utils/dateFormatters";
 import { normalizePhoneForLookup, getSenderPhone } from "../../../../utils/phoneNormalization";
@@ -307,14 +308,7 @@ export function ConversationViewModal({
   }, [attachmentsKey]);
 
   return (
-    <div
-      className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[80]"
-      onClick={onClose}
-    >
-      <div
-        className="bg-gray-100 w-full max-w-md h-[600px] rounded-2xl shadow-2xl flex flex-col overflow-hidden"
-        onClick={(e) => e.stopPropagation()}
-      >
+    <ResponsiveModal onClose={onClose} zIndex="z-[80]" overlayClassName="bg-black bg-opacity-50" panelBg="bg-gray-100" panelClassName="max-w-md sm:h-[600px] sm:rounded-2xl sm:overflow-hidden">
         {/* Phone-style header */}
         <div className="bg-gradient-to-r from-green-500 to-teal-600 px-4 py-3 flex items-center gap-3">
           <button
@@ -526,8 +520,7 @@ export function ConversationViewModal({
             Close
           </button>
         </div>
-      </div>
-    </div>
+    </ResponsiveModal>
   );
 }
 

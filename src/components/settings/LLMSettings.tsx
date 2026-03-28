@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback } from "react";
+import { ResponsiveModal } from "../common/ResponsiveModal";
 import { llmService } from '../../services';
 import logger from '../../utils/logger';
 
@@ -62,8 +63,7 @@ function ConsentModal({
   const [acknowledged, setAcknowledged] = useState(false);
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[60] p-4">
-      <div className="bg-white rounded-xl shadow-2xl max-w-lg w-full p-6">
+    <ResponsiveModal onClose={onDecline} zIndex="z-[60]" overlayClassName="bg-black bg-opacity-50" panelClassName="max-w-lg p-6">
         <div className="flex items-center gap-3 mb-4">
           <div className="w-10 h-10 bg-purple-100 rounded-full flex items-center justify-center">
             <svg
@@ -133,8 +133,7 @@ function ConsentModal({
             Accept & Continue
           </button>
         </div>
-      </div>
-    </div>
+    </ResponsiveModal>
   );
 }
 

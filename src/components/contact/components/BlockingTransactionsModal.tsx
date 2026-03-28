@@ -1,4 +1,5 @@
 import React from "react";
+import { ResponsiveModal } from "../../common/ResponsiveModal";
 import { TransactionWithRoles } from "../types";
 
 interface BlockingTransactionsModalProps {
@@ -15,8 +16,7 @@ function BlockingTransactionsModal({
   onClose,
 }: BlockingTransactionsModalProps) {
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4">
-      <div className="bg-white rounded-xl shadow-2xl max-w-4xl w-full max-h-[90vh] flex flex-col">
+    <ResponsiveModal onClose={onClose} overlayClassName="bg-black bg-opacity-50" panelClassName="max-w-4xl sm:max-h-[90vh]">
         {/* Header */}
         <div className="px-6 py-4 border-b border-gray-200 flex items-center justify-between bg-red-50 rounded-t-xl">
           <div className="flex items-center gap-3">
@@ -211,8 +211,7 @@ function BlockingTransactionsModal({
             Close
           </button>
         </div>
-      </div>
-    </div>
+    </ResponsiveModal>
   );
 }
 

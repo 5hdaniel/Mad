@@ -5,6 +5,7 @@
  * TASK-1993: Server-side search with debounce, date filter, and provider-level load more.
  */
 import React, { useState, useEffect, useMemo, useCallback, useRef } from "react";
+import { ResponsiveModal } from "../../../common/ResponsiveModal";
 import {
   processEmailThreads,
 } from "../EmailThreadCard";
@@ -307,11 +308,7 @@ export function AttachEmailsModal({
 
   return (
     <>
-    <div
-      className="fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center z-[70] p-4"
-      data-testid="attach-emails-modal"
-    >
-      <div className="bg-white rounded-xl shadow-2xl w-full max-w-3xl max-h-[80vh] flex flex-col">
+    <ResponsiveModal onClose={onClose} zIndex="z-[70]" testId="attach-emails-modal" panelClassName="max-w-3xl sm:max-h-[80vh]">
         {/* Header */}
         <div className="flex-shrink-0 bg-gradient-to-r from-blue-500 to-indigo-600 px-6 py-4 flex items-center justify-between rounded-t-xl">
           <div>
@@ -617,8 +614,7 @@ export function AttachEmailsModal({
             </button>
           </div>
         </div>
-      </div>
-    </div>
+    </ResponsiveModal>
 
     {/* Thread view modal */}
     {viewingThread && (

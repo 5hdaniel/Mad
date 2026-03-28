@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from "react";
+import { ResponsiveModal } from "./common/ResponsiveModal";
 import type { Transaction } from "../../electron/types/models";
 import { settingsService, transactionService } from '../services';
 import logger from '../utils/logger';
@@ -278,10 +279,9 @@ function ExportModal({
   // C6: When feature is gated, render ONLY UpgradePrompt with title and close button
   if (!featureGateLoading && !canExport) {
     return (
-      <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[70] p-4">
-        <div className="bg-white rounded-xl shadow-2xl w-full max-w-3xl">
+      <ResponsiveModal onClose={onClose} zIndex="z-[70]" overlayClassName="bg-black bg-opacity-50" panelClassName="max-w-3xl">
           {/* Header */}
-          <div className="bg-gradient-to-r from-purple-500 to-indigo-600 px-6 py-4 flex items-center justify-between rounded-t-xl">
+          <div className="bg-gradient-to-r from-purple-500 to-indigo-600 px-6 py-4 flex items-center justify-between sm:rounded-t-xl">
             <div>
               <h3 className="text-xl font-bold text-white">
                 Export Transaction Audit
@@ -318,14 +318,12 @@ function ExportModal({
               onDismiss={onClose}
             />
           </div>
-        </div>
-      </div>
+      </ResponsiveModal>
     );
   }
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[70] p-4">
-      <div className="bg-white rounded-xl shadow-2xl w-full max-w-3xl">
+    <ResponsiveModal onClose={onClose} zIndex="z-[70]" overlayClassName="bg-black bg-opacity-50" panelClassName="max-w-3xl">
         {/* Header */}
         <div className="bg-gradient-to-r from-purple-500 to-indigo-600 px-6 py-4 flex items-center justify-between rounded-t-xl">
           <div>
@@ -813,8 +811,7 @@ function ExportModal({
             </button>
           </div>
         )}
-      </div>
-    </div>
+    </ResponsiveModal>
   );
 }
 

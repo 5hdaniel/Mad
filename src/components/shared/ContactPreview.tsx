@@ -1,4 +1,5 @@
 import React from "react";
+import { ResponsiveModal } from "../common/ResponsiveModal";
 import { SourcePill, ImportStatusPill, mapToSourcePillSource } from "./SourcePill";
 import { formatRoleLabel } from "../../utils/transactionRoleUtils";
 import type { ExtendedContact } from "../../types/components";
@@ -112,15 +113,8 @@ export function ContactPreview({
   };
 
   return (
-    <div
-      className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4"
-      onClick={handleBackdropClick}
-      data-testid="contact-preview-backdrop"
-    >
-      <div
-        className="bg-white rounded-xl shadow-2xl w-full max-w-md max-h-[80vh] flex flex-col"
-        data-testid="contact-preview-modal"
-      >
+    <ResponsiveModal onClose={onClose} overlayClassName="bg-black bg-opacity-50" testId="contact-preview-backdrop" panelClassName="max-w-md sm:max-h-[80vh]">
+      <div data-testid="contact-preview-modal">
         {/* Header with close button */}
         <div className="flex justify-end p-4">
           <button
@@ -263,7 +257,7 @@ export function ContactPreview({
           )}
         </div>
       </div>
-    </div>
+    </ResponsiveModal>
   );
 }
 

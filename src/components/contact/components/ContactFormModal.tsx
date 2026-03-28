@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback } from "react";
+import { ResponsiveModal } from "../../common/ResponsiveModal";
 import { ExtendedContact, ContactFormData, ContactEmailEntry, ContactPhoneEntry } from "../types";
 import { ROLE_DISPLAY_NAMES } from "../../../constants/contactRoles";
 import { contactService } from "../../../services/contactService";
@@ -273,8 +274,7 @@ function ContactFormModal({
     "w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500";
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center z-[70] p-4">
-      <div className="bg-white rounded-xl shadow-2xl max-w-md w-full max-h-[90vh] flex flex-col">
+    <ResponsiveModal onClose={onClose} zIndex="z-[70]" panelClassName="max-w-md sm:max-h-[90vh]">
         {/* Header */}
         <div className="bg-gradient-to-r from-purple-500 to-pink-600 px-6 py-4 flex items-center justify-between rounded-t-xl flex-shrink-0">
           <h3 className="text-lg font-bold text-white">
@@ -543,8 +543,7 @@ function ContactFormModal({
             {saving ? "Saving..." : contact ? "Update Contact" : "Add Contact"}
           </button>
         </div>
-      </div>
-    </div>
+    </ResponsiveModal>
   );
 }
 

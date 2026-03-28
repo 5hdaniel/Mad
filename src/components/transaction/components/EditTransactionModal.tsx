@@ -3,6 +3,7 @@
  * Modal for editing transaction details and contact assignments
  */
 import React, { useState, useEffect } from "react";
+import { ResponsiveModal } from "../../common/ResponsiveModal";
 import type { Transaction } from "../../../../electron/types/models";
 import type { ExtendedContact } from "../../../types/components";
 import {
@@ -281,8 +282,7 @@ export function EditTransactionModal({
   };
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center z-[70] p-4">
-      <div className="bg-white rounded-xl shadow-2xl w-full max-w-4xl max-h-[90vh] flex flex-col">
+    <ResponsiveModal onClose={onClose} zIndex="z-[70]" panelClassName="max-w-4xl sm:max-h-[90vh]">
         {/* Header */}
         <div className="flex-shrink-0 bg-gradient-to-r from-blue-500 to-indigo-600 px-6 py-4 flex items-center justify-between rounded-t-xl">
           <h3 className="text-xl font-bold text-white">Edit Transaction</h3>
@@ -508,8 +508,7 @@ export function EditTransactionModal({
             {saving ? "Saving..." : "Save Changes"}
           </button>
         </div>
-      </div>
-    </div>
+    </ResponsiveModal>
   );
 }
 

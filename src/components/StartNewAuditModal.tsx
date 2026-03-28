@@ -1,4 +1,5 @@
 import React from "react";
+import { ResponsiveModal } from "./common/ResponsiveModal";
 import type { Transaction } from "../types";
 import { usePendingTransactions } from "../hooks/usePendingTransactions";
 import { FeatureGate } from "./common/FeatureGate";
@@ -58,11 +59,7 @@ function StartNewAuditModal({
     formatCurrencyShared(amount, "");
 
   return (
-    <div
-      className="fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center z-50 p-4"
-      data-testid="start-new-audit-modal"
-    >
-      <div className="bg-white rounded-xl shadow-2xl w-full max-w-2xl max-h-[85vh] flex flex-col">
+    <ResponsiveModal onClose={onClose} testId="start-new-audit-modal" panelClassName="max-w-2xl max-h-[85vh]">
         {/* Header */}
         <div className="flex-shrink-0 bg-gradient-to-r from-blue-500 to-indigo-600 px-6 py-4 flex items-center justify-between rounded-t-xl">
           <div>
@@ -375,8 +372,7 @@ function StartNewAuditModal({
             </button>
           </div>
         </div>
-      </div>
-    </div>
+    </ResponsiveModal>
   );
 }
 

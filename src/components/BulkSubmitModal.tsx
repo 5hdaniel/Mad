@@ -6,6 +6,7 @@
  * and results summary.
  */
 import React from "react";
+import { ResponsiveModal } from "./common/ResponsiveModal";
 import type { SubmissionStatus } from "@/types";
 
 // ============================================
@@ -384,8 +385,7 @@ export function BulkSubmitModal({
   };
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center z-[70] p-4">
-      <div className="bg-white rounded-xl shadow-2xl max-w-lg w-full p-6">
+    <ResponsiveModal onClose={onClose} zIndex="z-[70]" panelClassName="max-w-lg p-6">
         {/* Header */}
         <div className="flex items-center gap-3 mb-4">
           <div className="w-12 h-12 rounded-full bg-blue-100 flex items-center justify-center flex-shrink-0">
@@ -480,8 +480,7 @@ export function BulkSubmitModal({
             </>
           )}
         </div>
-      </div>
-    </div>
+    </ResponsiveModal>
   );
 }
 

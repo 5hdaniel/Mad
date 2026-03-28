@@ -7,6 +7,7 @@
  */
 import React, { useState, useCallback, useMemo, useEffect } from "react";
 import DOMPurify from "dompurify";
+import { ResponsiveModal } from "../../../common/ResponsiveModal";
 import type { Communication } from "../../types";
 import type { EmailThread } from "../EmailThreadCard";
 import { AttachmentPreviewModal } from "./AttachmentPreviewModal";
@@ -509,14 +510,7 @@ export function EmailThreadViewModal({
   }, []);
 
   return (
-    <div
-      className="fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center z-[80] p-4"
-      onClick={onClose}
-    >
-      <div
-        className="bg-gray-50 w-full max-w-xl max-h-[85vh] rounded-xl shadow-2xl flex flex-col overflow-hidden"
-        onClick={(e) => e.stopPropagation()}
-      >
+    <ResponsiveModal onClose={onClose} zIndex="z-[80]" panelBg="bg-gray-50" panelClassName="max-w-xl sm:max-h-[85vh] sm:overflow-hidden">
         {/* Header */}
         <div className="flex-shrink-0 bg-gradient-to-r from-blue-500 to-indigo-600 px-5 py-4">
           <div className="flex items-start justify-between">
@@ -577,7 +571,6 @@ export function EmailThreadViewModal({
             Close
           </button>
         </div>
-      </div>
 
       {/* TASK-1782: Attachment Preview Modal */}
       {previewAttachment && (
@@ -589,7 +582,7 @@ export function EmailThreadViewModal({
           }}
         />
       )}
-    </div>
+    </ResponsiveModal>
   );
 }
 

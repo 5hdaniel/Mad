@@ -1,4 +1,5 @@
 import React from "react";
+import { ResponsiveModal } from "./common/ResponsiveModal";
 import AddressVerificationStep from "./audit/AddressVerificationStep";
 import ContactAssignmentStep from "./audit/ContactAssignmentStep";
 import type { Transaction } from "../../electron/types/models";
@@ -72,14 +73,12 @@ function AuditTransactionModal({
   // Should never trigger if AppShell gate works, but prevents errors if bypassed
   if (!isDatabaseInitialized) {
     return (
-      <div className="fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center z-50 p-4">
-        <div className="bg-white rounded-xl shadow-2xl p-8">
+      <ResponsiveModal panelClassName="max-w-md p-8">
           <div className="text-center">
             <div className="w-8 h-8 border-4 border-indigo-600 border-t-transparent rounded-full animate-spin mx-auto mb-2"></div>
             <p className="text-gray-500 text-sm">Waiting for database...</p>
           </div>
-        </div>
-      </div>
+      </ResponsiveModal>
     );
   }
 
@@ -90,8 +89,7 @@ function AuditTransactionModal({
   const displayStep = isEditing ? 1 : Math.min(step, 3);
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-xl shadow-2xl w-full max-w-4xl max-h-[90vh] flex flex-col">
+    <ResponsiveModal onClose={onClose} panelClassName="max-w-4xl sm:max-h-[90vh]">
         {/* Header */}
         <div className="flex-shrink-0 bg-gradient-to-r from-indigo-500 to-purple-600 px-6 py-4 flex items-center justify-between rounded-t-xl">
           <div>
@@ -259,8 +257,7 @@ function AuditTransactionModal({
             </button>
           </div>
         </div>
-      </div>
-    </div>
+    </ResponsiveModal>
   );
 }
 
