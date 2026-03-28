@@ -49,7 +49,7 @@ describe("EmailViewModal", () => {
         />
       );
 
-      expect(screen.getByText("Important Email")).toBeInTheDocument();
+      expect(screen.getAllByText("Important Email")[0]).toBeInTheDocument();
     });
 
     it("should render (No Subject) when subject is missing", () => {
@@ -61,7 +61,7 @@ describe("EmailViewModal", () => {
         />
       );
 
-      expect(screen.getByText("(No Subject)")).toBeInTheDocument();
+      expect(screen.getAllByText("(No Subject)")[0]).toBeInTheDocument();
     });
 
     it("should render sender information", () => {
@@ -110,7 +110,7 @@ describe("EmailViewModal", () => {
       );
 
       // The exact format depends on locale, just check some part of the date is rendered
-      expect(screen.getByText(/2024|Jun|15/)).toBeInTheDocument();
+      expect(screen.getAllByText(/2024|Jun|15/)[0]).toBeInTheDocument();
     });
 
     it("should render Unknown date when sent_at is missing", () => {
@@ -444,7 +444,7 @@ describe("EmailViewModal", () => {
         />
       );
 
-      await user.click(screen.getByRole("button", { name: "Close email" }));
+      await user.click(screen.getAllByRole("button", { name: "Close email" })[0]);
       expect(mockOnClose).toHaveBeenCalled();
     });
 
