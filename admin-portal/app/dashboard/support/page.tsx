@@ -45,8 +45,6 @@ export default function SupportPage() {
     handleStatusChange, handlePriorityChange, handleCategoryChange, handleSearch,
     currentFilters: baseCurrentFilters, handleLoadView: baseHandleLoadView,
     page, setPage,
-    setStatusFilter, setPriorityFilter, setCategoryFilter,
-    setSortColumn, setSortDirection, setVisibleColumns,
   } = useTicketTableState(tickets);
 
   const pageSize = 20;
