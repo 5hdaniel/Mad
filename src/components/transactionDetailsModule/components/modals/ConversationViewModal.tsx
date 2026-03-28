@@ -110,7 +110,7 @@ function AttachmentImage({
       <img
         src={dataUrl}
         alt={attachment.filename || "Attachment"}
-        className="max-w-full max-h-64 rounded-lg cursor-pointer hover:opacity-90 transition-opacity"
+        className="max-w-full max-h-48 sm:max-h-64 rounded-lg cursor-pointer hover:opacity-90 transition-opacity"
         onLoad={() => setIsLoading(false)}
         onError={() => {
           setIsLoading(false);
@@ -308,11 +308,11 @@ export function ConversationViewModal({
 
   return (
     <div
-      className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[80]"
+      className="fixed inset-0 bg-black bg-opacity-50 flex items-end sm:items-center justify-center z-[80]"
       onClick={onClose}
     >
       <div
-        className="bg-gray-100 w-full max-w-md h-[600px] rounded-2xl shadow-2xl flex flex-col overflow-hidden"
+        className="bg-gray-100 w-full h-full sm:h-[600px] sm:max-w-md sm:rounded-2xl shadow-2xl flex flex-col overflow-hidden"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Phone-style header */}
@@ -426,7 +426,7 @@ export function ConversationViewModal({
                 className={`flex ${isOutbound ? "justify-end" : "justify-start"}`}
               >
                 <div
-                  className={`max-w-[80%] rounded-2xl px-4 py-2 ${
+                  className={`max-w-[85%] sm:max-w-[80%] rounded-2xl px-3 py-2 sm:px-4 ${
                     isOutbound
                       ? "bg-green-500 text-white rounded-br-md"
                       : "bg-white text-gray-900 rounded-bl-md shadow-sm"

@@ -187,21 +187,23 @@ function ConversationList({
       />
 
       {/* Header */}
-      <div className="bg-white border-b border-gray-200 p-6">
-        <h1 className="text-2xl font-bold text-gray-900 mb-4">
+      <div className="bg-white border-b border-gray-200 p-4 sm:p-6">
+        <h1 className="text-xl sm:text-2xl font-bold text-gray-900 mb-3 sm:mb-4">
           Select Contacts for Export
         </h1>
 
         {/* Search and Selection Controls */}
-        <div className="flex gap-4 mb-4">
+        <div className="flex flex-col sm:flex-row gap-2 sm:gap-4 mb-4">
           <SearchBar value={searchTerm} onChange={setSearchTerm} />
-          <SelectionControls
-            onSelectAll={() => selection.selectAll(filteredConversations)}
-            onDeselectAll={selection.deselectAll}
-            onToggleShowSelected={() => setShowOnlySelected(!showOnlySelected)}
-            showOnlySelected={showOnlySelected}
-            selectedCount={selection.count}
-          />
+          <div className="flex gap-2 sm:gap-4 flex-wrap">
+            <SelectionControls
+              onSelectAll={() => selection.selectAll(filteredConversations)}
+              onDeselectAll={selection.deselectAll}
+              onToggleShowSelected={() => setShowOnlySelected(!showOnlySelected)}
+              showOnlySelected={showOnlySelected}
+              selectedCount={selection.count}
+            />
+          </div>
         </div>
 
         {/* Export Section */}
@@ -224,7 +226,7 @@ function ConversationList({
       </div>
 
       {/* Conversation List */}
-      <div className="flex-1 overflow-y-auto p-6">
+      <div className="flex-1 overflow-y-auto p-3 sm:p-6">
         {filteredConversations.length === 0 ? (
           <div className="text-center py-12">
             <svg

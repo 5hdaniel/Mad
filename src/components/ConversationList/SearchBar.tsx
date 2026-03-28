@@ -21,7 +21,7 @@ export function SearchBar({ value, onChange }: SearchBarProps) {
         placeholder="Search contacts..."
         value={value}
         onChange={handleChange}
-        className="w-full px-4 py-2 pl-10 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent"
+        className="w-full px-4 py-2 pl-10 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent text-gray-900 bg-white"
       />
       <svg
         className="w-5 h-5 text-gray-400 absolute left-3 top-2.5"

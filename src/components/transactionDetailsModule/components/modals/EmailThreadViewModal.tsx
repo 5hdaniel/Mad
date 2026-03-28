@@ -357,7 +357,7 @@ function EmailBubble({
                         e.stopPropagation();
                         onPreviewAttachment(attachment);
                       }}
-                      className="flex items-center gap-2 w-full px-2 py-1.5 rounded-lg text-xs transition-colors bg-gray-50 hover:bg-gray-100 text-gray-700"
+                      className="flex items-center gap-2 w-full px-2 py-2 sm:py-1.5 rounded-lg text-xs transition-colors bg-gray-50 hover:bg-gray-100 text-gray-700"
                       title={`Preview ${attachment.filename}`}
                       data-testid={`thread-attachment-${attachment.id}`}
                     >
@@ -510,18 +510,18 @@ export function EmailThreadViewModal({
 
   return (
     <div
-      className="fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center z-[80] p-4"
+      className="fixed inset-0 bg-black bg-opacity-70 flex items-end sm:items-center justify-center z-[80] sm:p-4"
       onClick={onClose}
     >
       <div
-        className="bg-gray-50 w-full max-w-xl max-h-[85vh] rounded-xl shadow-2xl flex flex-col overflow-hidden"
+        className="bg-gray-50 w-full h-full sm:h-auto sm:max-w-xl sm:max-h-[85vh] sm:rounded-xl shadow-2xl flex flex-col overflow-hidden"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
-        <div className="flex-shrink-0 bg-gradient-to-r from-blue-500 to-indigo-600 px-5 py-4">
+        <div className="flex-shrink-0 bg-gradient-to-r from-blue-500 to-indigo-600 px-4 py-3 sm:px-5 sm:py-4">
           <div className="flex items-start justify-between">
-            <div className="flex-1 pr-4">
-              <h3 className="text-lg font-bold text-white truncate">
+            <div className="flex-1 pr-4 min-w-0">
+              <h3 className="text-base sm:text-lg font-bold text-white truncate">
                 {thread.subject || "(No Subject)"}
               </h3>
               <p className="text-blue-100 text-sm mt-1">
