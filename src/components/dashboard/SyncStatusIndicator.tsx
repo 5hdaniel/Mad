@@ -273,7 +273,7 @@ export function SyncStatusIndicator({
         className={`${styles.card} border rounded-xl p-4 mb-4 animate-fade-in`}
         data-testid="sync-status-complete"
       >
-        <div className="flex items-center justify-between">
+        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 sm:gap-0">
           <div className="flex items-center gap-3">
             {/* Icon */}
             <div
@@ -515,7 +515,7 @@ export function SyncStatusIndicator({
       data-testid="sync-status-indicator"
     >
       {/* Status pills row - render in queue order */}
-      <div className="flex items-center gap-2 mb-2">
+      <div className="flex items-center gap-2 mb-2 flex-wrap">
         {/* Spinning sync icon (counter-clockwise) */}
         <svg
           className={`w-4 h-4 ${iconClass} ${isAnySyncing ? 'animate-spin' : ''} flex-shrink-0`}
