@@ -11,6 +11,7 @@ import { SecuritySettings } from "./settings/SecuritySettings";
 import { DataPrivacySettings } from "./settings/DataPrivacySettings";
 import { AboutSettings } from "./settings/AboutSettings";
 import { SyncToolsSettings } from "./settings/SyncToolsSettings";
+import { AndroidPairingSection } from "./settings/AndroidPairingSection";
 import { useScrollSpy } from "@/hooks/useScrollSpy";
 import { useFeatureGate } from "@/hooks/useFeatureGate";
 import { OfflineNotice } from './common/OfflineNotice';
@@ -25,6 +26,7 @@ const SETTINGS_TABS = [
   { id: "settings-contacts", label: "Contacts" },
   { id: "settings-ai", label: "AI" },
   { id: "settings-security", label: "Security" },
+  { id: "settings-android", label: "Android" },
   { id: "settings-sync", label: "Sync" },
   { id: "settings-data", label: "Data & Privacy" },
   { id: "settings-about", label: "About" },
@@ -181,6 +183,9 @@ function Settings({ onClose, userId, onLogout, onEmailConnected, onEmailDisconne
             </FeatureGate>
 
             <SecuritySettings userId={userId} onLogout={onLogout} />
+
+            {/* Android Phone — pairing + WiFi sync (TASK-1431) */}
+            <AndroidPairingSection userId={userId} />
 
             {/* Sync Tools — Windows only (TASK-2277) */}
             {isWindows && <SyncToolsSettings />}

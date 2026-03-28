@@ -23,3 +23,5 @@ export { privacyBridge } from "./privacyBridge";
 export { failureLogBridge } from "./failureLogBridge";
 export { featureGateBridge } from "./featureGateBridge";
 export { supportBridge } from "./supportBridge";
+export { pairingBridge } from "./pairingBridge";
+export { localSyncBridge } from "./localSyncBridge";

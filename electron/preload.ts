@@ -58,6 +58,8 @@ import {
   failureLogBridge,
   featureGateBridge,
   supportBridge,
+  pairingBridge,
+  localSyncBridge,
   logBridge,
 } from "./preload/index";
 
@@ -144,6 +146,12 @@ contextBridge.exposeInMainWorld("api", {
 
   // Support ticket diagnostics + screenshot (TASK-2180)
   support: supportBridge,
+
+  // Android companion pairing (TASK-1428)
+  pairing: pairingBridge,
+
+  // Android companion local sync server (TASK-1431)
+  localSync: localSyncBridge,
 
   // Renderer log relay — pipes to main process log file
   log: logBridge,
