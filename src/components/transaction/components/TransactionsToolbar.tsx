@@ -88,9 +88,9 @@ export function TransactionsToolbar({
   ).length;
 
   return (
-    <div className="flex-shrink-0 p-6 bg-white shadow-md">
+    <div className="flex-shrink-0 px-3 sm:px-6 py-3 sm:py-6 bg-white shadow-md">
       {/* Responsive Toolbar: stacked on narrow, single row on wide */}
-      <div className="flex flex-col md:flex-row md:items-center gap-3">
+      <div className="flex flex-col md:flex-row md:items-center gap-2 sm:gap-3">
         {/* Search - full width on narrow, flex-1 on wide */}
         <div className="w-full md:w-auto md:flex-1 relative">
           <input
@@ -98,7 +98,7 @@ export function TransactionsToolbar({
             placeholder="Search by address..."
             value={searchQuery}
             onChange={(e) => onSearchChange(e.target.value)}
-            className="w-full h-10 pl-10 pr-4 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+            className="w-full h-10 pl-10 pr-4 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-gray-900 bg-white"
           />
           <svg
             className="w-5 h-5 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2"
@@ -115,8 +115,8 @@ export function TransactionsToolbar({
           </svg>
         </div>
 
-        {/* Filter tabs + action buttons - no wrap, shrink to fit */}
-        <div className="flex items-center gap-2 min-w-0">
+        {/* Filter tabs + action buttons - scrollable on mobile */}
+        <div className="flex items-center gap-2 min-w-0 overflow-x-auto scrollbar-hide">
           {/* Status Filter Toggle */}
           <div className="inline-flex items-center bg-gray-200 rounded-lg p-1 min-w-0 h-10">
             <button
