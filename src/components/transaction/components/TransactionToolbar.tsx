@@ -140,7 +140,7 @@ function TransactionToolbar({
               placeholder="Search by address..."
               value={searchQuery}
               onChange={(e) => onSearchChange(e.target.value)}
-              className="w-full h-10 pl-10 pr-4 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-gray-900 bg-white"
+              className="w-full h-11 pl-10 pr-4 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-gray-900 bg-white"
             />
             <svg
               className="w-5 h-5 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2"
@@ -160,7 +160,7 @@ function TransactionToolbar({
           {/* Filter tabs + action buttons - scrollable on mobile */}
           <div className="flex items-center gap-2 min-w-0 overflow-x-auto scrollbar-hide">
             {/* Consolidated Filter Tabs */}
-            <div className="inline-flex items-center bg-gray-200 rounded-lg p-1 min-w-0 h-10 flex-shrink-0">
+            <div className="inline-flex items-center bg-gray-200 rounded-lg p-1 min-w-0 h-11 flex-shrink-0">
               <button
                 onClick={() => onFilterChange("all")}
                 className={`px-2 sm:px-4 py-2 rounded-md font-medium transition-all text-sm whitespace-nowrap ${
@@ -303,7 +303,7 @@ function TransactionToolbar({
             {/* Edit Button */}
             <button
               onClick={onToggleSelectionMode}
-              className={`px-2 sm:px-4 py-2 h-10 rounded-lg font-semibold transition-all flex items-center gap-1 sm:gap-2 text-sm whitespace-nowrap ${
+              className={`px-2 sm:px-4 py-2 h-11 rounded-lg font-semibold transition-all flex items-center gap-1 sm:gap-2 text-sm whitespace-nowrap ${
                 selectionMode
                   ? "bg-blue-500 text-white hover:bg-blue-600"
                   : "bg-gray-200 text-gray-700 hover:bg-gray-300"
@@ -328,7 +328,7 @@ function TransactionToolbar({
             {/* Audit New Transaction Button */}
             <button
               onClick={onNewTransaction}
-              className="px-2 sm:px-4 py-2 h-10 rounded-lg font-semibold transition-all bg-green-500 text-white hover:bg-green-600 shadow-md hover:shadow-lg flex items-center gap-1 sm:gap-2 text-sm whitespace-nowrap"
+              className="px-2 sm:px-4 py-2 h-11 rounded-lg font-semibold transition-all bg-green-500 text-white hover:bg-green-600 shadow-md hover:shadow-lg flex items-center gap-1 sm:gap-2 text-sm whitespace-nowrap"
             >
               <svg
                 className="w-5 h-5"

@@ -112,7 +112,7 @@ export function ImportSourceSettings({ userId }: ImportSourceSettingsProps) {
                 checked={source === "macos-native"}
                 onChange={() => handleSourceChange("macos-native")}
                 disabled={saving}
-                className="mt-0.5"
+                className="mt-0.5 w-5 h-5"
               />
               <div>
                 <div className="text-sm font-medium text-gray-900">
@@ -139,7 +139,7 @@ export function ImportSourceSettings({ userId }: ImportSourceSettingsProps) {
                 checked={source === "iphone-sync"}
                 onChange={() => handleSourceChange("iphone-sync")}
                 disabled={saving}
-                className="mt-0.5"
+                className="mt-0.5 w-5 h-5"
               />
               <div>
                 <div className="text-sm font-medium text-gray-900">

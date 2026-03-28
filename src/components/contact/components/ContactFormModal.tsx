@@ -270,7 +270,7 @@ function ContactFormModal({
   };
 
   const inputClass =
-    "w-full px-3 py-2.5 sm:py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500 text-gray-900 bg-white";
+    "w-full px-3 py-2.5 sm:py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500 text-gray-900 bg-white min-h-[44px]";
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-70 flex items-end sm:items-center justify-center z-[70] sm:p-4">
@@ -344,7 +344,7 @@ function ContactFormModal({
                       type="email"
                       value={entry.email}
                       onChange={(e) => handleEmailChange(index, e.target.value)}
-                      className="flex-1 px-3 py-2.5 sm:py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500 text-sm text-gray-900 bg-white"
+                      className="flex-1 px-3 py-2.5 sm:py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500 text-sm text-gray-900 bg-white min-h-[44px]"
                       placeholder="email@example.com"
                     />
                     <button
@@ -414,7 +414,7 @@ function ContactFormModal({
                       type="tel"
                       value={entry.phone}
                       onChange={(e) => handlePhoneChange(index, e.target.value)}
-                      className="flex-1 px-3 py-2.5 sm:py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500 text-sm text-gray-900 bg-white"
+                      className="flex-1 px-3 py-2.5 sm:py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500 text-sm text-gray-900 bg-white min-h-[44px]"
                       placeholder="(555) 123-4567"
                     />
                     <button
@@ -506,7 +506,7 @@ function ContactFormModal({
             <select
               value={formData.defaultRole || ""}
               onChange={(e) => handleChange("defaultRole", e.target.value)}
-              className="w-full px-3 py-2.5 sm:py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500 text-gray-900 bg-white"
+              className="w-full px-3 py-2.5 sm:py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500 text-gray-900 bg-white min-h-[44px]"
             >
               <option value="">None</option>
               {Object.entries(ROLE_DISPLAY_NAMES).map(([value, label]) => (

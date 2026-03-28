@@ -441,12 +441,12 @@ export function ContactSearchList({
               onChange={handleSearchChange}
               onKeyDown={handleKeyDown}
               placeholder={searchPlaceholder}
-              className="w-full pl-10 pr-4 py-2.5 sm:py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500 focus:outline-none text-gray-900 bg-white text-sm sm:text-base"
+              className="w-full pl-10 pr-4 py-2.5 sm:py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500 focus:outline-none text-gray-900 bg-white text-sm sm:text-base min-h-[44px]"
               aria-label="Search contacts"
               data-testid="contact-search-input"
             />
             <svg
-              className="w-5 h-5 text-gray-400 absolute left-3 top-2.5"
+              className="w-5 h-5 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2"
               fill="none"
               stroke="currentColor"
               viewBox="0 0 24 24"

@@ -278,7 +278,7 @@ export function GeneralSettings({ userId, initialPreferences }: GeneralSettingsP
             <select
               value={exportFormat}
               onChange={(e) => handleExportFormatChange(e.target.value)}
-              className="text-sm border border-gray-300 rounded px-3 py-1.5 bg-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              className="text-sm border border-gray-300 rounded px-3 py-2.5 bg-white text-gray-900 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 min-h-[44px]"
             >
               <option value="pdf">PDF</option>
               <option value="excel">Excel (.xlsx)</option>
@@ -295,7 +295,7 @@ export function GeneralSettings({ userId, initialPreferences }: GeneralSettingsP
             <select
               value={emailExportMode}
               onChange={(e) => handleEmailExportModeChange(e.target.value as "thread" | "individual")}
-              className="text-sm border border-gray-300 rounded px-3 py-1.5 bg-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              className="text-sm border border-gray-300 rounded px-3 py-2.5 bg-white text-gray-900 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 min-h-[44px]"
             >
               <option value="thread">Thread (one PDF per conversation)</option>
               <option value="individual">Individual (one PDF per email, quotes stripped)</option>
