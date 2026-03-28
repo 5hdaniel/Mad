@@ -26,7 +26,7 @@ CREATE TABLE IF NOT EXISTS users_local (
   avatar_url TEXT,
 
   -- OAuth Reference
-  oauth_provider TEXT NOT NULL CHECK (oauth_provider IN ('google', 'microsoft')),
+  oauth_provider TEXT NOT NULL CHECK (oauth_provider IN ('google', 'microsoft', 'email')),
   oauth_id TEXT NOT NULL,
 
   -- Subscription (synced from cloud)

@@ -763,6 +763,61 @@ class DatabaseService implements IDatabaseService {
         }
       },
     },
+    {
+      version: 36,
+      description: "Add 'email' to oauth_provider CHECK constraint for OTP login (TASK-1337)",
+      migrate: (d) => {
+        // SQLite doesn't support ALTER CONSTRAINT, so recreate the table
+        d.exec(`
+          CREATE TABLE users_local_new (
+            id TEXT PRIMARY KEY,
+            email TEXT NOT NULL UNIQUE,
+            first_name TEXT,
+            last_name TEXT,
+            display_name TEXT,
+            avatar_url TEXT,
+            oauth_provider TEXT NOT NULL CHECK (oauth_provider IN ('google', 'microsoft', 'email')),
+            oauth_id TEXT NOT NULL,
+            subscription_tier TEXT DEFAULT 'free' CHECK (subscription_tier IN ('free', 'pro', 'enterprise')),
+            subscription_status TEXT DEFAULT 'trial' CHECK (subscription_status IN ('trial', 'active', 'cancelled', 'expired')),
+            trial_ends_at DATETIME,
+            is_active INTEGER DEFAULT 1,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            last_login_at DATETIME,
+            terms_accepted_at DATETIME,
+            terms_version_accepted TEXT,
+            privacy_policy_accepted_at DATETIME,
+            privacy_policy_version_accepted TEXT,
+            timezone TEXT DEFAULT 'America/Los_Angeles',
+            theme TEXT DEFAULT 'light' CHECK (theme IN ('light', 'dark', 'auto')),
+            notification_preferences TEXT DEFAULT '{}',
+            company TEXT,
+            job_title TEXT,
+            mobile_phone_type TEXT CHECK (mobile_phone_type IN ('iphone', 'android')),
+            license_type TEXT DEFAULT 'individual' CHECK (license_type IN ('individual', 'team', 'enterprise')),
+            ai_detection_enabled INTEGER DEFAULT 0,
+            organization_id TEXT,
+            email_onboarding_completed_at DATETIME,
+            last_cloud_sync_at DATETIME,
+            UNIQUE(oauth_provider, oauth_id)
+          )
+        `);
+        d.exec(`INSERT INTO users_local_new SELECT * FROM users_local`);
+        d.exec(`DROP TABLE users_local`);
+        d.exec(`ALTER TABLE users_local_new RENAME TO users_local`);
+        d.exec(`CREATE INDEX IF NOT EXISTS idx_users_local_email ON users_local(email)`);
+        d.exec(`CREATE INDEX IF NOT EXISTS idx_users_local_license_type ON users_local(license_type)`);
+        d.exec(`CREATE INDEX IF NOT EXISTS idx_users_local_organization ON users_local(organization_id)`);
+        d.exec(`
+          CREATE TRIGGER IF NOT EXISTS update_users_local_timestamp
+          AFTER UPDATE ON users_local
+          BEGIN
+            UPDATE users_local SET updated_at = CURRENT_TIMESTAMP WHERE id = NEW.id;
+          END
+        `);
+      },
+    },
   ];
 
   static validateNoDuplicateVersions(migrations: MigrationEntry[]): void {

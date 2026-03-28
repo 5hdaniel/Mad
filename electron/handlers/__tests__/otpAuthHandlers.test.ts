@@ -67,6 +67,7 @@ jest.mock("../../services/licenseService", () => ({
 
 jest.mock("../../services/deviceService", () => ({
   registerDevice: jest.fn(),
+  getDeviceId: jest.fn().mockReturnValue("stable-machine-id-123"),
 }));
 
 jest.mock("electron", () => ({
@@ -298,6 +299,20 @@ describe("OTP Auth Handlers", () => {
       expect(result.error).toContain("Validation error");
     });
 
+    it("rejects non-6-digit OTP codes", async () => {
+      const result1 = await handleOtpVerifyCode(mockEvent, "test@example.com", "12345");
+      expect(result1.success).toBe(false);
+      expect(result1.error).toContain("6 digits");
+
+      const result2 = await handleOtpVerifyCode(mockEvent, "test@example.com", "1234567");
+      expect(result2.success).toBe(false);
+      expect(result2.error).toContain("6 digits");
+
+      const result3 = await handleOtpVerifyCode(mockEvent, "test@example.com", "abcdef");
+      expect(result3.success).toBe(false);
+      expect(result3.error).toContain("6 digits");
+    });
+
     it("returns user-friendly error for expired code", async () => {
       const mockAuth = {
         verifyOtp: jest.fn().mockResolvedValue({
@@ -343,6 +358,14 @@ describe("OTP Auth Handlers", () => {
         auth: mockAuth,
       } as ReturnType<typeof supabaseService.getClient>);
 
+      // Pipeline steps before license check (sync user -> create local user)
+      mockSupabaseService.syncUser.mockResolvedValue(mockCloudUser as ReturnType<typeof supabaseService.syncUser> extends Promise<infer T> ? T : never);
+      mockDatabaseService.isInitialized.mockReturnValue(true);
+      mockDatabaseService.getUserByEmail.mockResolvedValue(null);
+      mockDatabaseService.createUser.mockResolvedValue(mockUser);
+      mockDatabaseService.updateLastLogin.mockResolvedValue(undefined);
+      mockDatabaseService.getUserById.mockResolvedValue(mockUser);
+
       mockValidateLicense.mockResolvedValue({
         isValid: false,
         licenseType: "trial",
@@ -371,6 +394,14 @@ describe("OTP Auth Handlers", () => {
       mockSupabaseService.getClient.mockReturnValue({
         auth: mockAuth,
       } as ReturnType<typeof supabaseService.getClient>);
+
+      // Pipeline steps before device registration (sync user -> create local user -> license)
+      mockSupabaseService.syncUser.mockResolvedValue(mockCloudUser as ReturnType<typeof supabaseService.syncUser> extends Promise<infer T> ? T : never);
+      mockDatabaseService.isInitialized.mockReturnValue(true);
+      mockDatabaseService.getUserByEmail.mockResolvedValue(null);
+      mockDatabaseService.createUser.mockResolvedValue(mockUser);
+      mockDatabaseService.updateLastLogin.mockResolvedValue(undefined);
+      mockDatabaseService.getUserById.mockResolvedValue(mockUser);
 
       mockValidateLicense.mockResolvedValue({
         isValid: true,

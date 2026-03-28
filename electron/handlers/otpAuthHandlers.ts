@@ -10,10 +10,7 @@
  * 3. Post-auth pipeline: license validation, device registration, session creation
  */
 
-import { ipcMain, BrowserWindow } from "electron";
-import os from "os";
-import crypto from "crypto";
-import { app } from "electron";
+import { ipcMain, BrowserWindow, app } from "electron";
 
 // Import services
 import databaseService from "../services/databaseService";
@@ -23,7 +20,7 @@ import rateLimitService from "../services/rateLimitService";
 import auditService from "../services/auditService";
 import logService from "../services/logService";
 import { validateLicense, createUserLicense } from "../services/licenseService";
-import { registerDevice } from "../services/deviceService";
+import { registerDevice, getDeviceId } from "../services/deviceService";
 
 // Import validation utilities
 import { ValidationError, validateEmail } from "../utils/validation";
@@ -204,6 +201,11 @@ export async function handleOtpVerifyCode(
 
     const trimmedToken = token.trim();
 
+    // Validate OTP code format before API call
+    if (!/^\d{6}$/.test(trimmedToken)) {
+      return { success: false, error: "Verification code must be 6 digits" };
+    }
+
     // Verify OTP with Supabase
     const { data: verifyData, error: verifyError } = await supabaseService
       .getClient()
@@ -251,45 +253,11 @@ export async function handleOtpVerifyCode(
 
     // ==========================================
     // POST-AUTH PIPELINE
-    // Follows the same pattern as googleAuthHandlers.ts handleGoogleCompleteLogin
+    // Order matches googleAuthHandlers.ts handleGoogleCompleteLogin:
+    // sync user -> create/find local user -> validate license -> register device -> create session -> track event
     // ==========================================
 
-    // Step 1: Validate license
-    let licenseStatus = await validateLicense(supabaseUser.id);
-
-    // Step 2: Create trial license if new user
-    if (licenseStatus.blockReason === "no_license") {
-      await logService.info("Creating trial license for new OTP user", "OtpAuthHandlers", {
-        userId: supabaseUser.id,
-      });
-      licenseStatus = await createUserLicense(supabaseUser.id);
-    }
-
-    // Step 3: Check if license blocks access
-    if (!licenseStatus.isValid && licenseStatus.blockReason !== "no_license") {
-      await logService.warn("License blocked for OTP user", "OtpAuthHandlers", {
-        userId: supabaseUser.id,
-        blockReason: licenseStatus.blockReason,
-      });
-      return {
-        success: false,
-        error: `Your license is ${licenseStatus.blockReason}. Please contact support.`,
-      };
-    }
-
-    // Step 4: Register device
-    const deviceResult = await registerDevice(supabaseUser.id);
-    if (!deviceResult.success && deviceResult.error === "device_limit_reached") {
-      await logService.warn("Device limit reached for OTP user", "OtpAuthHandlers", {
-        userId: supabaseUser.id,
-      });
-      return {
-        success: false,
-        error: "Device limit reached. Please deactivate a device first.",
-      };
-    }
-
-    // Step 5: Sync user to Supabase cloud users table
+    // Step 1: Sync user to Supabase cloud users table
     const userEmail = supabaseUser.email || validatedEmail;
     const cloudUser = await supabaseService.syncUser({
       email: userEmail,
@@ -301,7 +269,7 @@ export async function handleOtpVerifyCode(
       oauth_id: supabaseUser.id,
     });
 
-    // Step 6: Check if database is initialized
+    // Step 2: Check if database is initialized
     if (!databaseService.isInitialized()) {
       await logService.info(
         "Database not initialized - OTP login deferred",
@@ -316,7 +284,7 @@ export async function handleOtpVerifyCode(
       };
     }
 
-    // Step 7: Create or find user in local database
+    // Step 3: Create or find user in local database
     let localUser = await databaseService.getUserByEmail(userEmail);
     const isNewUser = !localUser;
 
@@ -351,7 +319,7 @@ export async function handleOtpVerifyCode(
       throw new Error("Local user is unexpectedly null after creation/update");
     }
 
-    // Step 8: Update last login
+    // Step 4: Update last login
     await databaseService.updateLastLogin(localUser.id);
     const refreshedUser = await databaseService.getUserById(localUser.id);
     if (!refreshedUser) {
@@ -359,7 +327,42 @@ export async function handleOtpVerifyCode(
     }
     localUser = refreshedUser;
 
-    // Step 9: Create session
+    // Step 5: Validate license
+    let licenseStatus = await validateLicense(supabaseUser.id);
+
+    // Create trial license if new user
+    if (licenseStatus.blockReason === "no_license") {
+      await logService.info("Creating trial license for new OTP user", "OtpAuthHandlers", {
+        userId: supabaseUser.id,
+      });
+      licenseStatus = await createUserLicense(supabaseUser.id);
+    }
+
+    // Check if license blocks access
+    if (!licenseStatus.isValid && licenseStatus.blockReason !== "no_license") {
+      await logService.warn("License blocked for OTP user", "OtpAuthHandlers", {
+        userId: supabaseUser.id,
+        blockReason: licenseStatus.blockReason,
+      });
+      return {
+        success: false,
+        error: `Your license is ${licenseStatus.blockReason}. Please contact support.`,
+      };
+    }
+
+    // Step 6: Register device
+    const deviceResult = await registerDevice(supabaseUser.id);
+    if (!deviceResult.success && deviceResult.error === "device_limit_reached") {
+      await logService.warn("Device limit reached for OTP user", "OtpAuthHandlers", {
+        userId: supabaseUser.id,
+      });
+      return {
+        success: false,
+        error: "Device limit reached. Please deactivate a device first.",
+      };
+    }
+
+    // Step 7: Create session
     const sessionToken = await databaseService.createSession(localUser.id);
 
     // Save session to disk for persistence across app restarts
@@ -375,21 +378,16 @@ export async function handleOtpVerifyCode(
       },
     });
 
-    // Step 10: Validate subscription
+    // Step 8: Validate subscription
     const subscription = await supabaseService.validateSubscription(cloudUser.id);
 
-    // Step 11: Track login event
-    const deviceInfo = {
-      device_id: crypto.randomUUID(),
-      device_name: os.hostname(),
-      os: os.platform() + " " + os.release(),
-      app_version: app.getVersion(),
-    };
+    // Step 9: Register device for event tracking (use stable machine ID)
+    const stableDeviceId = getDeviceId();
     await supabaseService.trackEvent(
       cloudUser.id,
       "user_login",
       { provider: "email_otp" },
-      deviceInfo.device_id,
+      stableDeviceId,
       app.getVersion(),
     );
 
@@ -402,10 +400,10 @@ export async function handleOtpVerifyCode(
       provider: "email_otp",
     });
 
-    // Step 12: Record successful login for rate limiting
+    // Step 10: Record successful login for rate limiting
     await rateLimitService.recordAttempt(validatedEmail, true);
 
-    // Step 13: Audit log
+    // Step 11: Audit log
     await auditService.log({
       userId: localUser.id,
       sessionId: sessionToken,
