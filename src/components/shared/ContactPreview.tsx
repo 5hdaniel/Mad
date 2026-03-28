@@ -113,19 +113,24 @@ export function ContactPreview({
 
   return (
     <div
-      className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4"
+      className="fixed inset-0 bg-black bg-opacity-50 flex items-end sm:items-center justify-center z-50 sm:p-4"
       onClick={handleBackdropClick}
       data-testid="contact-preview-backdrop"
     >
       <div
-        className="bg-white rounded-xl shadow-2xl w-full max-w-md max-h-[80vh] flex flex-col"
+        className="bg-white w-full h-full sm:h-auto sm:rounded-xl shadow-2xl sm:w-full sm:max-w-md sm:max-h-[80vh] flex flex-col"
         data-testid="contact-preview-modal"
       >
+        {/* Mobile drag handle */}
+        <div className="sm:hidden flex justify-center pt-3 pb-1">
+          <div className="w-10 h-1 bg-gray-300 rounded-full" />
+        </div>
+
         {/* Header with close button */}
-        <div className="flex justify-end p-4">
+        <div className="flex justify-end p-3 sm:p-4">
           <button
             onClick={onClose}
-            className="text-gray-400 hover:text-gray-600 transition-colors"
+            className="text-gray-400 hover:text-gray-600 transition-colors p-1"
             aria-label="Close preview"
             data-testid="contact-preview-close"
           >
@@ -230,7 +235,7 @@ export function ContactPreview({
         )}
 
         {/* Footer with Action Buttons */}
-        <div className="border-t border-gray-200 p-4 flex justify-between">
+        <div className="border-t border-gray-200 p-4 pb-safe flex justify-between gap-3">
           {isExternal ? (
             <button
               onClick={onImport}

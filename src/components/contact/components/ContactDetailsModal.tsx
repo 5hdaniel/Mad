@@ -22,10 +22,15 @@ function ContactDetailsModal({
   const sourceBadge = getSourceBadge(contact.source);
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center z-[60] p-4">
-      <div className="bg-white rounded-xl shadow-2xl max-w-md w-full">
+    <div className="fixed inset-0 bg-black bg-opacity-70 flex items-end sm:items-center justify-center z-[60] sm:p-4">
+      <div className="bg-white w-full h-full sm:h-auto sm:rounded-xl shadow-2xl sm:max-w-md flex flex-col">
+        {/* Mobile drag handle */}
+        <div className="sm:hidden flex justify-center pt-3 pb-1 bg-gradient-to-r from-purple-500 to-pink-600">
+          <div className="w-10 h-1 bg-white bg-opacity-40 rounded-full" />
+        </div>
+
         {/* Header */}
-        <div className="bg-gradient-to-r from-purple-500 to-pink-600 px-6 py-4 flex items-center justify-between rounded-t-xl">
+        <div className="bg-gradient-to-r from-purple-500 to-pink-600 px-4 py-3 sm:px-6 sm:py-4 flex items-center justify-between sm:rounded-t-xl">
           <h3 className="text-lg font-bold text-white">Contact Details</h3>
           <button
             onClick={onClose}
@@ -48,7 +53,7 @@ function ContactDetailsModal({
         </div>
 
         {/* Contact Info */}
-        <div className="p-6">
+        <div className="p-4 sm:p-6 flex-1 overflow-y-auto">
           <div className="flex items-center gap-4 mb-6">
             <div className="w-16 h-16 bg-gradient-to-br from-purple-500 to-pink-600 rounded-full flex items-center justify-center text-white font-bold text-2xl">
               {contact.name?.charAt(0).toUpperCase() || "?"}
@@ -220,7 +225,7 @@ function ContactDetailsModal({
         </div>
 
         {/* Actions */}
-        <div className="px-6 py-4 bg-gray-50 rounded-b-xl flex items-center gap-3">
+        <div className="px-4 py-4 sm:px-6 bg-gray-50 sm:rounded-b-xl flex items-center gap-3 pb-safe">
           {contact.source === "contacts_app" ? (
             <>
               <button
