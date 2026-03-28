@@ -212,10 +212,10 @@ function Contacts({ userId, onClose }: ContactsProps) {
   return (
     <div className="h-screen bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50 flex flex-col overflow-hidden">
       {/* Header */}
-      <div className="flex-shrink-0 bg-gradient-to-r from-purple-500 to-pink-600 px-6 pt-10 pb-4 flex items-center justify-between shadow-lg">
+      <div className="flex-shrink-0 bg-gradient-to-r from-purple-500 to-pink-600 px-3 pt-6 pb-3 sm:px-6 sm:pt-10 sm:pb-4 flex items-center justify-between shadow-lg">
         <button
           onClick={onClose}
-          className="text-white hover:bg-white hover:bg-opacity-20 rounded-lg px-4 py-2 transition-all flex items-center gap-2 font-medium"
+          className="text-white hover:bg-white hover:bg-opacity-20 rounded-lg px-2 py-2 sm:px-4 transition-all flex items-center gap-1 sm:gap-2 font-medium text-sm sm:text-base"
         >
           <svg
             className="w-5 h-5"
@@ -230,11 +230,12 @@ function Contacts({ userId, onClose }: ContactsProps) {
               d="M10 19l-7-7m0 0l7-7m-7 7h18"
             />
           </svg>
-          Back to Dashboard
+          <span className="hidden sm:inline">Back to Dashboard</span>
+          <span className="sm:hidden">Back</span>
         </button>
         <div className="text-right">
-          <h2 className="text-2xl font-bold text-white">Contacts</h2>
-          <p className="text-purple-100 text-sm">
+          <h2 className="text-lg sm:text-2xl font-bold text-white">Contacts</h2>
+          <p className="text-purple-100 text-xs sm:text-sm">
             {contacts.length + externalContacts.length} contacts
             {externalContacts.length > 0 &&
               ` (${externalContacts.length} from Contacts App)`}
@@ -244,7 +245,7 @@ function Contacts({ userId, onClose }: ContactsProps) {
 
       {/* Error Banner */}
       {error && (
-        <div className="flex-shrink-0 mx-4 mt-4 p-3 bg-red-50 border border-red-200 rounded-lg">
+        <div className="flex-shrink-0 mx-2 sm:mx-4 mt-2 sm:mt-4 p-3 bg-red-50 border border-red-200 rounded-lg">
           <p className="text-sm text-red-800">{error}</p>
         </div>
       )}
@@ -252,7 +253,7 @@ function Contacts({ userId, onClose }: ContactsProps) {
       <OfflineNotice />
 
       {/* ContactSearchList - main content area */}
-      <div className="flex-1 min-h-0 bg-white mx-4 my-4 rounded-xl shadow-lg overflow-hidden">
+      <div className="flex-1 min-h-0 bg-white mx-0 my-0 sm:mx-4 sm:my-4 sm:rounded-xl sm:shadow-lg overflow-hidden">
         <ContactSearchList
           contacts={contacts}
           externalContacts={externalContacts}

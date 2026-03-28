@@ -116,7 +116,7 @@ export function ContactRow({
   };
 
   const baseClasses = [
-    "flex items-center gap-3 px-3 py-2 border-b border-gray-100",
+    "flex items-center gap-3 px-3 py-3 sm:py-2 border-b border-gray-100",
     "cursor-pointer transition-colors duration-150",
     isSelected ? "bg-purple-50" : "hover:bg-gray-50",
     className,
