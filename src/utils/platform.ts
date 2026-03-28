@@ -76,6 +76,15 @@ export function isLinux(): boolean {
 }
 
 /**
+ * Returns true if running inside Electron (desktop app).
+ * Checks for the presence of the Electron IPC bridge (window.api).
+ * Returns false in browser environments (Android WebView, mobile browsers, etc.)
+ */
+export function isElectron(): boolean {
+  return typeof window !== "undefined" && !!window.api;
+}
+
+/**
  * Feature availability by platform.
  * Maps feature names to the platforms where they are available.
  */
