@@ -25,7 +25,7 @@ export function OfflineBanner({
     if (!isOnline) {
       wasOfflineRef.current = true;
       setShowReconnected(false);
-    } else if (wasOfflineRef.current && isOnline) {
+    } else if (wasOfflineRef.current) {
       wasOfflineRef.current = false;
       setShowReconnected(true);
       const timer = setTimeout(() => setShowReconnected(false), 3000);

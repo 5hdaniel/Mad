@@ -34,8 +34,8 @@ export function DataPrivacySettings({ userId }: DataPrivacySettingsProps) {
 
   // CCPA Export state
   const [exporting, setExporting] = useState<boolean>(false);
-  const [exportProgress, setExportProgress] = useState<number>(0);
-  const [exportCategory, setExportCategory] = useState<string>("");
+  const [exportProgress] = useState<number>(0);
+  const [exportCategory] = useState<string>("");
   const [exportResult, setExportResult] = useState<{ success: boolean; message: string } | null>(null);
 
   // Failure log state

@@ -25,15 +25,6 @@ jest.mock("../../utils/logger", () => ({
   },
 }));
 
-/** Helper to flush all pending microtasks */
-const flushMicrotasks = async () => {
-  await act(async () => {
-    await Promise.resolve();
-    await Promise.resolve();
-    await Promise.resolve();
-  });
-};
-
 describe("useSessionValidator", () => {
   let mockOnSessionInvalidated: jest.Mock;
   let mockValidateRemoteSession: jest.Mock;
