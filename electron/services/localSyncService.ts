@@ -7,6 +7,7 @@
  * and microsoftAuthService.ts. Uses Node built-in http module (NOT Express).
  *
  * TASK-1429: Android Companion — Encrypted HTTP Transport
+ * TASK-1431: Message pipeline integration + storage
  */
 
 import crypto from "crypto";
@@ -15,9 +16,13 @@ import os from "os";
 import logService from "./logService";
 import { decrypt } from "./localSyncEncryption";
 import { secureCompare } from "../utils/keyDerivation";
+import databaseService from "./databaseService";
+import { normalizePhone } from "./messageMatchingService";
+import { pairingService } from "./pairingService";
 import type {
   EncryptedPayload,
   SyncPayload,
+  SyncMessage,
   LocalSyncResult,
   LocalSyncServerStatus,
 } from "../types/localSync";
@@ -126,6 +131,26 @@ export function deriveTransportKeys(secretBase64: string): {
   return { authToken, encryptionKey };
 }
 
+/**
+ * Generate a dedup external_id from sender + timestamp + body.
+ * Uses SHA-256 hash to create a deterministic, unique identifier.
+ */
+function generateExternalId(sender: string, timestamp: number, body: string): string {
+  return crypto
+    .createHash("sha256")
+    .update(`${sender}|${timestamp}|${body}`)
+    .digest("hex");
+}
+
+/**
+ * Normalize a phone number for storage and matching.
+ * Strips non-digits, handles +1 prefix for US numbers.
+ */
+function normalizePhoneNumber(phone: string): string {
+  const normalized = normalizePhone(phone);
+  return normalized ?? phone.replace(/\D/g, "");
+}
+
 class LocalSyncService {
   private server: http.Server | null = null;
   private authToken: string | null = null;
@@ -133,23 +158,32 @@ class LocalSyncService {
   private boundAddress: string | null = null;
   private boundPort: number | null = null;
 
+  /** User ID for storing messages — set when server starts */
+  private userId: string | null = null;
+
   /** Callback invoked when a valid sync payload is received */
   private onMessagesReceived:
-    | ((payload: SyncPayload) => void)
+    | ((payload: SyncPayload) => Promise<void>)
     | null = null;
+
+  /** Sync statistics tracked across the server session */
+  private totalMessagesReceived = 0;
+  private lastSyncTimestamp: number | null = null;
 
   /**
    * Start the local sync HTTP server.
    *
    * @param port - Port to listen on (0 for OS-assigned)
    * @param secret - Base64-encoded shared secret from QR pairing
-   * @param onMessages - Callback for received message payloads
+   * @param userId - User ID for message storage
+   * @param onMessages - Optional additional callback for received message payloads
    * @returns The actual port and address the server is bound to
    */
   async startServer(
     port: number,
     secret: string,
-    onMessages?: (payload: SyncPayload) => void
+    userId?: string,
+    onMessages?: (payload: SyncPayload) => Promise<void>
   ): Promise<{ port: number; address: string }> {
     if (this.server) {
       logService.warn(
@@ -166,7 +200,10 @@ class LocalSyncService {
     const derived = deriveTransportKeys(secret);
     this.authToken = derived.authToken;
     this.encryptionKey = derived.encryptionKey;
+    this.userId = userId ?? null;
     this.onMessagesReceived = onMessages ?? null;
+    this.totalMessagesReceived = 0;
+    this.lastSyncTimestamp = null;
 
     const localIP = getLocalNetworkIP();
     if (!localIP) {
@@ -222,20 +259,25 @@ class LocalSyncService {
         this.encryptionKey = null;
         this.boundAddress = null;
         this.boundPort = null;
+        this.userId = null;
         this.onMessagesReceived = null;
+        this.totalMessagesReceived = 0;
+        this.lastSyncTimestamp = null;
         resolve();
       });
     });
   }
 
   /**
-   * Get the current server status.
+   * Get the current server status including sync statistics.
    */
   getStatus(): LocalSyncServerStatus {
     return {
       running: this.server !== null,
       port: this.boundPort,
       address: this.boundAddress,
+      totalMessagesReceived: this.totalMessagesReceived,
+      lastSyncTimestamp: this.lastSyncTimestamp,
     };
   }
 
@@ -369,14 +411,41 @@ class LocalSyncService {
         LOG_TAG
       );
 
-      // Invoke callback if registered
+      // Update device last seen timestamp
+      pairingService.updateLastSeen(syncPayload.deviceId);
+
+      // TASK-1431: Store messages in the database via the message pipeline
+      let storedCount = 0;
+      if (this.userId && syncPayload.messages.length > 0) {
+        try {
+          storedCount = this.storeMessages(this.userId, syncPayload.deviceId, syncPayload.messages);
+          this.totalMessagesReceived += storedCount;
+          this.lastSyncTimestamp = Date.now();
+          logService.info(
+            `[LocalSync] Stored ${storedCount} messages (${syncPayload.messages.length - storedCount} duplicates skipped)`,
+            LOG_TAG
+          );
+        } catch (err) {
+          const storeError = err instanceof Error ? err.message : "Storage failed";
+          logService.error(`[LocalSync] Message storage error: ${storeError}`, LOG_TAG);
+          // Continue — still respond success since messages were received
+        }
+      }
+
+      // Invoke additional callback if registered
       if (this.onMessagesReceived) {
-        this.onMessagesReceived(syncPayload);
+        try {
+          await this.onMessagesReceived(syncPayload);
+        } catch (err) {
+          const cbError = err instanceof Error ? err.message : "Callback error";
+          logService.error(`[LocalSync] onMessagesReceived callback error: ${cbError}`, LOG_TAG);
+        }
       }
 
       const result: LocalSyncResult = {
         success: true,
         messagesReceived: syncPayload.messages.length,
+        messagesStored: storedCount,
       };
 
       sendJSON(res, 200, result as unknown as Record<string, unknown>);
@@ -385,6 +454,57 @@ class LocalSyncService {
       logService.error(`[LocalSync] Unhandled error: ${message}`, LOG_TAG);
       sendJSON(res, 500, { error: "Internal server error" });
     }
+  }
+  /**
+   * Store received SMS messages in the local database.
+   * Follows the same pattern as iPhoneSyncStorageService for message storage.
+   *
+   * @param userId - User ID for message ownership
+   * @param deviceId - Android device ID from pairing
+   * @param messages - Array of SyncMessage from the Android device
+   * @returns Number of messages actually stored (excluding duplicates)
+   */
+  private storeMessages(userId: string, deviceId: string, messages: SyncMessage[]): number {
+    const messagesToInsert = messages.map((msg) => {
+      const normalizedSender = normalizePhoneNumber(msg.sender);
+      const externalId = generateExternalId(msg.sender, msg.timestamp, msg.body);
+
+      // Build participants JSON matching the existing message format
+      const participants = JSON.stringify({
+        from: msg.direction === "inbound" ? normalizedSender : "me",
+        to: msg.direction === "inbound" ? ["me"] : [normalizedSender],
+      });
+
+      // Extract digits for fast phone number matching
+      const senderDigits = msg.sender.replace(/\D/g, "");
+      const participantsFlat = senderDigits || normalizedSender;
+
+      const metadata = JSON.stringify({
+        source: "android_wifi_sync",
+        deviceId,
+        androidThreadId: msg.threadId || null,
+        originalSender: msg.sender,
+      });
+
+      return {
+        id: crypto.randomUUID(),
+        userId,
+        channel: "sms" as const,
+        externalId,
+        direction: msg.direction,
+        bodyText: msg.body,
+        participants,
+        participantsFlat,
+        threadId: msg.threadId ? `android-thread-${msg.threadId}` : "",
+        sentAt: new Date(msg.timestamp).toISOString(),
+        hasAttachments: 0,
+        messageType: "text" as const,
+        metadata,
+      };
+    });
+
+    const result = databaseService.batchInsertMessages(messagesToInsert, 500);
+    return result.stored;
   }
 }
 

@@ -3,6 +3,7 @@
  * Exposes the local sync HTTP server to the renderer process via IPC.
  *
  * TASK-1429: Android Companion — Encrypted HTTP Transport
+ * TASK-1431: Message pipeline integration + userId passthrough
  */
 
 import { ipcMain } from "electron";
@@ -20,10 +21,10 @@ export function registerLocalSyncHandlers(): void {
     "sync:start-server",
     async (
       _event,
-      options: { port: number; secret: string }
+      options: { port: number; secret: string; userId?: string }
     ): Promise<{ port: number; address: string }> => {
       logService.info("[LocalSync] IPC: start-server requested", LOG_TAG);
-      return localSyncService.startServer(options.port, options.secret);
+      return localSyncService.startServer(options.port, options.secret, options.userId);
     }
   );
 
