@@ -35,7 +35,6 @@ import { createClient, SupabaseClient } from "jsr:@supabase/supabase-js@2";
 import {
   resolveRole,
   extractGroupRoleMapping,
-  GroupRoleMapping,
 } from "../_shared/groupRoleMapper.ts";
 
 // ---------------------------------------------------------------------------
