@@ -11,14 +11,17 @@
   "dependencies": {
     "@react-native-async-storage/async-storage": "^3.0.2",
     "expo": "55.0.10-canary-20260327-0789fbc",
+    "expo-background-fetch": "~13.0.5",
     "expo-camera": "^55.0.12-canary-20260327-0789fbc",
     "expo-constants": "55.0.10-canary-20260327-0789fbc",
     "expo-linking": "55.0.10-canary-20260327-0789fbc",
     "expo-router": "55.0.9-canary-20260327-0789fbc",
     "expo-status-bar": "55.0.5-canary-20260327-0789fbc",
+    "expo-task-manager": "~12.0.5",
     "react": "19.2.0",
     "react-native": "0.83.4",
     "react-native-gesture-handler": "~2.30.0",
+    "react-native-get-sms-android": "^4.0.0",
     "react-native-safe-area-context": "~5.6.2",
     "react-native-screens": "~4.23.0"
   },

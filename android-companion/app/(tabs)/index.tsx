@@ -9,6 +9,12 @@ import {
 } from 'react-native';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import {
+  startBackgroundSync,
+  stopBackgroundSync,
+} from '../../services/backgroundSync';
+import { resetAllSyncData } from '../../services/smsQueueService';
+import { requestSmsPermissions } from '../../services/permissions';
 
 /** Data encoded in the QR code from the desktop app */
 interface PairingData {
@@ -63,6 +69,14 @@ export default function PairingScreen(): React.JSX.Element {
       JSON.stringify(storedPairing),
     );
     setPairing(storedPairing);
+
+    // Request SMS permissions and start background sync after pairing
+    try {
+      await requestSmsPermissions();
+      await startBackgroundSync();
+    } catch (error) {
+      console.error('[Pairing] Failed to start background sync:', error);
+    }
   };
 
   const handleBarCodeScanned = useCallback(
@@ -114,6 +128,13 @@ export default function PairingScreen(): React.JSX.Element {
         text: 'Unpair',
         style: 'destructive',
         onPress: async () => {
+          // Stop background sync and clear all sync data
+          try {
+            await stopBackgroundSync();
+            await resetAllSyncData();
+          } catch (error) {
+            console.error('[Pairing] Failed to stop background sync:', error);
+          }
           await AsyncStorage.removeItem(PAIRING_STORAGE_KEY);
           setPairing(null);
         },
