@@ -586,14 +586,15 @@ class OutlookService {
               bodyText = bodyText.replace(/<[^>]+>/g, "");
             }
 
-            // Decode HTML entities for readable text output (single-pass only;
-            // a while-loop here would double-unescape e.g. &amp;lt; → &lt; → <)
+            // Decode HTML entities for readable text output (single-pass only).
+            // &amp; MUST be decoded last — decoding it first would turn &amp;lt; into &lt;
+            // which the next replace would then decode to <, causing double-unescaping.
             bodyText = bodyText
               .replace(/&nbsp;/g, " ")
-              .replace(/&amp;/g, "&")
               .replace(/&lt;/g, "<")
               .replace(/&gt;/g, ">")
-              .replace(/&quot;/g, '"');
+              .replace(/&quot;/g, '"')
+              .replace(/&amp;/g, "&");
 
             bodyText = bodyText.trim();
           }
