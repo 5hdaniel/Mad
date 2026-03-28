@@ -9,10 +9,12 @@
  * TASK-1429: Android Companion — Encrypted HTTP Transport
  */
 
+import crypto from "crypto";
 import http from "http";
 import os from "os";
 import logService from "./logService";
 import { decrypt } from "./localSyncEncryption";
+import { secureCompare } from "../utils/keyDerivation";
 import type {
   EncryptedPayload,
   SyncPayload,
@@ -90,9 +92,43 @@ function sendJSON(
 // SERVICE CLASS
 // ============================================
 
+/**
+ * Derive separate auth token and encryption key from the shared secret.
+ * Uses HMAC-SHA256 with domain-specific labels so the bearer token (sent
+ * in plaintext over HTTP) cannot be used to decrypt payloads.
+ *
+ * @param secretBase64 - Base64-encoded shared secret from QR pairing
+ * @returns { authToken, encryptionKey } — hex auth token + 32-byte key buffer
+ */
+export function deriveTransportKeys(secretBase64: string): {
+  authToken: string;
+  encryptionKey: Buffer;
+} {
+  const secretBuf = Buffer.from(secretBase64, "base64");
+  if (secretBuf.length < 16) {
+    throw new Error(
+      `Shared secret too short: expected at least 16 bytes, got ${secretBuf.length}`
+    );
+  }
+
+  // Auth token: HMAC-SHA256(secret, "auth") → hex string (for Bearer header)
+  const authToken = crypto
+    .createHmac("sha256", secretBuf)
+    .update("auth")
+    .digest("hex");
+
+  // Encryption key: HMAC-SHA256(secret, "encryption") → 32-byte Buffer
+  const encryptionKey = crypto
+    .createHmac("sha256", secretBuf)
+    .update("encryption")
+    .digest();
+
+  return { authToken, encryptionKey };
+}
+
 class LocalSyncService {
   private server: http.Server | null = null;
-  private sharedSecret: string | null = null;
+  private authToken: string | null = null;
   private encryptionKey: Buffer | null = null;
   private boundAddress: string | null = null;
   private boundPort: number | null = null;
@@ -123,9 +159,13 @@ class LocalSyncService {
       await this.stopServer();
     }
 
-    this.sharedSecret = secret;
-    // Derive a 32-byte key from the shared secret
-    this.encryptionKey = Buffer.from(secret, "base64").subarray(0, 32);
+    // Derive separate auth token and encryption key from the shared secret.
+    // The auth token is used for bearer authentication; the encryption key
+    // is used for AES-256-GCM. They are cryptographically independent so
+    // capturing the bearer token on the wire does not reveal the encryption key.
+    const derived = deriveTransportKeys(secret);
+    this.authToken = derived.authToken;
+    this.encryptionKey = derived.encryptionKey;
     this.onMessagesReceived = onMessages ?? null;
 
     const localIP = getLocalNetworkIP();
@@ -178,7 +218,7 @@ class LocalSyncService {
       this.server!.close(() => {
         logService.info("[LocalSync] Server stopped", LOG_TAG);
         this.server = null;
-        this.sharedSecret = null;
+        this.authToken = null;
         this.encryptionKey = null;
         this.boundAddress = null;
         this.boundPort = null;
@@ -254,7 +294,10 @@ class LocalSyncService {
       }
 
       const token = authHeader.substring(7); // Remove "Bearer "
-      if (token !== this.sharedSecret) {
+      if (
+        !this.authToken ||
+        !secureCompare(Buffer.from(token, "utf8"), Buffer.from(this.authToken, "utf8"))
+      ) {
         logService.warn("[LocalSync] Invalid bearer token", LOG_TAG);
         sendJSON(res, 401, { error: "Unauthorized" });
         return;

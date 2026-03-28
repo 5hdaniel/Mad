@@ -12,6 +12,9 @@
  * The actual crypto implementation will use expo-crypto's getRandomBytes
  * for IV generation and the Web Crypto API (SubtleCrypto) for AES-GCM,
  * which is available in React Native's Hermes engine.
+ *
+ * SECURITY: The encryption key must be derived via deriveTransportKeys()
+ * from keyDerivation.ts — never use the raw shared secret directly.
  */
 
 import type { EncryptedPayload } from "../types/sync";
@@ -43,18 +46,6 @@ function bytesToHex(bytes: Uint8Array): string {
 }
 
 /**
- * Convert a base64 string to a Uint8Array.
- */
-function base64ToBytes(base64: string): Uint8Array {
-  const binary = atob(base64);
-  const bytes = new Uint8Array(binary.length);
-  for (let i = 0; i < binary.length; i++) {
-    bytes[i] = binary.charCodeAt(i);
-  }
-  return bytes;
-}
-
-/**
  * Import a raw key buffer as a CryptoKey for AES-GCM.
  */
 async function importKey(keyBytes: Uint8Array): Promise<CryptoKey> {
@@ -71,24 +62,23 @@ async function importKey(keyBytes: Uint8Array): Promise<CryptoKey> {
  * Encrypt a plaintext string using AES-256-GCM.
  *
  * @param data - The plaintext string to encrypt (typically JSON)
- * @param keyBase64 - Base64-encoded encryption key (from shared secret)
+ * @param encryptionKey - 32-byte derived encryption key (from deriveTransportKeys)
  * @returns EncryptedPayload with hex-encoded iv, ciphertext, and auth tag
  */
 export async function encrypt(
   data: string,
-  keyBase64: string
+  encryptionKey: Uint8Array
 ): Promise<EncryptedPayload> {
-  const keyBytes = base64ToBytes(keyBase64).slice(0, KEY_LENGTH);
-  if (keyBytes.length !== KEY_LENGTH) {
+  if (encryptionKey.length !== KEY_LENGTH) {
     throw new Error(
-      `Invalid key length: expected ${KEY_LENGTH} bytes, got ${keyBytes.length}`
+      `Invalid key length: expected ${KEY_LENGTH} bytes, got ${encryptionKey.length}`
     );
   }
 
   // Generate random IV using Web Crypto API
   const iv = crypto.getRandomValues(new Uint8Array(IV_LENGTH));
 
-  const cryptoKey = await importKey(keyBytes);
+  const cryptoKey = await importKey(encryptionKey);
 
   // AES-GCM encrypt — returns ciphertext + tag concatenated
   const ciphertextWithTag = await crypto.subtle.encrypt(
@@ -114,17 +104,16 @@ export async function encrypt(
  * Decrypt an AES-256-GCM encrypted payload.
  *
  * @param payload - EncryptedPayload with hex-encoded iv, ciphertext, and auth tag
- * @param keyBase64 - Base64-encoded encryption key (same key used for encryption)
+ * @param encryptionKey - 32-byte derived encryption key (from deriveTransportKeys)
  * @returns The decrypted plaintext string
  */
 export async function decrypt(
   payload: EncryptedPayload,
-  keyBase64: string
+  encryptionKey: Uint8Array
 ): Promise<string> {
-  const keyBytes = base64ToBytes(keyBase64).slice(0, KEY_LENGTH);
-  if (keyBytes.length !== KEY_LENGTH) {
+  if (encryptionKey.length !== KEY_LENGTH) {
     throw new Error(
-      `Invalid key length: expected ${KEY_LENGTH} bytes, got ${keyBytes.length}`
+      `Invalid key length: expected ${KEY_LENGTH} bytes, got ${encryptionKey.length}`
     );
   }
 
@@ -138,7 +127,7 @@ export async function decrypt(
     );
   }
 
-  const cryptoKey = await importKey(keyBytes);
+  const cryptoKey = await importKey(encryptionKey);
 
   // Reconstruct the ciphertext + tag buffer that WebCrypto expects
   const ciphertextWithTag = new Uint8Array(encrypted.length + tag.length);

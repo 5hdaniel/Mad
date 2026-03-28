@@ -6,6 +6,7 @@
  */
 
 import { encrypt } from "./encryption";
+import { deriveTransportKeys } from "./keyDerivation";
 import type {
   SyncMessage,
   SyncPayload,
@@ -58,6 +59,12 @@ export async function sendMessages(
 ): Promise<SyncResult> {
   const { ip, port, secret, deviceId } = pairingInfo;
 
+  // Derive separate auth token and encryption key from the shared secret.
+  // The auth token is sent as Bearer header; the encryption key is used
+  // for AES-256-GCM. They are cryptographically independent so capturing
+  // the bearer token on the wire does not reveal the encryption key.
+  const { authToken, encryptionKey } = await deriveTransportKeys(secret);
+
   // Build the plaintext sync payload
   const payload: SyncPayload = {
     deviceId,
@@ -65,8 +72,8 @@ export async function sendMessages(
     syncTimestamp: Date.now(),
   };
 
-  // Encrypt the payload using the shared secret
-  const encryptedPayload = await encrypt(JSON.stringify(payload), secret);
+  // Encrypt the payload using the derived encryption key
+  const encryptedPayload = await encrypt(JSON.stringify(payload), encryptionKey);
 
   const url = `http://${ip}:${port}/sync/messages`;
 
@@ -77,7 +84,7 @@ export async function sendMessages(
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          Authorization: `Bearer ${secret}`,
+          Authorization: `Bearer ${authToken}`,
         },
         body: JSON.stringify(encryptedPayload),
       },

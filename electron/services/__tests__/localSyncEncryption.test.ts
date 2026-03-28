@@ -1,12 +1,13 @@
 /**
  * Unit tests for Local Sync Encryption Service
- * Verifies AES-256-GCM encryption/decryption roundtrip.
+ * Verifies AES-256-GCM encryption/decryption roundtrip and key derivation.
  *
  * TASK-1429: Android Companion — Encrypted HTTP Transport
  */
 
 import crypto from "crypto";
 import { encrypt, decrypt } from "../localSyncEncryption";
+import { deriveTransportKeys } from "../localSyncService";
 import type { EncryptedPayload } from "../../types/localSync";
 
 describe("localSyncEncryption", () => {
@@ -179,5 +180,68 @@ describe("localSyncEncryption", () => {
 
       expect(() => decrypt(tampered, testKey)).toThrow("Invalid auth tag length");
     });
+  });
+});
+
+describe("deriveTransportKeys", () => {
+  // 32 random bytes, base64-encoded (valid shared secret)
+  const validSecret = crypto.randomBytes(32).toString("base64");
+
+  it("should derive an auth token and encryption key from a base64 secret", () => {
+    const { authToken, encryptionKey } = deriveTransportKeys(validSecret);
+
+    // Auth token is a 64-char hex string (HMAC-SHA256 output)
+    expect(authToken).toMatch(/^[0-9a-f]{64}$/);
+
+    // Encryption key is exactly 32 bytes
+    expect(encryptionKey).toBeInstanceOf(Buffer);
+    expect(encryptionKey.length).toBe(32);
+  });
+
+  it("should produce different auth token and encryption key", () => {
+    const { authToken, encryptionKey } = deriveTransportKeys(validSecret);
+
+    // The hex encoding of the encryption key must differ from the auth token
+    expect(authToken).not.toBe(encryptionKey.toString("hex"));
+  });
+
+  it("should be deterministic for the same secret", () => {
+    const first = deriveTransportKeys(validSecret);
+    const second = deriveTransportKeys(validSecret);
+
+    expect(first.authToken).toBe(second.authToken);
+    expect(first.encryptionKey.equals(second.encryptionKey)).toBe(true);
+  });
+
+  it("should produce different keys for different secrets", () => {
+    const otherSecret = crypto.randomBytes(32).toString("base64");
+    const first = deriveTransportKeys(validSecret);
+    const second = deriveTransportKeys(otherSecret);
+
+    expect(first.authToken).not.toBe(second.authToken);
+    expect(first.encryptionKey.equals(second.encryptionKey)).toBe(false);
+  });
+
+  it("should throw if secret is too short (< 16 bytes)", () => {
+    const shortSecret = crypto.randomBytes(8).toString("base64");
+    expect(() => deriveTransportKeys(shortSecret)).toThrow("too short");
+  });
+
+  it("should produce a usable encryption key for AES-256-GCM", () => {
+    const { encryptionKey } = deriveTransportKeys(validSecret);
+
+    // Verify the derived key works for encrypt/decrypt roundtrip
+    const plaintext = "test payload for derived key";
+    const encrypted = encrypt(plaintext, encryptionKey);
+    const decrypted = decrypt(encrypted, encryptionKey);
+    expect(decrypted).toBe(plaintext);
+  });
+
+  it("should accept secrets of exactly 16 bytes", () => {
+    const minSecret = crypto.randomBytes(16).toString("base64");
+    const { authToken, encryptionKey } = deriveTransportKeys(minSecret);
+
+    expect(authToken).toMatch(/^[0-9a-f]{64}$/);
+    expect(encryptionKey.length).toBe(32);
   });
 });
