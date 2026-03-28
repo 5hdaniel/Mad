@@ -185,10 +185,10 @@ function SourceCard({
       type="button"
       onClick={onToggle}
       disabled={isSaving}
-      className={`w-full p-4 rounded-xl border-2 transition-all text-left flex items-center gap-4 disabled:opacity-50 disabled:cursor-not-allowed ${
+      className={`w-full p-3 sm:p-4 rounded-xl border-2 transition-all text-left flex items-center gap-3 sm:gap-4 min-h-[44px] disabled:opacity-50 disabled:cursor-not-allowed ${
         isSelected
           ? `${source.selectedBorder} ${source.selectedBg} shadow-sm`
-          : "border-gray-200 bg-white hover:border-gray-300 hover:bg-gray-50"
+          : "border-gray-200 bg-white hover:border-gray-300 hover:bg-gray-50 active:bg-gray-100"
       }`}
     >
       <div
@@ -324,7 +324,7 @@ export function Content({
             />
           </svg>
         </div>
-        <h2 className="text-xl font-bold text-gray-900 mb-2">
+        <h2 className="text-lg sm:text-xl font-bold text-gray-900 mb-2">
           Where do you save your contacts?
         </h2>
         <p className="text-sm text-gray-600">
@@ -395,7 +395,7 @@ export function Content({
       <button
         onClick={handleContinue}
         disabled={isSaving}
-        className="w-full px-4 py-2.5 bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700 text-white text-sm font-semibold rounded-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 shadow-md"
+        className="w-full min-h-[44px] px-4 py-2.5 bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700 active:from-blue-700 active:to-purple-800 text-white text-sm font-semibold rounded-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 shadow-md"
       >
         {isSaving ? (
           <>
