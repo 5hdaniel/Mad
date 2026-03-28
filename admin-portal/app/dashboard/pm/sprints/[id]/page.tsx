@@ -208,10 +208,6 @@ export default function SprintDetailPage() {
   }
 
   const { sprint, metrics } = detail;
-  const progress =
-    metrics.total_items > 0
-      ? Math.round((metrics.completed_items / metrics.total_items) * 100)
-      : 0;
 
   // Status breakdown for the progress section
   const statusBreakdown: {

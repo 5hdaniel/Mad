@@ -75,7 +75,7 @@ export default function UserListClient({
   const [isBulkEditOpen, setIsBulkEditOpen] = useState(false);
   const [deactivateMember, setDeactivateMember] = useState<OrganizationMember | null>(null);
   const [removeMember, setRemoveMember] = useState<OrganizationMember | null>(null);
-  const [resendingId, setResendingId] = useState<string | null>(null);
+  const [, setResendingId] = useState<string | null>(null);
   const [resendResult, setResendResult] = useState<{ memberId: string; success: boolean; error?: string } | null>(null);
 
   const handleResendInvite = useCallback(async (member: OrganizationMember) => {

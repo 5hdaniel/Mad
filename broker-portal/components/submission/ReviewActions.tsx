@@ -119,7 +119,7 @@ export function ReviewActions({ submission, disabled, isImpersonating }: ReviewA
       }
 
       // Add a comment for the record if notes provided
-      if (notes && user) {
+      if (notes) {
         await supabase.from('submission_comments').insert({
           submission_id: submission.id,
           user_id: user.id,

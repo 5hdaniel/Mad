@@ -177,7 +177,7 @@ describe('SyncOrchestratorService', () => {
 
     it('should NOT set isRunning to true when no sync functions are registered', async () => {
       // No sync functions registered, request types that don't exist
-      const result = syncOrchestrator.requestSync({ types: ['contacts'], userId: 'test-user' });
+      syncOrchestrator.requestSync({ types: ['contacts'], userId: 'test-user' });
 
       // requestSync calls startSync which returns early for empty validTypes
       // But requestSync returns { started: true } because it's not checking validTypes

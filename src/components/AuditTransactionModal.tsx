@@ -53,11 +53,6 @@ function AuditTransactionModal({
     // External contacts (from macOS Contacts app, etc.)
     externalContacts,
     externalContactsLoading,
-    // Auto-detect start date (TASK-1974)
-    startDateMode,
-    autoDetectedDate,
-    isAutoDetecting,
-    setStartDateMode,
     setAddressData,
     setSelectedContactIds,
     handleAddressChange,

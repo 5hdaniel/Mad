@@ -9,7 +9,7 @@
  */
 
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { Send, Lock, MessageSquare, ChevronDown, ChevronUp, FileText, Search, X } from 'lucide-react';
+import { Send, Lock, MessageSquare, ChevronDown, ChevronUp, FileText, Search } from 'lucide-react';
 import { addMessage, uploadAttachment, listTemplates } from '@/lib/support-queries';
 import type { MessageType, SupportResponseTemplate } from '@/lib/support-types';
 import { FileUpload } from './FileUpload';

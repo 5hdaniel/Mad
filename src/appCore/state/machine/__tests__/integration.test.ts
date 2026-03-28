@@ -47,7 +47,6 @@ import {
 } from "./testUtils";
 import { useAppState } from "../useAppState";
 import { AppStateProvider } from "../AppStateContext";
-import { AuthProvider } from "../../../../contexts";
 import type { AppState, ReadyState, UserData } from "../types";
 
 // ============================================

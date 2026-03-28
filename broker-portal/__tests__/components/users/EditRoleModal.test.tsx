@@ -169,6 +169,7 @@ describe('EditRoleModal form state', () => {
     it('should clear submitting after response', () => {
       let state = defaultState('admin');
       state.isSubmitting = true;
+      expect(state.isSubmitting).toBe(true);
       state.isSubmitting = false;
       expect(state.isSubmitting).toBe(false);
     });

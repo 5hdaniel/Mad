@@ -14,7 +14,7 @@ import * as Sentry from "@sentry/electron/main";
 import logService from "./logService";
 import { autoLinkCommunicationsForContact } from "./autoLinkService";
 import type { AutoLinkResult } from "./autoLinkService";
-import { createEmail, getEmailByExternalId, countEmailsByUser } from "./db/emailDbService";
+import { countEmailsByUser } from "./db/emailDbService";
 import { dbGet, dbAll, getRawDatabase } from "./db/core/dbConnection";
 import gmailFetchService from "./gmailFetchService";
 import outlookFetchService from "./outlookFetchService";
@@ -220,7 +220,7 @@ async function fetchStoreAndDedup(params: {
   /** For Outlook: function to get Graph API attachments by message ID */
   getAttachmentsFn?: (messageId: string) => Promise<Array<{ id: string; name: string; contentType: string; size: number }>>;
 }): Promise<{ fetched: number; stored: number; errors: number }> {
-  const { provider, fetchFn, userId, seenIds, getAttachmentsFn } = params;
+  const { provider, fetchFn, userId, seenIds } = params;
   let fetched = 0;
   let stored = 0;
   let errors = 0;
