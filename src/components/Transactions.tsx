@@ -35,6 +35,7 @@ import TransactionDetails from "./TransactionDetails";
 import {
   TransactionListCard,
   TransactionsToolbar,
+  TransactionMobileCard,
 } from "./transaction";
 import {
   useTransactionList,
@@ -330,10 +331,10 @@ function Transactions({
   return (
     <div className="h-screen bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50 flex flex-col overflow-hidden">
       {/* Header */}
-      <div className="flex-shrink-0 bg-gradient-to-r from-blue-500 to-purple-600 px-6 py-6 flex items-center justify-between shadow-lg">
+      <div className="flex-shrink-0 bg-gradient-to-r from-blue-500 to-purple-600 px-3 sm:px-6 py-4 sm:py-6 flex items-center justify-between shadow-lg">
         <button
           onClick={onClose}
-          className="text-white hover:bg-white hover:bg-opacity-20 rounded-lg px-4 py-2 transition-all flex items-center gap-2 font-medium"
+          className="text-white hover:bg-white hover:bg-opacity-20 rounded-lg px-2 sm:px-4 py-2 transition-all flex items-center gap-1 sm:gap-2 font-medium text-sm sm:text-base"
         >
           <svg
             className="w-5 h-5"
@@ -348,11 +349,12 @@ function Transactions({
               d="M10 19l-7-7m0 0l7-7m-7 7h18"
             />
           </svg>
-          Back to Dashboard
+          <span className="hidden sm:inline">Back to Dashboard</span>
+          <span className="sm:hidden">Back</span>
         </button>
         <div className="text-right">
-          <h2 className="text-2xl font-bold text-white">Transactions</h2>
-          <p className="text-blue-100 text-sm">
+          <h2 className="text-lg sm:text-2xl font-bold text-white">Transactions</h2>
+          <p className="text-blue-100 text-xs sm:text-sm">
             {transactions.length} properties found
           </p>
         </div>
@@ -379,7 +381,7 @@ function Transactions({
       />
 
       {/* Transactions List */}
-      <div className="flex-1 min-h-0 overflow-y-auto p-6 max-w-7xl mx-auto w-full">
+      <div className="flex-1 min-h-0 overflow-y-auto p-3 sm:p-6 max-w-7xl mx-auto w-full">
         {loading ? (
           <div className="flex items-center justify-center h-full">
             <div className="text-center">
@@ -389,9 +391,9 @@ function Transactions({
           </div>
         ) : filteredTransactions.length === 0 ? (
           <div className="flex items-center justify-center h-full">
-            <div className="text-center max-w-md">
+            <div className="text-center max-w-md px-4">
               <svg
-                className="w-16 h-16 text-gray-300 mx-auto mb-4"
+                className="w-12 h-12 sm:w-16 sm:h-16 text-gray-300 mx-auto mb-4"
                 fill="none"
                 stroke="currentColor"
                 viewBox="0 0 24 24"
@@ -403,18 +405,18 @@ function Transactions({
                   d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
                 />
               </svg>
-              <h3 className="text-lg font-semibold text-gray-900 mb-2">
+              <h3 className="text-base sm:text-lg font-semibold text-gray-900 mb-2">
                 {searchQuery
                   ? "No matching transactions"
                   : "No transactions yet"}
               </h3>
               {searchQuery && (
-                <p className="text-gray-600 mb-4">Try adjusting your search</p>
+                <p className="text-gray-600 mb-4 text-sm">Try adjusting your search</p>
               )}
               {!searchQuery && (
                 <button
                   onClick={openAuditCreate}
-                  className="px-4 py-2 h-10 rounded-lg font-semibold transition-all bg-green-500 text-white hover:bg-green-600 shadow-md hover:shadow-lg flex items-center gap-2 text-sm whitespace-nowrap"
+                  className="px-4 py-2 h-10 rounded-lg font-semibold transition-all bg-green-500 text-white hover:bg-green-600 shadow-md hover:shadow-lg flex items-center gap-2 text-sm whitespace-nowrap mx-auto"
                 >
                   <svg
                     className="w-5 h-5"
@@ -435,23 +437,41 @@ function Transactions({
             </div>
           </div>
         ) : (
-          <div className="grid gap-6">
-            {filteredTransactions.map((transaction: Transaction) => (
-              <TransactionListCard
-                key={transaction.id}
-                transaction={transaction}
-                selectionMode={selectionMode}
-                isSelected={isSelected(transaction.id)}
-                onTransactionClick={handleTransactionClick}
-                onCheckboxClick={handleCheckboxClick}
-                onQuickExport={handleQuickExport}
-                onMessagesClick={handleMessagesClick}
-                onEmailsClick={handleEmailsClick}
-                formatCurrency={formatCurrency}
-                formatDate={formatDate}
-              />
-            ))}
-          </div>
+          <>
+            {/* Mobile card list (< 640px) */}
+            <div className="grid gap-3 sm:hidden">
+              {filteredTransactions.map((transaction: Transaction) => (
+                <TransactionMobileCard
+                  key={transaction.id}
+                  transaction={transaction}
+                  selectionMode={selectionMode}
+                  isSelected={isSelected(transaction.id)}
+                  onTransactionClick={() => handleTransactionClick(transaction)}
+                  onCheckboxClick={(e) => handleCheckboxClick(e, transaction.id)}
+                  formatDate={formatDate}
+                />
+              ))}
+            </div>
+
+            {/* Desktop card list (>= 640px) */}
+            <div className="hidden sm:grid gap-6">
+              {filteredTransactions.map((transaction: Transaction) => (
+                <TransactionListCard
+                  key={transaction.id}
+                  transaction={transaction}
+                  selectionMode={selectionMode}
+                  isSelected={isSelected(transaction.id)}
+                  onTransactionClick={handleTransactionClick}
+                  onCheckboxClick={handleCheckboxClick}
+                  onQuickExport={handleQuickExport}
+                  onMessagesClick={handleMessagesClick}
+                  onEmailsClick={handleEmailsClick}
+                  formatCurrency={formatCurrency}
+                  formatDate={formatDate}
+                />
+              ))}
+            </div>
+          </>
         )}
       </div>
 

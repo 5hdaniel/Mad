@@ -18,6 +18,7 @@ import {
   TransactionStatusWrapper,
   TransactionCard,
   TransactionToolbar,
+  TransactionMobileCard,
   // Hooks
   useTransactionList,
   useTransactionScan,
@@ -275,7 +276,7 @@ function TransactionList({
       <OfflineNotice />
 
       {/* Transactions List */}
-      <div className="flex-1 min-h-0 overflow-y-auto p-6 max-w-7xl mx-auto w-full">
+      <div className="flex-1 min-h-0 overflow-y-auto p-3 sm:p-6 max-w-7xl mx-auto w-full">
         {loading ? (
           <div className="flex items-center justify-center h-full">
             <div className="text-center">
@@ -285,9 +286,9 @@ function TransactionList({
           </div>
         ) : filteredTransactions.length === 0 ? (
           <div className="flex items-center justify-center h-full">
-            <div className="text-center max-w-md">
+            <div className="text-center max-w-md px-4">
               <svg
-                className="w-16 h-16 text-gray-300 mx-auto mb-4"
+                className="w-12 h-12 sm:w-16 sm:h-16 text-gray-300 mx-auto mb-4"
                 fill="none"
                 stroke="currentColor"
                 viewBox="0 0 24 24"
@@ -299,18 +300,18 @@ function TransactionList({
                   d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
                 />
               </svg>
-              <h3 className="text-lg font-semibold text-gray-900 mb-2">
+              <h3 className="text-base sm:text-lg font-semibold text-gray-900 mb-2">
                 {searchQuery
                   ? "No matching transactions"
                   : "No transactions yet"}
               </h3>
               {searchQuery && (
-                <p className="text-gray-600 mb-4">Try adjusting your search</p>
+                <p className="text-gray-600 mb-4 text-sm">Try adjusting your search</p>
               )}
               {!searchQuery && (
                 <button
                   onClick={() => setShowAuditCreate(true)}
-                  className="px-4 py-2 h-10 rounded-lg font-semibold transition-all bg-green-500 text-white hover:bg-green-600 shadow-md hover:shadow-lg flex items-center gap-2 text-sm whitespace-nowrap"
+                  className="px-4 py-2 h-10 rounded-lg font-semibold transition-all bg-green-500 text-white hover:bg-green-600 shadow-md hover:shadow-lg flex items-center gap-2 text-sm whitespace-nowrap mx-auto"
                 >
                   <svg
                     className="w-5 h-5"
@@ -331,47 +332,65 @@ function TransactionList({
             </div>
           </div>
         ) : (
-          <div className="grid gap-6">
-            {filteredTransactions.map((transaction) => {
-              const isPending = transaction.detection_status === "pending" || transaction.status === "pending";
-              const isRejected = transaction.detection_status === "rejected";
-
-              // Handle wrapper action button click based on status
-              const handleWrapperAction = (e: React.MouseEvent<HTMLButtonElement>) => {
-                if (isPending) {
-                  // Open review modal for pending
-                  setPendingReviewTransaction(transaction);
-                } else if (isRejected) {
-                  // Open details to restore for rejected
-                  setSelectedTransaction(transaction);
-                } else {
-                  // Open export modal for active/closed
-                  handleQuickExport(transaction, e);
-                }
-              };
-
-              // Wrap ALL transactions with the unified status wrapper
-              return (
-                <TransactionStatusWrapper
+          <>
+            {/* Mobile card list (< 640px) */}
+            <div className="grid gap-3 sm:hidden">
+              {filteredTransactions.map((transaction) => (
+                <TransactionMobileCard
                   key={transaction.id}
                   transaction={transaction}
-                  onActionClick={handleWrapperAction}
-                >
-                  <TransactionCard
+                  selectionMode={selectionMode}
+                  isSelected={isSelected(transaction.id)}
+                  onTransactionClick={() => handleTransactionClick(transaction)}
+                  onCheckboxClick={(e) => handleCheckboxClick(e, transaction.id)}
+                  formatDate={formatDate}
+                />
+              ))}
+            </div>
+
+            {/* Desktop card list (>= 640px) */}
+            <div className="hidden sm:grid gap-6">
+              {filteredTransactions.map((transaction) => {
+                const isPending = transaction.detection_status === "pending" || transaction.status === "pending";
+                const isRejected = transaction.detection_status === "rejected";
+
+                // Handle wrapper action button click based on status
+                const handleWrapperAction = (e: React.MouseEvent<HTMLButtonElement>) => {
+                  if (isPending) {
+                    // Open review modal for pending
+                    setPendingReviewTransaction(transaction);
+                  } else if (isRejected) {
+                    // Open details to restore for rejected
+                    setSelectedTransaction(transaction);
+                  } else {
+                    // Open export modal for active/closed
+                    handleQuickExport(transaction, e);
+                  }
+                };
+
+                // Wrap ALL transactions with the unified status wrapper
+                return (
+                  <TransactionStatusWrapper
+                    key={transaction.id}
                     transaction={transaction}
-                    selectionMode={selectionMode}
-                    isSelected={isSelected(transaction.id)}
-                    onTransactionClick={() => handleTransactionClick(transaction)}
-                    onCheckboxClick={(e) => handleCheckboxClick(e, transaction.id)}
-                    onMessagesClick={createMessagesClickHandler(transaction)}
-                    onEmailsClick={createEmailsClickHandler(transaction)}
-                    formatCurrency={formatCurrency}
-                    formatDate={formatDate}
-                  />
-                </TransactionStatusWrapper>
-              );
-            })}
-          </div>
+                    onActionClick={handleWrapperAction}
+                  >
+                    <TransactionCard
+                      transaction={transaction}
+                      selectionMode={selectionMode}
+                      isSelected={isSelected(transaction.id)}
+                      onTransactionClick={() => handleTransactionClick(transaction)}
+                      onCheckboxClick={(e) => handleCheckboxClick(e, transaction.id)}
+                      onMessagesClick={createMessagesClickHandler(transaction)}
+                      onEmailsClick={createEmailsClickHandler(transaction)}
+                      formatCurrency={formatCurrency}
+                      formatDate={formatDate}
+                    />
+                  </TransactionStatusWrapper>
+                );
+              })}
+            </div>
+          </>
         )}
       </div>
 

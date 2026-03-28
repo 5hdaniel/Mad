@@ -100,10 +100,10 @@ function TransactionToolbar({
   return (
     <>
       {/* Header */}
-      <div className="flex-shrink-0 bg-gradient-to-r from-blue-500 to-purple-600 px-6 pt-10 pb-4 flex items-center justify-between shadow-lg">
+      <div className="flex-shrink-0 bg-gradient-to-r from-blue-500 to-purple-600 px-3 sm:px-6 pt-6 sm:pt-10 pb-3 sm:pb-4 flex items-center justify-between shadow-lg">
         <button
           onClick={onClose}
-          className="text-white hover:bg-white hover:bg-opacity-20 rounded-lg px-4 py-2 transition-all flex items-center gap-2 font-medium"
+          className="text-white hover:bg-white hover:bg-opacity-20 rounded-lg px-2 sm:px-4 py-2 transition-all flex items-center gap-1 sm:gap-2 font-medium text-sm sm:text-base"
         >
           <svg
             className="w-5 h-5"
@@ -118,20 +118,21 @@ function TransactionToolbar({
               d="M10 19l-7-7m0 0l7-7m-7 7h18"
             />
           </svg>
-          Back to Dashboard
+          <span className="hidden sm:inline">Back to Dashboard</span>
+          <span className="sm:hidden">Back</span>
         </button>
         <div className="text-right">
-          <h2 className="text-2xl font-bold text-white">Transactions</h2>
-          <p className="text-blue-100 text-sm">
+          <h2 className="text-lg sm:text-2xl font-bold text-white">Transactions</h2>
+          <p className="text-blue-100 text-xs sm:text-sm">
             {transactionCount} properties found
           </p>
         </div>
       </div>
 
       {/* Toolbar */}
-      <div className="flex-shrink-0 p-6 bg-white shadow-md">
+      <div className="flex-shrink-0 px-3 sm:px-6 py-3 sm:py-6 bg-white shadow-md">
         {/* Responsive Toolbar: stacked on narrow, single row on wide */}
-        <div className="flex flex-col md:flex-row md:items-center gap-3">
+        <div className="flex flex-col md:flex-row md:items-center gap-2 sm:gap-3">
           {/* Search - full width on narrow, flex-1 on wide */}
           <div className="w-full md:w-auto md:flex-1 relative">
             <input
@@ -139,7 +140,7 @@ function TransactionToolbar({
               placeholder="Search by address..."
               value={searchQuery}
               onChange={(e) => onSearchChange(e.target.value)}
-              className="w-full h-10 pl-10 pr-4 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              className="w-full h-10 pl-10 pr-4 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-gray-900 bg-white"
             />
             <svg
               className="w-5 h-5 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2"
@@ -156,10 +157,10 @@ function TransactionToolbar({
             </svg>
           </div>
 
-          {/* Filter tabs + action buttons - no wrap, shrink to fit */}
-          <div className="flex items-center gap-2 min-w-0">
+          {/* Filter tabs + action buttons - scrollable on mobile */}
+          <div className="flex items-center gap-2 min-w-0 overflow-x-auto scrollbar-hide">
             {/* Consolidated Filter Tabs */}
-            <div className="inline-flex items-center bg-gray-200 rounded-lg p-1 min-w-0 h-10">
+            <div className="inline-flex items-center bg-gray-200 rounded-lg p-1 min-w-0 h-10 flex-shrink-0">
               <button
                 onClick={() => onFilterChange("all")}
                 className={`px-2 sm:px-4 py-2 rounded-md font-medium transition-all text-sm whitespace-nowrap ${
