@@ -1,6 +1,5 @@
 import { getAuthenticatedUser } from '@/lib/supabase/server';
 import { redirect } from 'next/navigation';
-import { PlanCard } from './components/PlanCard';
 import { PlansPageClient } from './components/PlansPageClient';
 
 export const dynamic = 'force-dynamic';

@@ -191,7 +191,7 @@ export default function ProjectDetailPage() {
             <span className="text-sm text-gray-500">({sortedSprints.length})</span>
           </div>
 
-          {sortedSprints.length === 0 && !loadingDetail ? (
+          {sortedSprints.length === 0 ? (
             <div className="border border-gray-200 rounded-lg p-8 text-center">
               <p className="text-sm text-gray-400">
                 No sprints yet. Create one below.

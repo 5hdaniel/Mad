@@ -27,7 +27,6 @@ import {
   PRIORITY_LABELS,
 } from '@/lib/support-types';
 import { StatusBadge } from './StatusBadge';
-import { PriorityBadge } from './PriorityBadge';
 import { ParticipantsPanel } from './ParticipantsPanel';
 import { RelatedTicketsPanel } from './RelatedTicketsPanel';
 import { BacklogLinksPanel } from './BacklogLinksPanel';

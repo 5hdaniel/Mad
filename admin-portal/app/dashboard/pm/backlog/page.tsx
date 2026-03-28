@@ -108,29 +108,6 @@ function sortItems(
 }
 
 // ---------------------------------------------------------------------------
-// Client-side enhanced search: matches item_number, legacy_id, description
-// ---------------------------------------------------------------------------
-
-function matchesEnhancedSearch(item: PmBacklogItem, query: string): boolean {
-  if (!query) return true;
-  const q = query.toLowerCase().trim();
-
-  // Match item number (e.g., "682" matches item #682)
-  if (String(item.item_number).includes(q)) return true;
-
-  // Match legacy ID (e.g., "BACKLOG-798")
-  if (item.legacy_id && item.legacy_id.toLowerCase().includes(q)) return true;
-
-  // Match title (supplement server-side full-text search with simple substring)
-  if (item.title.toLowerCase().includes(q)) return true;
-
-  // Match description text
-  if (item.description && item.description.toLowerCase().includes(q)) return true;
-
-  return false;
-}
-
-// ---------------------------------------------------------------------------
 // Client-side multi-value filtering
 // ---------------------------------------------------------------------------
 
