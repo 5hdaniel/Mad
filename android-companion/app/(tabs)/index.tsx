@@ -14,7 +14,10 @@ import {
   stopBackgroundSync,
 } from '../../services/backgroundSync';
 import { resetAllSyncData } from '../../services/smsQueueService';
-import { requestSmsPermissions } from '../../services/permissions';
+import {
+  requestSmsPermissions,
+  requestContactsPermissions,
+} from '../../services/permissions';
 
 /** Data encoded in the QR code from the desktop app */
 interface PairingData {
@@ -70,9 +73,10 @@ export default function PairingScreen(): React.JSX.Element {
     );
     setPairing(storedPairing);
 
-    // Request SMS permissions and start background sync after pairing
+    // Request SMS and contacts permissions, then start background sync after pairing
     try {
       await requestSmsPermissions();
+      await requestContactsPermissions();
       await startBackgroundSync();
     } catch (error) {
       console.error('[Pairing] Failed to start background sync:', error);

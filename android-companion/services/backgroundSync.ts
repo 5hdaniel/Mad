@@ -18,7 +18,8 @@ import * as TaskManager from "expo-task-manager";
 import * as BackgroundFetch from "expo-background-fetch";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { readSmsMessages } from "./smsReader";
-import { sendMessages, pingDesktop } from "./syncService";
+import { readContacts } from "./contactReader";
+import { sendMessages, sendContacts, pingDesktop } from "./syncService";
 import {
   enqueueMessages,
   dequeueBatch,
@@ -79,6 +80,8 @@ export interface SyncOperationResult {
   newMessages: number;
   /** Number of messages successfully sent to desktop */
   sentMessages: number;
+  /** Number of contacts synced to desktop (BACKLOG-1449) */
+  contactsSynced: number;
   /** Whether the desktop was reachable */
   desktopReachable: boolean;
   /** Current queue size after this operation */
@@ -104,6 +107,7 @@ export async function performSync(): Promise<SyncOperationResult> {
     return {
       newMessages: 0,
       sentMessages: 0,
+      contactsSynced: 0,
       desktopReachable: false,
       queueSize: await getQueueSize(),
       error: "Not paired with a desktop",
@@ -137,6 +141,7 @@ export async function performSync(): Promise<SyncOperationResult> {
     return {
       newMessages,
       sentMessages: 0,
+      contactsSynced: 0,
       desktopReachable: false,
       queueSize,
       error: "Desktop not reachable",
@@ -176,7 +181,27 @@ export async function performSync(): Promise<SyncOperationResult> {
     }
   }
 
-  // Step 4: Record stats
+  // Step 4: Sync contacts (BACKLOG-1449)
+  let contactsSynced = 0;
+  try {
+    const contacts = await readContacts();
+    if (contacts.length > 0) {
+      const contactResult = await sendContacts(contacts, pairingInfo);
+      if (contactResult.success) {
+        contactsSynced = contacts.length;
+        console.log(`[BackgroundSync] Synced ${contacts.length} contacts`);
+      } else {
+        console.warn(
+          `[BackgroundSync] Contact sync failed: ${contactResult.error}`
+        );
+      }
+    }
+  } catch (error) {
+    console.error("[BackgroundSync] Failed to sync contacts:", error);
+    // Non-fatal — message sync result is still valid
+  }
+
+  // Step 5: Record stats
   await recordSyncAttempt(totalSent > 0, totalSent);
 
   const queueSize = await getQueueSize();
@@ -184,6 +209,7 @@ export async function performSync(): Promise<SyncOperationResult> {
   return {
     newMessages,
     sentMessages: totalSent,
+    contactsSynced,
     desktopReachable: true,
     queueSize,
     error: sendError,

@@ -1,9 +1,10 @@
 /**
  * Local Sync Protocol Types
  * Type definitions for the encrypted local HTTP transport layer
- * used for SMS sync between Android companion app and Electron desktop.
+ * used for SMS and contact sync between Android companion app and Electron desktop.
  *
  * TASK-1429: Android Companion — Encrypted HTTP Transport
+ * BACKLOG-1449: Android contacts sync
  */
 
 // ============================================
@@ -41,6 +42,54 @@ export interface SyncPayload {
   messages: SyncMessage[];
   /** Unix timestamp (ms) when this sync batch was created */
   syncTimestamp: number;
+}
+
+// ============================================
+// CONTACT TYPES (BACKLOG-1449)
+// ============================================
+
+/**
+ * A single contact synced from the Android device.
+ */
+export interface SyncContact {
+  /** Stable contact ID from the Android contacts provider */
+  id: string;
+  /** Display name (first + last or organization fallback) */
+  displayName: string;
+  /** Phone numbers associated with the contact */
+  phones: { number: string; label?: string }[];
+  /** Email addresses associated with the contact */
+  emails: { address: string; label?: string }[];
+  /** Company / organization name */
+  company?: string;
+  /** Job title */
+  title?: string;
+}
+
+/**
+ * The plaintext payload for contact sync from Android to Electron.
+ * This is encrypted before transmission.
+ */
+export interface ContactSyncPayload {
+  /** Unique device identifier from QR pairing */
+  deviceId: string;
+  /** Array of contacts to sync */
+  contacts: SyncContact[];
+  /** Unix timestamp (ms) when this sync batch was created */
+  syncTimestamp: number;
+}
+
+/**
+ * Result of a contact sync operation.
+ */
+export interface ContactSyncResult {
+  success: boolean;
+  /** Number of contacts received */
+  contactsReceived?: number;
+  /** Number of contacts stored (excluding duplicates) */
+  contactsStored?: number;
+  /** Error message if success is false */
+  error?: string;
 }
 
 /**

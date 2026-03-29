@@ -3,7 +3,10 @@
  * Matches the Electron types in electron/types/localSync.ts.
  *
  * TASK-1429: Android Companion — Encrypted HTTP Transport
+ * BACKLOG-1449: Android contacts sync
  */
+
+import type { SyncContact } from "./contacts";
 
 // ============================================
 // MESSAGE TYPES
@@ -38,6 +41,21 @@ export interface SyncPayload {
   deviceId: string;
   /** Array of messages to sync */
   messages: SyncMessage[];
+  /** Unix timestamp (ms) when this sync batch was created */
+  syncTimestamp: number;
+}
+
+/**
+ * The plaintext payload for contact sync from Android to Electron.
+ * This is encrypted before transmission.
+ *
+ * BACKLOG-1449: Android contacts sync
+ */
+export interface ContactSyncPayload {
+  /** Unique device identifier from QR pairing */
+  deviceId: string;
+  /** Array of contacts to sync */
+  contacts: SyncContact[];
   /** Unix timestamp (ms) when this sync batch was created */
   syncTimestamp: number;
 }
