@@ -283,7 +283,15 @@ export function useOnboardingQueue(
           break;
 
         case "GO_BACK_SELECT_IPHONE":
-          // This navigates back to phone-type - handled by context reset
+          // Navigate back to phone-type step.
+          // The parent onAction dispatches PHONE_TYPE_RESET which sets phoneType = null,
+          // causing the queue to rebuild with phone-type as incomplete.
+          // We must also clear manuallyCompletedIds — phone-type was marked manually
+          // complete when the user originally selected a phone type (goToNext added it).
+          // Without clearing, the manual override keeps phone-type "complete" even
+          // though the context says it's incomplete, causing the queue to skip forward.
+          setManuallyCompletedIds(new Set());
+          setBackOverrideIndex(0); // phone-type is always index 0 in visible entries
           break;
 
         case "USER_VERIFIED_IN_LOCAL_DB":
