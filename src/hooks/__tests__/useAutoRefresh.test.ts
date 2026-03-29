@@ -404,6 +404,139 @@ describe("useAutoRefresh", () => {
     });
   });
 
+  describe("BACKLOG-1467: skip macOS messages for Android users", () => {
+    it("should NOT include messages when import source is android-companion on macOS", async () => {
+      (usePlatform as jest.Mock).mockReturnValue({ isMacOS: true });
+
+      // Return android-companion as import source
+      mockPreferencesGet.mockResolvedValue({
+        success: true,
+        preferences: {
+          sync: { autoSyncOnLogin: true },
+          messages: { source: 'android-companion' },
+        },
+      });
+
+      renderHook(() => useAutoRefresh(defaultOptions));
+
+      // Let preferences load
+      await act(async () => {
+        await Promise.resolve();
+        await Promise.resolve();
+      });
+
+      // Trigger auto-refresh after delay
+      await act(async () => {
+        jest.advanceTimersByTime(1500);
+        await Promise.resolve();
+      });
+
+      // Should have contacts + emails but NOT messages
+      expect(mockRequestSync).toHaveBeenCalledWith(
+        ['contacts', 'emails'],
+        'test-user-123'
+      );
+    });
+
+    it("should NOT include messages when import source is iphone-sync on macOS", async () => {
+      (usePlatform as jest.Mock).mockReturnValue({ isMacOS: true });
+
+      // Return iphone-sync as import source
+      mockPreferencesGet.mockResolvedValue({
+        success: true,
+        preferences: {
+          sync: { autoSyncOnLogin: true },
+          messages: { source: 'iphone-sync' },
+        },
+      });
+
+      renderHook(() => useAutoRefresh(defaultOptions));
+
+      // Let preferences load
+      await act(async () => {
+        await Promise.resolve();
+        await Promise.resolve();
+      });
+
+      // Trigger auto-refresh after delay
+      await act(async () => {
+        jest.advanceTimersByTime(1500);
+        await Promise.resolve();
+      });
+
+      // Should have contacts + emails but NOT messages
+      expect(mockRequestSync).toHaveBeenCalledWith(
+        ['contacts', 'emails'],
+        'test-user-123'
+      );
+    });
+
+    it("should include messages when import source is macos-native on macOS", async () => {
+      (usePlatform as jest.Mock).mockReturnValue({ isMacOS: true });
+
+      // Return macos-native (default) as import source
+      mockPreferencesGet.mockResolvedValue({
+        success: true,
+        preferences: {
+          sync: { autoSyncOnLogin: true },
+          messages: { source: 'macos-native' },
+        },
+      });
+
+      renderHook(() => useAutoRefresh(defaultOptions));
+
+      // Let preferences load
+      await act(async () => {
+        await Promise.resolve();
+        await Promise.resolve();
+      });
+
+      // Trigger auto-refresh after delay
+      await act(async () => {
+        jest.advanceTimersByTime(1500);
+        await Promise.resolve();
+      });
+
+      // Should include messages for macos-native
+      expect(mockRequestSync).toHaveBeenCalledWith(
+        ['contacts', 'emails', 'messages'],
+        'test-user-123'
+      );
+    });
+
+    it("should skip messages via triggerRefresh when import source is android-companion", async () => {
+      (usePlatform as jest.Mock).mockReturnValue({ isMacOS: true });
+
+      mockPreferencesGet.mockResolvedValue({
+        success: true,
+        preferences: {
+          sync: { autoSyncOnLogin: true },
+          messages: { source: 'android-companion' },
+        },
+      });
+
+      const { result } = renderHook(() => useAutoRefresh(defaultOptions));
+
+      // Let preferences load
+      await act(async () => {
+        await Promise.resolve();
+        await Promise.resolve();
+      });
+
+      mockRequestSync.mockClear();
+
+      // Manual trigger should also respect import source
+      await act(async () => {
+        await result.current.triggerRefresh();
+      });
+
+      expect(mockRequestSync).toHaveBeenCalledWith(
+        ['contacts', 'emails'],
+        'test-user-123'
+      );
+    });
+  });
+
   describe("sync status from orchestrator queue", () => {
     it("should reflect running status from orchestrator queue", async () => {
       // Update mock to return running state
