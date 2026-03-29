@@ -212,6 +212,11 @@ function OnboardingFlowInner({ app, machineState }: OnboardingFlowInnerProps) {
 
         case "GO_BACK_SELECT_IPHONE":
           app.handleAndroidGoBack();
+          // Reset state machine's selectedPhoneType so the queue rebuilds
+          // with phone-type as the active step
+          if (machineState) {
+            machineState.dispatch({ type: "PHONE_TYPE_RESET" });
+          }
           break;
 
         case "CONTINUE_EMAIL_ONLY":
@@ -237,7 +242,7 @@ function OnboardingFlowInner({ app, machineState }: OnboardingFlowInnerProps) {
           break;
       }
     },
-    [app, appState.isDatabaseInitialized]
+    [app, appState.isDatabaseInitialized, machineState]
   );
 
   // Handle onboarding completion - dispatches ONBOARDING_QUEUE_DONE

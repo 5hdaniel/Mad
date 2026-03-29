@@ -546,6 +546,18 @@ export function appStateReducer(
       };
     }
 
+    case "PHONE_TYPE_RESET": {
+      if (state.status !== "onboarding") {
+        return state;
+      }
+
+      return {
+        ...state,
+        selectedPhoneType: undefined,
+        completedSteps: state.completedSteps.filter((s) => s !== "phone-type"),
+      };
+    }
+
     case "ONBOARDING_SKIP": {
       if (state.status !== "onboarding") {
         return state;
