@@ -420,7 +420,21 @@ class LocalSyncService {
         LOG_TAG
       );
 
-      // Update device last seen timestamp
+      // Register the device as paired if not already known, then update last seen.
+      // BACKLOG-1454: pairingService.addPairedDevice() was never called, so
+      // getStatus() always returned isPaired=false and the desktop onboarding
+      // QR screen never transitioned to "Connected".
+      const existingStatus = pairingService.getStatus();
+      const alreadyPaired = existingStatus.devices.some(
+        (d) => d.deviceId === syncPayload.deviceId
+      );
+      if (!alreadyPaired) {
+        pairingService.addPairedDevice(
+          syncPayload.deviceId,
+          `Android-${syncPayload.deviceId.substring(0, 8)}`,
+          "" // secret not needed after pairing — auth already validated via bearer token
+        );
+      }
       pairingService.updateLastSeen(syncPayload.deviceId);
 
       // TASK-1431: Store messages in the database via the message pipeline
@@ -611,7 +625,19 @@ class LocalSyncService {
         LOG_TAG
       );
 
-      // Update device last seen timestamp
+      // Register the device as paired if not already known, then update last seen.
+      // BACKLOG-1454: same fix as handleSyncMessages — ensure device is registered.
+      const contactExistingStatus = pairingService.getStatus();
+      const contactAlreadyPaired = contactExistingStatus.devices.some(
+        (d) => d.deviceId === contactPayload.deviceId
+      );
+      if (!contactAlreadyPaired) {
+        pairingService.addPairedDevice(
+          contactPayload.deviceId,
+          `Android-${contactPayload.deviceId.substring(0, 8)}`,
+          ""
+        );
+      }
       pairingService.updateLastSeen(contactPayload.deviceId);
 
       // Store contacts using the externalContactDbService shadow table
