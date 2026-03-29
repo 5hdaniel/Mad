@@ -183,6 +183,63 @@ export async function sendContacts(
 }
 
 /**
+ * Register this device with the desktop app immediately after QR pairing.
+ *
+ * Sends an authenticated POST /register to notify the desktop that the phone
+ * has scanned the QR code and is paired. This causes the desktop onboarding
+ * QR screen to transition to "Connected" without waiting for the first sync.
+ *
+ * BACKLOG-1456: Phone auto-pings on pair + auto-first-sync
+ * WARNING: This logic must be preserved if the pairing screen is rewritten (BACKLOG-1463).
+ *
+ * @param pairingInfo - Connection details from QR pairing
+ * @returns SyncResult indicating success/failure of the registration
+ */
+export async function registerDevice(
+  pairingInfo: PairingInfo
+): Promise<SyncResult> {
+  const { ip, port, secret, deviceId } = pairingInfo;
+
+  const { authToken } = await deriveTransportKeys(secret);
+
+  const url = `http://${ip}:${port}/register`;
+
+  try {
+    const response = await fetchWithTimeout(
+      url,
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${authToken}`,
+        },
+        body: JSON.stringify({ deviceId, deviceName: deviceId }),
+      },
+      PING_TIMEOUT_MS
+    );
+
+    if (!response.ok) {
+      const errorBody = await response.text().catch(() => "Unknown error");
+      return {
+        success: false,
+        error: `Server responded with ${response.status}: ${errorBody}`,
+      };
+    }
+
+    const result = (await response.json()) as SyncResult;
+    return result;
+  } catch (err) {
+    if (err instanceof Error) {
+      if (err.name === "AbortError") {
+        return { success: false, error: "Request timed out" };
+      }
+      return { success: false, error: `Network error: ${err.message}` };
+    }
+    return { success: false, error: "Unknown error" };
+  }
+}
+
+/**
  * Ping the desktop app to check if it's reachable and the sync server is running.
  *
  * @param pairingInfo - Connection details from QR pairing
