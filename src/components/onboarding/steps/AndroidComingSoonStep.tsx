@@ -110,11 +110,25 @@ function Content({ context, onAction }: OnboardingStepContentProps) {
       if (pollIntervalRef.current) clearInterval(pollIntervalRef.current);
       if (pollTimeoutRef.current) clearTimeout(pollTimeoutRef.current);
 
-      // Poll for pairing status
+      // Poll for pairing status via two signals:
+      // 1. pairingService.getStatus() — device registered after first authenticated request
+      // 2. localSync.getStatus() — totalMessagesReceived > 0 means a device synced data
+      // BACKLOG-1454: Previously only checked pairing status, but addPairedDevice was
+      // never called so isPaired was always false.
       const pollInterval = setInterval(async () => {
         try {
-          const status = await window.api.pairing.getStatus();
-          if (status.success && status.status?.isPaired && status.status.devices.length > 0) {
+          // Primary: check pairing service (device explicitly registered)
+          const pairingStatus = await window.api.pairing.getStatus();
+          if (pairingStatus.success && pairingStatus.status?.isPaired && pairingStatus.status.devices.length > 0) {
+            setPaired(true);
+            clearInterval(pollInterval);
+            pollIntervalRef.current = null;
+            return;
+          }
+
+          // Fallback: check if sync server has received any data
+          const syncStatus = await window.api.localSync.getStatus();
+          if (syncStatus.totalMessagesReceived > 0) {
             setPaired(true);
             clearInterval(pollInterval);
             pollIntervalRef.current = null;
