@@ -825,7 +825,89 @@ class LocalSyncService {
       LOG_TAG
     );
 
+    // BACKLOG-1469: Promote Android contacts to the main contacts table.
+    // Outlook/Google contacts rely on user-initiated import from the "Available"
+    // list, but Android contacts should auto-promote so they appear immediately
+    // in the main contacts view. Match by phone number to avoid duplicates.
+    this.promoteToMainContacts(userId, contacts);
+
     return syncResult.inserted;
+  }
+
+  /**
+   * Promote Android-synced contacts into the main contacts table.
+   * For each contact, checks if a matching contact already exists by phone
+   * number. Only creates new entries for contacts not already in the main table.
+   *
+   * BACKLOG-1469: Android contacts were only stored in external_contacts shadow
+   * table but never promoted to the main contacts table, making them invisible.
+   */
+  private promoteToMainContacts(userId: string, contacts: SyncContact[]): void {
+    const contactsToCreate: Array<{
+      user_id: string;
+      display_name: string;
+      company?: string;
+      title?: string;
+      source: string;
+      is_imported: boolean;
+      allPhones: string[];
+      allEmails: string[];
+    }> = [];
+
+    for (const contact of contacts) {
+      const phones = contact.phones
+        .map((p) => p.number)
+        .filter((n) => n.length > 0);
+      const emails = contact.emails
+        .map((e) => e.address)
+        .filter((a) => a.length > 0);
+
+      // Skip contacts with no phone numbers and no emails — nothing to match or display
+      if (phones.length === 0 && emails.length === 0) {
+        continue;
+      }
+
+      // Check if any phone number already exists in the main contacts table
+      let alreadyExists = false;
+      for (const phone of phones) {
+        const digits = phone.replace(/\D/g, "");
+        const normalized = digits.length >= 10 ? digits.slice(-10) : digits;
+        if (normalized.length < 7) continue;
+
+        // Synchronous check against contact_phones table
+        const existing = databaseService.findContactByNormalizedPhone(userId, normalized);
+        if (existing) {
+          alreadyExists = true;
+          break;
+        }
+      }
+
+      if (!alreadyExists) {
+        contactsToCreate.push({
+          user_id: userId,
+          display_name: contact.displayName || "Unknown",
+          company: contact.company ?? undefined,
+          title: contact.title ?? undefined,
+          source: "android_sync",
+          is_imported: true,
+          allPhones: phones,
+          allEmails: emails,
+        });
+      }
+    }
+
+    if (contactsToCreate.length > 0) {
+      const createdIds = databaseService.createContactsBatch(contactsToCreate);
+      logService.info(
+        `[LocalSync] Promoted ${createdIds.length} Android contacts to main contacts table (${contacts.length - contactsToCreate.length} already existed)`,
+        LOG_TAG
+      );
+    } else {
+      logService.info(
+        `[LocalSync] All ${contacts.length} Android contacts already exist in main contacts table, no promotion needed`,
+        LOG_TAG
+      );
+    }
   }
 }
 
