@@ -220,7 +220,8 @@ function OnboardingFlowInner({ app, machineState }: OnboardingFlowInnerProps) {
           break;
 
         case "CONTINUE_EMAIL_ONLY":
-          app.handleAndroidContinueWithEmail();
+          // BACKLOG-1455: No-op here — the queue handles CONTINUE_EMAIL_ONLY
+          // navigation via goToNext() in useOnboardingQueue.
           break;
 
         case "CONNECT_EMAIL_START":

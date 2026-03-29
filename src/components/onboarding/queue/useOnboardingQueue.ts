@@ -260,6 +260,13 @@ export function useOnboardingQueue(
       // Handle navigation-specific actions
       switch (action.type) {
         case "SELECT_PHONE":
+          // BACKLOG-1455: Don't call goToNext() here — phone-type's isComplete
+          // predicate (phoneType !== null) auto-advances the queue when context
+          // updates. Calling goToNext() causes a race: the queue advances before
+          // phoneType is set, skipping android-coming-soon and flash-mounting
+          // account-verification.
+          break;
+
         case "EMAIL_CONNECTED":
         case "EMAIL_SKIPPED":
         case "PERMISSION_GRANTED":
@@ -267,8 +274,7 @@ export function useOnboardingQueue(
         case "DRIVER_SKIPPED":
         case "TERMS_ACCEPTED":
         case "CONTINUE_EMAIL_ONLY":
-          // Android pairing step: explicitly advance past android-coming-soon
-          // since this step has no context-driven isComplete.
+          // Explicitly advance past steps that may not have context-driven isComplete.
           goToNext();
           break;
 
