@@ -959,4 +959,71 @@ describe('SyncOrchestratorService', () => {
         .toHaveBeenCalledWith('test-user', undefined);
     });
   });
+
+  describe('BACKLOG-1467: skip macOS messages for android-companion', () => {
+    beforeEach(() => {
+      (window as any).api.messages.importMacOSMessages = jest.fn().mockResolvedValue({
+        success: true,
+        messagesImported: 100,
+      });
+      (window as any).api.messages.onImportProgress = jest.fn().mockReturnValue(jest.fn());
+
+      const platformMock = require('../../utils/platform');
+      platformMock.isMacOS.mockReturnValue(true);
+    });
+
+    it('should skip macOS messages import when import source is android-companion', async () => {
+      (window as any).api.preferences.get = jest.fn().mockResolvedValue({
+        success: true,
+        preferences: { messages: { source: 'android-companion' } },
+      });
+
+      syncOrchestrator.initializeSyncFunctions();
+
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const syncFn = (syncOrchestrator as any).syncFunctions.get('messages');
+      const onProgress = jest.fn();
+      await syncFn('test-user', onProgress);
+
+      // Should NOT have called importMacOSMessages
+      expect((window as any).api.messages.importMacOSMessages).not.toHaveBeenCalled();
+      // Should have set progress to 100 (skipped cleanly)
+      expect(onProgress).toHaveBeenCalledWith(100);
+    });
+
+    it('should skip macOS messages import when import source is iphone-sync', async () => {
+      (window as any).api.preferences.get = jest.fn().mockResolvedValue({
+        success: true,
+        preferences: { messages: { source: 'iphone-sync' } },
+      });
+
+      syncOrchestrator.initializeSyncFunctions();
+
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const syncFn = (syncOrchestrator as any).syncFunctions.get('messages');
+      const onProgress = jest.fn();
+      await syncFn('test-user', onProgress);
+
+      // Should NOT have called importMacOSMessages
+      expect((window as any).api.messages.importMacOSMessages).not.toHaveBeenCalled();
+      // Should have set progress to 100 (skipped cleanly)
+      expect(onProgress).toHaveBeenCalledWith(100);
+    });
+
+    it('should proceed with macOS messages import when import source is macos-native', async () => {
+      (window as any).api.preferences.get = jest.fn().mockResolvedValue({
+        success: true,
+        preferences: { messages: { source: 'macos-native' } },
+      });
+
+      syncOrchestrator.initializeSyncFunctions();
+
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const syncFn = (syncOrchestrator as any).syncFunctions.get('messages');
+      await syncFn('test-user', jest.fn());
+
+      // Should have called importMacOSMessages
+      expect((window as any).api.messages.importMacOSMessages).toHaveBeenCalled();
+    });
+  });
 });

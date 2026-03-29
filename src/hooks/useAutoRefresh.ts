@@ -31,6 +31,7 @@ import { usePlatform } from "../contexts/PlatformContext";
 import { hasMessagesImportTriggered, setMessagesImportTriggered } from "../utils/syncFlags";
 import { useSyncOrchestrator } from "./useSyncOrchestrator";
 import type { SyncType, SyncItem } from "../services/SyncOrchestratorService";
+import type { ImportSource } from "../services/settingsService";
 
 // Module-level flag to track if auto-refresh has been triggered this session
 // Using module-level prevents React strict mode from triggering twice
@@ -75,6 +76,9 @@ interface AutoSyncPreferences {
   };
   notifications?: {
     enabled?: boolean;
+  };
+  messages?: {
+    source?: ImportSource;
   };
 }
 
@@ -163,6 +167,8 @@ export function useAutoRefresh({
   const [autoSyncEnabled, setAutoSyncEnabled] = useState(true);
   const [notificationsEnabled, setNotificationsEnabled] = useState(true);
   const [hasLoadedPreference, setHasLoadedPreference] = useState(false);
+  // BACKLOG-1467: Track import source to skip macOS messages for Android users
+  const [importSource, setImportSource] = useState<ImportSource>('macos-native');
 
   // Load auto-sync and notification preferences
   useEffect(() => {
@@ -179,6 +185,10 @@ export function useAutoRefresh({
           // Load notification preference (default to true if not set)
           const notifEnabled = prefs.notifications?.enabled !== false;
           setNotificationsEnabled(notifEnabled);
+          // BACKLOG-1467: Load import source to gate macOS messages sync
+          if (prefs.messages?.source) {
+            setImportSource(prefs.messages.source);
+          }
         }
       } catch (prefsError) {
         // Default to enabled on error
@@ -225,7 +235,8 @@ export function useAutoRefresh({
       if (emailConnected) {
         typesToSync.push('emails');
       }
-      if (isMacOS && hasPermissions) {
+      // BACKLOG-1467: Skip macOS messages when import source is android-companion or iphone-sync
+      if (isMacOS && hasPermissions && importSource === 'macos-native') {
         typesToSync.push('messages');
       }
 
@@ -234,7 +245,7 @@ export function useAutoRefresh({
         requestSync(typesToSync, uid);
       }
     },
-    [isMacOS, hasPermissions, hasAIAddon, requestSync]
+    [isMacOS, hasPermissions, hasAIAddon, importSource, requestSync]
   );
 
   /**

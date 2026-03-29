@@ -310,9 +310,10 @@ class SyncOrchestratorServiceClass {
         logger.info('[SyncOrchestrator] Starting messages sync, forceReimport:', !!options?.forceReimport);
 
         // TASK-1979: Skip macOS Messages import when iphone-sync is selected
+        // BACKLOG-1467: Also skip when android-companion is selected
         const importSource = await this.getImportSource(userId);
-        if (importSource === 'iphone-sync') {
-          logger.info('[SyncOrchestrator] Skipping macOS Messages (import source: iphone-sync)');
+        if (importSource !== 'macos-native') {
+          logger.info(`[SyncOrchestrator] Skipping macOS Messages (import source: ${importSource})`);
           onProgress(100);
           return;
         }
