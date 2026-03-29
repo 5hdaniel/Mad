@@ -305,6 +305,11 @@ class LocalSyncService {
       return;
     }
 
+    if (method === "POST" && urlPath === "/register") {
+      this.handleRegister(req, res);
+      return;
+    }
+
     if (method === "POST" && urlPath === "/sync/messages") {
       this.handleSyncMessages(req, res);
       return;
@@ -325,6 +330,96 @@ class LocalSyncService {
    */
   private handlePing(res: http.ServerResponse): void {
     sendJSON(res, 200, { status: "ok", timestamp: Date.now() });
+  }
+
+  /**
+   * POST /register — register a paired device immediately after QR scan.
+   * Requires bearer token authentication (same as /sync/messages).
+   * No encryption needed — the body is a simple JSON with deviceId and deviceName.
+   *
+   * This endpoint allows the phone to notify the desktop that pairing succeeded,
+   * so the desktop QR screen transitions to "Connected" without waiting for
+   * the first full sync.
+   *
+   * BACKLOG-1456: Phone auto-pings on pair + auto-first-sync
+   */
+  private async handleRegister(
+    req: http.IncomingMessage,
+    res: http.ServerResponse
+  ): Promise<void> {
+    try {
+      // Validate bearer token (same auth as /sync/messages)
+      const authHeader = req.headers.authorization;
+      if (!authHeader || !authHeader.startsWith("Bearer ")) {
+        logService.warn("[LocalSync] Missing or invalid Authorization header (register)", LOG_TAG);
+        sendJSON(res, 401, { error: "Unauthorized" });
+        return;
+      }
+
+      const token = authHeader.substring(7);
+      if (
+        !this.authToken ||
+        !secureCompare(Buffer.from(token, "utf8"), Buffer.from(this.authToken, "utf8"))
+      ) {
+        logService.warn("[LocalSync] Invalid bearer token (register)", LOG_TAG);
+        sendJSON(res, 401, { error: "Unauthorized" });
+        return;
+      }
+
+      // Read and parse request body (plaintext JSON — no encryption for registration)
+      let body: string;
+      try {
+        body = await readRequestBody(req);
+      } catch (err) {
+        const message = err instanceof Error ? err.message : "Failed to read body";
+        logService.error(`[LocalSync] Body read error (register): ${message}`, LOG_TAG);
+        sendJSON(res, 400, { error: message });
+        return;
+      }
+
+      let registerPayload: { deviceId?: string; deviceName?: string };
+      try {
+        registerPayload = JSON.parse(body) as { deviceId?: string; deviceName?: string };
+      } catch {
+        logService.warn("[LocalSync] Invalid JSON in request body (register)", LOG_TAG);
+        sendJSON(res, 400, { error: "Invalid JSON" });
+        return;
+      }
+
+      if (!registerPayload.deviceId) {
+        logService.warn("[LocalSync] Missing deviceId in register payload", LOG_TAG);
+        sendJSON(res, 400, { error: "Missing deviceId" });
+        return;
+      }
+
+      const deviceId = registerPayload.deviceId;
+      const deviceName = registerPayload.deviceName || `Android-${deviceId.substring(0, 8)}`;
+
+      logService.info(
+        `[LocalSync] Device registration: ${deviceName} (${deviceId})`,
+        LOG_TAG
+      );
+
+      // Register the device as paired if not already known
+      const existingStatus = pairingService.getStatus();
+      const alreadyPaired = existingStatus.devices.some(
+        (d) => d.deviceId === deviceId
+      );
+      if (!alreadyPaired) {
+        pairingService.addPairedDevice(
+          deviceId,
+          deviceName,
+          "" // secret not needed after pairing — auth already validated via bearer token
+        );
+      }
+      pairingService.updateLastSeen(deviceId);
+
+      sendJSON(res, 200, { success: true, deviceId });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Internal error";
+      logService.error(`[LocalSync] Unhandled error (register): ${message}`, LOG_TAG);
+      sendJSON(res, 500, { error: "Internal server error" });
+    }
   }
 
   /**

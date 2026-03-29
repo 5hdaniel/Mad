@@ -12,12 +12,14 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import {
   startBackgroundSync,
   stopBackgroundSync,
+  performSync,
 } from '../../services/backgroundSync';
 import { resetAllSyncData } from '../../services/smsQueueService';
 import {
   requestSmsPermissions,
   requestContactsPermissions,
 } from '../../services/permissions';
+import { registerDevice } from '../../services/syncService';
 
 /** Data encoded in the QR code from the desktop app */
 interface PairingData {
@@ -73,7 +75,30 @@ export default function PairingScreen(): React.JSX.Element {
     );
     setPairing(storedPairing);
 
-    // Request SMS and contacts permissions, then start background sync after pairing
+    // --- BACKLOG-1456: Auto-ping on pair + auto-first-sync ---
+    // WARNING: This auto-ping/auto-sync logic must be preserved if this screen
+    // is rewritten (BACKLOG-1463 pairing screen redesign).
+
+    // Step 1: Immediately register with the desktop so it shows "Connected"
+    // in the onboarding QR screen without waiting for the first full sync.
+    try {
+      const regResult = await registerDevice({
+        ip: data.ip,
+        port: data.port,
+        secret: data.secret,
+        deviceId: data.deviceName,
+      });
+      if (regResult.success) {
+        console.log('[Pairing] Device registered with desktop');
+      } else {
+        console.warn('[Pairing] Device registration failed:', regResult.error);
+      }
+    } catch (error) {
+      // Non-fatal: desktop may not be reachable yet, first sync will also register
+      console.warn('[Pairing] Device registration error (non-fatal):', error);
+    }
+
+    // Step 2: Request SMS and contacts permissions, then start background sync
     try {
       await requestSmsPermissions();
       await requestContactsPermissions();
@@ -81,6 +106,20 @@ export default function PairingScreen(): React.JSX.Element {
     } catch (error) {
       console.error('[Pairing] Failed to start background sync:', error);
     }
+
+    // Step 3: Auto-trigger first sync immediately after pairing + permissions.
+    // This sends SMS and contacts to the desktop right away instead of waiting
+    // for the 15-minute background sync interval.
+    try {
+      const syncResult = await performSync();
+      console.log(
+        `[Pairing] Auto-first-sync complete: ${syncResult.sentMessages} msgs, ${syncResult.contactsSynced} contacts`,
+      );
+    } catch (error) {
+      // Non-fatal: background sync will retry on its 15-min schedule
+      console.warn('[Pairing] Auto-first-sync error (non-fatal):', error);
+    }
+    // --- END BACKLOG-1456 ---
   };
 
   const handleBarCodeScanned = useCallback(
