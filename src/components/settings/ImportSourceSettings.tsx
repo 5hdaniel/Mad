@@ -14,6 +14,7 @@
 import React, { useState, useEffect, useCallback } from "react";
 import { usePlatform } from "../../contexts/PlatformContext";
 import type { ImportSource, UserPreferences } from "../../services/settingsService";
+import { settingsService } from '../../services';
 import logger from '../../utils/logger';
 
 // Re-export type for consumers
@@ -40,6 +41,8 @@ interface SyncStatus {
 
 interface ImportSourceSettingsProps {
   userId: string;
+  /** Callback when the user changes the import source (BACKLOG-1458) */
+  onSourceChange?: (source: ImportSource) => void;
 }
 
 // ---------------------------------------------------------------------------
@@ -74,7 +77,7 @@ function formatRelativeTime(isoOrTimestamp: string | number): string {
  * Import source settings.
  * Allows switching between macOS native import, iPhone sync, and Android companion.
  */
-export function ImportSourceSettings({ userId }: ImportSourceSettingsProps) {
+export function ImportSourceSettings({ userId, onSourceChange }: ImportSourceSettingsProps) {
   const { isMacOS } = usePlatform();
   const [source, setSource] = useState<ImportSource>(isMacOS ? "macos-native" : "iphone-sync");
   const [loading, setLoading] = useState(true);
@@ -90,7 +93,7 @@ export function ImportSourceSettings({ userId }: ImportSourceSettingsProps) {
   const [androidError, setAndroidError] = useState<string | null>(null);
   const [serverStarting, setServerStarting] = useState(false);
 
-  // Load preference on mount
+  // Load preference on mount, falling back to phoneType-based default
   useEffect(() => {
     if (!userId) return;
 
@@ -101,6 +104,13 @@ export function ImportSourceSettings({ userId }: ImportSourceSettingsProps) {
         const prefs = result.preferences as UserPreferences | undefined;
         if (result.success && prefs?.messages?.source) {
           setSource(prefs.messages.source);
+        } else {
+          // BACKLOG-1458: No saved preference — default based on phoneType
+          const phoneResult = await settingsService.getPhoneType(userId);
+          if (phoneResult.success && phoneResult.data === 'android') {
+            setSource('android-companion');
+          }
+          // Otherwise keep the platform-based default (macos-native or iphone-sync)
         }
       } catch (error) {
         logger.error("[ImportSourceSettings] Failed to load preference:", error);
@@ -159,6 +169,8 @@ export function ImportSourceSettings({ userId }: ImportSourceSettingsProps) {
             source: newSource,
           },
         });
+        // BACKLOG-1458: Notify parent of source change for adaptive Messages section
+        onSourceChange?.(newSource);
       } catch (error) {
         logger.error("[ImportSourceSettings] Failed to save preference:", error);
         // Revert on error
@@ -167,7 +179,7 @@ export function ImportSourceSettings({ userId }: ImportSourceSettingsProps) {
         setSaving(false);
       }
     },
-    [userId, source, saving]
+    [userId, source, saving, onSourceChange]
   );
 
   // Android pairing handlers
