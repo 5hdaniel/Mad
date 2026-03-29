@@ -74,6 +74,7 @@ function mapToSyncContact(contact: Contacts.Contact): SyncContact {
     }));
 
   return {
+    id: contact.id,
     displayName: contact.name ?? "",
     phones,
     emails,

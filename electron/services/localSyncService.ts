@@ -669,8 +669,8 @@ class LocalSyncService {
     // Map SyncContact to ExternalContactInput for the generic upsert
     const externalContacts: externalContactDb.ExternalContactInput[] = contacts.map(
       (contact) => {
-        // Build external_record_id from deviceId + displayName for dedup
-        const externalRecordId = `android-${deviceId}-${contact.displayName}`;
+        // Build external_record_id from deviceId + stable contact ID for dedup
+        const externalRecordId = `android-${deviceId}-${contact.id}`;
 
         // Extract phone numbers as simple strings
         const phones = contact.phones

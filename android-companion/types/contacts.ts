@@ -34,6 +34,8 @@ export interface ContactEmail {
  * Contains the core fields needed for contact matching and display.
  */
 export interface SyncContact {
+  /** Stable contact ID from the Android contacts provider */
+  id: string;
   /** Display name (first + last or organization fallback) */
   displayName: string;
   /** Phone numbers associated with the contact */

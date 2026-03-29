@@ -52,6 +52,8 @@ export interface SyncPayload {
  * A single contact synced from the Android device.
  */
 export interface SyncContact {
+  /** Stable contact ID from the Android contacts provider */
+  id: string;
   /** Display name (first + last or organization fallback) */
   displayName: string;
   /** Phone numbers associated with the contact */
