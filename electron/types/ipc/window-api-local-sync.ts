@@ -25,4 +25,10 @@ export interface WindowApiLocalSync {
     totalMessagesReceived: number;
     lastSyncTimestamp: number | null;
   }>;
+
+  /** Clear all Android-synced messages and contacts from local DB (BACKLOG-1468) */
+  clearAndroidData: (options: { userId: string }) => Promise<{
+    messagesDeleted: number;
+    contactsDeleted: number;
+  }>;
 }

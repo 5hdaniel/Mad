@@ -67,6 +67,7 @@ export function AndroidMessagesSettings({ userId }: AndroidMessagesSettingsProps
   const [loading, setLoading] = useState(true);
   const [showForceWarning, setShowForceWarning] = useState(false);
   const [resetting, setResetting] = useState(false);
+  const [clearResult, setClearResult] = useState<{ messagesDeleted: number; contactsDeleted: number } | null>(null);
 
   // Import filter state
   const [lookbackMonths, setLookbackMonths] = useState<number | null>(3);
@@ -144,8 +145,15 @@ export function AndroidMessagesSettings({ userId }: AndroidMessagesSettingsProps
   const handleForceReimport = async () => {
     setShowForceWarning(false);
     setResetting(true);
+    setClearResult(null);
     try {
-      // Stop and restart the sync server to reset in-memory counters.
+      // BACKLOG-1468: Clear Android-synced data from local DB before stopping server.
+      // This deletes messages (metadata source = 'android_wifi_sync') and
+      // contacts (source = 'android_sync') so the companion app re-sends everything.
+      const result = await window.api.localSync.clearAndroidData({ userId });
+      setClearResult(result);
+
+      // Stop the sync server to reset in-memory counters.
       // The companion app will re-send all messages on next sync.
       await window.api.localSync.stopServer();
       await refreshStatus();
@@ -181,6 +189,15 @@ export function AndroidMessagesSettings({ userId }: AndroidMessagesSettingsProps
           {syncStatus && syncStatus.totalMessagesReceived > 0 && (
             <> | {syncStatus.totalMessagesReceived.toLocaleString()} messages received</>
           )}
+        </div>
+      )}
+
+      {/* Clear result display (BACKLOG-1468) */}
+      {clearResult && (
+        <div className="mb-3 text-xs text-green-700 bg-green-50 rounded p-2 border border-green-200">
+          Cleared {clearResult.messagesDeleted.toLocaleString()} messages and{" "}
+          {clearResult.contactsDeleted.toLocaleString()} contacts. Open the companion app and
+          tap Sync Now to re-import.
         </div>
       )}
 
@@ -271,11 +288,12 @@ export function AndroidMessagesSettings({ userId }: AndroidMessagesSettingsProps
             </svg>
             <div className="flex-1">
               <p className="text-sm font-medium text-amber-800">
-                Force re-import will reset the sync session
+                Force re-import will delete all Android data
               </p>
               <p className="text-xs text-amber-700 mt-1">
-                This stops the current sync server and clears the session.
-                Open the companion app and tap Sync Now to re-send all messages.
+                This deletes all synced messages and contacts from the local database,
+                then stops the sync server. Open the companion app and tap Sync Now to
+                re-import everything from scratch.
               </p>
               <div className="flex gap-2 mt-2">
                 <button

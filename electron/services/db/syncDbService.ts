@@ -240,6 +240,28 @@ export function deleteAttachmentsBySessionId(sessionId: string): { deleted: numb
 }
 
 /**
+ * Delete all messages whose metadata JSON contains a specific source value.
+ * Used for Android force re-import to clear all android_wifi_sync messages.
+ *
+ * BACKLOG-1468: Android Force Re-import clears synced data
+ *
+ * @param userId - User ID for message ownership
+ * @param metadataSource - The source value to match in metadata JSON (e.g., 'android_wifi_sync')
+ * @returns Number of messages deleted
+ */
+export function deleteMessagesByMetadataSource(userId: string, metadataSource: string): number {
+  const db = ensureDb();
+  const result = db.prepare(
+    `DELETE FROM messages WHERE user_id = ? AND json_extract(metadata, '$.source') = ?`
+  ).run(userId, metadataSource);
+  logService.info(
+    `Deleted ${result.changes} messages with metadata source '${metadataSource}'`,
+    "syncDbService"
+  );
+  return result.changes;
+}
+
+/**
  * Delete all external contacts inserted during a specific sync session.
  */
 export function deleteContactsBySessionId(userId: string, sessionId: string): number {
