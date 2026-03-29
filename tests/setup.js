@@ -193,6 +193,33 @@ if (typeof window !== 'undefined') {
       openITunesStore: jest.fn(),
       checkUpdate: jest.fn(),
     },
+    // Android companion pairing (BACKLOG-1447)
+    pairing: {
+      generateQR: jest.fn().mockResolvedValue({
+        success: true,
+        result: {
+          qrDataUrl: 'data:image/png;base64,mock',
+          pairingInfo: { ip: '192.168.1.1', port: 8384, secret: 'mock-secret', deviceName: 'Test PC' },
+        },
+      }),
+      getStatus: jest.fn().mockResolvedValue({
+        success: true,
+        status: { isPaired: false, devices: [] },
+      }),
+      disconnect: jest.fn().mockResolvedValue({ success: true }),
+    },
+    // Android companion local sync (BACKLOG-1447)
+    localSync: {
+      startServer: jest.fn().mockResolvedValue({ success: true }),
+      stopServer: jest.fn().mockResolvedValue({ success: true }),
+      getStatus: jest.fn().mockResolvedValue({
+        running: false,
+        port: null,
+        address: null,
+        totalMessagesReceived: 0,
+        lastSyncTimestamp: null,
+      }),
+    },
     // SPRINT-127 / TASK-2160: Feature gate (plan-based feature access)
     featureGate: {
       getAll: jest.fn().mockResolvedValue({}),
