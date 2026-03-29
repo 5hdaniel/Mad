@@ -243,7 +243,7 @@ export interface AppStateMachine {
   // ============================================
 
   handleSelectIPhone: () => Promise<void>;
-  handleSelectAndroid: () => void;
+  handleSelectAndroid: () => Promise<void>;
   handleAndroidGoBack: () => void;
   handleAndroidContinueWithEmail: () => Promise<void>;
   handlePhoneTypeChange: (phoneType: "iphone" | "android") => Promise<void>;

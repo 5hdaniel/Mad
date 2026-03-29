@@ -49,7 +49,7 @@ export interface UsePhoneHandlersOptions {
 
 export interface UsePhoneHandlersReturn {
   handleSelectIPhone: () => Promise<void>;
-  handleSelectAndroid: () => void;
+  handleSelectAndroid: () => Promise<void>;
   handleAndroidGoBack: () => void;
   handleAndroidContinueWithEmail: () => Promise<void>;
   handlePhoneTypeChange: (phoneType: "iphone" | "android") => Promise<void>;
@@ -114,10 +114,42 @@ export function usePhoneHandlers({
     setHasSelectedPhoneType,
   ]);
 
-  const handleSelectAndroid = useCallback((): void => {
-    setSelectedPhoneType("android");
-    setCurrentStep("android-coming-soon");
-  }, [setSelectedPhoneType, setCurrentStep]);
+  const handleSelectAndroid = useCallback(async (): Promise<void> => {
+    if (pendingOAuthData && !isAuthenticated) {
+      setSelectedPhoneType("android");
+      setPendingOnboardingData((prev) => ({ ...prev, phoneType: "android" }));
+      if (!USE_NEW_ONBOARDING) {
+        setCurrentStep("android-coming-soon");
+      }
+      return;
+    }
+
+    if (!currentUserId) return;
+
+    const success = await savePhoneType("android");
+    if (success) {
+      setHasSelectedPhoneType(true);
+      if (!USE_NEW_ONBOARDING) {
+        setCurrentStep("android-coming-soon");
+      }
+    } else {
+      // DB not initialized — store in pending data, let OnboardingFlow handle navigation
+      setSelectedPhoneType("android");
+      setPendingOnboardingData((prev) => ({ ...prev, phoneType: "android" }));
+      if (!USE_NEW_ONBOARDING) {
+        setCurrentStep("android-coming-soon");
+      }
+    }
+  }, [
+    pendingOAuthData,
+    isAuthenticated,
+    currentUserId,
+    setSelectedPhoneType,
+    setPendingOnboardingData,
+    setCurrentStep,
+    savePhoneType,
+    setHasSelectedPhoneType,
+  ]);
 
   const handleAndroidGoBack = useCallback((): void => {
     setSelectedPhoneType(null);

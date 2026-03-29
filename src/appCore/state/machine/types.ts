@@ -266,6 +266,7 @@ export type AppAction =
   | OnboardingStepCompleteAction
   | OnboardingSkipAction
   | OnboardingQueueDoneAction
+  | PhoneTypeResetAction
   | EmailConnectedAction
   | EmailDisconnectedAction
   | StartEmailSetupAction
@@ -382,6 +383,16 @@ export interface OnboardingStepCompleteAction {
  */
 export interface OnboardingQueueDoneAction {
   type: "ONBOARDING_QUEUE_DONE";
+}
+
+/**
+ * Reset phone type selection during onboarding.
+ * Dispatched when user navigates back from the android pairing step
+ * to re-select their phone type. Clears selectedPhoneType and removes
+ * "phone-type" from completedSteps so the queue shows phone-type as active.
+ */
+export interface PhoneTypeResetAction {
+  type: "PHONE_TYPE_RESET";
 }
 
 /**

@@ -34,6 +34,11 @@ export const meta: OnboardingStepMeta = {
     showBack: false,
     hideContinue: true,
   },
+  // Only show this step when the user selected Android
+  isApplicable: (context) => context.phoneType === "android",
+  // This step is never auto-complete; the user must click Continue or Skip.
+  // Manual advancement is handled via CONTINUE_EMAIL_ONLY action in the queue.
+  isComplete: () => false,
 };
 
 // =============================================================================

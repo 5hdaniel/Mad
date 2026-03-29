@@ -260,8 +260,9 @@ export function useOnboardingQueue(
         case "DRIVER_SKIPPED":
         case "TERMS_ACCEPTED":
         case "CONTINUE_EMAIL_ONLY":
-          // These actions update context, which triggers queue rebuild.
-          // The active step changes automatically when context changes.
+          // Android pairing step: explicitly advance past android-coming-soon
+          // since this step has no context-driven isComplete.
+          goToNext();
           break;
 
         case "NAVIGATE_NEXT":

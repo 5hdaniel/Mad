@@ -80,12 +80,12 @@ describe("Onboarding Flows", () => {
   });
 
   describe("Flow Configuration", () => {
-    it("macOS flow has 7 steps", () => {
-      expect(MACOS_FLOW_STEPS.length).toBe(7);
+    it("macOS flow has 8 steps", () => {
+      expect(MACOS_FLOW_STEPS.length).toBe(8);
     });
 
-    it("Windows flow has 6 steps", () => {
-      expect(WINDOWS_FLOW_STEPS.length).toBe(6);
+    it("Windows flow has 7 steps", () => {
+      expect(WINDOWS_FLOW_STEPS.length).toBe(7);
     });
 
     it("macOS includes secure-storage and permissions", () => {
@@ -114,6 +114,19 @@ describe("Onboarding Flows", () => {
     it("both flows include data-sync step", () => {
       expect(MACOS_FLOW_STEPS).toContain("data-sync");
       expect(WINDOWS_FLOW_STEPS).toContain("data-sync");
+    });
+
+    it("both flows include android-coming-soon after phone-type", () => {
+      expect(MACOS_FLOW_STEPS).toContain("android-coming-soon");
+      expect(WINDOWS_FLOW_STEPS).toContain("android-coming-soon");
+
+      const macosPhoneIndex = MACOS_FLOW_STEPS.indexOf("phone-type");
+      const macosAndroidIndex = MACOS_FLOW_STEPS.indexOf("android-coming-soon");
+      expect(macosAndroidIndex).toBe(macosPhoneIndex + 1);
+
+      const windowsPhoneIndex = WINDOWS_FLOW_STEPS.indexOf("phone-type");
+      const windowsAndroidIndex = WINDOWS_FLOW_STEPS.indexOf("android-coming-soon");
+      expect(windowsAndroidIndex).toBe(windowsPhoneIndex + 1);
     });
 
     it("data-sync comes after email-connect", () => {
