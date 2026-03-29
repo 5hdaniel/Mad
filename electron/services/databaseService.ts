@@ -1558,6 +1558,10 @@ class DatabaseService implements IDatabaseService {
     return syncDb.deleteMessagesBySessionId(userId, sessionId);
   }
 
+  deleteMessagesByMetadataSource(userId: string, metadataSource: string) {
+    return syncDb.deleteMessagesByMetadataSource(userId, metadataSource);
+  }
+
   deleteAttachmentsBySessionId(sessionId: string) {
     return syncDb.deleteAttachmentsBySessionId(sessionId);
   }

@@ -273,6 +273,28 @@ class LocalSyncService {
   }
 
   /**
+   * Clear all Android-synced data from the local database.
+   * Deletes messages with metadata source 'android_wifi_sync' and
+   * external contacts with source 'android_sync'.
+   *
+   * BACKLOG-1468: Android Force Re-import clears synced data
+   *
+   * @param userId - User ID for data ownership
+   * @returns Counts of deleted messages and contacts
+   */
+  clearAndroidData(userId: string): { messagesDeleted: number; contactsDeleted: number } {
+    const messagesDeleted = databaseService.deleteMessagesByMetadataSource(userId, "android_wifi_sync");
+    const contactsDeleted = externalContactDb.deleteBySource(userId, "android_sync");
+
+    logService.info(
+      `[LocalSync] Cleared Android data: ${messagesDeleted} messages, ${contactsDeleted} contacts`,
+      LOG_TAG
+    );
+
+    return { messagesDeleted, contactsDeleted };
+  }
+
+  /**
    * Get the current server status including sync statistics.
    */
   getStatus(): LocalSyncServerStatus {

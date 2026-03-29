@@ -645,6 +645,25 @@ export function deleteByMacOSRecordId(userId: string, recordId: string): void {
 }
 
 /**
+ * Delete all external contacts for a user with a specific source.
+ * Used for Android force re-import to clear all android_sync contacts.
+ *
+ * BACKLOG-1468: Android Force Re-import clears synced data
+ *
+ * @param userId - User ID for contact ownership
+ * @param source - The source to delete (e.g., 'android_sync')
+ * @returns Number of contacts deleted
+ */
+export function deleteBySource(userId: string, source: ExternalContactSource): number {
+  const result = dbRun(
+    'DELETE FROM external_contacts WHERE user_id = ? AND source = ?',
+    [userId, source]
+  );
+  logService.info(`Deleted ${result.changes} external contacts with source '${source}'`, 'ExternalContactDbService', { userId });
+  return result.changes;
+}
+
+/**
  * Clear all external contacts for a user
  */
 export function clearAllForUser(userId: string): void {
