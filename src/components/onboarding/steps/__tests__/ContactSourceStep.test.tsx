@@ -217,6 +217,80 @@ describe("ContactSourceStep", () => {
   });
 
   // =========================================================================
+  // ANDROID-SPECIFIC RENDERING (BACKLOG-1466)
+  // =========================================================================
+
+  describe("Content - Android phone type", () => {
+    it("renders Android Phone Contacts when phone type is android", () => {
+      (usePlatform as jest.Mock).mockReturnValue({ isMacOS: true });
+
+      render(
+        <ContactSourceStep.Content
+          context={createMockContext({ phoneType: "android" })}
+          onAction={jest.fn()}
+        />
+      );
+
+      expect(screen.getByText("Android Phone Contacts")).toBeInTheDocument();
+    });
+
+    it("hides macOS Contacts when phone type is android", () => {
+      (usePlatform as jest.Mock).mockReturnValue({ isMacOS: true });
+
+      render(
+        <ContactSourceStep.Content
+          context={createMockContext({ phoneType: "android" })}
+          onAction={jest.fn()}
+        />
+      );
+
+      expect(screen.queryByText("macOS Contacts App")).not.toBeInTheDocument();
+    });
+
+    it("does not render Android Phone Contacts when phone type is iphone", () => {
+      (usePlatform as jest.Mock).mockReturnValue({ isMacOS: true });
+
+      render(
+        <ContactSourceStep.Content
+          context={createMockContext({ phoneType: "iphone" })}
+          onAction={jest.fn()}
+        />
+      );
+
+      expect(screen.queryByText("Android Phone Contacts")).not.toBeInTheDocument();
+    });
+
+    it("pre-selects Android Contacts and Google Contacts for Android users", async () => {
+      (usePlatform as jest.Mock).mockReturnValue({ isMacOS: true });
+      const onAction = jest.fn();
+
+      render(
+        <ContactSourceStep.Content
+          context={createMockContext({ phoneType: "android", authProvider: "google" })}
+          onAction={onAction}
+        />
+      );
+
+      fireEvent.click(screen.getByText("Continue"));
+
+      await waitFor(() => {
+        expect(window.api.preferences.update).toHaveBeenCalledWith(
+          "test-user-123",
+          {
+            contactSources: {
+              direct: {
+                outlookContacts: false,
+                googleContacts: true,
+                androidContacts: true,
+              },
+            },
+          }
+        );
+      });
+    });
+  });
+
+  // =========================================================================
   // SAVE PREFERENCES TESTS
   // =========================================================================
 

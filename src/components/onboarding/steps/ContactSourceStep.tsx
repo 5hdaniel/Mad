@@ -26,7 +26,7 @@ import logger from "../../../utils/logger";
 // =============================================================================
 
 interface SourceConfig {
-  key: "macosContacts" | "outlookContacts" | "iphoneContacts" | "googleContacts";
+  key: "macosContacts" | "outlookContacts" | "iphoneContacts" | "googleContacts" | "androidContacts";
   label: string;
   description: string;
   icon: React.ReactNode;
@@ -36,6 +36,8 @@ interface SourceConfig {
   platforms?: ("macos" | "windows")[];
   /** Only show when user selected this phone type. Undefined = always show. */
   phoneType?: "iphone" | "android";
+  /** Hide when user selected this phone type. Undefined = never hide by phone type. */
+  excludePhoneType?: "iphone" | "android";
   /** Only show when user authenticated with this provider. Undefined = always show. */
   authProvider?: "google" | "microsoft";
   /** Hidden sources are registered but not shown in UI yet. */
@@ -67,6 +69,7 @@ const SOURCE_OPTIONS: SourceConfig[] = [
     selectedBorder: "border-violet-400",
     selectedBg: "bg-violet-50",
     platforms: ["macos"],
+    excludePhoneType: "android",
   },
   {
     key: "outlookContacts",
@@ -115,6 +118,24 @@ const SOURCE_OPTIONS: SourceConfig[] = [
     selectedBorder: "border-gray-400",
     selectedBg: "bg-gray-50",
     phoneType: "iphone",
+  },
+  {
+    key: "androidContacts",
+    label: "Android Phone Contacts",
+    description: "Import contacts synced from your Android companion app",
+    icon: (
+      <svg className="w-7 h-7 text-green-600" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+        <path
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          strokeWidth={1.5}
+          d="M12 18h.01M8 21h8a2 2 0 002-2V5a2 2 0 00-2-2H8a2 2 0 00-2 2v14a2 2 0 002 2z"
+        />
+      </svg>
+    ),
+    selectedBorder: "border-green-400",
+    selectedBg: "bg-green-50",
+    phoneType: "android",
   },
 ];
 
@@ -241,12 +262,16 @@ export function Content({
   const { isMacOS } = usePlatform();
   const [isSaving, setIsSaving] = useState(false);
 
-  // Default: macOS Contacts + SSO provider's contacts pre-selected
+  // Default selections adapt to phone type:
+  // - Android: Android Contacts + Google Contacts pre-selected
+  // - iPhone/null: macOS Contacts + SSO provider's contacts pre-selected
+  const isAndroid = context.phoneType === "android";
   const [selected, setSelected] = useState<Record<string, boolean>>({
-    macosContacts: true,
-    outlookContacts: context.authProvider === "microsoft",
+    macosContacts: !isAndroid,
+    outlookContacts: isAndroid ? false : context.authProvider === "microsoft",
     iphoneContacts: false,
-    googleContacts: context.authProvider === "google",
+    googleContacts: isAndroid ? true : context.authProvider === "google",
+    androidContacts: isAndroid,
   });
 
   // Filter sources by platform, phone type, auth provider, and visibility
@@ -256,6 +281,7 @@ export function Content({
         if (source.hidden) return false;
         if (source.platforms && !source.platforms.includes(isMacOS ? "macos" : "windows")) return false;
         if (source.phoneType && source.phoneType !== context.phoneType) return false;
+        if (source.excludePhoneType && source.excludePhoneType === context.phoneType) return false;
         if (source.authProvider && source.authProvider !== context.authProvider) return false;
         return true;
       }),

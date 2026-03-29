@@ -38,6 +38,18 @@ export function registerLocalSyncHandlers(): void {
   ipcMain.handle("sync:get-status", () => {
     return localSyncService.getStatus();
   });
+
+  // Clear all Android-synced data from local DB (BACKLOG-1468)
+  ipcMain.handle(
+    "sync:clear-android-data",
+    async (
+      _event,
+      options: { userId: string }
+    ): Promise<{ messagesDeleted: number; contactsDeleted: number }> => {
+      logService.info("[LocalSync] IPC: clear-android-data requested", LOG_TAG);
+      return localSyncService.clearAndroidData(options.userId);
+    }
+  );
 }
 
 /**

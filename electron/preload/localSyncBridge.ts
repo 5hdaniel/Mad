@@ -26,4 +26,14 @@ export const localSyncBridge = {
    * @returns Server running state, address, port, and sync statistics
    */
   getStatus: () => ipcRenderer.invoke("sync:get-status"),
+
+  /**
+   * Clears all Android-synced data (messages and contacts) from the local database.
+   * Used by Force Re-import to wipe synced data before re-syncing.
+   * BACKLOG-1468
+   * @param options - Must include userId
+   * @returns Counts of deleted messages and contacts
+   */
+  clearAndroidData: (options: { userId: string }) =>
+    ipcRenderer.invoke("sync:clear-android-data", options),
 };

@@ -906,6 +906,40 @@ export async function getContactByPhone(
 }
 
 /**
+ * Synchronous phone lookup scoped by user_id.
+ * Used by Android contact promotion to check for duplicates before
+ * creating entries in the main contacts table.
+ *
+ * BACKLOG-1469: Added to support contact promotion dedup.
+ *
+ * @param userId - Owning user ID
+ * @param normalizedPhone - Last 10 digits of the phone number
+ * @returns Contact ID and display_name if found, null otherwise
+ */
+export function findContactByNormalizedPhone(
+  userId: string,
+  normalizedPhone: string
+): { id: string; display_name: string } | null {
+  if (!normalizedPhone || normalizedPhone.length < 7) {
+    return null;
+  }
+
+  const sql = `
+    SELECT
+      c.id,
+      c.display_name
+    FROM contacts c
+    JOIN contact_phones cp ON c.id = cp.contact_id
+    WHERE c.user_id = ?
+      AND SUBSTR(REPLACE(REPLACE(REPLACE(REPLACE(cp.phone_e164, '+', ''), '-', ''), ' ', ''), '(', ''), -10) = ?
+    LIMIT 1
+  `;
+
+  const result = dbGet<{ id: string; display_name: string }>(sql, [userId, normalizedPhone]);
+  return result || null;
+}
+
+/**
  * Batch lookup contacts by multiple phone numbers.
  * Returns a map of normalized phone -> contact name.
  */
