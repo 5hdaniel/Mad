@@ -1,33 +1,18 @@
 /**
  * Encryption Service (Android Companion)
- * AES-256-GCM encryption/decryption for the local HTTP transport layer.
+ * AES-256-GCM encryption/decryption using node-forge.
  *
- * Uses expo-crypto for native crypto operations on Android.
- * API matches the Electron implementation in electron/services/localSyncEncryption.ts.
- *
- * TASK-1429: Android Companion — Encrypted HTTP Transport
- *
- * NOTE: This module requires expo-crypto to be installed:
- *   npx expo install expo-crypto
- * The actual crypto implementation will use expo-crypto's getRandomBytes
- * for IV generation and the Web Crypto API (SubtleCrypto) for AES-GCM,
- * which is available in React Native's Hermes engine.
- *
- * SECURITY: The encryption key must be derived via deriveTransportKeys()
- * from keyDerivation.ts — never use the raw shared secret directly.
+ * Hermes (React Native JS engine) doesn't have crypto.subtle,
+ * so we use node-forge which is pure JS and works everywhere.
  */
 
+import forge from 'node-forge';
 import type { EncryptedPayload } from "../types/sync";
 
-/** AES-256-GCM key length: 32 bytes */
 const KEY_LENGTH = 32;
-
-/** GCM standard IV length: 12 bytes */
 const IV_LENGTH = 12;
+const TAG_LENGTH = 16;
 
-/**
- * Convert a hex string to a Uint8Array.
- */
 function hexToBytes(hex: string): Uint8Array {
   const bytes = new Uint8Array(hex.length / 2);
   for (let i = 0; i < hex.length; i += 2) {
@@ -36,34 +21,26 @@ function hexToBytes(hex: string): Uint8Array {
   return bytes;
 }
 
-/**
- * Convert a Uint8Array to a hex string.
- */
 function bytesToHex(bytes: Uint8Array): string {
   return Array.from(bytes)
     .map((b) => b.toString(16).padStart(2, "0"))
     .join("");
 }
 
-/**
- * Import a raw key buffer as a CryptoKey for AES-GCM.
- */
-async function importKey(keyBytes: Uint8Array): Promise<CryptoKey> {
-  return crypto.subtle.importKey(
-    "raw",
-    keyBytes.buffer as ArrayBuffer,
-    { name: "AES-GCM" },
-    false,
-    ["encrypt", "decrypt"]
-  );
+function uint8ToForgeBytes(arr: Uint8Array): string {
+  return String.fromCharCode.apply(null, Array.from(arr));
+}
+
+function forgeBytesToUint8(str: string): Uint8Array {
+  const arr = new Uint8Array(str.length);
+  for (let i = 0; i < str.length; i++) {
+    arr[i] = str.charCodeAt(i);
+  }
+  return arr;
 }
 
 /**
  * Encrypt a plaintext string using AES-256-GCM.
- *
- * @param data - The plaintext string to encrypt (typically JSON)
- * @param encryptionKey - 32-byte derived encryption key (from deriveTransportKeys)
- * @returns EncryptedPayload with hex-encoded iv, ciphertext, and auth tag
  */
 export async function encrypt(
   data: string,
@@ -75,23 +52,25 @@ export async function encrypt(
     );
   }
 
-  // Generate random IV using Web Crypto API
-  const iv = crypto.getRandomValues(new Uint8Array(IV_LENGTH));
+  // Generate random IV
+  const ivBytes = forge.random.getBytesSync(IV_LENGTH);
+  const iv = forgeBytesToUint8(ivBytes);
 
-  const cryptoKey = await importKey(encryptionKey);
-
-  // AES-GCM encrypt — returns ciphertext + tag concatenated
-  const ciphertextWithTag = await crypto.subtle.encrypt(
-    { name: "AES-GCM", iv: iv.buffer as ArrayBuffer, tagLength: 128 },
-    cryptoKey,
-    new TextEncoder().encode(data)
+  const cipher = forge.cipher.createCipher(
+    'AES-GCM',
+    uint8ToForgeBytes(encryptionKey)
   );
 
-  const result = new Uint8Array(ciphertextWithTag);
+  cipher.start({
+    iv: ivBytes,
+    tagLength: TAG_LENGTH * 8, // bits
+  });
 
-  // GCM appends the 16-byte auth tag to the ciphertext
-  const encrypted = result.slice(0, result.length - 16);
-  const tag = result.slice(result.length - 16);
+  cipher.update(forge.util.createBuffer(forge.util.encodeUtf8(data)));
+  cipher.finish();
+
+  const encrypted = forgeBytesToUint8(cipher.output.bytes());
+  const tag = forgeBytesToUint8(cipher.mode.tag.bytes());
 
   return {
     iv: bytesToHex(iv),
@@ -102,10 +81,6 @@ export async function encrypt(
 
 /**
  * Decrypt an AES-256-GCM encrypted payload.
- *
- * @param payload - EncryptedPayload with hex-encoded iv, ciphertext, and auth tag
- * @param encryptionKey - 32-byte derived encryption key (from deriveTransportKeys)
- * @returns The decrypted plaintext string
  */
 export async function decrypt(
   payload: EncryptedPayload,
@@ -127,18 +102,23 @@ export async function decrypt(
     );
   }
 
-  const cryptoKey = await importKey(encryptionKey);
-
-  // Reconstruct the ciphertext + tag buffer that WebCrypto expects
-  const ciphertextWithTag = new Uint8Array(encrypted.length + tag.length);
-  ciphertextWithTag.set(encrypted);
-  ciphertextWithTag.set(tag, encrypted.length);
-
-  const decrypted = await crypto.subtle.decrypt(
-    { name: "AES-GCM", iv: iv.buffer as ArrayBuffer, tagLength: 128 },
-    cryptoKey,
-    ciphertextWithTag.buffer as ArrayBuffer
+  const decipher = forge.cipher.createDecipher(
+    'AES-GCM',
+    uint8ToForgeBytes(encryptionKey)
   );
 
-  return new TextDecoder().decode(decrypted);
+  decipher.start({
+    iv: uint8ToForgeBytes(iv),
+    tagLength: TAG_LENGTH * 8,
+    tag: forge.util.createBuffer(uint8ToForgeBytes(tag)),
+  });
+
+  decipher.update(forge.util.createBuffer(uint8ToForgeBytes(encrypted)));
+  const pass = decipher.finish();
+
+  if (!pass) {
+    throw new Error('Decryption failed: authentication tag mismatch');
+  }
+
+  return forge.util.decodeUtf8(decipher.output.bytes());
 }
