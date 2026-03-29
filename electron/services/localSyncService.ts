@@ -19,12 +19,16 @@ import { secureCompare } from "../utils/keyDerivation";
 import databaseService from "./databaseService";
 import { normalizePhone } from "./messageMatchingService";
 import { pairingService } from "./pairingService";
+import * as externalContactDb from "./db/externalContactDbService";
 import type {
   EncryptedPayload,
   SyncPayload,
   SyncMessage,
   LocalSyncResult,
   LocalSyncServerStatus,
+  ContactSyncPayload,
+  ContactSyncResult,
+  SyncContact,
 } from "../types/localSync";
 
 const LOG_TAG = "LocalSync";
@@ -306,6 +310,11 @@ class LocalSyncService {
       return;
     }
 
+    if (method === "POST" && urlPath === "/sync/contacts") {
+      this.handleSyncContacts(req, res);
+      return;
+    }
+
     // Unknown route
     sendJSON(res, 404, { error: "Not found" });
   }
@@ -505,6 +514,197 @@ class LocalSyncService {
 
     const result = databaseService.batchInsertMessages(messagesToInsert, 500);
     return result.stored;
+  }
+
+  /**
+   * POST /sync/contacts — receive encrypted contact batch.
+   * Requires bearer token authentication + AES-256-GCM decryption.
+   *
+   * BACKLOG-1449: Android contacts sync
+   */
+  private async handleSyncContacts(
+    req: http.IncomingMessage,
+    res: http.ServerResponse
+  ): Promise<void> {
+    try {
+      // Validate bearer token (same auth as messages)
+      const authHeader = req.headers.authorization;
+      if (!authHeader || !authHeader.startsWith("Bearer ")) {
+        logService.warn("[LocalSync] Missing or invalid Authorization header (contacts)", LOG_TAG);
+        sendJSON(res, 401, { error: "Unauthorized" });
+        return;
+      }
+
+      const token = authHeader.substring(7);
+      if (
+        !this.authToken ||
+        !secureCompare(Buffer.from(token, "utf8"), Buffer.from(this.authToken, "utf8"))
+      ) {
+        logService.warn("[LocalSync] Invalid bearer token (contacts)", LOG_TAG);
+        sendJSON(res, 401, { error: "Unauthorized" });
+        return;
+      }
+
+      // Read and parse request body
+      let body: string;
+      try {
+        body = await readRequestBody(req);
+      } catch (err) {
+        const message = err instanceof Error ? err.message : "Failed to read body";
+        logService.error(`[LocalSync] Body read error (contacts): ${message}`, LOG_TAG);
+        sendJSON(res, 400, { error: message });
+        return;
+      }
+
+      let encryptedPayload: EncryptedPayload;
+      try {
+        encryptedPayload = JSON.parse(body) as EncryptedPayload;
+      } catch {
+        logService.warn("[LocalSync] Invalid JSON in request body (contacts)", LOG_TAG);
+        sendJSON(res, 400, { error: "Invalid JSON" });
+        return;
+      }
+
+      // Validate encrypted payload structure
+      if (!encryptedPayload.iv || !encryptedPayload.encrypted || !encryptedPayload.tag) {
+        logService.warn("[LocalSync] Missing encrypted payload fields (contacts)", LOG_TAG);
+        sendJSON(res, 400, { error: "Invalid payload: missing iv, encrypted, or tag" });
+        return;
+      }
+
+      // Decrypt
+      if (!this.encryptionKey) {
+        logService.error("[LocalSync] Encryption key not set (contacts)", LOG_TAG);
+        sendJSON(res, 500, { error: "Server not configured" });
+        return;
+      }
+
+      let decryptedJson: string;
+      try {
+        decryptedJson = decrypt(encryptedPayload, this.encryptionKey);
+      } catch (err) {
+        const message = err instanceof Error ? err.message : "Decryption failed";
+        logService.warn(`[LocalSync] Decryption failed (contacts): ${message}`, LOG_TAG);
+        sendJSON(res, 400, { error: "Decryption failed" });
+        return;
+      }
+
+      // Parse decrypted payload
+      let contactPayload: ContactSyncPayload;
+      try {
+        contactPayload = JSON.parse(decryptedJson) as ContactSyncPayload;
+      } catch {
+        logService.warn("[LocalSync] Invalid JSON in decrypted payload (contacts)", LOG_TAG);
+        sendJSON(res, 400, { error: "Invalid decrypted payload" });
+        return;
+      }
+
+      // Validate contact payload structure
+      if (!contactPayload.deviceId || !Array.isArray(contactPayload.contacts)) {
+        logService.warn("[LocalSync] Invalid contact payload structure", LOG_TAG);
+        sendJSON(res, 400, { error: "Invalid contact payload: missing deviceId or contacts" });
+        return;
+      }
+
+      logService.info(
+        `[LocalSync] Received ${contactPayload.contacts.length} contacts from device ${contactPayload.deviceId}`,
+        LOG_TAG
+      );
+
+      // Update device last seen timestamp
+      pairingService.updateLastSeen(contactPayload.deviceId);
+
+      // Store contacts using the externalContactDbService shadow table
+      let storedCount = 0;
+      if (this.userId && contactPayload.contacts.length > 0) {
+        try {
+          storedCount = this.storeContacts(
+            this.userId,
+            contactPayload.deviceId,
+            contactPayload.contacts
+          );
+          logService.info(
+            `[LocalSync] Stored ${storedCount} contacts from Android device`,
+            LOG_TAG
+          );
+        } catch (err) {
+          const storeError = err instanceof Error ? err.message : "Storage failed";
+          logService.error(`[LocalSync] Contact storage error: ${storeError}`, LOG_TAG);
+          // Continue — still respond success since contacts were received
+        }
+      }
+
+      const result: ContactSyncResult = {
+        success: true,
+        contactsReceived: contactPayload.contacts.length,
+        contactsStored: storedCount,
+      };
+
+      sendJSON(res, 200, result as unknown as Record<string, unknown>);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Internal error";
+      logService.error(`[LocalSync] Unhandled error (contacts): ${message}`, LOG_TAG);
+      sendJSON(res, 500, { error: "Internal server error" });
+    }
+  }
+
+  /**
+   * Store received contacts in the external_contacts shadow table.
+   * Uses the same pattern as Outlook/Google contact sync — stores
+   * in the shadow table with source 'android_sync', matching by
+   * device ID + display name as the external_record_id.
+   *
+   * BACKLOG-1449: Android contacts sync
+   *
+   * @param userId - User ID for contact ownership
+   * @param deviceId - Android device ID from pairing
+   * @param contacts - Array of SyncContact from the Android device
+   * @returns Number of contacts stored
+   */
+  private storeContacts(
+    userId: string,
+    deviceId: string,
+    contacts: SyncContact[]
+  ): number {
+    // Map SyncContact to ExternalContactInput for the generic upsert
+    const externalContacts: externalContactDb.ExternalContactInput[] = contacts.map(
+      (contact) => {
+        // Build external_record_id from deviceId + displayName for dedup
+        const externalRecordId = `android-${deviceId}-${contact.displayName}`;
+
+        // Extract phone numbers as simple strings
+        const phones = contact.phones
+          .map((p) => p.number)
+          .filter((n) => n.length > 0);
+
+        // Extract email addresses as simple strings
+        const emails = contact.emails
+          .map((e) => e.address)
+          .filter((a) => a.length > 0);
+
+        return {
+          external_record_id: externalRecordId,
+          name: contact.displayName || null,
+          emails,
+          phones,
+          company: contact.company ?? null,
+        };
+      }
+    );
+
+    // Use the existing syncContactsBySource which handles upsert + stale deletion + last_message_at
+    const syncResult = externalContactDb.syncContactsBySource(
+      userId,
+      "android_sync",
+      externalContacts
+    );
+
+    logService.info(
+      `[LocalSync] Android contact sync complete: inserted=${syncResult.inserted}, deleted=${syncResult.deleted}, total=${syncResult.total}`,
+      LOG_TAG
+    );
+
+    return syncResult.inserted;
   }
 }
 

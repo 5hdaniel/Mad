@@ -20,7 +20,7 @@ import { queryContacts, isPoolReady } from '../../workers/contactWorkerPool';
  * Valid external contact source types
  * TASK-2301: Extracted as type alias; added google_contacts
  */
-export type ExternalContactSource = 'macos' | 'iphone' | 'outlook' | 'google_contacts';
+export type ExternalContactSource = 'macos' | 'iphone' | 'outlook' | 'google_contacts' | 'android_sync';
 
 /**
  * External contact as stored in database
