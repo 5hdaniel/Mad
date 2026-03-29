@@ -144,7 +144,7 @@ function readBox(filter: SmsFilter): Promise<SyncMessage[]> {
           const records = JSON.parse(smsList) as RawSmsRecord[];
           const messages = records
             .filter((r) => r.address && r.body)
-            .map((r) => rawToSyncMessage(r));
+            .map((r) => rawToSyncMessage(r, filter.box));
           console.log(
             `[SmsReader] ${filter.box}: ${records.length} raw records -> ${messages.length} valid messages`
           );
@@ -160,11 +160,20 @@ function readBox(filter: SmsFilter): Promise<SyncMessage[]> {
 
 /**
  * Convert a raw SMS record to a SyncMessage.
+ *
+ * Direction is determined primarily by which box was queried (inbox vs sent),
+ * since the native module may not always return a reliable `type` field.
+ * The `raw.type` is used as a secondary signal only when `box` is not provided.
+ *
+ * BACKLOG-1459: raw.type was undefined/null for some sent-box queries, causing
+ * the `?? SMS_TYPE_INBOX` fallback to mark all messages as inbound.
  */
-function rawToSyncMessage(raw: RawSmsRecord): SyncMessage {
-  const smsType = raw.type ?? SMS_TYPE_INBOX;
-  const direction: "inbound" | "outbound" =
-    smsType === SMS_TYPE_SENT ? "outbound" : "inbound";
+function rawToSyncMessage(raw: RawSmsRecord, box?: "inbox" | "sent"): SyncMessage {
+  // Primary: use the box we explicitly queried
+  // Fallback: use raw.type from the native module
+  const direction: "inbound" | "outbound" = box
+    ? (box === "sent" ? "outbound" : "inbound")
+    : ((raw.type ?? SMS_TYPE_INBOX) === SMS_TYPE_SENT ? "outbound" : "inbound");
 
   // Use date_sent if available and non-zero, otherwise use date
   const dateSent = parseInt(raw.date_sent, 10);
