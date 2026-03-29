@@ -76,7 +76,7 @@ function formatRelativeTime(isoOrTimestamp: string | number): string {
  */
 export function ImportSourceSettings({ userId }: ImportSourceSettingsProps) {
   const { isMacOS } = usePlatform();
-  const [source, setSource] = useState<ImportSource>("macos-native");
+  const [source, setSource] = useState<ImportSource>(isMacOS ? "macos-native" : "iphone-sync");
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
 

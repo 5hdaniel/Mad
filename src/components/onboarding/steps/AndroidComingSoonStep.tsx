@@ -10,25 +10,13 @@
  * @module onboarding/steps/AndroidComingSoonStep
  */
 
-import React, { useState, useCallback } from "react";
+import React, { useState, useCallback, useRef, useEffect } from "react";
 import type {
   OnboardingStep,
   OnboardingStepMeta,
   OnboardingStepContentProps,
 } from "../types";
 import logger from "../../../utils/logger";
-
-// =============================================================================
-// TYPES
-// =============================================================================
-
-interface SyncStatus {
-  running: boolean;
-  port: number | null;
-  address: string | null;
-  totalMessagesReceived: number;
-  lastSyncTimestamp: number | null;
-}
 
 // =============================================================================
 // STEP METADATA
@@ -62,6 +50,18 @@ function Content({ context, onAction }: OnboardingStepContentProps) {
   const [error, setError] = useState<string | null>(null);
   const [paired, setPaired] = useState(false);
   const [serverStarting, setServerStarting] = useState(false);
+
+  // Refs for cleanup of polling interval and timeout to prevent memory leaks
+  const pollIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const pollTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Cleanup polling on unmount
+  useEffect(() => {
+    return () => {
+      if (pollIntervalRef.current) clearInterval(pollIntervalRef.current);
+      if (pollTimeoutRef.current) clearTimeout(pollTimeoutRef.current);
+    };
+  }, []);
 
   const handleGoBack = () => {
     onAction({ type: "GO_BACK_SELECT_IPHONE" });
@@ -101,6 +101,10 @@ function Content({ context, onAction }: OnboardingStepContentProps) {
         setServerStarting(false);
       }
 
+      // Clear any previous polling before starting new one
+      if (pollIntervalRef.current) clearInterval(pollIntervalRef.current);
+      if (pollTimeoutRef.current) clearTimeout(pollTimeoutRef.current);
+
       // Poll for pairing status
       const pollInterval = setInterval(async () => {
         try {
@@ -108,14 +112,20 @@ function Content({ context, onAction }: OnboardingStepContentProps) {
           if (status.success && status.status?.isPaired && status.status.devices.length > 0) {
             setPaired(true);
             clearInterval(pollInterval);
+            pollIntervalRef.current = null;
           }
         } catch {
           // Ignore polling errors
         }
       }, 3000);
+      pollIntervalRef.current = pollInterval;
 
       // Stop polling after 5 minutes
-      setTimeout(() => clearInterval(pollInterval), 300_000);
+      pollTimeoutRef.current = setTimeout(() => {
+        clearInterval(pollInterval);
+        pollIntervalRef.current = null;
+        pollTimeoutRef.current = null;
+      }, 300_000);
     } catch (err) {
       logger.error("[AndroidPairingStep] Failed to generate QR:", err);
       setError(err instanceof Error ? err.message : "Failed to generate pairing code");
