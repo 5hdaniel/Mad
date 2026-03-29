@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import { LLMSettings } from "./settings/LLMSettings";
 import { MacOSMessagesImportSettings } from "./settings/MacOSMessagesImportSettings";
+import { AndroidMessagesSettings } from "./settings/AndroidMessagesSettings";
 import { ImportSourceSettings } from "./settings/ImportSourceSettings";
 import { FeatureGate } from "./common/FeatureGate";
 import { SettingsTabBar } from "./settings/SettingsTabBar";
@@ -16,6 +17,7 @@ import { useFeatureGate } from "@/hooks/useFeatureGate";
 import { OfflineNotice } from './common/OfflineNotice';
 import { settingsService } from '../services';
 import logger from '../utils/logger';
+import type { ImportSource } from '../services/settingsService';
 import type { PreferencesResult } from './settings/types';
 
 const SETTINGS_TABS = [
@@ -66,6 +68,9 @@ function Settings({ onClose, userId, onLogout, onEmailConnected, onEmailDisconne
   const [isGoogleConnected, setIsGoogleConnected] = useState<boolean>(false);
   const [isMicrosoftConnected, setIsMicrosoftConnected] = useState<boolean>(false);
 
+  // BACKLOG-1458: Track active import source for adaptive Messages section
+  const [activeImportSource, setActiveImportSource] = useState<ImportSource | null>(null);
+
   const activeTabId = useScrollSpy(visibleTabIds, scrollContainerRef, 48, !loadingPreferences);
 
   const handleTabClick = useCallback((id: string) => {
@@ -89,6 +94,25 @@ function Settings({ onClose, userId, onLogout, onEmailConnected, onEmailDisconne
         const prefs = result.data as PreferencesResult['preferences'];
         if (result.success && prefs) {
           setPreferences(prefs);
+
+          // BACKLOG-1458: Derive active import source from preferences + phoneType
+          // The messages.source field is stored in preferences but not in PreferencesResult type
+          const messagesPrefs = (prefs as Record<string, unknown>).messages as
+            | { source?: ImportSource }
+            | undefined;
+          if (messagesPrefs?.source) {
+            setActiveImportSource(messagesPrefs.source);
+          } else {
+            // No saved source — check phoneType for default
+            const phoneResult = await settingsService.getPhoneType(userId);
+            if (phoneResult.success && phoneResult.data === 'android') {
+              setActiveImportSource('android-companion');
+            } else {
+              setActiveImportSource(
+                window.api?.system?.platform === 'darwin' ? 'macos-native' : 'iphone-sync'
+              );
+            }
+          }
         } else if (!result.success) {
           logger.error("[Settings] Failed to load preferences:", result.error);
         }
@@ -102,6 +126,11 @@ function Settings({ onClose, userId, onLogout, onEmailConnected, onEmailDisconne
       loadPreferences();
     }
   }, [userId]);
+
+  // BACKLOG-1458: Callback for ImportSourceSettings to notify parent of source changes
+  const handleImportSourceChange = useCallback((newSource: ImportSource) => {
+    setActiveImportSource(newSource);
+  }, []);
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
@@ -143,12 +172,16 @@ function Settings({ onClose, userId, onLogout, onEmailConnected, onEmailDisconne
               onConnectionStatusChange={handleConnectionStatusChange}
             />
 
-            {/* macOS Messages Import */}
+            {/* Messages Import — adapts per active import source (BACKLOG-1458) */}
             <div id="settings-messages" className="mb-8">
               <h3 className="text-lg font-semibold text-gray-900 mb-4">Messages</h3>
               <div className="space-y-4">
-                <ImportSourceSettings userId={userId} />
-                <MacOSMessagesImportSettings userId={userId} />
+                <ImportSourceSettings userId={userId} onSourceChange={handleImportSourceChange} />
+                {activeImportSource === 'android-companion' ? (
+                  <AndroidMessagesSettings userId={userId} />
+                ) : (
+                  <MacOSMessagesImportSettings userId={userId} />
+                )}
               </div>
             </div>
 

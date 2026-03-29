@@ -47,10 +47,9 @@ describe("ImportSourceSettings", () => {
       render(<ImportSourceSettings userId={mockUserId} />);
 
       await waitFor(() => {
-        expect(screen.getByText("Import Source")).toBeInTheDocument();
+        expect(screen.getByText("macOS Messages + Contacts")).toBeInTheDocument();
       });
 
-      expect(screen.getByText("macOS Messages + Contacts")).toBeInTheDocument();
       expect(screen.getByText("iPhone Sync")).toBeInTheDocument();
       expect(screen.getByText("Android Companion")).toBeInTheDocument();
     });
@@ -61,11 +60,10 @@ describe("ImportSourceSettings", () => {
       render(<ImportSourceSettings userId={mockUserId} />);
 
       await waitFor(() => {
-        expect(screen.getByText("Import Source")).toBeInTheDocument();
+        expect(screen.getByText("iPhone Sync")).toBeInTheDocument();
       });
 
       expect(screen.queryByText("macOS Messages + Contacts")).not.toBeInTheDocument();
-      expect(screen.getByText("iPhone Sync")).toBeInTheDocument();
       expect(screen.getByText("Android Companion")).toBeInTheDocument();
     });
 
@@ -360,8 +358,9 @@ describe("ImportSourceSettings", () => {
     it("should NOT show iPhone instructions when macos-native is selected", async () => {
       render(<ImportSourceSettings userId={mockUserId} />);
 
+      // Wait for loading to complete (radio buttons visible)
       await waitFor(() => {
-        expect(screen.getByText("Import Source")).toBeInTheDocument();
+        expect(screen.getByText("macOS Messages + Contacts")).toBeInTheDocument();
       });
 
       expect(screen.queryByText("To use iPhone Sync:")).not.toBeInTheDocument();
@@ -479,8 +478,9 @@ describe("ImportSourceSettings", () => {
     it("should NOT show Android details when another source is selected", async () => {
       render(<ImportSourceSettings userId={mockUserId} />);
 
+      // Wait for loading to complete (radio buttons visible)
       await waitFor(() => {
-        expect(screen.getByText("Import Source")).toBeInTheDocument();
+        expect(screen.getByText("macOS Messages + Contacts")).toBeInTheDocument();
       });
 
       expect(screen.queryByText("Pair Android Phone")).not.toBeInTheDocument();

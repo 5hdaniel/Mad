@@ -151,9 +151,15 @@ function PermissionsStepContent({ context, onAction }: OnboardingStepContentProp
     // This sets the module-level flag in syncFlags that useAutoRefresh checks
     setMessagesImportTriggered();
 
+    // BACKLOG-1458: Android users should not trigger macOS Messages import.
+    // Only sync contacts (from macOS Contacts app) for Android users.
+    const syncTypes: Array<'contacts' | 'messages'> = context.phoneType === 'android'
+      ? ['contacts']
+      : ['contacts', 'messages'];
+
     // Request sync from orchestrator - runs contacts then messages sequentially
     // Progress is tracked centrally by SyncOrchestratorService
-    requestSync(['contacts', 'messages'], userId);
+    requestSync(syncTypes, userId);
 
     // Don't wait for imports - let them continue in background
     // User will see progress on the dashboard via SyncStatusIndicator
