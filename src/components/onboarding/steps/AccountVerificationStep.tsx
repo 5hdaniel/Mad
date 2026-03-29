@@ -186,6 +186,7 @@ function getBackoffDelay(attempt: number): number {
  * Uses exponential backoff retry on verification failure.
  */
 export function AccountVerificationContent({
+  context,
   onAction,
 }: OnboardingStepContentProps): React.ReactElement {
   const [status, setStatus] = useState<VerificationStatus>('waiting-for-init');
@@ -203,6 +204,8 @@ export function AccountVerificationContent({
   const initStageSubscribedRef = useRef(false);
   // Track mount state for cleanup
   const mountedRef = useRef(true);
+  // Track whether verification has been started (to guard safety timeout)
+  const verificationStartedRef = useRef(false);
 
   const verify = async (attempt: number) => {
     if (!mountedRef.current) return;
@@ -394,18 +397,38 @@ export function AccountVerificationContent({
     mountedRef.current = true;
 
     const startVerification = () => {
+      if (verificationStartedRef.current) return; // Prevent double-start
+      verificationStartedRef.current = true;
       setStatus('verifying');
       verify(0);
     };
 
     const checkAndSubscribe = async () => {
-      // 1. Check current init stage
+      // BACKLOG-1455: If queue context already says DB is initialized, skip the
+      // init-stage broadcaster check entirely. The queue only activates this step
+      // after secure-storage completes (isDatabaseInitialized = true), so the DB
+      // is guaranteed ready. Relying solely on the broadcaster caused a hang when
+      // the broadcaster stage was stale (e.g., 'idle' after a fast init path).
+      if (context.isDatabaseInitialized) {
+        console.log('[AccountVerification] DB already initialized per context, skipping init-stage check');
+        Sentry.addBreadcrumb({
+          category: 'onboarding.init',
+          message: 'DB already initialized per queue context — skipping init-stage check',
+          level: 'info',
+          data: { isDatabaseInitialized: true, waited_ms: 0 },
+        });
+        startVerification();
+        return;
+      }
+
+      // 1. Check current init stage (fallback for edge cases where context lags)
       try {
         const currentStage = await window.api?.system?.getInitStage?.();
         if (!mountedRef.current) return;
 
         if (currentStage && currentStage.stage === 'complete') {
           // Already complete - proceed immediately
+          console.log('[AccountVerification] Init stage already complete via IPC');
           Sentry.addBreadcrumb({
             category: 'onboarding.init',
             message: 'Init already complete on mount',
@@ -435,6 +458,24 @@ export function AccountVerificationContent({
       setStatus('waiting-for-init');
       setInitStageMessage('Preparing...');
 
+      // BACKLOG-1455: Safety timeout — if init-stage events never arrive (e.g., broadcaster
+      // stuck at 'idle'), force-start verification after 5 seconds. The verify() function
+      // handles DB-not-ready errors via its own retry logic.
+      const safetyTimeout = setTimeout(() => {
+        if (!mountedRef.current) return;
+        if (!verificationStartedRef.current) {
+          console.warn('[AccountVerification] Safety timeout — forcing verification start after 5s');
+          Sentry.addBreadcrumb({
+            category: 'onboarding.init',
+            message: 'Safety timeout reached — forcing verification',
+            level: 'warning',
+            data: { waited_ms: Date.now() - startTimeRef.current },
+          });
+          cleanupFnRef.current();
+          startVerification();
+        }
+      }, 5000);
+
       const unsubscribe = window.api.system.onInitStage((event) => {
         if (!mountedRef.current) return;
 
@@ -454,6 +495,7 @@ export function AccountVerificationContent({
 
         if (event.stage === 'complete') {
           // Init complete - clean up subscription and start verification
+          clearTimeout(safetyTimeout);
           unsubscribe();
           initStageSubscribedRef.current = false;
           startVerification();
@@ -462,6 +504,7 @@ export function AccountVerificationContent({
 
       // Store cleanup
       cleanupFnRef.current = () => {
+        clearTimeout(safetyTimeout);
         unsubscribe();
         initStageSubscribedRef.current = false;
       };
