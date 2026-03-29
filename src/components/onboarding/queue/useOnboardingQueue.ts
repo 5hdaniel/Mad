@@ -155,6 +155,13 @@ export function useOnboardingQueue(
   const queueActiveEntry = useMemo(() => getActiveEntry(queue), [queue]);
   const queueComplete = useMemo(() => isQueueComplete(queue), [queue]);
 
+  // BACKLOG-1455: Debug logging for onboarding queue state (visible in browser DevTools)
+  // eslint-disable-next-line no-console
+  console.log(
+    '[QUEUE-DEBUG] Active step:', queueActiveEntry?.step.meta.id ?? '(none)',
+    'Queue:', visibleEntries.map(e => `${e.step.meta.id}(${e.status})`).join(' -> ')
+  );
+
   // Resolve the effective active entry: back override takes precedence
   const activeEntry = useMemo(() => {
     if (backOverrideIndex !== null && backOverrideIndex >= 0 && backOverrideIndex < visibleEntries.length) {
