@@ -1058,6 +1058,14 @@ class DatabaseService implements IDatabaseService {
     return contactDb.getContactByPhone(phone);
   }
 
+  /**
+   * Synchronous phone lookup scoped by user_id (BACKLOG-1469).
+   * Used by Android contact promotion to check for duplicates.
+   */
+  findContactByNormalizedPhone(userId: string, normalizedPhone: string): { id: string; display_name: string } | null {
+    return contactDb.findContactByNormalizedPhone(userId, normalizedPhone);
+  }
+
   getLastMessageDateForPhone(userId: string, normalizedPhone: string): string | null {
     return messageDb.getLastMessageDateForPhone(userId, normalizedPhone);
   }
