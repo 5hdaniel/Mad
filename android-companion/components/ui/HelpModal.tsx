@@ -365,8 +365,8 @@ export default function HelpModal({
               <Text style={styles.successMessage}>
                 {"We'll get back to you soon. You'll receive a response via email."}
               </Text>
-              <TouchableOpacity style={styles.submitButton} onPress={onClose}>
-                <Text style={styles.submitButtonText}>Done</Text>
+              <TouchableOpacity style={styles.doneButton} onPress={onClose}>
+                <Text style={styles.doneButtonText}>Done</Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -767,6 +767,17 @@ const styles = StyleSheet.create({
     color: colors.gray[500],
     textAlign: 'center',
     marginBottom: spacing[6],
+  },
+  doneButton: {
+    alignSelf: 'stretch',
+    backgroundColor: colors.primary[500],
+    paddingVertical: 14,
+    borderRadius: borderRadius.lg,
+    alignItems: 'center',
+  },
+  doneButtonText: {
+    ...textStyles.button,
+    color: colors.white,
   },
   screenshotSection: {
     marginBottom: spacing[3],
