@@ -4,11 +4,14 @@
  * Wraps Supabase auth operations for use in the companion app.
  * Supports Google OAuth, Microsoft/Azure OAuth, and email magic links.
  *
- * OAuth on React Native uses the `keepr-companion://` URL scheme
- * configured in app.json for redirect callbacks.
+ * OAuth on React Native uses expo-web-browser's openAuthSessionAsync()
+ * to open an in-app browser that returns the full redirect URL including
+ * tokens. This avoids the issue where Expo Router consumes the URL before
+ * the callback component can read the hash fragment.
  */
 
 import { createURL } from 'expo-linking';
+import * as WebBrowser from 'expo-web-browser';
 import { supabase } from './supabaseClient';
 import type { Session, AuthChangeEvent, Subscription } from '@supabase/supabase-js';
 
@@ -16,44 +19,90 @@ import type { Session, AuthChangeEvent, Subscription } from '@supabase/supabase-
 const REDIRECT_URI = createURL('auth/callback', { scheme: 'keepr-companion' });
 
 /**
- * Sign in with Google via Supabase OAuth.
- * Opens the system browser for the Google sign-in flow.
+ * Extract tokens from a redirect URL hash fragment and set the Supabase session.
+ * Returns null on success, or an error message string on failure.
  */
-export async function signInWithGoogle(): Promise<{ url: string | null; error: string | null }> {
+async function extractSessionFromUrl(url: string): Promise<string | null> {
+  const hashIndex = url.indexOf('#');
+  if (hashIndex === -1) {
+    return 'No tokens in redirect URL';
+  }
+
+  const params = new URLSearchParams(url.substring(hashIndex + 1));
+  const accessToken = params.get('access_token');
+  const refreshToken = params.get('refresh_token');
+
+  if (!accessToken || !refreshToken) {
+    return 'No tokens in redirect URL';
+  }
+
+  const { error: sessionError } = await supabase.auth.setSession({
+    access_token: accessToken,
+    refresh_token: refreshToken,
+  });
+
+  if (sessionError) {
+    return sessionError.message;
+  }
+
+  return null;
+}
+
+/**
+ * Sign in with Google via Supabase OAuth.
+ * Uses expo-web-browser to open an in-app auth session that returns
+ * the redirect URL with tokens directly.
+ */
+export async function signInWithGoogle(): Promise<{ error: string | null }> {
   const { data, error } = await supabase.auth.signInWithOAuth({
     provider: 'google',
     options: {
       redirectTo: REDIRECT_URI,
-      skipBrowserRedirect: false,
+      skipBrowserRedirect: true,
     },
   });
 
-  if (error) {
-    return { url: null, error: error.message };
+  if (error || !data.url) {
+    return { error: error?.message ?? 'No OAuth URL returned' };
   }
 
-  return { url: data.url, error: null };
+  const result = await WebBrowser.openAuthSessionAsync(data.url, REDIRECT_URI);
+
+  if (result.type === 'success' && result.url) {
+    const sessionError = await extractSessionFromUrl(result.url);
+    return { error: sessionError };
+  }
+
+  return { error: result.type === 'cancel' ? 'Sign in cancelled' : 'Sign in failed' };
 }
 
 /**
  * Sign in with Microsoft/Azure via Supabase OAuth.
- * Opens the system browser for the Microsoft sign-in flow.
+ * Uses expo-web-browser to open an in-app auth session that returns
+ * the redirect URL with tokens directly.
  */
-export async function signInWithMicrosoft(): Promise<{ url: string | null; error: string | null }> {
+export async function signInWithMicrosoft(): Promise<{ error: string | null }> {
   const { data, error } = await supabase.auth.signInWithOAuth({
     provider: 'azure',
     options: {
       redirectTo: REDIRECT_URI,
-      skipBrowserRedirect: false,
+      skipBrowserRedirect: true,
       scopes: 'email profile openid',
     },
   });
 
-  if (error) {
-    return { url: null, error: error.message };
+  if (error || !data.url) {
+    return { error: error?.message ?? 'No OAuth URL returned' };
   }
 
-  return { url: data.url, error: null };
+  const result = await WebBrowser.openAuthSessionAsync(data.url, REDIRECT_URI);
+
+  if (result.type === 'success' && result.url) {
+    const sessionError = await extractSessionFromUrl(result.url);
+    return { error: sessionError };
+  }
+
+  return { error: result.type === 'cancel' ? 'Sign in cancelled' : 'Sign in failed' };
 }
 
 /**
