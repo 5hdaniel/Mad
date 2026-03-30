@@ -24,6 +24,7 @@ export type OnboardingStepId =
   | "welcome"
   | "terms"
   | "phone-type"
+  | "android-download"
   | "android-coming-soon"
   | "secure-storage"
   | "account-verification"
