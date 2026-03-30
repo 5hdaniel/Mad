@@ -2,23 +2,22 @@
  * AndroidDownloadStep
  *
  * Step displayed when users select Android during phone type selection,
- * BEFORE the QR pairing step. Shows a QR code linking to the broker portal
- * download page so the user can install the Keepr Companion APK on their
- * Android phone.
+ * BEFORE the QR pairing step. Shows the download URL as text with
+ * installation instructions so users don't confuse it with the pairing
+ * QR code in the next step.
  *
  * BACKLOG-1479: New step to guide users through companion app installation.
+ * BACKLOG-1490: Removed QR code to avoid confusion with the pairing QR.
  *
  * @module onboarding/steps/AndroidDownloadStep
  */
 
-import React, { useState, useEffect } from "react";
-import QRCode from "qrcode";
+import React, { useState, useEffect, useCallback } from "react";
 import type {
   OnboardingStep,
   OnboardingStepMeta,
   OnboardingStepContentProps,
 } from "../types";
-import logger from "../../../utils/logger";
 
 // =============================================================================
 // CONSTANTS
@@ -26,9 +25,12 @@ import logger from "../../../utils/logger";
 
 /**
  * URL for the broker portal download page.
- * The QR code encodes this URL so users can scan it with their phone camera.
+ * Displayed as clickable text so users can type it into their phone browser.
  */
 const DOWNLOAD_URL = "https://app.keeprcompliance.com/download/android";
+
+/** Auto-advance timer duration in seconds */
+const AUTO_ADVANCE_SECONDS = 60;
 
 // =============================================================================
 // STEP METADATA
@@ -56,59 +58,53 @@ export const meta: OnboardingStepMeta = {
 
 /**
  * Android Download step content.
- * Generates a QR code linking to the broker portal download page
- * and shows installation instructions.
+ * Shows the download URL as text with installation instructions.
+ * No QR code — the next step (pairing) has the QR code, and showing
+ * two QR codes in sequence confuses users (BACKLOG-1490).
  */
 function Content({ onAction }: OnboardingStepContentProps) {
-  const [qrDataUrl, setQrDataUrl] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  const [secondsLeft, setSecondsLeft] = useState(AUTO_ADVANCE_SECONDS);
+  const [copied, setCopied] = useState(false);
 
+  const handleAdvance = useCallback(() => {
+    onAction({ type: "NAVIGATE_NEXT" });
+  }, [onAction]);
+
+  // Auto-advance timer
   useEffect(() => {
-    let cancelled = false;
-
-    async function generateQR() {
-      try {
-        const dataUrl = await QRCode.toDataURL(DOWNLOAD_URL, {
-          width: 200,
-          margin: 2,
-          color: {
-            dark: "#000000",
-            light: "#ffffff",
-          },
-        });
-        if (!cancelled) {
-          setQrDataUrl(dataUrl);
+    const interval = setInterval(() => {
+      setSecondsLeft((prev) => {
+        if (prev <= 1) {
+          clearInterval(interval);
+          handleAdvance();
+          return 0;
         }
-      } catch (err) {
-        logger.error("[AndroidDownloadStep] Failed to generate QR code:", err);
-        if (!cancelled) {
-          setError("Failed to generate QR code");
-        }
-      }
-    }
-
-    generateQR();
+        return prev - 1;
+      });
+    }, 1000);
 
     return () => {
-      cancelled = true;
+      clearInterval(interval);
     };
-  }, []);
+  }, [handleAdvance]);
 
-  const handleInstalled = () => {
-    onAction({ type: "NAVIGATE_NEXT" });
-  };
-
-  const handleSkip = () => {
-    onAction({ type: "NAVIGATE_NEXT" });
+  const handleCopyUrl = async () => {
+    try {
+      await navigator.clipboard.writeText(DOWNLOAD_URL);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch {
+      // Clipboard API may not be available in all Electron contexts
+    }
   };
 
   return (
     <div className="text-center">
       {/* Download Icon */}
       <div className="relative inline-block mb-4">
-        <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto">
+        <div className="w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center mx-auto">
           <svg
-            className="w-10 h-10 text-green-500"
+            className="w-10 h-10 text-blue-600"
             fill="none"
             stroke="currentColor"
             viewBox="0 0 24 24"
@@ -117,7 +113,7 @@ function Content({ onAction }: OnboardingStepContentProps) {
               strokeLinecap="round"
               strokeLinejoin="round"
               strokeWidth={2}
-              d="M12 18h.01M8 21h8a2 2 0 002-2V5a2 2 0 00-2-2H8a2 2 0 00-2 2v14a2 2 0 002 2z"
+              d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"
             />
           </svg>
         </div>
@@ -129,35 +125,27 @@ function Content({ onAction }: OnboardingStepContentProps) {
       </h1>
 
       <p className="text-sm text-gray-600 mb-4">
-        Scan this QR code with your Android phone to download the Keepr
-        Companion app.
+        On your Android phone, open a browser and go to:
       </p>
 
-      {/* QR Code */}
-      {qrDataUrl && (
-        <div className="flex flex-col items-center mb-4">
-          <div className="bg-white p-3 rounded-xl border border-gray-200 shadow-sm mb-3">
-            <img
-              src={qrDataUrl}
-              alt="Download QR Code"
-              className="w-48 h-48 sm:w-56 sm:h-56"
-            />
-          </div>
-        </div>
-      )}
-
-      {/* Error */}
-      {error && (
-        <div className="text-sm text-red-700 bg-red-50 p-3 rounded border border-red-200 mb-4">
-          {error}
-        </div>
-      )}
+      {/* Download URL display */}
+      <div className="bg-gray-50 border border-gray-200 rounded-xl p-4 mb-4">
+        <p className="text-base font-mono text-blue-700 break-all select-all mb-2">
+          {DOWNLOAD_URL}
+        </p>
+        <button
+          onClick={handleCopyUrl}
+          className="text-xs text-gray-500 hover:text-gray-700 underline transition-colors"
+        >
+          {copied ? "Copied!" : "Copy URL"}
+        </button>
+      </div>
 
       {/* Installation Instructions */}
-      <div className="bg-gradient-to-r from-green-50 to-emerald-50 rounded-xl p-4 mb-4 text-left">
+      <div className="bg-gradient-to-r from-blue-50 to-indigo-50 rounded-xl p-4 mb-4 text-left">
         <h3 className="font-semibold text-gray-900 mb-2 flex items-center gap-2">
           <svg
-            className="w-5 h-5 text-green-500"
+            className="w-5 h-5 text-blue-500"
             fill="none"
             stroke="currentColor"
             viewBox="0 0 24 24"
@@ -173,19 +161,19 @@ function Content({ onAction }: OnboardingStepContentProps) {
         </h3>
         <ol className="space-y-2">
           <li className="flex items-start gap-2 text-sm text-gray-600">
-            <span className="flex-shrink-0 w-5 h-5 bg-green-100 text-green-700 rounded-full flex items-center justify-center text-xs font-bold">
+            <span className="flex-shrink-0 w-5 h-5 bg-blue-100 text-blue-700 rounded-full flex items-center justify-center text-xs font-bold">
               1
             </span>
-            Scan the QR code with your phone camera
+            Type the URL above into your phone&apos;s browser
           </li>
           <li className="flex items-start gap-2 text-sm text-gray-600">
-            <span className="flex-shrink-0 w-5 h-5 bg-green-100 text-green-700 rounded-full flex items-center justify-center text-xs font-bold">
+            <span className="flex-shrink-0 w-5 h-5 bg-blue-100 text-blue-700 rounded-full flex items-center justify-center text-xs font-bold">
               2
             </span>
             Download and install the APK
           </li>
           <li className="flex items-start gap-2 text-sm text-gray-600">
-            <span className="flex-shrink-0 w-5 h-5 bg-green-100 text-green-700 rounded-full flex items-center justify-center text-xs font-bold">
+            <span className="flex-shrink-0 w-5 h-5 bg-blue-100 text-blue-700 rounded-full flex items-center justify-center text-xs font-bold">
               3
             </span>
             Open the app and sign in
@@ -196,23 +184,24 @@ function Content({ onAction }: OnboardingStepContentProps) {
       {/* Action Buttons */}
       <div className="space-y-2">
         <button
-          onClick={handleInstalled}
+          onClick={handleAdvance}
           className="w-full py-2.5 px-4 bg-green-500 text-white rounded-lg font-semibold hover:bg-green-600 transition-all shadow-md hover:shadow-lg"
         >
-          I&apos;ve Installed It
+          I&apos;ve Installed It — Continue
         </button>
 
         <button
-          onClick={handleSkip}
+          onClick={handleAdvance}
           className="w-full py-2.5 px-4 border border-gray-300 text-gray-700 rounded-lg font-medium hover:bg-gray-50 transition-all"
         >
           Skip — I already have it
         </button>
       </div>
 
-      {/* Footer Note */}
+      {/* Timer + Footer Note */}
       <p className="text-xs text-gray-400 mt-4">
-        You can also download the companion app later from your broker portal.
+        Auto-continuing in {secondsLeft}s &middot; You can also download the
+        companion app later from your broker portal.
       </p>
     </div>
   );
