@@ -11,6 +11,8 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useRouter } from 'expo-router';
 import { stopBackgroundSync } from '../../services/backgroundSync';
 import { resetAllSyncData } from '../../services/smsQueueService';
+import { signOut, getSession } from '../../services/authService';
+import type { Session } from '@supabase/supabase-js';
 import { colors } from '../../theme/colors';
 import { textStyles } from '../../theme/typography';
 import { spacing } from '../../theme/spacing';
@@ -35,17 +37,22 @@ const PAIRING_STORAGE_KEY = '@keepr/pairing';
 export default function AccountScreen(): React.JSX.Element {
   const router = useRouter();
   const [pairing, setPairing] = useState<StoredPairing | null>(null);
+  const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    AsyncStorage.getItem(PAIRING_STORAGE_KEY)
-      .then((stored) => {
+    Promise.all([
+      AsyncStorage.getItem(PAIRING_STORAGE_KEY),
+      getSession(),
+    ])
+      .then(([stored, currentSession]) => {
         if (stored) {
           setPairing(JSON.parse(stored) as StoredPairing);
         }
+        setSession(currentSession);
       })
       .catch((error) => {
-        console.error('[Account] Failed to load pairing:', error);
+        console.error('[Account] Failed to load data:', error);
       })
       .finally(() => {
         setLoading(false);
@@ -77,10 +84,28 @@ export default function AccountScreen(): React.JSX.Element {
   }, []);
 
   const handleSignOut = useCallback((): void => {
-    // Stub — will be connected to Supabase auth in BACKLOG-1462
     Alert.alert(
       'Sign Out',
-      'Sign out functionality will be available after authentication is set up.',
+      'Are you sure you want to sign out? You will need to sign in again to use the app.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Sign Out',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              await stopBackgroundSync();
+            } catch (error) {
+              console.error('[Account] Failed to stop background sync:', error);
+            }
+            const result = await signOut();
+            if (result.error) {
+              Alert.alert('Sign Out Failed', result.error);
+            }
+            // Auth state change listener in _layout.tsx will redirect to login
+          },
+        },
+      ],
     );
   }, []);
 
@@ -120,13 +145,26 @@ export default function AccountScreen(): React.JSX.Element {
         contentContainerStyle={styles.scrollContent}
         style={styles.scrollView}
       >
-        {/* User info — placeholder until Supabase auth (BACKLOG-1462) */}
+        {/* User info */}
         <Card title="User">
-          <CardRow label="Name" value="--" />
+          <CardRow
+            label="Name"
+            value={
+              session?.user?.user_metadata?.full_name ??
+              session?.user?.user_metadata?.name ??
+              '--'
+            }
+          />
           <CardDivider />
-          <CardRow label="Email" value="--" />
+          <CardRow
+            label="Email"
+            value={session?.user?.email ?? '--'}
+          />
           <CardDivider />
-          <CardRow label="Plan" value="--" />
+          <CardRow
+            label="Provider"
+            value={session?.user?.app_metadata?.provider ?? '--'}
+          />
         </Card>
 
         {/* Paired device info */}
