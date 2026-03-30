@@ -221,14 +221,14 @@ const styles = StyleSheet.create({
   },
   title: {
     ...textStyles.heading,
-    color: colors.gray[800],
+    color: colors.gray[900],
     textAlign: 'center',
     marginTop: spacing[4],
     marginBottom: spacing[3],
   },
   description: {
     ...textStyles.body,
-    color: colors.gray[500],
+    color: colors.gray[600],
     textAlign: 'center',
     marginBottom: spacing[2],
   },

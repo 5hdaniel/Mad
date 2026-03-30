@@ -250,7 +250,7 @@ const styles = StyleSheet.create({
     width: 80,
     height: 80,
     borderRadius: borderRadius['2xl'],
-    backgroundColor: colors.primary[600],
+    backgroundColor: colors.primary[500],
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: spacing[5],
@@ -262,13 +262,13 @@ const styles = StyleSheet.create({
   },
   title: {
     ...textStyles.heading,
-    color: colors.gray[800],
+    color: colors.gray[900],
     textAlign: 'center',
     marginBottom: spacing[2],
   },
   description: {
     ...textStyles.body,
-    color: colors.gray[500],
+    color: colors.gray[600],
     textAlign: 'center',
   },
   subdescription: {
@@ -329,10 +329,10 @@ const styles = StyleSheet.create({
     height: 52,
     backgroundColor: colors.white,
     borderWidth: 1,
-    borderColor: colors.gray[300],
+    borderColor: colors.gray[200],
     borderRadius: borderRadius.lg,
     paddingHorizontal: spacing[4],
     ...textStyles.body,
-    color: colors.gray[800],
+    color: colors.gray[900],
   },
 });

@@ -26,7 +26,7 @@ interface ButtonProps {
 const variantStyles: Record<ButtonVariant, { container: ViewStyle; text: TextStyle }> = {
   primary: {
     container: {
-      backgroundColor: colors.primary[600],
+      backgroundColor: colors.primary[500],
     },
     text: {
       color: colors.white,
@@ -52,10 +52,10 @@ const variantStyles: Record<ButtonVariant, { container: ViewStyle; text: TextSty
     container: {
       backgroundColor: colors.transparent,
       borderWidth: 1,
-      borderColor: colors.primary[600],
+      borderColor: colors.primary[500],
     },
     text: {
-      color: colors.primary[600],
+      color: colors.primary[500],
     },
   },
 };
