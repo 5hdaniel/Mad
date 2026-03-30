@@ -127,9 +127,13 @@ export async function performSync(): Promise<SyncOperationResult> {
     if (messages.length > 0) {
       await enqueueMessages(messages);
 
-      // Update last sync timestamp to the newest message
+      // Update last sync timestamp to 1ms after the newest message.
+      // The native SMS query uses >= for minDate, so storing the exact
+      // timestamp would re-read the same message on every sync.
+      // Adding 1ms makes the next query exclude the already-synced message.
+      // (BACKLOG-1484: sync dedup — "1 new message" reported every cycle)
       const newestTimestamp = Math.max(...messages.map((m) => m.timestamp));
-      await setLastSyncTimestamp(newestTimestamp);
+      await setLastSyncTimestamp(newestTimestamp + 1);
     }
   } catch (error) {
     console.error("[BackgroundSync] Failed to read SMS:", error);
