@@ -14,6 +14,7 @@
  */
 
 import { Platform, PermissionsAndroid } from "react-native";
+import * as Contacts from "expo-contacts";
 
 /** Possible states for SMS permissions */
 export type SmsPermissionStatus = "granted" | "denied" | "never_ask_again" | "unavailable";
@@ -121,6 +122,8 @@ function mapPermissionResult(
 
 /**
  * Check the current state of contacts permissions without requesting them.
+ * Uses expo-contacts API for consistency with contactReader.ts.
+ * BACKLOG-1480: PermissionsAndroid returned wrong results; expo-contacts is authoritative.
  *
  * @returns Current permission status for READ_CONTACTS
  */
@@ -132,19 +135,18 @@ export async function checkContactsPermissions(): Promise<ContactsPermissionResu
     };
   }
 
-  const readResult = await PermissionsAndroid.check(
-    PermissionsAndroid.PERMISSIONS.READ_CONTACTS
-  );
+  const { status } = await Contacts.getPermissionsAsync();
 
   return {
-    readContacts: readResult ? "granted" : "denied",
-    granted: readResult,
+    readContacts: status === "granted" ? "granted" : "denied",
+    granted: status === "granted",
   };
 }
 
 /**
  * Request contacts permissions from the user.
- * Shows the Android permission dialog if permissions have not been permanently denied.
+ * Uses expo-contacts API for consistency with contactReader.ts.
+ * BACKLOG-1480: PermissionsAndroid returned 'never_ask_again' even when granted.
  *
  * @returns Permission result after the request
  */
@@ -156,38 +158,16 @@ export async function requestContactsPermissions(): Promise<ContactsPermissionRe
     };
   }
 
-  const result = await PermissionsAndroid.request(
-    PermissionsAndroid.PERMISSIONS.READ_CONTACTS,
-    {
-      title: "Contacts Permission",
-      message:
-        "Keepr Companion needs access to your contacts to sync them with the desktop app.",
-      buttonPositive: "Allow",
-      buttonNegative: "Deny",
-    }
-  );
-
-  const status = mapContactsPermissionResult(result);
+  const response = await Contacts.requestPermissionsAsync();
+  const status: ContactsPermissionStatus =
+    response.status === "granted"
+      ? "granted"
+      : response.canAskAgain === false
+        ? "never_ask_again"
+        : "denied";
 
   return {
     readContacts: status,
-    granted: status === "granted",
+    granted: response.status === "granted",
   };
-}
-
-/**
- * Map Android permission result string to contacts status type.
- */
-function mapContactsPermissionResult(
-  result: string | undefined
-): ContactsPermissionStatus {
-  switch (result) {
-    case PermissionsAndroid.RESULTS.GRANTED:
-      return "granted";
-    case PermissionsAndroid.RESULTS.NEVER_ASK_AGAIN:
-      return "never_ask_again";
-    case PermissionsAndroid.RESULTS.DENIED:
-    default:
-      return "denied";
-  }
 }
