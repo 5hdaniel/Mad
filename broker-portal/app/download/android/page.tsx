@@ -13,7 +13,7 @@
 
 import { useEffect, useState } from 'react';
 
-const APK_URL = '/downloads/keepr-companion.apk';
+const APK_URL = 'https://github.com/5hdaniel/Mad/releases/download/v1.0.0-companion-beta/app-debug.apk';
 
 export default function AndroidDownloadPage() {
   const [autoStarted, setAutoStarted] = useState(false);
