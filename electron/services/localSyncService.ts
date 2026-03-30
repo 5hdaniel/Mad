@@ -13,6 +13,7 @@
 import crypto from "crypto";
 import http from "http";
 import os from "os";
+import * as Sentry from "@sentry/electron/main";
 import logService from "./logService";
 import { decrypt } from "./localSyncEncryption";
 import { secureCompare } from "../utils/keyDerivation";
@@ -226,6 +227,9 @@ class LocalSyncService {
           `[LocalSync] Server error: ${err.message}`,
           LOG_TAG
         );
+        Sentry.captureException(err, {
+          tags: { component: "localSyncService" },
+        });
         reject(err);
       });
 
@@ -239,6 +243,12 @@ class LocalSyncService {
             `[LocalSync] Server listening on ${this.boundAddress}:${this.boundPort}`,
             LOG_TAG
           );
+          Sentry.addBreadcrumb({
+            category: "localSync",
+            message: "Server started",
+            level: "info",
+            data: { address: this.boundAddress, port: this.boundPort },
+          });
           resolve({ port: this.boundPort, address: this.boundAddress });
         } else {
           reject(new Error("Failed to get server address"));
@@ -258,6 +268,11 @@ class LocalSyncService {
     return new Promise((resolve) => {
       this.server!.close(() => {
         logService.info("[LocalSync] Server stopped", LOG_TAG);
+        Sentry.addBreadcrumb({
+          category: "localSync",
+          message: "Server stopped",
+          level: "info",
+        });
         this.server = null;
         this.authToken = null;
         this.encryptionKey = null;
@@ -537,6 +552,16 @@ class LocalSyncService {
         LOG_TAG
       );
 
+      Sentry.addBreadcrumb({
+        category: "localSync",
+        message: "Messages received",
+        level: "info",
+        data: {
+          messageCount: syncPayload.messages.length,
+          deviceId: syncPayload.deviceId,
+        },
+      });
+
       // Register the device as paired if not already known, then update last seen.
       // BACKLOG-1454: pairingService.addPairedDevice() was never called, so
       // getStatus() always returned isPaired=false and the desktop onboarding
@@ -741,6 +766,16 @@ class LocalSyncService {
         `[LocalSync] Received ${contactPayload.contacts.length} contacts from device ${contactPayload.deviceId}`,
         LOG_TAG
       );
+
+      Sentry.addBreadcrumb({
+        category: "localSync",
+        message: "Contacts received",
+        level: "info",
+        data: {
+          contactCount: contactPayload.contacts.length,
+          deviceId: contactPayload.deviceId,
+        },
+      });
 
       // Register the device as paired if not already known, then update last seen.
       // BACKLOG-1454: same fix as handleSyncMessages — ensure device is registered.
