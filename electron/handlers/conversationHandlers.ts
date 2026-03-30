@@ -18,7 +18,6 @@ import {
   resolveContactName,
 } from "../services/contactsService";
 import logService from "../services/logService";
-import databaseService from "../services/databaseService";
 import { getConversationsFromMessages } from "../services/db/messageDbService";
 import { wrapHandler } from "../utils/wrapHandler";
 import { macTimestampToDate, getYearsAgoTimestamp } from "../utils/dateUtils";
@@ -53,48 +52,41 @@ export function registerConversationHandlers(mainWindow: BrowserWindow): void {
   }
   handlersRegistered = true;
 
-  // Get conversations — routes to macOS chat.db or local messages table
-  // based on user's mobile_phone_type preference.
-  // BACKLOG-1470: Android/iPhone-sync users get conversations from local messages table.
+  // Get conversations — unified to read from local messages table (mad.db)
+  // for ALL sources (macOS, iPhone, Android).
+  // BACKLOG-1481: All sources now import into the messages table, so we
+  // read from a single code path. chat.db is kept as a fallback for
+  // macOS users who haven't imported yet.
   ipcMain.handle("get-conversations", wrapHandler(async (_event: IpcMainInvokeEvent, userId?: string) => {
-    // If userId provided, check phone type to decide source
-    if (userId) {
-      try {
-        const user = await databaseService.getUserById(userId);
-        const phoneType = user?.mobile_phone_type;
-
-        if (phoneType === "android") {
-          // Android users: read from local messages table
-          logService.info("Loading conversations from messages table (android)", "ConversationHandlers");
-          const conversations = getConversationsFromMessages(userId);
-          return {
-            success: true,
-            conversations,
-          };
-        }
-        // For iphone users with synced data, also check the messages table
-        // if they have messages there (iphone-sync stores in messages table too)
-        if (phoneType === "iphone") {
-          const conversations = getConversationsFromMessages(userId);
-          if (conversations.length > 0) {
-            logService.info(
-              `Loading conversations from messages table (iphone-sync, ${conversations.length} conversations)`,
-              "ConversationHandlers"
-            );
-            return {
-              success: true,
-              conversations,
-            };
-          }
-          // Fall through to macOS chat.db if no synced messages found
-        }
-      } catch (err) {
-        logService.error("Failed to check phone type, falling back to macOS chat.db", "ConversationHandlers", { error: err });
-        // Fall through to macOS chat.db
-      }
+    if (!userId) {
+      return { success: true, conversations: [] };
     }
 
-    // Default: read from macOS chat.db (macos-native)
+    // Primary path: read from local messages table (works for all sources)
+    const conversations = getConversationsFromMessages(userId);
+
+    if (conversations.length > 0) {
+      logService.info(
+        `Loading conversations from messages table (${conversations.length} conversations)`,
+        "ConversationHandlers"
+      );
+      return {
+        success: true,
+        conversations,
+      };
+    }
+
+    // Fallback: if messages table is empty and we're on macOS, try chat.db
+    // This handles the case where a macOS user hasn't imported messages yet.
+    if (process.platform !== "darwin") {
+      return { success: true, conversations: [] };
+    }
+
+    logService.info(
+      "No messages in local DB, falling back to macOS chat.db",
+      "ConversationHandlers"
+    );
+
     const messagesDbPath = path.join(
       process.env.HOME!,
       "Library/Messages/chat.db"
@@ -116,7 +108,7 @@ export function registerConversationHandlers(mainWindow: BrowserWindow): void {
 
         // Get all chats with their latest message
         // Filter to only show chats with at least 1 message
-        const conversations = await dbAll<ConversationRow>(`
+        const chatDbConversations = await dbAll<ConversationRow>(`
           SELECT
             chat.ROWID as chat_id,
             chat.chat_identifier,
@@ -151,7 +143,7 @@ export function registerConversationHandlers(mainWindow: BrowserWindow): void {
         const conversationMap = new Map<string, ProcessedConversation>();
 
         // Process conversations - track direct chats and group chats separately
-        for (const conv of conversations) {
+        for (const conv of chatDbConversations) {
           const rawContactId = conv.contact_id || conv.chat_identifier;
           const displayName = resolveContactName(
             conv.contact_id || "",
