@@ -64,10 +64,12 @@ export const legacyElectronBridge = {
   openSystemSettings: () => ipcRenderer.invoke("open-system-settings"),
 
   /**
-   * Gets iMessage conversations from Messages database
+   * Gets conversations — from macOS chat.db or local messages table
+   * depending on the user's phone type (BACKLOG-1470).
+   * @param userId - Optional user ID for phone type lookup
    * @returns List of conversations
    */
-  getConversations: () => ipcRenderer.invoke("get-conversations"),
+  getConversations: (userId?: string) => ipcRenderer.invoke("get-conversations", userId),
 
   /**
    * Gets messages for a specific chat

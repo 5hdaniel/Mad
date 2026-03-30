@@ -44,11 +44,15 @@ export interface UseConversationsReturn {
 }
 
 /**
- * Custom hook for managing conversations data
- * Loads iMessage conversations from the electron backend
+ * Custom hook for managing conversations data.
+ * Loads conversations from macOS chat.db or local messages table
+ * depending on user's phone type (BACKLOG-1470).
+ *
+ * @param userId - Optional user ID; when provided, the backend checks
+ *   mobile_phone_type and routes to the appropriate data source.
  * @returns Conversations state and reload function
  */
-export function useConversations(): UseConversationsReturn {
+export function useConversations(userId?: string | null): UseConversationsReturn {
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
@@ -59,7 +63,7 @@ export function useConversations(): UseConversationsReturn {
 
     try {
       const result: GetConversationsResult =
-        await window.api.messages.getConversations();
+        await window.api.messages.getConversations(userId ?? undefined);
 
       if (result.success) {
         setConversations(result.conversations || []);
@@ -77,7 +81,7 @@ export function useConversations(): UseConversationsReturn {
 
   useEffect(() => {
     loadConversations();
-  }, []);
+  }, [userId]);
 
   return {
     conversations,

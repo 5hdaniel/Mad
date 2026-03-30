@@ -18,6 +18,8 @@ import {
   resolveContactName,
 } from "../services/contactsService";
 import logService from "../services/logService";
+import databaseService from "../services/databaseService";
+import { getConversationsFromMessages } from "../services/db/messageDbService";
 import { wrapHandler } from "../utils/wrapHandler";
 import { macTimestampToDate, getYearsAgoTimestamp } from "../utils/dateUtils";
 import { createTimestampedFilename } from "../utils/fileUtils";
@@ -51,8 +53,48 @@ export function registerConversationHandlers(mainWindow: BrowserWindow): void {
   }
   handlersRegistered = true;
 
-  // Get conversations from Messages database
-  ipcMain.handle("get-conversations", wrapHandler(async () => {
+  // Get conversations — routes to macOS chat.db or local messages table
+  // based on user's mobile_phone_type preference.
+  // BACKLOG-1470: Android/iPhone-sync users get conversations from local messages table.
+  ipcMain.handle("get-conversations", wrapHandler(async (_event: IpcMainInvokeEvent, userId?: string) => {
+    // If userId provided, check phone type to decide source
+    if (userId) {
+      try {
+        const user = await databaseService.getUserById(userId);
+        const phoneType = user?.mobile_phone_type;
+
+        if (phoneType === "android") {
+          // Android users: read from local messages table
+          logService.info("Loading conversations from messages table (android)", "ConversationHandlers");
+          const conversations = getConversationsFromMessages(userId);
+          return {
+            success: true,
+            conversations,
+          };
+        }
+        // For iphone users with synced data, also check the messages table
+        // if they have messages there (iphone-sync stores in messages table too)
+        if (phoneType === "iphone") {
+          const conversations = getConversationsFromMessages(userId);
+          if (conversations.length > 0) {
+            logService.info(
+              `Loading conversations from messages table (iphone-sync, ${conversations.length} conversations)`,
+              "ConversationHandlers"
+            );
+            return {
+              success: true,
+              conversations,
+            };
+          }
+          // Fall through to macOS chat.db if no synced messages found
+        }
+      } catch (err) {
+        logService.error("Failed to check phone type, falling back to macOS chat.db", "ConversationHandlers", { error: err });
+        // Fall through to macOS chat.db
+      }
+    }
+
+    // Default: read from macOS chat.db (macos-native)
     const messagesDbPath = path.join(
       process.env.HOME!,
       "Library/Messages/chat.db"

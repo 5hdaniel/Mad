@@ -18,6 +18,7 @@ import {
 } from "../../hooks/useConversations";
 import { useSelection } from "../../hooks/useSelection";
 import { useTour } from "../../hooks/useTour";
+import { useAppStateMachine } from "../../appCore";
 
 // Subcomponents
 import { SearchBar } from "./SearchBar";
@@ -59,8 +60,10 @@ function ConversationList({
   onConnectOutlook,
   outlookConnected,
 }: ConversationListProps) {
+  // Get current user ID for phone-type-aware conversation loading (BACKLOG-1470)
+  const { currentUser } = useAppStateMachine();
   // State management using custom hooks
-  const { conversations, isLoading, error, reload } = useConversations();
+  const { conversations, isLoading, error, reload } = useConversations(currentUser?.id);
   const selection = useSelection();
   const tour = useTour(
     conversations.length > 0 && !isLoading,
