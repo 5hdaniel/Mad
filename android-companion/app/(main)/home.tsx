@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback, useRef } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import {
   StyleSheet,
   Text,
@@ -8,7 +8,6 @@ import {
   ActivityIndicator,
   ScrollView,
 } from 'react-native';
-import { captureRef } from 'react-native-view-shot';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useRouter } from 'expo-router';
@@ -73,33 +72,11 @@ export default function HomeScreen(): React.JSX.Element {
   const [lastSyncResult, setLastSyncResult] =
     useState<SyncOperationResult | null>(null);
   const [helpVisible, setHelpVisible] = useState(false);
-  const [screenshotBase64, setScreenshotBase64] = useState<string | null>(null);
-  const screenRef = useRef<View>(null);
 
-  // -------------------------------------------------------
-  // Screenshot capture for support ticket
-  // -------------------------------------------------------
-
-  const openHelpWithScreenshot = useCallback(async (): Promise<void> => {
-    try {
-      if (screenRef.current) {
-        const base64 = await captureRef(screenRef, {
-          format: 'png',
-          quality: 0.8,
-          result: 'base64',
-        });
-        setScreenshotBase64(base64);
-      } else {
-        console.warn('[Screenshot] screenRef is not attached, skipping capture');
-        setScreenshotBase64(null);
-      }
-    } catch (err) {
-      // Screenshot capture is best-effort; proceed without it.
-      // react-native-view-shot may fail if the native module is not linked
-      // (e.g. in Expo Go without a prebuild).
-      console.error('[Screenshot] Capture failed:', err);
-      setScreenshotBase64(null);
-    }
+  // TODO: Re-add screenshot capture when expo-screen-capture or a proper
+  // native module setup is available. react-native-view-shot requires native
+  // linking that may not work without a fresh prebuild (BACKLOG-1490).
+  const openHelp = useCallback((): void => {
     setHelpVisible(true);
   }, []);
 
@@ -331,13 +308,13 @@ export default function HomeScreen(): React.JSX.Element {
 
   if (!pairing) {
     return (
-      <View style={styles.screen} ref={screenRef}>
+      <View style={styles.screen}>
         <Header
           title="Keepr Companion"
           rightActions={[
             {
               icon: '\u2753',
-              onPress: () => void openHelpWithScreenshot(),
+              onPress: () => void openHelp(),
               accessibilityLabel: 'Help',
             },
           ]}
@@ -358,7 +335,6 @@ export default function HomeScreen(): React.JSX.Element {
         <HelpModal
           visible={helpVisible}
           onClose={() => setHelpVisible(false)}
-          screenshotBase64={screenshotBase64}
         />
       </View>
     );
@@ -371,7 +347,7 @@ export default function HomeScreen(): React.JSX.Element {
   const pairedDate = new Date(pairing.pairedAt);
 
   return (
-    <View style={styles.screen} ref={screenRef}>
+    <View style={styles.screen}>
       <Header
         title="Keepr Companion"
         leftActions={[
@@ -389,7 +365,7 @@ export default function HomeScreen(): React.JSX.Element {
           },
           {
             icon: '\u2753',
-            onPress: () => void openHelpWithScreenshot(),
+            onPress: () => void openHelp(),
             accessibilityLabel: 'Help',
           },
         ]}
