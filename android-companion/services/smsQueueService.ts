@@ -26,6 +26,8 @@ import type { SyncMessage } from "../types/sync";
 const QUEUE_STORAGE_KEY = "@keepr/sms-queue";
 const LAST_SYNC_TIMESTAMP_KEY = "@keepr/last-sync-timestamp";
 const SYNC_STATS_KEY = "@keepr/sync-stats";
+const SYNC_INTERVAL_KEY = "@keepr/sync-interval";
+const BACKGROUND_SYNC_ENABLED_KEY = "@keepr/background-sync-enabled";
 
 /** Maximum messages to send in a single batch */
 export const MAX_BATCH_SIZE = 50;
@@ -225,8 +227,73 @@ export async function recordSyncAttempt(
   await AsyncStorage.setItem(SYNC_STATS_KEY, JSON.stringify(stats));
 }
 
+// ============================================
+// SYNC SETTINGS (BACKLOG-1464)
+// ============================================
+
+/** Valid sync interval values in minutes, or 'manual' to disable background sync */
+export type SyncIntervalValue = 15 | 30 | 60 | "manual";
+
+/** Default sync interval (15 minutes — Android's minimum for BackgroundFetch) */
+export const DEFAULT_SYNC_INTERVAL: SyncIntervalValue = 15;
+
 /**
- * Reset all sync data (queue, timestamp, stats).
+ * Get the configured sync interval.
+ * @returns The stored interval value, or DEFAULT_SYNC_INTERVAL if not set
+ */
+export async function getSyncInterval(): Promise<SyncIntervalValue> {
+  try {
+    const stored = await AsyncStorage.getItem(SYNC_INTERVAL_KEY);
+    if (!stored) return DEFAULT_SYNC_INTERVAL;
+    if (stored === "manual") return "manual";
+    const num = parseInt(stored, 10);
+    if (num === 15 || num === 30 || num === 60) return num;
+    return DEFAULT_SYNC_INTERVAL;
+  } catch {
+    return DEFAULT_SYNC_INTERVAL;
+  }
+}
+
+/**
+ * Set the sync interval preference.
+ * @param interval - Interval in minutes (15/30/60) or 'manual'
+ */
+export async function setSyncInterval(
+  interval: SyncIntervalValue
+): Promise<void> {
+  await AsyncStorage.setItem(SYNC_INTERVAL_KEY, String(interval));
+}
+
+/**
+ * Get whether background sync is enabled.
+ * Defaults to true (enabled).
+ */
+export async function getBackgroundSyncEnabled(): Promise<boolean> {
+  try {
+    const stored = await AsyncStorage.getItem(BACKGROUND_SYNC_ENABLED_KEY);
+    if (stored === null) return true; // Default: enabled
+    return stored === "true";
+  } catch {
+    return true;
+  }
+}
+
+/**
+ * Set whether background sync is enabled.
+ * @param enabled - true to enable, false to disable
+ */
+export async function setBackgroundSyncEnabled(
+  enabled: boolean
+): Promise<void> {
+  await AsyncStorage.setItem(BACKGROUND_SYNC_ENABLED_KEY, String(enabled));
+}
+
+// ============================================
+// RESET
+// ============================================
+
+/**
+ * Reset all sync data (queue, timestamp, stats, settings).
  * Called when the device is unpaired.
  */
 export async function resetAllSyncData(): Promise<void> {
@@ -234,5 +301,7 @@ export async function resetAllSyncData(): Promise<void> {
     AsyncStorage.removeItem(QUEUE_STORAGE_KEY),
     AsyncStorage.removeItem(LAST_SYNC_TIMESTAMP_KEY),
     AsyncStorage.removeItem(SYNC_STATS_KEY),
+    AsyncStorage.removeItem(SYNC_INTERVAL_KEY),
+    AsyncStorage.removeItem(BACKGROUND_SYNC_ENABLED_KEY),
   ]);
 }
