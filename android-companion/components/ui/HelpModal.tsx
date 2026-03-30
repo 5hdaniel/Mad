@@ -285,7 +285,7 @@ export default function HelpModal({
           p_subcategory_id: null,
           p_requester_email: email || 'unknown@companion.app',
           p_requester_name: name || 'Companion User',
-          p_source_channel: 'android_companion',
+          p_source_channel: 'in_app_redirect', // RPC allows: web_form, email, in_app_redirect, admin_created
         },
       );
 
