@@ -286,6 +286,24 @@ function Content({ context, onAction }: OnboardingStepContentProps) {
         </div>
       )}
 
+      {/* Companion app download info — BACKLOG-1473 */}
+      {!paired && (
+        <div className="bg-blue-50 rounded-lg p-3 mb-4 text-center border border-blue-100">
+          <p className="text-sm text-blue-700">
+            Download the Keepr Companion app from your organization&apos;s{" "}
+            <a
+              href="https://portal.keepr.com/downloads"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="font-semibold underline hover:text-blue-900"
+            >
+              broker portal
+            </a>
+            .
+          </p>
+        </div>
+      )}
+
       {/* Action Buttons */}
       <div className="space-y-2">
         <button

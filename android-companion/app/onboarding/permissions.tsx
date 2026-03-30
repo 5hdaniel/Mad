@@ -47,9 +47,10 @@ export default function PermissionsScreen(): React.JSX.Element {
       setContactsResult(contacts);
       setAttempted(true);
 
-      // If all permissions granted, auto-advance
+      // If all permissions granted, auto-advance to pair-device
+      // BACKLOG-1473: permissions is now step 1, pair-device is step 2
       if (sms.allGranted && contacts.granted) {
-        router.replace('/onboarding/first-sync');
+        router.replace('/onboarding/pair-device');
       }
     } catch (error) {
       console.error('[Onboarding] Permission request error:', error);
@@ -60,7 +61,8 @@ export default function PermissionsScreen(): React.JSX.Element {
   }, [router]);
 
   const handleContinueAnyway = useCallback((): void => {
-    router.replace('/onboarding/first-sync');
+    // BACKLOG-1473: Skip to pair-device (step 2) instead of first-sync
+    router.replace('/onboarding/pair-device');
   }, [router]);
 
   const handleOpenSettings = useCallback((): void => {
@@ -80,7 +82,7 @@ export default function PermissionsScreen(): React.JSX.Element {
       setContactsResult(contacts);
 
       if (sms.allGranted && contacts.granted) {
-        router.replace('/onboarding/first-sync');
+        router.replace('/onboarding/pair-device');
       }
     } finally {
       setLoading(false);
@@ -99,7 +101,7 @@ export default function PermissionsScreen(): React.JSX.Element {
     <View style={styles.screen}>
       {/* Step indicator */}
       <View style={styles.stepIndicator}>
-        <Text style={styles.stepText}>Step 2 of 3</Text>
+        <Text style={styles.stepText}>Step 1 of 3</Text>
       </View>
 
       <View style={styles.content}>
@@ -144,7 +146,7 @@ export default function PermissionsScreen(): React.JSX.Element {
         ) : allGranted ? (
           <Button
             title="Continue"
-            onPress={() => router.replace('/onboarding/first-sync')}
+            onPress={() => router.replace('/onboarding/pair-device')}
             size="lg"
             fullWidth
           />
