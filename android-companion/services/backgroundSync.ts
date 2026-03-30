@@ -14,6 +14,7 @@
  * backgrounded, subject to Android's battery optimization constraints.
  */
 
+import * as Sentry from "@sentry/react-native";
 import * as TaskManager from "expo-task-manager";
 import * as BackgroundFetch from "expo-background-fetch";
 import AsyncStorage from "@react-native-async-storage/async-storage";
@@ -69,6 +70,9 @@ TaskManager.defineTask(BACKGROUND_SYNC_TASK, async () => {
     return BackgroundFetch.BackgroundFetchResult.NoData;
   } catch (error) {
     console.error("[BackgroundSync] Task failed:", error);
+    Sentry.captureException(error, {
+      tags: { component: "backgroundSync" },
+    });
     return BackgroundFetch.BackgroundFetchResult.Failed;
   }
 });
@@ -104,6 +108,12 @@ export interface SyncOperationResult {
  * This is called both by the background task and by the manual "Sync Now" button.
  */
 export async function performSync(): Promise<SyncOperationResult> {
+  Sentry.addBreadcrumb({
+    category: "sync",
+    message: "Sync cycle started",
+    level: "info",
+  });
+
   // Load pairing info
   const pairingInfo = await loadPairingInfo();
   if (!pairingInfo) {
@@ -212,6 +222,19 @@ export async function performSync(): Promise<SyncOperationResult> {
   await recordSyncAttempt(totalSent > 0, totalSent);
 
   const queueSize = await getQueueSize();
+
+  Sentry.addBreadcrumb({
+    category: "sync",
+    message: "Sync cycle completed",
+    level: "info",
+    data: {
+      newMessages,
+      sentMessages: totalSent,
+      contactsSynced,
+      queueSize,
+      hadError: !!sendError,
+    },
+  });
 
   return {
     newMessages,

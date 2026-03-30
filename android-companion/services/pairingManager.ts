@@ -16,6 +16,7 @@
  * - @keepr/pairing-health: Failure count + last success timestamp
  */
 
+import * as Sentry from '@sentry/react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { stopBackgroundSync } from './backgroundSync';
 import { resetAllSyncData } from './smsQueueService';
@@ -114,6 +115,12 @@ export async function shouldAutoUnpair(): Promise<boolean> {
  * and reset sync queue data.
  */
 export async function autoUnpair(): Promise<void> {
+  Sentry.addBreadcrumb({
+    category: 'pairing',
+    message: 'Auto-unpair triggered (24h offline)',
+    level: 'warning',
+  });
+
   await Promise.all([
     AsyncStorage.removeItem(PAIRING_STORAGE_KEY),
     AsyncStorage.removeItem(HEALTH_STORAGE_KEY),
@@ -146,11 +153,21 @@ export async function getConnectionStatus(): Promise<ConnectionStatus> {
 
   const health = await getHealth();
 
+  let status: ConnectionStatus;
   if (health.consecutiveFailures >= FAILURE_WARNING_THRESHOLD) {
-    return 'degraded';
+    status = 'degraded';
+  } else {
+    status = 'connected';
   }
 
-  return 'connected';
+  Sentry.addBreadcrumb({
+    category: 'pairing',
+    message: `Connection status: ${status}`,
+    level: status === 'degraded' ? 'warning' : 'info',
+    data: { consecutiveFailures: health.consecutiveFailures },
+  });
+
+  return status;
 }
 
 /**

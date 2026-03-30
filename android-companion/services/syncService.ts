@@ -7,6 +7,7 @@
  * BACKLOG-1449: Android contacts sync
  */
 
+import * as Sentry from "@sentry/react-native";
 import { encrypt } from "./encryption";
 import { deriveTransportKeys } from "./keyDerivation";
 import type {
@@ -97,6 +98,12 @@ export async function sendMessages(
 
     if (!response.ok) {
       const errorBody = await response.text().catch(() => "Unknown error");
+      Sentry.addBreadcrumb({
+        category: "sync",
+        message: `sendMessages failed: ${response.status}`,
+        level: "error",
+        data: { status: response.status, messageCount: messages.length },
+      });
       return {
         success: false,
         error: `Server responded with ${response.status}: ${errorBody}`,
@@ -104,9 +111,18 @@ export async function sendMessages(
     }
 
     const result = (await response.json()) as SyncResult;
+    Sentry.addBreadcrumb({
+      category: "sync",
+      message: "sendMessages succeeded",
+      level: "info",
+      data: { messageCount: messages.length },
+    });
     return result;
   } catch (err) {
     if (err instanceof Error) {
+      Sentry.captureException(err, {
+        tags: { component: "syncService", operation: "sendMessages" },
+      });
       if (err.name === "AbortError") {
         return { success: false, error: "Request timed out" };
       }
@@ -163,6 +179,12 @@ export async function sendContacts(
 
     if (!response.ok) {
       const errorBody = await response.text().catch(() => "Unknown error");
+      Sentry.addBreadcrumb({
+        category: "sync",
+        message: `sendContacts failed: ${response.status}`,
+        level: "error",
+        data: { status: response.status, contactCount: contacts.length },
+      });
       return {
         success: false,
         error: `Server responded with ${response.status}: ${errorBody}`,
@@ -170,9 +192,18 @@ export async function sendContacts(
     }
 
     const result = (await response.json()) as SyncResult;
+    Sentry.addBreadcrumb({
+      category: "sync",
+      message: "sendContacts succeeded",
+      level: "info",
+      data: { contactCount: contacts.length },
+    });
     return result;
   } catch (err) {
     if (err instanceof Error) {
+      Sentry.captureException(err, {
+        tags: { component: "syncService", operation: "sendContacts" },
+      });
       if (err.name === "AbortError") {
         return { success: false, error: "Request timed out" };
       }
@@ -220,6 +251,12 @@ export async function registerDevice(
 
     if (!response.ok) {
       const errorBody = await response.text().catch(() => "Unknown error");
+      Sentry.addBreadcrumb({
+        category: "sync",
+        message: `registerDevice failed: ${response.status}`,
+        level: "error",
+        data: { status: response.status },
+      });
       return {
         success: false,
         error: `Server responded with ${response.status}: ${errorBody}`,
@@ -227,9 +264,17 @@ export async function registerDevice(
     }
 
     const result = (await response.json()) as SyncResult;
+    Sentry.addBreadcrumb({
+      category: "sync",
+      message: "registerDevice succeeded",
+      level: "info",
+    });
     return result;
   } catch (err) {
     if (err instanceof Error) {
+      Sentry.captureException(err, {
+        tags: { component: "syncService", operation: "registerDevice" },
+      });
       if (err.name === "AbortError") {
         return { success: false, error: "Request timed out" };
       }

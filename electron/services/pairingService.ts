@@ -7,6 +7,7 @@ import crypto from "crypto";
 import os from "os";
 import QRCode from "qrcode";
 import log from "electron-log";
+import * as Sentry from "@sentry/electron/main";
 
 /**
  * Data encoded in the QR code for pairing
@@ -103,6 +104,13 @@ class PairingService {
       secretPrefix: secret.substring(0, 8) + "...",
     });
 
+    Sentry.addBreadcrumb({
+      category: "pairing",
+      message: "QR code generated",
+      level: "info",
+      data: { ip, port, deviceName },
+    });
+
     const qrDataUrl = await QRCode.toDataURL(JSON.stringify(pairingInfo), {
       width: 300,
       margin: 2,
@@ -141,6 +149,12 @@ class PairingService {
       lastSeen: now,
     });
     log.info("[PairingService] Device paired:", { deviceId, deviceName });
+    Sentry.addBreadcrumb({
+      category: "pairing",
+      message: "Device added",
+      level: "info",
+      data: { deviceId, deviceName },
+    });
   }
 
   /**
@@ -166,6 +180,12 @@ class PairingService {
     if (existed) {
       this.pairedDevices.delete(deviceId);
       log.info("[PairingService] Device disconnected:", { deviceId });
+      Sentry.addBreadcrumb({
+        category: "pairing",
+        message: "Device disconnected",
+        level: "info",
+        data: { deviceId },
+      });
     }
     return existed;
   }

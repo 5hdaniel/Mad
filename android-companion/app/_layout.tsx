@@ -1,4 +1,5 @@
 import '../services/cryptoPolyfill';
+import * as Sentry from '@sentry/react-native';
 import { useEffect, useState } from 'react';
 import { ActivityIndicator, View, StyleSheet } from 'react-native';
 import { Stack, useRouter, useSegments } from 'expo-router';
@@ -6,6 +7,13 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { onAuthStateChange, getSession } from '../services/authService';
 import { colors } from '../theme/colors';
 import type { Session } from '@supabase/supabase-js';
+
+Sentry.init({
+  dsn: 'https://placeholder@sentry.io/0',
+  // Set to false until a real Sentry project is created for the companion app
+  enabled: false,
+  tracesSampleRate: 1.0,
+});
 
 const ONBOARDING_COMPLETE_KEY = '@keepr/onboarding-complete';
 
