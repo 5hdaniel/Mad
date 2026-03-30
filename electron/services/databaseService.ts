@@ -793,7 +793,8 @@ class DatabaseService implements IDatabaseService {
         // 2. Copy existing data
         d.exec("INSERT OR IGNORE INTO contacts_new SELECT * FROM contacts;");
 
-        // 3. Drop old trigger referencing contacts
+        // 3. Drop views and triggers referencing contacts
+        d.exec("DROP VIEW IF EXISTS contact_lookup;");
         d.exec("DROP TRIGGER IF EXISTS update_contacts_timestamp;");
 
         // 4. Drop old table
@@ -815,6 +816,20 @@ class DatabaseService implements IDatabaseService {
           BEGIN
             UPDATE contacts SET updated_at = CURRENT_TIMESTAMP WHERE id = NEW.id;
           END;
+        `);
+
+        // 8. Recreate contact_lookup view
+        d.exec(`
+          CREATE VIEW IF NOT EXISTS contact_lookup AS
+          SELECT
+            c.id as contact_id,
+            c.user_id,
+            c.display_name,
+            ce.email,
+            cp.phone_e164 as phone
+          FROM contacts c
+          LEFT JOIN contact_emails ce ON c.id = ce.contact_id
+          LEFT JOIN contact_phones cp ON c.id = cp.contact_id;
         `);
       },
     },
