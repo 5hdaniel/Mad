@@ -27,11 +27,6 @@ import {
   requestContactsPermissions,
 } from '../../services/permissions';
 import { registerDevice } from '../../services/syncService';
-import {
-  getConnectionStatus,
-  autoUnpair,
-  type ConnectionStatus,
-} from '../../services/pairingManager';
 import { colors } from '../../theme/colors';
 import { textStyles } from '../../theme/typography';
 import { borderRadius, spacing } from '../../theme/spacing';
@@ -77,8 +72,6 @@ export default function HomeScreen(): React.JSX.Element {
   const [lastSyncResult, setLastSyncResult] =
     useState<SyncOperationResult | null>(null);
   const [helpVisible, setHelpVisible] = useState(false);
-  const [connectionStatus, setConnectionStatus] =
-    useState<ConnectionStatus>('disconnected');
 
   // -------------------------------------------------------
   // Data loading
@@ -86,18 +79,16 @@ export default function HomeScreen(): React.JSX.Element {
 
   const loadAllData = useCallback(async (): Promise<void> => {
     try {
-      const [stored, stats, queue, bgActive, connStatus] = await Promise.all([
+      const [stored, stats, queue, bgActive] = await Promise.all([
         AsyncStorage.getItem(PAIRING_STORAGE_KEY),
         getSyncStats(),
         getQueueSize(),
         isBackgroundSyncActive(),
-        getConnectionStatus(),
       ]);
       setPairing(stored ? (JSON.parse(stored) as StoredPairing) : null);
       setSyncStats(stats);
       setQueueSize(queue);
       setBgSyncActive(bgActive);
-      setConnectionStatus(connStatus);
     } catch (error) {
       console.error('[Home] Failed to load data:', error);
     } finally {
@@ -116,7 +107,7 @@ export default function HomeScreen(): React.JSX.Element {
   );
 
   // -------------------------------------------------------
-  // Pairing (re-pair after auto-unpair)
+  // Pairing
   // -------------------------------------------------------
 
   const savePairing = async (data: PairingData): Promise<void> => {
@@ -170,9 +161,6 @@ export default function HomeScreen(): React.JSX.Element {
       console.warn('[Pairing] Auto-first-sync error (non-fatal):', error);
     }
     // --- END BACKLOG-1456 ---
-
-    // Reload all data to reflect new pairing + sync state
-    await loadAllData();
   };
 
   const handleBarCodeScanned = useCallback(
@@ -229,33 +217,6 @@ export default function HomeScreen(): React.JSX.Element {
   }, [permission, requestPermission]);
 
   // -------------------------------------------------------
-  // Unpair
-  // -------------------------------------------------------
-
-  const handleUnpair = useCallback((): void => {
-    Alert.alert(
-      'Unpair Device',
-      'This will disconnect from the desktop and stop syncing. You can re-pair by scanning a new QR code.',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Unpair',
-          style: 'destructive',
-          onPress: async () => {
-            await autoUnpair();
-            setPairing(null);
-            setConnectionStatus('disconnected');
-            setSyncStats(null);
-            setQueueSize(0);
-            setBgSyncActive(false);
-            setLastSyncResult(null);
-          },
-        },
-      ],
-    );
-  }, []);
-
-  // -------------------------------------------------------
   // Sync
   // -------------------------------------------------------
 
@@ -267,24 +228,12 @@ export default function HomeScreen(): React.JSX.Element {
       const result = await performSync();
       setLastSyncResult(result);
 
-      const [stats, queue, connStatus] = await Promise.all([
+      const [stats, queue] = await Promise.all([
         getSyncStats(),
         getQueueSize(),
-        getConnectionStatus(),
       ]);
       setSyncStats(stats);
       setQueueSize(queue);
-      setConnectionStatus(connStatus);
-
-      // Check if auto-unpaired during sync
-      if (result.error === 'Auto-unpaired after 24h offline') {
-        setPairing(null);
-        Alert.alert(
-          'Device Unpaired',
-          'Your device was automatically unpaired after being offline for 24 hours. Please scan a new QR code to reconnect.',
-        );
-        return;
-      }
 
       if (result.error) {
         Alert.alert('Sync Issue', result.error);
@@ -371,7 +320,7 @@ export default function HomeScreen(): React.JSX.Element {
             connect this device as an SMS companion.
           </Text>
           <Button
-            title="Re-pair Device"
+            title="Scan QR Code"
             onPress={handleStartScanning}
             size="lg"
           />
@@ -389,7 +338,6 @@ export default function HomeScreen(): React.JSX.Element {
   // -------------------------------------------------------
 
   const pairedDate = new Date(pairing.pairedAt);
-  const statusBadgeProps = getStatusBadgeProps(connectionStatus);
 
   return (
     <View style={styles.screen}>
@@ -421,21 +369,8 @@ export default function HomeScreen(): React.JSX.Element {
       >
         {/* Status */}
         <View style={styles.statusSection}>
-          <StatusBadge
-            status={statusBadgeProps.status}
-            label={statusBadgeProps.label}
-          />
+          <StatusBadge status="connected" label="Paired" />
         </View>
-
-        {/* Warning Banner — shown when 3+ consecutive failures */}
-        {connectionStatus === 'degraded' && (
-          <View style={styles.warningBanner}>
-            <Text style={styles.warningText}>
-              Cannot reach desktop. Check that Keepr is running and both devices
-              are on the same network.
-            </Text>
-          </View>
-        )}
 
         {/* Device Info */}
         <Card title="Device">
@@ -513,7 +448,7 @@ export default function HomeScreen(): React.JSX.Element {
           </Card>
         )}
 
-        {/* Action buttons */}
+        {/* Sync Now button */}
         <View style={styles.buttonRow}>
           <View style={styles.buttonFlex}>
             <Button
@@ -533,22 +468,6 @@ export default function HomeScreen(): React.JSX.Element {
             />
           </View>
         </View>
-
-        {/* Unpair / Re-pair */}
-        <View style={styles.secondaryActions}>
-          <Button
-            title="Re-pair Device"
-            variant="secondary"
-            onPress={handleStartScanning}
-            size="sm"
-          />
-          <Button
-            title="Unpair"
-            variant="danger"
-            onPress={handleUnpair}
-            size="sm"
-          />
-        </View>
       </ScrollView>
       <HelpModal
         visible={helpVisible}
@@ -561,20 +480,6 @@ export default function HomeScreen(): React.JSX.Element {
 // ============================================
 // HELPERS
 // ============================================
-
-function getStatusBadgeProps(status: ConnectionStatus): {
-  status: 'connected' | 'disconnected' | 'warning';
-  label: string;
-} {
-  switch (status) {
-    case 'connected':
-      return { status: 'connected', label: 'Connected' };
-    case 'degraded':
-      return { status: 'warning', label: 'Connection Issues' };
-    case 'disconnected':
-      return { status: 'disconnected', label: 'Not Paired' };
-  }
-}
 
 function formatRelativeTime(isoString: string): string {
   const date = new Date(isoString);
@@ -632,19 +537,6 @@ const styles = StyleSheet.create({
     marginBottom: spacing[5],
     marginTop: spacing[2],
   },
-  warningBanner: {
-    backgroundColor: colors.warning[50],
-    borderWidth: 1,
-    borderColor: colors.warning[400],
-    borderRadius: borderRadius.lg,
-    padding: spacing[4],
-    marginBottom: spacing[4],
-  },
-  warningText: {
-    ...textStyles.label,
-    color: colors.warning[600],
-    textAlign: 'center',
-  },
   buttonRow: {
     flexDirection: 'row',
     gap: spacing[3],
@@ -652,12 +544,6 @@ const styles = StyleSheet.create({
   },
   buttonFlex: {
     flex: 1,
-  },
-  secondaryActions: {
-    flexDirection: 'row',
-    justifyContent: 'center',
-    gap: spacing[3],
-    marginTop: spacing[4],
   },
 
   // Scanner styles (preserved from original)
