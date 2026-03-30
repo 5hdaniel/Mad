@@ -1,0 +1,331 @@
+import { useState, useCallback } from 'react';
+import {
+  StyleSheet,
+  View,
+  Text,
+  Linking,
+  Platform,
+} from 'react-native';
+import { useRouter } from 'expo-router';
+import {
+  requestSmsPermissions,
+  requestContactsPermissions,
+  checkSmsPermissions,
+  checkContactsPermissions,
+} from '../../services/permissions';
+import type {
+  SmsPermissionResult,
+  ContactsPermissionResult,
+} from '../../services/permissions';
+import { colors } from '../../theme/colors';
+import { textStyles } from '../../theme/typography';
+import { borderRadius, spacing } from '../../theme/spacing';
+import { Button } from '../../components/ui';
+
+export default function PermissionsScreen(): React.JSX.Element {
+  const router = useRouter();
+  const [loading, setLoading] = useState(false);
+  const [smsResult, setSmsResult] = useState<SmsPermissionResult | null>(null);
+  const [contactsResult, setContactsResult] = useState<ContactsPermissionResult | null>(null);
+  const [attempted, setAttempted] = useState(false);
+
+  const handleRequestPermissions = useCallback(async (): Promise<void> => {
+    setLoading(true);
+    try {
+      const [sms, contacts] = await Promise.all([
+        requestSmsPermissions(),
+        requestContactsPermissions(),
+      ]);
+      setSmsResult(sms);
+      setContactsResult(contacts);
+      setAttempted(true);
+
+      // If all permissions granted, auto-advance
+      if (sms.allGranted && contacts.granted) {
+        router.replace('/onboarding/first-sync');
+      }
+    } catch (error) {
+      console.error('[Onboarding] Permission request error:', error);
+    } finally {
+      setLoading(false);
+    }
+  }, [router]);
+
+  const handleContinueAnyway = useCallback((): void => {
+    router.replace('/onboarding/first-sync');
+  }, [router]);
+
+  const handleOpenSettings = useCallback((): void => {
+    if (Platform.OS === 'android') {
+      Linking.openSettings();
+    }
+  }, []);
+
+  const handleCheckPermissions = useCallback(async (): Promise<void> => {
+    setLoading(true);
+    try {
+      const [sms, contacts] = await Promise.all([
+        checkSmsPermissions(),
+        checkContactsPermissions(),
+      ]);
+      setSmsResult(sms);
+      setContactsResult(contacts);
+
+      if (sms.allGranted && contacts.granted) {
+        router.replace('/onboarding/first-sync');
+      }
+    } finally {
+      setLoading(false);
+    }
+  }, [router]);
+
+  const hasBlockedPermissions =
+    smsResult?.readSms === 'never_ask_again' ||
+    smsResult?.receiveSms === 'never_ask_again' ||
+    contactsResult?.readContacts === 'never_ask_again';
+
+  const allGranted =
+    smsResult?.allGranted === true && contactsResult?.granted === true;
+
+  return (
+    <View style={styles.screen}>
+      {/* Step indicator */}
+      <View style={styles.stepIndicator}>
+        <Text style={styles.stepText}>Step 2 of 3</Text>
+      </View>
+
+      <View style={styles.content}>
+        <Text style={styles.stepIcon}>{'🔐'}</Text>
+        <Text style={styles.title}>App Permissions</Text>
+        <Text style={styles.description}>
+          Keepr Companion needs access to your SMS messages and contacts to sync
+          them with the desktop app.
+        </Text>
+
+        {/* Permission items */}
+        <View style={styles.permissionsCard}>
+          <PermissionItem
+            label="Read SMS"
+            description="Read messages from your phone"
+            status={smsResult?.readSms ?? null}
+          />
+          <View style={styles.itemDivider} />
+          <PermissionItem
+            label="Receive SMS"
+            description="Get notified of new messages"
+            status={smsResult?.receiveSms ?? null}
+          />
+          <View style={styles.itemDivider} />
+          <PermissionItem
+            label="Contacts"
+            description="Sync contacts with desktop app"
+            status={contactsResult?.readContacts ?? null}
+          />
+        </View>
+
+        {/* Actions */}
+        {!attempted ? (
+          <Button
+            title="Grant Permissions"
+            onPress={handleRequestPermissions}
+            loading={loading}
+            disabled={loading}
+            size="lg"
+            fullWidth
+          />
+        ) : allGranted ? (
+          <Button
+            title="Continue"
+            onPress={() => router.replace('/onboarding/first-sync')}
+            size="lg"
+            fullWidth
+          />
+        ) : hasBlockedPermissions ? (
+          <View style={styles.blockedSection}>
+            <Text style={styles.blockedText}>
+              Some permissions were permanently denied. Please enable them in
+              your device settings.
+            </Text>
+            <Button
+              title="Open Settings"
+              onPress={handleOpenSettings}
+              size="lg"
+              fullWidth
+            />
+            <View style={styles.buttonSpacer} />
+            <Button
+              title="I Updated Settings"
+              variant="outline"
+              onPress={handleCheckPermissions}
+              loading={loading}
+              size="lg"
+              fullWidth
+            />
+            <View style={styles.buttonSpacer} />
+            <Button
+              title="Skip for Now"
+              variant="secondary"
+              onPress={handleContinueAnyway}
+              size="sm"
+              fullWidth
+            />
+          </View>
+        ) : (
+          <View style={styles.blockedSection}>
+            <Button
+              title="Try Again"
+              onPress={handleRequestPermissions}
+              loading={loading}
+              disabled={loading}
+              size="lg"
+              fullWidth
+            />
+            <View style={styles.buttonSpacer} />
+            <Button
+              title="Skip for Now"
+              variant="secondary"
+              onPress={handleContinueAnyway}
+              size="sm"
+              fullWidth
+            />
+          </View>
+        )}
+      </View>
+    </View>
+  );
+}
+
+// ============================================
+// Permission Item Sub-Component
+// ============================================
+
+function PermissionItem({
+  label,
+  description,
+  status,
+}: {
+  label: string;
+  description: string;
+  status: string | null;
+}): React.JSX.Element {
+  const statusColor =
+    status === 'granted'
+      ? colors.success[600]
+      : status === 'never_ask_again'
+        ? colors.danger[500]
+        : status === 'denied'
+          ? colors.warning[500]
+          : colors.gray[400];
+
+  const statusLabel =
+    status === 'granted'
+      ? 'Granted'
+      : status === 'never_ask_again'
+        ? 'Blocked'
+        : status === 'denied'
+          ? 'Denied'
+          : 'Not requested';
+
+  return (
+    <View style={styles.permissionItem}>
+      <View style={styles.permissionInfo}>
+        <Text style={styles.permissionLabel}>{label}</Text>
+        <Text style={styles.permissionDescription}>{description}</Text>
+      </View>
+      <Text style={[styles.permissionStatus, { color: statusColor }]}>
+        {statusLabel}
+      </Text>
+    </View>
+  );
+}
+
+// ============================================
+// Styles
+// ============================================
+
+const styles = StyleSheet.create({
+  screen: {
+    flex: 1,
+    backgroundColor: colors.gray[50],
+  },
+  stepIndicator: {
+    paddingTop: spacing[16],
+    paddingBottom: spacing[2],
+    alignItems: 'center',
+  },
+  stepText: {
+    ...textStyles.caption,
+    color: colors.primary[600],
+    fontWeight: '600',
+  },
+  content: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: spacing[6],
+    paddingBottom: spacing[12],
+  },
+  stepIcon: {
+    fontSize: 48,
+    marginBottom: spacing[5],
+  },
+  title: {
+    ...textStyles.heading,
+    color: colors.gray[800],
+    textAlign: 'center',
+    marginBottom: spacing[3],
+  },
+  description: {
+    ...textStyles.body,
+    color: colors.gray[500],
+    textAlign: 'center',
+    marginBottom: spacing[8],
+  },
+  permissionsCard: {
+    width: '100%',
+    backgroundColor: colors.white,
+    borderRadius: borderRadius.xl,
+    borderWidth: 1,
+    borderColor: colors.gray[200],
+    padding: spacing[4],
+    marginBottom: spacing[8],
+  },
+  permissionItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: spacing[3],
+  },
+  permissionInfo: {
+    flex: 1,
+    marginRight: spacing[3],
+  },
+  permissionLabel: {
+    ...textStyles.label,
+    color: colors.gray[800],
+  },
+  permissionDescription: {
+    ...textStyles.caption,
+    color: colors.gray[400],
+    marginTop: 2,
+  },
+  permissionStatus: {
+    ...textStyles.label,
+  },
+  itemDivider: {
+    height: 1,
+    backgroundColor: colors.gray[100],
+  },
+  blockedSection: {
+    width: '100%',
+  },
+  blockedText: {
+    ...textStyles.caption,
+    color: colors.gray[500],
+    textAlign: 'center',
+    marginBottom: spacing[4],
+  },
+  buttonSpacer: {
+    height: spacing[3],
+  },
+});
