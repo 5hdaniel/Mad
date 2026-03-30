@@ -236,7 +236,7 @@ const styles = StyleSheet.create({
   },
   emptyText: {
     ...textStyles.label,
-    color: colors.gray[500],
+    color: colors.gray[600],
     marginBottom: spacing[1],
   },
   emptyDescription: {

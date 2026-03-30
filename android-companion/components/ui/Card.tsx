@@ -65,7 +65,7 @@ const styles = StyleSheet.create({
   card: {
     width: '100%',
     backgroundColor: colors.white,
-    borderRadius: borderRadius.xl,
+    borderRadius: borderRadius.lg,
     borderWidth: 1,
     borderColor: colors.gray[200],
     padding: spacing[4],
@@ -94,13 +94,13 @@ const styles = StyleSheet.create({
   },
   label: {
     ...textStyles.label,
-    color: colors.gray[500],
+    color: colors.gray[600],
     flexShrink: 0,
     marginRight: spacing[3],
   },
   value: {
     ...textStyles.label,
-    color: colors.gray[800],
+    color: colors.gray[900],
     flexShrink: 1,
     textAlign: 'right',
   },

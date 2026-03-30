@@ -515,14 +515,14 @@ const styles = StyleSheet.create({
   },
   heroTitle: {
     ...textStyles.heading,
-    color: colors.gray[800],
+    color: colors.gray[900],
     marginTop: spacing[6],
     marginBottom: spacing[3],
   },
   heroDescription: {
     ...textStyles.body,
     textAlign: 'center',
-    color: colors.gray[500],
+    color: colors.gray[600],
     marginBottom: spacing[8],
   },
   scrollView: {

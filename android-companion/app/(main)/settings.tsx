@@ -431,13 +431,13 @@ const styles = StyleSheet.create({
   },
   rowLabel: {
     ...textStyles.label,
-    color: colors.gray[500],
+    color: colors.gray[600],
     flexShrink: 0,
     marginRight: spacing[3],
   },
   rowValue: {
     ...textStyles.label,
-    color: colors.gray[800],
+    color: colors.gray[900],
   },
 
   // Sync interval picker
@@ -464,7 +464,7 @@ const styles = StyleSheet.create({
   },
   intervalOptionText: {
     ...textStyles.label,
-    color: colors.gray[600],
+    color: colors.gray[700],
   },
   intervalOptionTextSelected: {
     color: colors.primary[700],

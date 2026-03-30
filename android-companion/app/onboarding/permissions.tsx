@@ -285,24 +285,29 @@ const styles = StyleSheet.create({
   },
   title: {
     ...textStyles.heading,
-    color: colors.gray[800],
+    color: colors.gray[900],
     textAlign: 'center',
     marginBottom: spacing[3],
   },
   description: {
     ...textStyles.body,
-    color: colors.gray[500],
+    color: colors.gray[600],
     textAlign: 'center',
     marginBottom: spacing[8],
   },
   permissionsCard: {
     width: '100%',
     backgroundColor: colors.white,
-    borderRadius: borderRadius.xl,
+    borderRadius: borderRadius.lg,
     borderWidth: 1,
     borderColor: colors.gray[200],
     padding: spacing[4],
     marginBottom: spacing[8],
+    shadowColor: colors.black,
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 2,
+    elevation: 1,
   },
   permissionItem: {
     flexDirection: 'row',
@@ -316,7 +321,7 @@ const styles = StyleSheet.create({
   },
   permissionLabel: {
     ...textStyles.label,
-    color: colors.gray[800],
+    color: colors.gray[900],
   },
   permissionDescription: {
     ...textStyles.caption,
