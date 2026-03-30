@@ -28,7 +28,7 @@ import logger from "../../../utils/logger";
  * URL for the broker portal download page.
  * The QR code encodes this URL so users can scan it with their phone camera.
  */
-const DOWNLOAD_URL = "https://app.keeprcompliance.com/download";
+const DOWNLOAD_URL = "https://app.keeprcompliance.com/download/android";
 
 // =============================================================================
 // STEP METADATA
