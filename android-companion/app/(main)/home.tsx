@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useRef } from 'react';
 import {
   StyleSheet,
   Text,
@@ -8,6 +8,7 @@ import {
   ActivityIndicator,
   ScrollView,
 } from 'react-native';
+import { captureRef } from 'react-native-view-shot';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useRouter } from 'expo-router';
@@ -72,6 +73,29 @@ export default function HomeScreen(): React.JSX.Element {
   const [lastSyncResult, setLastSyncResult] =
     useState<SyncOperationResult | null>(null);
   const [helpVisible, setHelpVisible] = useState(false);
+  const [screenshotBase64, setScreenshotBase64] = useState<string | null>(null);
+  const screenRef = useRef<View>(null);
+
+  // -------------------------------------------------------
+  // Screenshot capture for support ticket
+  // -------------------------------------------------------
+
+  const openHelpWithScreenshot = useCallback(async (): Promise<void> => {
+    try {
+      if (screenRef.current) {
+        const base64 = await captureRef(screenRef, {
+          format: 'png',
+          quality: 0.8,
+          result: 'base64',
+        });
+        setScreenshotBase64(base64);
+      }
+    } catch {
+      // Screenshot capture is best-effort; proceed without it
+      setScreenshotBase64(null);
+    }
+    setHelpVisible(true);
+  }, []);
 
   // -------------------------------------------------------
   // Data loading
@@ -301,13 +325,13 @@ export default function HomeScreen(): React.JSX.Element {
 
   if (!pairing) {
     return (
-      <View style={styles.screen}>
+      <View style={styles.screen} ref={screenRef}>
         <Header
           title="Keepr Companion"
           rightActions={[
             {
               icon: '\u2753',
-              onPress: () => setHelpVisible(true),
+              onPress: () => void openHelpWithScreenshot(),
               accessibilityLabel: 'Help',
             },
           ]}
@@ -328,6 +352,7 @@ export default function HomeScreen(): React.JSX.Element {
         <HelpModal
           visible={helpVisible}
           onClose={() => setHelpVisible(false)}
+          screenshotBase64={screenshotBase64}
         />
       </View>
     );
@@ -340,7 +365,7 @@ export default function HomeScreen(): React.JSX.Element {
   const pairedDate = new Date(pairing.pairedAt);
 
   return (
-    <View style={styles.screen}>
+    <View style={styles.screen} ref={screenRef}>
       <Header
         title="Keepr Companion"
         leftActions={[
@@ -358,7 +383,7 @@ export default function HomeScreen(): React.JSX.Element {
           },
           {
             icon: '\u2753',
-            onPress: () => setHelpVisible(true),
+            onPress: () => void openHelpWithScreenshot(),
             accessibilityLabel: 'Help',
           },
         ]}
@@ -472,6 +497,7 @@ export default function HomeScreen(): React.JSX.Element {
       <HelpModal
         visible={helpVisible}
         onClose={() => setHelpVisible(false)}
+        screenshotBase64={screenshotBase64}
       />
     </View>
   );

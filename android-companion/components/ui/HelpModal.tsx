@@ -11,10 +11,12 @@ import {
   Alert,
   Platform,
   KeyboardAvoidingView,
+  Image,
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import Constants from 'expo-constants';
 import { getSession } from '../../services/authService';
+import { supabase } from '../../services/supabaseClient';
 import { checkSmsPermissions, checkContactsPermissions } from '../../services/permissions';
 import { getLastSuccessTime } from '../../services/pairingManager';
 import { colors } from '../../theme/colors';
@@ -41,11 +43,14 @@ interface Diagnostics {
 interface HelpModalProps {
   visible: boolean;
   onClose: () => void;
+  /** Base64-encoded screenshot captured before the modal opened */
+  screenshotBase64?: string | null;
 }
 
 export default function HelpModal({
   visible,
   onClose,
+  screenshotBase64,
 }: HelpModalProps): React.JSX.Element {
   const [subject, setSubject] = useState('');
   const [description, setDescription] = useState('');
@@ -55,6 +60,8 @@ export default function HelpModal({
   const [showCategoryPicker, setShowCategoryPicker] = useState(false);
   const [diagnostics, setDiagnostics] = useState<Diagnostics | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const [submitSuccess, setSubmitSuccess] = useState(false);
+  const [ticketNumber, setTicketNumber] = useState<number | null>(null);
 
   const collectDiagnostics = useCallback(async (): Promise<void> => {
     const appVersion =
@@ -117,6 +124,8 @@ export default function HelpModal({
     if (visible) {
       void collectDiagnostics();
       void loadUserInfo();
+      setSubmitSuccess(false);
+      setTicketNumber(null);
     } else {
       // Reset form when modal closes
       setSubject('');
@@ -124,22 +133,92 @@ export default function HelpModal({
       setCategory('Question');
       setShowCategoryPicker(false);
       setSubmitting(false);
+      setSubmitSuccess(false);
+      setTicketNumber(null);
     }
   }, [visible, collectDiagnostics, loadUserInfo]);
 
-  const handleSubmit = async (): Promise<void> => {
-    if (!subject.trim()) {
-      Alert.alert('Required', 'Please enter a subject.');
-      return;
+  /**
+   * Upload screenshot to Supabase storage and register as ticket attachment.
+   */
+  const uploadScreenshot = async (ticketId: string, base64Data: string): Promise<void> => {
+    const attachmentId = crypto.randomUUID();
+    const storagePath = `${ticketId}/${attachmentId}/screenshot.png`;
+
+    // Decode base64 to Uint8Array for upload
+    const binaryStr = atob(base64Data);
+    const bytes = new Uint8Array(binaryStr.length);
+    for (let i = 0; i < binaryStr.length; i++) {
+      bytes[i] = binaryStr.charCodeAt(i);
     }
-    if (!description.trim()) {
-      Alert.alert('Required', 'Please enter a description.');
+
+    const { error: uploadError } = await supabase.storage
+      .from('support-attachments')
+      .upload(storagePath, bytes, {
+        contentType: 'image/png',
+        upsert: false,
+      });
+
+    if (uploadError) {
+      console.warn('[Support] Screenshot upload failed:', uploadError.message);
       return;
     }
 
-    setSubmitting(true);
+    // Register the attachment via RPC
+    const { error: attachError } = await supabase.rpc('support_add_attachment', {
+      p_ticket_id: ticketId,
+      p_message_id: null,
+      p_file_name: 'screenshot.png',
+      p_file_size: bytes.length,
+      p_file_type: 'image/png',
+      p_storage_path: storagePath,
+    });
 
-    // Build the email body with form data and diagnostics
+    if (attachError) {
+      console.warn('[Support] Screenshot attachment registration failed:', attachError.message);
+    }
+  };
+
+  /**
+   * Upload diagnostics JSON to Supabase storage and register as ticket attachment.
+   */
+  const uploadDiagnostics = async (ticketId: string, diagData: Diagnostics): Promise<void> => {
+    const attachmentId = crypto.randomUUID();
+    const storagePath = `${ticketId}/${attachmentId}/diagnostics.json`;
+    const jsonStr = JSON.stringify(diagData, null, 2);
+    const encoder = new TextEncoder();
+    const jsonBytes = encoder.encode(jsonStr);
+
+    const { error: uploadError } = await supabase.storage
+      .from('support-attachments')
+      .upload(storagePath, jsonBytes, {
+        contentType: 'application/json',
+        upsert: false,
+      });
+
+    if (uploadError) {
+      console.warn('[Support] Diagnostics upload failed:', uploadError.message);
+      return;
+    }
+
+    const { error: attachError } = await supabase.rpc('support_add_attachment', {
+      p_ticket_id: ticketId,
+      p_message_id: null,
+      p_file_name: 'diagnostics.json',
+      p_file_size: jsonBytes.length,
+      p_file_type: 'application/json',
+      p_storage_path: storagePath,
+    });
+
+    if (attachError) {
+      console.warn('[Support] Diagnostics attachment registration failed:', attachError.message);
+    }
+  };
+
+  /**
+   * Fall back to opening the email client with pre-filled ticket data.
+   */
+  const fallbackToEmail = async (): Promise<void> => {
     const diagLines = diagnostics
       ? [
           `App Version: ${diagnostics.appVersion}`,
@@ -179,10 +258,122 @@ export default function HelpModal({
       }
     } catch {
       Alert.alert('Error', 'Could not open email client.');
+    }
+  };
+
+  const handleSubmit = async (): Promise<void> => {
+    if (!subject.trim()) {
+      Alert.alert('Required', 'Please enter a subject.');
+      return;
+    }
+    if (!description.trim()) {
+      Alert.alert('Required', 'Please enter a description.');
+      return;
+    }
+
+    setSubmitting(true);
+
+    try {
+      // Step 1: Create ticket via Supabase RPC (same as desktop)
+      const { data: ticketData, error: ticketError } = await supabase.rpc(
+        'support_create_ticket',
+        {
+          p_subject: subject.trim(),
+          p_description: description.trim(),
+          p_priority: 'normal',
+          p_category_id: null,
+          p_subcategory_id: null,
+          p_requester_email: email || 'unknown@companion.app',
+          p_requester_name: name || 'Companion User',
+          p_source_channel: 'android_companion',
+        },
+      );
+
+      if (ticketError) {
+        throw new Error(ticketError.message);
+      }
+
+      const ticket = ticketData as { id: string; ticket_number: number } | null;
+      if (!ticket?.id) {
+        throw new Error('Ticket creation returned no ticket ID');
+      }
+
+      // Step 2: Upload screenshot if available (non-blocking)
+      if (screenshotBase64) {
+        try {
+          await uploadScreenshot(ticket.id, screenshotBase64);
+        } catch {
+          // Screenshot upload is best-effort
+        }
+      }
+
+      // Step 3: Upload diagnostics if available (non-blocking)
+      if (diagnostics) {
+        try {
+          await uploadDiagnostics(ticket.id, diagnostics);
+        } catch {
+          // Diagnostics upload is best-effort
+        }
+      }
+
+      setTicketNumber(ticket.ticket_number);
+      setSubmitSuccess(true);
+    } catch (err) {
+      // Supabase submission failed — offer email fallback
+      const errorMsg = err instanceof Error ? err.message : 'Unknown error';
+      console.warn('[Support] Supabase submission failed, offering email fallback:', errorMsg);
+
+      Alert.alert(
+        'Submission Failed',
+        'Could not submit ticket online. Would you like to send it via email instead?',
+        [
+          { text: 'Cancel', style: 'cancel' },
+          {
+            text: 'Send via Email',
+            onPress: () => void fallbackToEmail(),
+          },
+        ],
+      );
     } finally {
       setSubmitting(false);
     }
   };
+
+  // Success state
+  if (submitSuccess) {
+    return (
+      <Modal
+        visible={visible}
+        animationType="slide"
+        transparent
+        onRequestClose={onClose}
+      >
+        <KeyboardAvoidingView
+          style={styles.overlay}
+          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        >
+          <View style={styles.sheet}>
+            <View style={styles.handleBar} />
+            <View style={styles.successContent}>
+              <View style={styles.successIcon}>
+                <Text style={styles.successIconText}>{'\u2713'}</Text>
+              </View>
+              <Text style={styles.successTitle}>Ticket Submitted!</Text>
+              {ticketNumber && (
+                <Text style={styles.successTicketNumber}>Ticket #{ticketNumber}</Text>
+              )}
+              <Text style={styles.successMessage}>
+                {"We'll get back to you soon. You'll receive a response via email."}
+              </Text>
+              <TouchableOpacity style={styles.submitButton} onPress={onClose}>
+                <Text style={styles.submitButtonText}>Done</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </KeyboardAvoidingView>
+      </Modal>
+    );
+  }
 
   return (
     <Modal
@@ -205,6 +396,18 @@ export default function HelpModal({
             keyboardShouldPersistTaps="handled"
           >
             <Text style={styles.title}>Submit Support Ticket</Text>
+
+            {/* Screenshot preview */}
+            {screenshotBase64 && (
+              <View style={styles.screenshotSection}>
+                <Text style={styles.screenshotLabel}>Screenshot attached</Text>
+                <Image
+                  source={{ uri: `data:image/png;base64,${screenshotBase64}` }}
+                  style={styles.screenshotPreview}
+                  resizeMode="contain"
+                />
+              </View>
+            )}
 
             {/* Category selector */}
             <Text style={styles.fieldLabel}>Category</Text>
@@ -331,7 +534,7 @@ export default function HelpModal({
               disabled={submitting}
             >
               <Text style={styles.submitButtonText}>
-                {submitting ? 'Opening...' : 'Submit via Email'}
+                {submitting ? 'Submitting...' : 'Submit Ticket'}
               </Text>
             </TouchableOpacity>
           </View>
@@ -530,5 +733,57 @@ const styles = StyleSheet.create({
   submitButtonText: {
     ...textStyles.button,
     color: colors.white,
+  },
+  successContent: {
+    alignItems: 'center',
+    paddingHorizontal: spacing[6],
+    paddingVertical: spacing[10],
+  },
+  successIcon: {
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    backgroundColor: '#DEF7EC',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: spacing[4],
+  },
+  successIconText: {
+    fontSize: 32,
+    color: '#059669',
+  },
+  successTitle: {
+    ...textStyles.heading,
+    color: colors.gray[900],
+    marginBottom: spacing[2],
+  },
+  successTicketNumber: {
+    ...textStyles.body,
+    color: colors.gray[600],
+    marginBottom: spacing[1],
+  },
+  successMessage: {
+    ...textStyles.body,
+    color: colors.gray[500],
+    textAlign: 'center',
+    marginBottom: spacing[6],
+  },
+  screenshotSection: {
+    marginBottom: spacing[3],
+    padding: spacing[3],
+    backgroundColor: colors.gray[50],
+    borderRadius: borderRadius.lg,
+    borderWidth: 1,
+    borderColor: colors.gray[200],
+  },
+  screenshotLabel: {
+    ...textStyles.caption,
+    color: colors.gray[500],
+    marginBottom: spacing[2],
+  },
+  screenshotPreview: {
+    width: '100%',
+    height: 120,
+    borderRadius: borderRadius.md,
   },
 });
