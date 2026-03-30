@@ -1,15 +1,24 @@
+/**
+ * Settings Screen (Android Companion)
+ * Configuration-only screen: sync preferences, permissions, about.
+ * Status/sync stats are on the home screen, not here.
+ *
+ * BACKLOG-1464: Full redesign for Keepr Companion UX.
+ */
+
 import { useState, useCallback } from 'react';
 import {
   StyleSheet,
   View,
   Text,
   ScrollView,
+  Switch,
+  TouchableOpacity,
   Linking,
   Platform,
   Alert,
 } from 'react-native';
-import { useRouter } from 'expo-router';
-import { useFocusEffect } from 'expo-router';
+import { useRouter, useFocusEffect } from 'expo-router';
 import Constants from 'expo-constants';
 import {
   checkSmsPermissions,
@@ -23,48 +32,76 @@ import type {
 } from '../../services/permissions';
 import {
   isBackgroundSyncActive,
-  getBackgroundFetchStatus,
+  startBackgroundSync,
+  stopBackgroundSync,
+  updateSyncInterval,
 } from '../../services/backgroundSync';
-import * as BackgroundFetch from 'expo-background-fetch';
+import {
+  getSyncInterval,
+  setSyncInterval,
+  getBackgroundSyncEnabled,
+  setBackgroundSyncEnabled,
+} from '../../services/smsQueueService';
+import type { SyncIntervalValue } from '../../services/smsQueueService';
 import { colors } from '../../theme/colors';
 import { textStyles } from '../../theme/typography';
-import { spacing } from '../../theme/spacing';
-import {
-  Header,
-  Button,
-  Card,
-  CardDivider,
-  CardRow,
-} from '../../components/ui';
+import { borderRadius, spacing } from '../../theme/spacing';
+import { Header, Card, CardDivider } from '../../components/ui';
+
+// ============================================
+// CONSTANTS
+// ============================================
+
+/** Sync interval options for the picker */
+const INTERVAL_OPTIONS: { label: string; value: SyncIntervalValue }[] = [
+  { label: '15 min', value: 15 },
+  { label: '30 min', value: 30 },
+  { label: '1 hour', value: 60 },
+  { label: 'Manual only', value: 'manual' },
+];
+
+const PRIVACY_POLICY_URL = 'https://keepr.com/privacy';
+const TERMS_URL = 'https://keepr.com/terms';
+
+// ============================================
+// COMPONENT
+// ============================================
 
 export default function SettingsScreen(): React.JSX.Element {
   const router = useRouter();
-  const [permissions, setPermissions] = useState<SmsPermissionResult | null>(
-    null,
-  );
-  const [contactsPermissions, setContactsPermissions] =
-    useState<ContactsPermissionResult | null>(null);
-  const [bgSyncActive, setBgSyncActive] = useState(false);
-  const [bgFetchStatus, setBgFetchStatus] =
-    useState<BackgroundFetch.BackgroundFetchStatus | null>(null);
 
+  // Sync settings
+  const [bgSyncEnabled, setBgSyncEnabled] = useState(true);
+  const [syncInterval, setSyncIntervalState] =
+    useState<SyncIntervalValue>(15);
+
+  // Permissions
+  const [smsPerms, setSmsPerms] = useState<SmsPermissionResult | null>(null);
+  const [contactsPerms, setContactsPerms] =
+    useState<ContactsPermissionResult | null>(null);
+
+  // App info
   const appVersion =
     Constants.expoConfig?.version ??
     Constants.manifest2?.extra?.expoClient?.version ??
     '1.0.0';
 
+  // -------------------------------------------------------
+  // Data loading
+  // -------------------------------------------------------
+
   const loadSettings = useCallback(async (): Promise<void> => {
     try {
-      const [perms, contactsPerms, bgActive, fetchStatus] = await Promise.all([
+      const [perms, cPerms, enabled, interval] = await Promise.all([
         checkSmsPermissions(),
         checkContactsPermissions(),
-        isBackgroundSyncActive(),
-        getBackgroundFetchStatus(),
+        getBackgroundSyncEnabled(),
+        getSyncInterval(),
       ]);
-      setPermissions(perms);
-      setContactsPermissions(contactsPerms);
-      setBgSyncActive(bgActive);
-      setBgFetchStatus(fetchStatus);
+      setSmsPerms(perms);
+      setContactsPerms(cPerms);
+      setBgSyncEnabled(enabled);
+      setSyncIntervalState(interval);
     } catch (error) {
       console.error('[Settings] Failed to load settings:', error);
     }
@@ -76,32 +113,72 @@ export default function SettingsScreen(): React.JSX.Element {
     }, [loadSettings]),
   );
 
-  const handleRequestPermissions = useCallback(async (): Promise<void> => {
-    const result = await requestSmsPermissions();
-    await requestContactsPermissions();
-    setPermissions(result);
+  // -------------------------------------------------------
+  // Sync handlers
+  // -------------------------------------------------------
 
-    if (result.readSms === 'never_ask_again') {
-      Alert.alert(
-        'Permission Required',
-        'SMS permission was permanently denied. Please enable it in Settings > Apps > Keepr Companion > Permissions.',
-        [
-          { text: 'Cancel', style: 'cancel' },
-          {
-            text: 'Open Settings',
-            onPress: () => {
-              if (Platform.OS === 'android') {
-                Linking.openSettings();
-              }
-            },
-          },
-        ],
-      );
+  const handleToggleBackgroundSync = useCallback(
+    async (enabled: boolean): Promise<void> => {
+      setBgSyncEnabled(enabled);
+      await setBackgroundSyncEnabled(enabled);
+
+      if (enabled) {
+        // Re-read interval and start sync with current setting
+        const interval = await getSyncInterval();
+        if (interval === 'manual') {
+          // If interval was manual, just enable the toggle but don't register task
+          return;
+        }
+        await startBackgroundSync();
+      } else {
+        await stopBackgroundSync();
+      }
+    },
+    [],
+  );
+
+  const handleIntervalChange = useCallback(
+    async (interval: SyncIntervalValue): Promise<void> => {
+      setSyncIntervalState(interval);
+      await setSyncInterval(interval);
+
+      // Only update the background task if sync is enabled
+      const enabled = await getBackgroundSyncEnabled();
+      if (enabled) {
+        await updateSyncInterval(interval);
+      }
+    },
+    [],
+  );
+
+  // -------------------------------------------------------
+  // Permission handlers
+  // -------------------------------------------------------
+
+  const handleRequestSms = useCallback(async (): Promise<void> => {
+    const result = await requestSmsPermissions();
+    setSmsPerms(result);
+
+    if (
+      result.readSms === 'never_ask_again' ||
+      result.receiveSms === 'never_ask_again'
+    ) {
+      openPermissionsDeniedAlert();
     }
   }, []);
 
-  const bgFetchAvailable =
-    bgFetchStatus === BackgroundFetch.BackgroundFetchStatus.Available;
+  const handleRequestContacts = useCallback(async (): Promise<void> => {
+    const result = await requestContactsPermissions();
+    setContactsPerms(result);
+
+    if (result.readContacts === 'never_ask_again') {
+      openPermissionsDeniedAlert();
+    }
+  }, []);
+
+  // -------------------------------------------------------
+  // Render
+  // -------------------------------------------------------
 
   return (
     <View style={styles.screen}>
@@ -119,101 +196,171 @@ export default function SettingsScreen(): React.JSX.Element {
         contentContainerStyle={styles.scrollContent}
         style={styles.scrollView}
       >
-        {/* Sync Settings */}
+        {/* ========== SYNC ========== */}
         <Card title="Sync">
-          <CardRow label="Sync Interval" value="Every 15 minutes" />
+          {/* Background Sync toggle */}
+          <View style={styles.row}>
+            <Text style={styles.rowLabel}>Background Sync</Text>
+            <Switch
+              value={bgSyncEnabled}
+              onValueChange={handleToggleBackgroundSync}
+              trackColor={{
+                false: colors.gray[300],
+                true: colors.primary[400],
+              }}
+              thumbColor={
+                bgSyncEnabled ? colors.primary[600] : colors.gray[100]
+              }
+            />
+          </View>
           <CardDivider />
-          <CardRow
-            label="Background Sync"
-            value={bgSyncActive ? 'Active' : 'Inactive'}
-            valueColor={bgSyncActive ? colors.success[600] : colors.gray[400]}
-          />
-          <CardDivider />
-          <CardRow
-            label="System Support"
-            value={bgFetchAvailable ? 'Available' : 'Restricted'}
-            valueColor={
-              bgFetchAvailable ? colors.success[600] : colors.warning[500]
-            }
-          />
-        </Card>
 
-        {/* Permissions */}
-        <Card title="Permissions">
-          <CardRow
-            label="Read SMS"
-            value={formatPermissionStatus(permissions?.readSms)}
-            valueColor={
-              permissions?.readSms === 'granted'
-                ? colors.success[600]
-                : colors.danger[500]
-            }
-          />
-          <CardDivider />
-          <CardRow
-            label="Receive SMS"
-            value={formatPermissionStatus(permissions?.receiveSms)}
-            valueColor={
-              permissions?.receiveSms === 'granted'
-                ? colors.success[600]
-                : colors.danger[500]
-            }
-          />
-          <CardDivider />
-          <CardRow
-            label="Contacts"
-            value={formatPermissionStatus(contactsPermissions?.readContacts)}
-            valueColor={
-              contactsPermissions?.readContacts === 'granted'
-                ? colors.success[600]
-                : colors.danger[500]
-            }
-          />
-          {permissions &&
-            (!permissions.allGranted ||
-              (contactsPermissions && !contactsPermissions.granted)) && (
-            <View style={styles.permissionAction}>
-              <Button
-                title="Grant Permissions"
-                size="sm"
-                onPress={handleRequestPermissions}
-                fullWidth
-              />
+          {/* Sync Interval selector */}
+          <View style={styles.intervalSection}>
+            <Text style={styles.rowLabel}>Sync Interval</Text>
+            <View style={styles.intervalPicker}>
+              {INTERVAL_OPTIONS.map((option) => {
+                const selected = syncInterval === option.value;
+                return (
+                  <TouchableOpacity
+                    key={String(option.value)}
+                    style={[
+                      styles.intervalOption,
+                      selected && styles.intervalOptionSelected,
+                    ]}
+                    onPress={() => handleIntervalChange(option.value)}
+                    activeOpacity={0.7}
+                  >
+                    <Text
+                      style={[
+                        styles.intervalOptionText,
+                        selected && styles.intervalOptionTextSelected,
+                      ]}
+                    >
+                      {option.label}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
             </View>
-          )}
+            {syncInterval === 'manual' && (
+              <Text style={styles.intervalHint}>
+                Use "Sync Now" on the home screen to sync manually.
+              </Text>
+            )}
+          </View>
         </Card>
 
-        {/* About */}
-        <Card title="About">
-          <CardRow label="App" value="Keepr Companion" />
-          <CardDivider />
-          <CardRow label="Version" value={appVersion} />
-          <CardDivider />
-          <CardRow
-            label="Package"
-            value={Constants.expoConfig?.android?.package ?? 'com.keepr.companion'}
-            mono
+        {/* ========== PERMISSIONS ========== */}
+        <Card title="Permissions">
+          <PermissionRow
+            label="SMS Access"
+            granted={smsPerms?.readSms === 'granted'}
+            onGrant={handleRequestSms}
           />
+          <CardDivider />
+          <PermissionRow
+            label="Contacts Access"
+            granted={contactsPerms?.readContacts === 'granted'}
+            onGrant={handleRequestContacts}
+          />
+          <CardDivider />
+          <PermissionRow
+            label="Receive SMS"
+            granted={smsPerms?.receiveSms === 'granted'}
+            onGrant={handleRequestSms}
+          />
+        </Card>
+
+        {/* ========== ABOUT ========== */}
+        <Card title="About">
+          <View style={styles.row}>
+            <Text style={styles.rowLabel}>App Version</Text>
+            <Text style={styles.rowValue}>{appVersion}</Text>
+          </View>
+          <CardDivider />
+          <TouchableOpacity
+            style={styles.row}
+            onPress={() => Linking.openURL(PRIVACY_POLICY_URL)}
+            activeOpacity={0.7}
+          >
+            <Text style={styles.rowLabel}>Privacy Policy</Text>
+            <Text style={styles.linkText}>{'\u2192'}</Text>
+          </TouchableOpacity>
+          <CardDivider />
+          <TouchableOpacity
+            style={styles.row}
+            onPress={() => Linking.openURL(TERMS_URL)}
+            activeOpacity={0.7}
+          >
+            <Text style={styles.rowLabel}>Terms of Service</Text>
+            <Text style={styles.linkText}>{'\u2192'}</Text>
+          </TouchableOpacity>
         </Card>
       </ScrollView>
     </View>
   );
 }
 
-function formatPermissionStatus(status: string | undefined): string {
-  switch (status) {
-    case 'granted':
-      return 'Granted';
-    case 'denied':
-      return 'Not Granted';
-    case 'never_ask_again':
-      return 'Blocked';
-    case 'unavailable':
-      return 'N/A';
-    default:
-      return 'Unknown';
-  }
+// ============================================
+// SUB-COMPONENTS
+// ============================================
+
+/** Single permission row with status indicator and grant button. */
+function PermissionRow({
+  label,
+  granted,
+  onGrant,
+}: {
+  label: string;
+  granted: boolean;
+  onGrant: () => void;
+}): React.JSX.Element {
+  return (
+    <View style={styles.row}>
+      <Text style={styles.rowLabel}>{label}</Text>
+      {granted ? (
+        <View style={styles.permissionStatus}>
+          <Text style={styles.permissionGranted}>{'\u2713'} On</Text>
+        </View>
+      ) : (
+        <TouchableOpacity
+          style={styles.grantButton}
+          onPress={onGrant}
+          activeOpacity={0.7}
+        >
+          <Text style={styles.grantButtonText}>Grant</Text>
+        </TouchableOpacity>
+      )}
+    </View>
+  );
 }
+
+// ============================================
+// HELPERS
+// ============================================
+
+function openPermissionsDeniedAlert(): void {
+  Alert.alert(
+    'Permission Required',
+    'This permission was permanently denied. Please enable it in Settings > Apps > Keepr Companion > Permissions.',
+    [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: 'Open Settings',
+        onPress: () => {
+          if (Platform.OS === 'android') {
+            Linking.openSettings();
+          }
+        },
+      },
+    ],
+  );
+}
+
+// ============================================
+// STYLES
+// ============================================
 
 const styles = StyleSheet.create({
   screen: {
@@ -227,7 +374,85 @@ const styles = StyleSheet.create({
     padding: spacing[4],
     paddingBottom: spacing[12],
   },
-  permissionAction: {
-    marginTop: spacing[3],
+
+  // Row layout (used for toggle rows, info rows, link rows)
+  row: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: spacing[3],
+  },
+  rowLabel: {
+    ...textStyles.label,
+    color: colors.gray[500],
+    flexShrink: 0,
+    marginRight: spacing[3],
+  },
+  rowValue: {
+    ...textStyles.label,
+    color: colors.gray[800],
+  },
+
+  // Sync interval picker
+  intervalSection: {
+    paddingTop: spacing[3],
+  },
+  intervalPicker: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: spacing[2],
+    marginTop: spacing[2],
+  },
+  intervalOption: {
+    paddingHorizontal: spacing[3],
+    paddingVertical: spacing[2],
+    borderRadius: borderRadius.md,
+    borderWidth: 1,
+    borderColor: colors.gray[300],
+    backgroundColor: colors.white,
+  },
+  intervalOptionSelected: {
+    borderColor: colors.primary[600],
+    backgroundColor: colors.primary[50],
+  },
+  intervalOptionText: {
+    ...textStyles.label,
+    color: colors.gray[600],
+  },
+  intervalOptionTextSelected: {
+    color: colors.primary[700],
+  },
+  intervalHint: {
+    ...textStyles.caption,
+    color: colors.gray[400],
+    marginTop: spacing[2],
+  },
+
+  // Permissions
+  permissionStatus: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  permissionGranted: {
+    ...textStyles.label,
+    color: colors.success[600],
+  },
+  grantButton: {
+    paddingHorizontal: spacing[3],
+    paddingVertical: spacing[1],
+    borderRadius: borderRadius.md,
+    backgroundColor: colors.primary[50],
+    borderWidth: 1,
+    borderColor: colors.primary[200],
+  },
+  grantButtonText: {
+    ...textStyles.label,
+    color: colors.primary[700],
+  },
+
+  // Links
+  linkText: {
+    ...textStyles.label,
+    color: colors.primary[600],
   },
 });

@@ -28,7 +28,10 @@ import {
   setLastSyncTimestamp,
   recordSyncAttempt,
   getQueueSize,
+  getSyncInterval,
+  getBackgroundSyncEnabled,
 } from "./smsQueueService";
+import type { SyncIntervalValue } from "./smsQueueService";
 import type { PairingInfo } from "../types/sync";
 
 // ============================================
@@ -222,9 +225,21 @@ export async function performSync(): Promise<SyncOperationResult> {
 
 /**
  * Register the background sync task with expo-background-fetch.
+ * Reads the configured sync interval from AsyncStorage.
  * Should be called after pairing is established.
  */
 export async function startBackgroundSync(): Promise<void> {
+  const [enabled, interval] = await Promise.all([
+    getBackgroundSyncEnabled(),
+    getSyncInterval(),
+  ]);
+
+  if (!enabled || interval === "manual") {
+    console.log("[BackgroundSync] Background sync disabled or set to manual");
+    await stopBackgroundSync();
+    return;
+  }
+
   const isRegistered = await TaskManager.isTaskRegisteredAsync(
     BACKGROUND_SYNC_TASK
   );
@@ -233,18 +248,22 @@ export async function startBackgroundSync(): Promise<void> {
     return;
   }
 
+  const intervalSeconds = interval * 60;
+
   await BackgroundFetch.registerTaskAsync(BACKGROUND_SYNC_TASK, {
-    minimumInterval: BACKGROUND_FETCH_INTERVAL,
+    minimumInterval: intervalSeconds,
     stopOnTerminate: false,
     startOnBoot: true,
   });
 
-  console.log("[BackgroundSync] Task registered");
+  console.log(
+    `[BackgroundSync] Task registered with interval: ${interval} min`
+  );
 }
 
 /**
  * Unregister the background sync task.
- * Should be called when the device is unpaired.
+ * Should be called when the device is unpaired or sync is disabled.
  */
 export async function stopBackgroundSync(): Promise<void> {
   const isRegistered = await TaskManager.isTaskRegisteredAsync(
@@ -257,6 +276,39 @@ export async function stopBackgroundSync(): Promise<void> {
 
   await BackgroundFetch.unregisterTaskAsync(BACKGROUND_SYNC_TASK);
   console.log("[BackgroundSync] Task unregistered");
+}
+
+/**
+ * Update the background sync interval at runtime.
+ * Unregisters the current task and re-registers with the new interval.
+ * If set to 'manual', the task is unregistered entirely.
+ *
+ * BACKLOG-1464: Called from Settings screen when user changes sync interval.
+ *
+ * @param interval - New interval in minutes (15/30/60) or 'manual'
+ */
+export async function updateSyncInterval(
+  interval: SyncIntervalValue
+): Promise<void> {
+  // Always unregister first
+  await stopBackgroundSync();
+
+  if (interval === "manual") {
+    console.log("[BackgroundSync] Manual mode — background task disabled");
+    return;
+  }
+
+  const intervalSeconds = interval * 60;
+
+  await BackgroundFetch.registerTaskAsync(BACKGROUND_SYNC_TASK, {
+    minimumInterval: intervalSeconds,
+    stopOnTerminate: false,
+    startOnBoot: true,
+  });
+
+  console.log(
+    `[BackgroundSync] Re-registered with interval: ${interval} min`
+  );
 }
 
 /**
