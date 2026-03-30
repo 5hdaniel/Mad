@@ -33,6 +33,21 @@ interface StoredPairing {
 
 const PAIRING_STORAGE_KEY = '@keepr/pairing';
 
+/** Map Supabase provider identifiers to user-friendly display names. */
+function formatProvider(provider: string | undefined): string {
+  if (!provider) return '--';
+  switch (provider) {
+    case 'azure':
+      return 'Microsoft';
+    case 'google':
+      return 'Google';
+    case 'email':
+      return 'Email';
+    default:
+      return provider;
+  }
+}
+
 export default function AccountScreen(): React.JSX.Element {
   const router = useRouter();
   const [pairing, setPairing] = useState<StoredPairing | null>(null);
@@ -142,7 +157,7 @@ export default function AccountScreen(): React.JSX.Element {
           <CardDivider />
           <CardRow
             label="Provider"
-            value={session?.user?.app_metadata?.provider ?? '--'}
+            value={formatProvider(session?.user?.app_metadata?.provider)}
           />
         </Card>
 

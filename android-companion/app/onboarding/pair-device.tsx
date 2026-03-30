@@ -172,7 +172,7 @@ export default function PairDeviceScreen(): React.JSX.Element {
 
       <View style={styles.content}>
         <Text style={styles.stepIcon}>{'📱'}</Text>
-        <Text style={styles.title}>Pair with Desktop</Text>
+        <Text style={styles.title}>Pair with Keepr</Text>
         <Text style={styles.description}>
           Open the Keepr desktop app and go to Settings {'->'} Companion Device.
           Scan the QR code displayed there to connect this phone.
