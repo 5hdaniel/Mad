@@ -39,11 +39,12 @@ export default function PermissionsScreen(): React.JSX.Element {
       const smsFallback: SmsPermissionResult = { readSms: 'denied', receiveSms: 'denied', allGranted: false };
       const contactsFallback: ContactsPermissionResult = { readContacts: 'denied', granted: false };
 
-      const [sms, contacts] = await Promise.all([
-        withTimeout(requestSmsPermissions(), 10000, smsFallback),
-        withTimeout(requestContactsPermissions(), 10000, contactsFallback),
-      ]);
+      // BACKLOG-1483: Request SEQUENTIALLY — Android can only show one permission dialog at a time.
+      // Promise.all caused the second dialog (contacts) to be silently dropped.
+      const sms = await withTimeout(requestSmsPermissions(), 10000, smsFallback);
       setSmsResult(sms);
+
+      const contacts = await withTimeout(requestContactsPermissions(), 10000, contactsFallback);
       setContactsResult(contacts);
       setAttempted(true);
 
@@ -285,7 +286,7 @@ const styles = StyleSheet.create({
   },
   title: {
     ...textStyles.heading,
-    color: colors.gray[800],
+    color: colors.gray[900],
     textAlign: 'center',
     marginBottom: spacing[3],
   },
@@ -316,7 +317,7 @@ const styles = StyleSheet.create({
   },
   permissionLabel: {
     ...textStyles.label,
-    color: colors.gray[800],
+    color: colors.gray[900],
   },
   permissionDescription: {
     ...textStyles.caption,
