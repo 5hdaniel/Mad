@@ -69,8 +69,9 @@ export default function PairDeviceScreen(): React.JSX.Element {
         console.warn('[Onboarding] Device registration error (non-fatal):', error);
       }
 
-      // Move to the next onboarding step
-      router.replace('/onboarding/permissions');
+      // Move to the next onboarding step (first-sync)
+      // BACKLOG-1473: pair-device is now step 2, next is first-sync (step 3)
+      router.replace('/onboarding/first-sync');
     } catch (error) {
       Alert.alert(
         'Pairing Failed',
@@ -166,7 +167,7 @@ export default function PairDeviceScreen(): React.JSX.Element {
     <View style={styles.screen}>
       {/* Step indicator */}
       <View style={styles.stepIndicator}>
-        <Text style={styles.stepText}>Step 1 of 3</Text>
+        <Text style={styles.stepText}>Step 2 of 3</Text>
       </View>
 
       <View style={styles.content}>
