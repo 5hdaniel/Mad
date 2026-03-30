@@ -32,9 +32,16 @@ export default function PermissionsScreen(): React.JSX.Element {
   const handleRequestPermissions = useCallback(async (): Promise<void> => {
     setLoading(true);
     try {
+      // Request permissions with a 10-second timeout per request
+      const withTimeout = <T,>(promise: Promise<T>, ms: number, fallback: T): Promise<T> =>
+        Promise.race([promise, new Promise<T>((resolve) => setTimeout(() => resolve(fallback), ms))]);
+
+      const smsFallback: SmsPermissionResult = { readSms: 'denied', receiveSms: 'denied', allGranted: false };
+      const contactsFallback: ContactsPermissionResult = { readContacts: 'denied', granted: false };
+
       const [sms, contacts] = await Promise.all([
-        requestSmsPermissions(),
-        requestContactsPermissions(),
+        withTimeout(requestSmsPermissions(), 10000, smsFallback),
+        withTimeout(requestContactsPermissions(), 10000, contactsFallback),
       ]);
       setSmsResult(sms);
       setContactsResult(contacts);
@@ -46,6 +53,7 @@ export default function PermissionsScreen(): React.JSX.Element {
       }
     } catch (error) {
       console.error('[Onboarding] Permission request error:', error);
+      setAttempted(true);
     } finally {
       setLoading(false);
     }

@@ -59,6 +59,18 @@ export default function RootLayout(): React.JSX.Element {
     };
   }, []);
 
+  // Re-check onboarding status when navigating (catches AsyncStorage updates from first-sync)
+  useEffect(() => {
+    if (loading || !session) return;
+    const checkOnboarding = async () => {
+      const complete = await AsyncStorage.getItem(ONBOARDING_COMPLETE_KEY);
+      if (complete === 'true' && !onboarded) {
+        setOnboarded(true);
+      }
+    };
+    checkOnboarding();
+  }, [segments, loading, session, onboarded]);
+
   // Handle routing based on auth state
   useEffect(() => {
     if (loading) return;
