@@ -10,7 +10,6 @@ import {
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useRouter } from 'expo-router';
 import { stopBackgroundSync } from '../../services/backgroundSync';
-import { resetAllSyncData } from '../../services/smsQueueService';
 import { signOut, getSession } from '../../services/authService';
 import type { Session } from '@supabase/supabase-js';
 import { colors } from '../../theme/colors';
@@ -59,29 +58,9 @@ export default function AccountScreen(): React.JSX.Element {
       });
   }, []);
 
-  const handleUnpair = useCallback((): void => {
-    Alert.alert(
-      'Unpair Device',
-      'This will disconnect from the desktop app and clear all sync data. Are you sure?',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Unpair',
-          style: 'destructive',
-          onPress: async () => {
-            try {
-              await stopBackgroundSync();
-              await resetAllSyncData();
-            } catch (error) {
-              console.error('[Account] Failed to stop background sync:', error);
-            }
-            await AsyncStorage.removeItem(PAIRING_STORAGE_KEY);
-            setPairing(null);
-          },
-        },
-      ],
-    );
-  }, []);
+  const handleRepair = useCallback((): void => {
+    router.replace('/(main)/home');
+  }, [router]);
 
   const handleSignOut = useCallback((): void => {
     Alert.alert(
@@ -192,24 +171,21 @@ export default function AccountScreen(): React.JSX.Element {
             <View style={styles.emptyState}>
               <Text style={styles.emptyText}>No device paired</Text>
               <Text style={styles.emptyDescription}>
-                Go to the home screen and scan a QR code to pair with the Keepr
-                desktop app.
+                Scan a QR code to pair with the Keepr desktop app.
               </Text>
+              <View style={styles.repairButtonWrapper}>
+                <Button
+                  title="Re-pair Device"
+                  onPress={handleRepair}
+                  fullWidth
+                />
+              </View>
             </View>
           </Card>
         )}
 
         {/* Actions */}
         <View style={styles.actions}>
-          {pairing && (
-            <Button
-              title="Unpair Device"
-              variant="danger"
-              onPress={handleUnpair}
-              fullWidth
-            />
-          )}
-          <View style={styles.actionSpacer} />
           <Button
             title="Sign Out"
             variant="secondary"
@@ -253,10 +229,11 @@ const styles = StyleSheet.create({
     color: colors.gray[400],
     textAlign: 'center',
   },
+  repairButtonWrapper: {
+    marginTop: spacing[3],
+    width: '100%',
+  },
   actions: {
     marginTop: spacing[4],
-  },
-  actionSpacer: {
-    height: spacing[3],
   },
 });

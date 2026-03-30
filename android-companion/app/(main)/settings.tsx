@@ -18,6 +18,7 @@ import {
   Platform,
   Alert,
 } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useRouter, useFocusEffect } from 'expo-router';
 import Constants from 'expo-constants';
 import {
@@ -41,12 +42,13 @@ import {
   setSyncInterval,
   getBackgroundSyncEnabled,
   setBackgroundSyncEnabled,
+  resetAllSyncData,
 } from '../../services/smsQueueService';
 import type { SyncIntervalValue } from '../../services/smsQueueService';
 import { colors } from '../../theme/colors';
 import { textStyles } from '../../theme/typography';
 import { borderRadius, spacing } from '../../theme/spacing';
-import { Header, Card, CardDivider } from '../../components/ui';
+import { Header, Button, Card, CardDivider } from '../../components/ui';
 
 // ============================================
 // CONSTANTS
@@ -60,6 +62,7 @@ const INTERVAL_OPTIONS: { label: string; value: SyncIntervalValue }[] = [
   { label: 'Manual only', value: 'manual' },
 ];
 
+const PAIRING_STORAGE_KEY = '@keepr/pairing';
 const PRIVACY_POLICY_URL = 'https://keepr.com/privacy';
 const TERMS_URL = 'https://keepr.com/terms';
 
@@ -177,6 +180,34 @@ export default function SettingsScreen(): React.JSX.Element {
   }, []);
 
   // -------------------------------------------------------
+  // Device handlers
+  // -------------------------------------------------------
+
+  const handleUnpair = useCallback((): void => {
+    Alert.alert(
+      'Unpair Device',
+      'This will disconnect from the desktop app and clear all sync data. Are you sure?',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Unpair',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              await stopBackgroundSync();
+              await resetAllSyncData();
+            } catch (error) {
+              console.error('[Settings] Failed to stop background sync:', error);
+            }
+            await AsyncStorage.removeItem(PAIRING_STORAGE_KEY);
+            router.replace('/(main)/home');
+          },
+        },
+      ],
+    );
+  }, [router]);
+
+  // -------------------------------------------------------
   // Render
   // -------------------------------------------------------
 
@@ -270,6 +301,22 @@ export default function SettingsScreen(): React.JSX.Element {
             granted={smsPerms?.receiveSms === 'granted'}
             onGrant={handleRequestSms}
           />
+        </Card>
+
+        {/* ========== DEVICE ========== */}
+        <Card title="Device">
+          <View style={styles.unpairSection}>
+            <Text style={styles.unpairDescription}>
+              Unpair this device from the Keepr desktop app. All sync data will
+              be cleared.
+            </Text>
+            <Button
+              title="Unpair Device"
+              variant="danger"
+              onPress={handleUnpair}
+              fullWidth
+            />
+          </View>
         </Card>
 
         {/* ========== ABOUT ========== */}
@@ -448,6 +495,16 @@ const styles = StyleSheet.create({
   grantButtonText: {
     ...textStyles.label,
     color: colors.primary[700],
+  },
+
+  // Unpair
+  unpairSection: {
+    paddingVertical: spacing[2],
+  },
+  unpairDescription: {
+    ...textStyles.caption,
+    color: colors.gray[400],
+    marginBottom: spacing[3],
   },
 
   // Links
