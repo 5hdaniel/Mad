@@ -1,15 +1,14 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import {
   StyleSheet,
   View,
   Text,
   TextInput,
-  Linking,
-  Alert,
   KeyboardAvoidingView,
   Platform,
   ScrollView,
 } from 'react-native';
+import * as WebBrowser from 'expo-web-browser';
 import {
   signInWithGoogle,
   signInWithMicrosoft,
@@ -26,6 +25,14 @@ export default function LoginScreen(): React.JSX.Element {
   const [emailSent, setEmailSent] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  // Warm up the in-app browser for faster OAuth flow
+  useEffect(() => {
+    WebBrowser.warmUpAsync();
+    return () => {
+      WebBrowser.coolDownAsync();
+    };
+  }, []);
+
   const handleGoogleSignIn = useCallback(async (): Promise<void> => {
     setError(null);
     setLoading('google');
@@ -33,9 +40,9 @@ export default function LoginScreen(): React.JSX.Element {
       const result = await signInWithGoogle();
       if (result.error) {
         setError(result.error);
-      } else if (result.url) {
-        await Linking.openURL(result.url);
       }
+      // On success (error === null), the auth state change listener
+      // in _layout.tsx will detect the new session and redirect automatically.
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to sign in with Google');
     } finally {
@@ -50,9 +57,9 @@ export default function LoginScreen(): React.JSX.Element {
       const result = await signInWithMicrosoft();
       if (result.error) {
         setError(result.error);
-      } else if (result.url) {
-        await Linking.openURL(result.url);
       }
+      // On success (error === null), the auth state change listener
+      // in _layout.tsx will detect the new session and redirect automatically.
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to sign in with Microsoft');
     } finally {
