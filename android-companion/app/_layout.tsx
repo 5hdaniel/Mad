@@ -87,7 +87,8 @@ export default function RootLayout(): React.JSX.Element {
     } else if (!onboarded) {
       // Authenticated but not onboarded -> go to onboarding
       if (!inOnboardingGroup) {
-        router.replace('/onboarding/pair-device');
+        // BACKLOG-1473: permissions is now step 1 (before pair-device)
+        router.replace('/onboarding/permissions');
       }
     } else {
       // Authenticated and onboarded -> go to main app
