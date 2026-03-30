@@ -94,6 +94,9 @@ export default function PermissionsScreen(): React.JSX.Element {
     smsResult?.receiveSms === 'never_ask_again' ||
     contactsResult?.readContacts === 'never_ask_again';
 
+  // Show Open Settings for ANY denied permissions (not just permanently blocked)
+  const hasDeniedPermissions = attempted && !allGranted;
+
   const allGranted =
     smsResult?.allGranted === true && contactsResult?.granted === true;
 
@@ -150,11 +153,12 @@ export default function PermissionsScreen(): React.JSX.Element {
             size="lg"
             fullWidth
           />
-        ) : hasBlockedPermissions ? (
+        ) : hasDeniedPermissions ? (
           <View style={styles.blockedSection}>
             <Text style={styles.blockedText}>
-              Some permissions were permanently denied. Please enable them in
-              your device settings.
+              {hasBlockedPermissions
+                ? 'Some permissions were permanently denied. Please enable them in your device settings.'
+                : 'Some permissions were not granted. You can enable them in your device settings or continue without them.'}
             </Text>
             <Button
               title="Open Settings"
