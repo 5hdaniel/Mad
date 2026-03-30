@@ -479,7 +479,7 @@ export default function HomeScreen(): React.JSX.Element {
       <HelpModal
         visible={helpVisible}
         onClose={() => setHelpVisible(false)}
-        screenshotBase64={screenshotBase64}
+        screenshotBase64={null}
       />
     </View>
   );
