@@ -21,7 +21,13 @@ import type { SyncContact, ContactPhone, ContactEmail } from "../types/contacts"
  * @returns Array of SyncContact objects ready for syncing
  */
 export async function readContacts(): Promise<SyncContact[]> {
-  const { status } = await Contacts.getPermissionsAsync();
+  let { status } = await Contacts.getPermissionsAsync();
+
+  if (status !== "granted") {
+    // Try requesting permission through expo-contacts (may differ from system permission)
+    const request = await Contacts.requestPermissionsAsync();
+    status = request.status;
+  }
 
   if (status !== "granted") {
     console.log("[ContactReader] Contacts permission not granted");

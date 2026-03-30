@@ -910,7 +910,7 @@ class LocalSyncService {
           display_name: contact.displayName || "Unknown",
           company: contact.company ?? undefined,
           title: contact.title ?? undefined,
-          source: "android_sync",
+          source: "contacts_app", // Use 'contacts_app' until CHECK constraint is updated to include 'android_sync'
           is_imported: true,
           allPhones: phones,
           allEmails: emails,
