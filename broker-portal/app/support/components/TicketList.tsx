@@ -79,15 +79,6 @@ export function TicketList() {
       });
   }, [readyToLoad, isAuthenticated, userEmail]);
 
-  function handleEmailLookup(e: React.FormEvent) {
-    e.preventDefault();
-    const input = (e.target as HTMLFormElement).elements.namedItem('email') as HTMLInputElement;
-    if (input?.value?.trim()) {
-      setUserEmail(input.value.trim());
-      setReadyToLoad(true);
-    }
-  }
-
   // Unauthenticated: prompt to log in or submit a new ticket
   if (!isAuthenticated && !readyToLoad) {
     return (

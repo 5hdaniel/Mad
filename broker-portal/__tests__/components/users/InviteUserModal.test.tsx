@@ -95,15 +95,6 @@ describe('InviteUserModal form state', () => {
 
   describe('state transitions', () => {
     it('should reset all state on close', () => {
-      const dirtyState: FormState = {
-        email: 'test@example.com',
-        role: 'admin',
-        isSubmitting: false,
-        error: 'Some error',
-        inviteLink: 'https://example.com/invite/123',
-        copied: true,
-      };
-
       const afterReset = resetState();
 
       expect(afterReset.email).toBe('');

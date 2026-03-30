@@ -203,7 +203,7 @@ describe("exportUtils - contact resolution", () => {
     it("skips empty and whitespace-only handles", () => {
       mockDbAll.mockReturnValue([]);
 
-      const result = getContactNamesByHandles(["", "  ", "+15551234567"]);
+      getContactNamesByHandles(["", "  ", "+15551234567"]);
 
       // Should still call dbAll for the one valid phone
       expect(mockDbAll).toHaveBeenCalled();

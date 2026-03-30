@@ -186,6 +186,7 @@ function getBackoffDelay(attempt: number): number {
  * Uses exponential backoff retry on verification failure.
  */
 export function AccountVerificationContent({
+  context,
   onAction,
 }: OnboardingStepContentProps): React.ReactElement {
   const [status, setStatus] = useState<VerificationStatus>('waiting-for-init');
@@ -193,19 +194,16 @@ export function AccountVerificationContent({
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [initStageMessage, setInitStageMessage] = useState<string>('Preparing...');
 
-  // Effect safety pattern: ref guard prevents double-execution
-  const hasStartedRef = useRef(false);
   // Track when step first rendered so we can enforce MIN_DISPLAY_MS
   const startTimeRef = useRef(Date.now());
   // Guard to ensure Sentry event fires only once per error occurrence
   const hasSentryReportedRef = useRef(false);
-  // Ref guard for init stage subscription (per LoadingOrchestrator pattern)
-  const initStageSubscribedRef = useRef(false);
-  // Track mount state for cleanup
-  const mountedRef = useRef(true);
 
-  const verify = async (attempt: number) => {
-    if (!mountedRef.current) return;
+  // verify is called from the effect with a `cancelled` closure variable.
+  // Each effect invocation gets its own `cancelled`, making this StrictMode-safe.
+  const verifyRef = useRef<((attempt: number, isCancelled: () => boolean) => Promise<void>) | undefined>(undefined);
+  verifyRef.current = async (attempt: number, isCancelled: () => boolean) => {
+    if (isCancelled()) return;
 
     setStatus('verifying');
     setErrorMessage(null);
@@ -231,7 +229,7 @@ export function AccountVerificationContent({
       // Use dedicated handler that ensures user exists in local DB
       const result = await window.api.system.verifyUserInLocalDb();
 
-      if (!mountedRef.current) return;
+      if (isCancelled()) return;
 
       if (result.success) {
         const successTotalMs = Date.now() - startTimeRef.current;
@@ -253,7 +251,7 @@ export function AccountVerificationContent({
         const elapsed = Date.now() - startTimeRef.current;
         const remaining = Math.max(0, MIN_DISPLAY_MS - elapsed);
         setTimeout(() => {
-          if (!mountedRef.current) return;
+          if (isCancelled()) return;
           // Dispatch action to update context
           const action: UserVerifiedInLocalDbAction = {
             type: 'USER_VERIFIED_IN_LOCAL_DB',
@@ -278,7 +276,7 @@ export function AccountVerificationContent({
 
           setRetryCount(attempt + 1);
           const delay = getBackoffDelay(attempt);
-          setTimeout(() => verify(attempt + 1), delay);
+          setTimeout(() => verifyRef.current?.(attempt + 1, isCancelled), delay);
         } else {
           // Max retries reached - show error
           setStatus('error');
@@ -319,7 +317,7 @@ export function AccountVerificationContent({
         }
       }
     } catch (error) {
-      if (!mountedRef.current) return;
+      if (isCancelled()) return;
 
       const errorMsg = error instanceof Error ? error.message : String(error);
       logger.error('[AccountVerificationStep] Verification failed:', error);
@@ -340,7 +338,7 @@ export function AccountVerificationContent({
 
         setRetryCount(attempt + 1);
         const delay = getBackoffDelay(attempt);
-        setTimeout(() => verify(attempt + 1), delay);
+        setTimeout(() => verifyRef.current?.(attempt + 1, isCancelled), delay);
       } else {
         setStatus('error');
         setErrorMessage(
@@ -385,27 +383,49 @@ export function AccountVerificationContent({
     }
   };
 
-  // Event-driven initialization (BACKLOG-1383):
-  // On mount, check current init stage. If 'complete', proceed immediately.
-  // Otherwise, subscribe to onInitStage events and wait for 'complete'.
+  // Event-driven initialization (BACKLOG-1383, BACKLOG-1455 take 2):
+  // Uses `cancelled` local variable pattern (per LoadingOrchestrator) instead of
+  // hasStartedRef/mountedRef. Each effect invocation gets its own `cancelled`
+  // closure, making this StrictMode-safe: cleanup from run #1 sets cancelled=true,
+  // run #2 creates a fresh cancelled=false.
   useEffect(() => {
-    if (hasStartedRef.current) return;
-    hasStartedRef.current = true;
-    mountedRef.current = true;
+    let cancelled = false;
+    let verificationStarted = false;
+    let subscriptionCleanup: (() => void) | null = null;
 
     const startVerification = () => {
+      if (verificationStarted || cancelled) return;
+      verificationStarted = true;
       setStatus('verifying');
-      verify(0);
+      verifyRef.current?.(0, () => cancelled);
     };
 
     const checkAndSubscribe = async () => {
-      // 1. Check current init stage
+      // BACKLOG-1455: If queue context already says DB is initialized, skip the
+      // init-stage broadcaster check entirely. The queue only activates this step
+      // after secure-storage completes (isDatabaseInitialized = true), so the DB
+      // is guaranteed ready. Relying solely on the broadcaster caused a hang when
+      // the broadcaster stage was stale (e.g., 'idle' after a fast init path).
+      if (context.isDatabaseInitialized) {
+        console.log('[AccountVerification] DB already initialized per context, skipping init-stage check');
+        Sentry.addBreadcrumb({
+          category: 'onboarding.init',
+          message: 'DB already initialized per queue context — skipping init-stage check',
+          level: 'info',
+          data: { isDatabaseInitialized: true, waited_ms: 0 },
+        });
+        startVerification();
+        return;
+      }
+
+      // 1. Check current init stage (fallback for edge cases where context lags)
       try {
         const currentStage = await window.api?.system?.getInitStage?.();
-        if (!mountedRef.current) return;
+        if (cancelled) return;
 
         if (currentStage && currentStage.stage === 'complete') {
           // Already complete - proceed immediately
+          console.log('[AccountVerification] Init stage already complete via IPC');
           Sentry.addBreadcrumb({
             category: 'onboarding.init',
             message: 'Init already complete on mount',
@@ -419,6 +439,8 @@ export function AccountVerificationContent({
         // getInitStage may not be available — fall through to subscription or direct verification
       }
 
+      if (cancelled) return;
+
       // 2. If not complete, subscribe to events
       if (!window.api?.system?.onInitStage) {
         // Fallback: if onInitStage is unavailable, proceed directly
@@ -428,15 +450,31 @@ export function AccountVerificationContent({
         return;
       }
 
-      // Guard against duplicate subscriptions
-      if (initStageSubscribedRef.current) return;
-      initStageSubscribedRef.current = true;
-
       setStatus('waiting-for-init');
       setInitStageMessage('Preparing...');
 
+      // BACKLOG-1455: Safety timeout — if init-stage events never arrive (e.g., broadcaster
+      // stuck at 'idle'), force-start verification after 5 seconds. The verify() function
+      // handles DB-not-ready errors via its own retry logic.
+      const safetyTimeout = setTimeout(() => {
+        if (cancelled || verificationStarted) return;
+        console.warn('[AccountVerification] Safety timeout — forcing verification start after 5s');
+        Sentry.addBreadcrumb({
+          category: 'onboarding.init',
+          message: 'Safety timeout reached — forcing verification',
+          level: 'warning',
+          data: { waited_ms: Date.now() - startTimeRef.current },
+        });
+        // Clean up subscription before starting verification
+        if (subscriptionCleanup) {
+          subscriptionCleanup();
+          subscriptionCleanup = null;
+        }
+        startVerification();
+      }, 5000);
+
       const unsubscribe = window.api.system.onInitStage((event) => {
-        if (!mountedRef.current) return;
+        if (cancelled) return;
 
         const waitedMs = Date.now() - startTimeRef.current;
 
@@ -454,35 +492,60 @@ export function AccountVerificationContent({
 
         if (event.stage === 'complete') {
           // Init complete - clean up subscription and start verification
+          clearTimeout(safetyTimeout);
           unsubscribe();
-          initStageSubscribedRef.current = false;
+          subscriptionCleanup = null;
           startVerification();
         }
       });
 
-      // Store cleanup
-      cleanupFnRef.current = () => {
+      subscriptionCleanup = () => {
+        clearTimeout(safetyTimeout);
         unsubscribe();
-        initStageSubscribedRef.current = false;
       };
     };
-
-    const cleanupFnRef = { current: () => {} };
 
     checkAndSubscribe();
 
     return () => {
-      mountedRef.current = false;
-      cleanupFnRef.current();
+      cancelled = true;
+      if (subscriptionCleanup) {
+        subscriptionCleanup();
+        subscriptionCleanup = null;
+      }
     };
-  }, []);
+  }, [context.isDatabaseInitialized, onAction]);
+
+  // BACKLOG-1455 Fix 3: Safety retry — if status stays 'verifying' for 10 seconds,
+  // something went wrong (e.g., verify() resolved into a cancelled closure).
+  // Re-trigger verification to recover.
+  useEffect(() => {
+    if (status !== 'verifying') return;
+
+    const safety = setTimeout(() => {
+      console.warn('[AccountVerification] Safety: still verifying after 10s, retrying');
+      Sentry.addBreadcrumb({
+        category: 'onboarding.verification',
+        message: 'Safety retry: still verifying after 10s',
+        level: 'warning',
+        data: { total_ms: Date.now() - startTimeRef.current },
+      });
+      // Reset and re-trigger verification
+      setRetryCount(0);
+      hasSentryReportedRef.current = false;
+      verifyRef.current?.(0, () => false);
+    }, 10000);
+
+    return () => clearTimeout(safety);
+  }, [status]);
 
   const handleRetry = () => {
     // Reset retry count and start fresh verification
     setRetryCount(0);
     // Reset Sentry guard so a new failure sequence can report again
     hasSentryReportedRef.current = false;
-    verify(0);
+    // Manual retry: use a non-cancelled checker since user explicitly clicked
+    verifyRef.current?.(0, () => false);
   };
 
   const handleContactSupport = () => {

@@ -8,7 +8,7 @@
  * @see TASK-1765: EditContactsModal 2-Screen Flow Redesign
  * @see BACKLOG-418: Redesign Contact Selection UX (Select First, Assign Roles Second)
  */
-import React, { useState, useEffect, useMemo, useCallback, useRef } from "react";
+import React, { useState, useEffect, useMemo, useCallback } from "react";
 import type { Transaction } from "@/types";
 import type { ExtendedContact } from "../../../../types/components";
 import { ROLE_TO_CATEGORY, AUDIT_WORKFLOW_STEPS } from "../../../../constants/contactRoles";

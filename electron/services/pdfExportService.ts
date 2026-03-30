@@ -15,26 +15,6 @@ const domPurifyWindow = new JSDOM("").window;
 const DOMPurify = createDOMPurify(domPurifyWindow as unknown as WindowLike);
 
 /**
- * Format phone number or resolve to contact name
- */
-function formatSenderName(sender: string | null | undefined, nameMap: Record<string, string>): string {
-  if (!sender) return "Unknown";
-
-  // Check if it's a phone number (starts with + or contains mostly digits)
-  const isPhone = sender.startsWith('+') || /^\d{10,}$/.test(sender.replace(/\D/g, ''));
-
-  if (isPhone) {
-    const normalized = sender.replace(/\D/g, '').slice(-10);
-    const name = nameMap[normalized] || nameMap[sender];
-    if (name) {
-      return `${name} (${sender})`;
-    }
-  }
-
-  return sender;
-}
-
-/**
  * PDF Export Service
  * Generates PDF reports for transactions using Electron's built-in PDF export
  * Uses HTML templates for beautiful, customizable reports

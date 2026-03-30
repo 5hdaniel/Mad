@@ -155,6 +155,13 @@ export function useOnboardingQueue(
   const queueActiveEntry = useMemo(() => getActiveEntry(queue), [queue]);
   const queueComplete = useMemo(() => isQueueComplete(queue), [queue]);
 
+  // BACKLOG-1455: Debug logging for onboarding queue state (visible in browser DevTools)
+  // eslint-disable-next-line no-console
+  console.log(
+    '[QUEUE-DEBUG] Active step:', queueActiveEntry?.step.meta.id ?? '(none)',
+    'Queue:', visibleEntries.map(e => `${e.step.meta.id}(${e.status})`).join(' -> ')
+  );
+
   // Resolve the effective active entry: back override takes precedence
   const activeEntry = useMemo(() => {
     if (backOverrideIndex !== null && backOverrideIndex >= 0 && backOverrideIndex < visibleEntries.length) {
@@ -253,6 +260,13 @@ export function useOnboardingQueue(
       // Handle navigation-specific actions
       switch (action.type) {
         case "SELECT_PHONE":
+          // BACKLOG-1455: Don't call goToNext() here — phone-type's isComplete
+          // predicate (phoneType !== null) auto-advances the queue when context
+          // updates. Calling goToNext() causes a race: the queue advances before
+          // phoneType is set, skipping android-coming-soon and flash-mounting
+          // account-verification.
+          break;
+
         case "EMAIL_CONNECTED":
         case "EMAIL_SKIPPED":
         case "PERMISSION_GRANTED":
@@ -260,8 +274,8 @@ export function useOnboardingQueue(
         case "DRIVER_SKIPPED":
         case "TERMS_ACCEPTED":
         case "CONTINUE_EMAIL_ONLY":
-          // These actions update context, which triggers queue rebuild.
-          // The active step changes automatically when context changes.
+          // Explicitly advance past steps that may not have context-driven isComplete.
+          goToNext();
           break;
 
         case "NAVIGATE_NEXT":
@@ -282,7 +296,15 @@ export function useOnboardingQueue(
           break;
 
         case "GO_BACK_SELECT_IPHONE":
-          // This navigates back to phone-type - handled by context reset
+          // Navigate back to phone-type step.
+          // The parent onAction dispatches PHONE_TYPE_RESET which sets phoneType = null,
+          // causing the queue to rebuild with phone-type as incomplete.
+          // We must also clear manuallyCompletedIds — phone-type was marked manually
+          // complete when the user originally selected a phone type (goToNext added it).
+          // Without clearing, the manual override keeps phone-type "complete" even
+          // though the context says it's incomplete, causing the queue to skip forward.
+          setManuallyCompletedIds(new Set());
+          setBackOverrideIndex(0); // phone-type is always index 0 in visible entries
           break;
 
         case "USER_VERIFIED_IN_LOCAL_DB":

@@ -95,8 +95,6 @@ Object.defineProperty(window, "api", { value: mockApi, writable: true });
 const testUser = { id: "test-user-123", email: "test@example.com" };
 
 const macOSPlatform = { isMacOS: true, isWindows: false, hasIPhone: true };
-const windowsPlatform = { isMacOS: false, isWindows: true, hasIPhone: true };
-
 const completeUserData = {
   phoneType: "iphone" as const,
   hasCompletedEmailOnboarding: true,

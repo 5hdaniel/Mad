@@ -37,6 +37,17 @@ jest.mock("child_process", () => ({
     }
     return { on: jest.fn(), stdout: { on: jest.fn() }, stderr: { on: jest.fn() } };
   }),
+  execFile: jest.fn((_file, _args, opts, callback) => {
+    if (typeof opts === "function") {
+      callback = opts;
+    }
+    const error = new Error("Command not found");
+    (error as NodeJS.ErrnoException).code = "ENOENT";
+    if (callback) {
+      callback(error, "", "");
+    }
+    return { on: jest.fn(), stdout: { on: jest.fn() }, stderr: { on: jest.fn() } };
+  }),
   spawn: jest.fn(() => ({
     on: jest.fn((event, cb) => {
       if (event === "close") {

@@ -20,7 +20,7 @@ import { queryContacts, isPoolReady } from '../../workers/contactWorkerPool';
  * Valid external contact source types
  * TASK-2301: Extracted as type alias; added google_contacts
  */
-export type ExternalContactSource = 'macos' | 'iphone' | 'outlook' | 'google_contacts';
+export type ExternalContactSource = 'macos' | 'iphone' | 'outlook' | 'google_contacts' | 'android_sync';
 
 /**
  * External contact as stored in database
@@ -236,7 +236,7 @@ export function getContactSourceStats(userId: string): Record<string, number> {
     `SELECT source, COUNT(*) as count FROM external_contacts WHERE user_id = ? GROUP BY source`,
     [userId]
   );
-  const stats: Record<string, number> = { macos: 0, iphone: 0, outlook: 0, google_contacts: 0 };
+  const stats: Record<string, number> = { macos: 0, iphone: 0, outlook: 0, google_contacts: 0, android_sync: 0 };
   for (const row of rows) {
     stats[row.source] = row.count;
   }
@@ -642,6 +642,25 @@ export function deleteByMacOSRecordId(userId: string, recordId: string): void {
     'DELETE FROM external_contacts WHERE user_id = ? AND source = ? AND external_record_id = ?',
     [userId, 'macos', recordId]
   );
+}
+
+/**
+ * Delete all external contacts for a user with a specific source.
+ * Used for Android force re-import to clear all android_sync contacts.
+ *
+ * BACKLOG-1468: Android Force Re-import clears synced data
+ *
+ * @param userId - User ID for contact ownership
+ * @param source - The source to delete (e.g., 'android_sync')
+ * @returns Number of contacts deleted
+ */
+export function deleteBySource(userId: string, source: ExternalContactSource): number {
+  const result = dbRun(
+    'DELETE FROM external_contacts WHERE user_id = ? AND source = ?',
+    [userId, source]
+  );
+  logService.info(`Deleted ${result.changes} external contacts with source '${source}'`, 'ExternalContactDbService', { userId });
+  return result.changes;
 }
 
 /**

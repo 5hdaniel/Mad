@@ -48,13 +48,6 @@ const ACTION_LABELS: Record<string, { label: string; color: string }> = {
   'impersonation.end': { label: 'Impersonation Ended', color: 'bg-purple-100 text-purple-700' },
 };
 
-const TARGET_TYPE_LABELS: Record<string, string> = {
-  admin_role: 'Role',
-  user: 'User',
-  license: 'License',
-  internal_user: 'Internal User',
-};
-
 // Column definitions
 type ColumnKey = 'action' | 'target' | 'metadata' | 'ip_address' | 'user_agent' | 'actor' | 'timestamp';
 

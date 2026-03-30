@@ -107,6 +107,47 @@ export default function DownloadPage() {
               ))}
           </div>
         </div>
+
+        {/* Android Companion App Link */}
+        <a
+          href="/download/android"
+          className="block bg-white rounded-lg border border-gray-200 p-6 hover:border-green-300 hover:shadow-sm transition-all group"
+        >
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 bg-green-100 rounded-full flex items-center justify-center flex-shrink-0">
+                <svg
+                  className="w-6 h-6 text-green-600"
+                  viewBox="0 0 24 24"
+                  fill="currentColor"
+                >
+                  <path d="M17.6 9.48l1.84-3.18c.16-.31.04-.69-.26-.85-.29-.15-.65-.06-.83.22l-1.88 3.24a11.463 11.463 0 00-8.94 0L5.65 5.67c-.19-.29-.54-.38-.84-.22-.3.16-.42.54-.26.85L6.4 9.48A10.78 10.78 0 002 18h20a10.78 10.78 0 00-4.4-8.52zM7 15.25a1.25 1.25 0 110-2.5 1.25 1.25 0 010 2.5zm10 0a1.25 1.25 0 110-2.5 1.25 1.25 0 010 2.5z" />
+                </svg>
+              </div>
+              <div className="text-left">
+                <p className="font-semibold text-gray-900">
+                  Keepr Companion for Android
+                </p>
+                <p className="text-sm text-gray-500">
+                  Sync SMS messages over WiFi
+                </p>
+              </div>
+            </div>
+            <svg
+              className="w-5 h-5 text-gray-400 group-hover:text-green-600 transition-colors"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M9 5l7 7-7 7"
+              />
+            </svg>
+          </div>
+        </a>
       </div>
     </div>
   );

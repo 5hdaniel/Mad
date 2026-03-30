@@ -763,6 +763,76 @@ class DatabaseService implements IDatabaseService {
         }
       },
     },
+    {
+      version: 36,
+      description: "Add 'android_sync' to contacts source CHECK constraint (BACKLOG-1470)",
+      migrate: (d) => {
+        // SQLite doesn't support ALTER CHECK, so recreate the table.
+        // 1. Create new table with updated CHECK constraint
+        d.exec(`
+          CREATE TABLE IF NOT EXISTS contacts_new (
+            id TEXT PRIMARY KEY,
+            user_id TEXT NOT NULL,
+            display_name TEXT NOT NULL,
+            company TEXT,
+            title TEXT,
+            source TEXT DEFAULT 'manual' CHECK (source IN ('manual', 'email', 'sms', 'contacts_app', 'inferred', 'android_sync')),
+            last_inbound_at DATETIME,
+            last_outbound_at DATETIME,
+            total_messages INTEGER DEFAULT 0,
+            tags TEXT,
+            is_imported INTEGER DEFAULT 1,
+            default_role TEXT,
+            metadata TEXT,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (user_id) REFERENCES users_local(id) ON DELETE CASCADE
+          );
+        `);
+
+        // 2. Copy existing data
+        d.exec("INSERT OR IGNORE INTO contacts_new SELECT * FROM contacts;");
+
+        // 3. Drop views and triggers referencing contacts
+        d.exec("DROP VIEW IF EXISTS contact_lookup;");
+        d.exec("DROP TRIGGER IF EXISTS update_contacts_timestamp;");
+
+        // 4. Drop old table
+        d.exec("DROP TABLE IF EXISTS contacts;");
+
+        // 5. Rename new table
+        d.exec("ALTER TABLE contacts_new RENAME TO contacts;");
+
+        // 6. Recreate indexes
+        d.exec("CREATE INDEX IF NOT EXISTS idx_contacts_user_id ON contacts(user_id);");
+        d.exec("CREATE INDEX IF NOT EXISTS idx_contacts_display_name ON contacts(display_name);");
+        d.exec("CREATE INDEX IF NOT EXISTS idx_contacts_is_imported ON contacts(is_imported);");
+        d.exec("CREATE INDEX IF NOT EXISTS idx_contacts_user_imported ON contacts(user_id, is_imported);");
+
+        // 7. Recreate trigger
+        d.exec(`
+          CREATE TRIGGER IF NOT EXISTS update_contacts_timestamp
+          AFTER UPDATE ON contacts
+          BEGIN
+            UPDATE contacts SET updated_at = CURRENT_TIMESTAMP WHERE id = NEW.id;
+          END;
+        `);
+
+        // 8. Recreate contact_lookup view
+        d.exec(`
+          CREATE VIEW IF NOT EXISTS contact_lookup AS
+          SELECT
+            c.id as contact_id,
+            c.user_id,
+            c.display_name,
+            ce.email,
+            cp.phone_e164 as phone
+          FROM contacts c
+          LEFT JOIN contact_emails ce ON c.id = ce.contact_id
+          LEFT JOIN contact_phones cp ON c.id = cp.contact_id;
+        `);
+      },
+    },
   ];
 
   static validateNoDuplicateVersions(migrations: MigrationEntry[]): void {
@@ -1056,6 +1126,14 @@ class DatabaseService implements IDatabaseService {
 
   async getContactByPhone(phone: string): Promise<{ id: string; display_name: string; phone: string } | null> {
     return contactDb.getContactByPhone(phone);
+  }
+
+  /**
+   * Synchronous phone lookup scoped by user_id (BACKLOG-1469).
+   * Used by Android contact promotion to check for duplicates.
+   */
+  findContactByNormalizedPhone(userId: string, normalizedPhone: string): { id: string; display_name: string } | null {
+    return contactDb.findContactByNormalizedPhone(userId, normalizedPhone);
   }
 
   getLastMessageDateForPhone(userId: string, normalizedPhone: string): string | null {
@@ -1548,6 +1626,10 @@ class DatabaseService implements IDatabaseService {
 
   deleteMessagesBySessionId(userId: string, sessionId: string) {
     return syncDb.deleteMessagesBySessionId(userId, sessionId);
+  }
+
+  deleteMessagesByMetadataSource(userId: string, metadataSource: string) {
+    return syncDb.deleteMessagesByMetadataSource(userId, metadataSource);
   }
 
   deleteAttachmentsBySessionId(sessionId: string) {

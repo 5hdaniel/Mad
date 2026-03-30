@@ -308,9 +308,10 @@ Deno.serve(async (req: Request) => {
     );
   } catch (error) {
     // Fire-and-forget: log error but always return 200
+    // Keep detailed error in server logs only — never expose to client (CodeQL: js/stack-trace-exposure)
     console.error("[audit-alert] Unexpected error:", error);
     return new Response(
-      JSON.stringify({ error: String(error) }),
+      JSON.stringify({ error: "Internal error" }),
       {
         status: 200,
         headers: { ...CORS_HEADERS, "Content-Type": "application/json" },

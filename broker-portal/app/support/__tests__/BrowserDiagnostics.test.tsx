@@ -11,7 +11,7 @@
  */
 
 import React from 'react';
-import { render, screen, act } from '@testing-library/react';
+import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { renderHook } from '@testing-library/react';
 import { useBrowserDiagnostics, BrowserDiagnostics } from '../components/BrowserDiagnostics';
@@ -45,8 +45,6 @@ describe('useBrowserDiagnostics', () => {
 
   it('returns null initially before useEffect runs', () => {
     // The hook returns null synchronously, then populates in useEffect
-    let hookResult: BrowserDiagnosticsData | null = null;
-
     // Without act, we can see the initial null state
     const { result } = renderHook(() => useBrowserDiagnostics());
 

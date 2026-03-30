@@ -105,6 +105,7 @@ export function getSourceBadge(source: ContactSource): SourceBadge {
     inferred: { text: "Inferred", color: "bg-gray-100 text-gray-700" },
     outlook: { text: "Outlook", color: "bg-indigo-100 text-indigo-700" },
     google_contacts: { text: "Google Contacts", color: "bg-red-100 text-red-700" },
+    android_sync: { text: "Android", color: "bg-emerald-100 text-emerald-700" },
   };
   return badges[source] || badges.manual;
 }

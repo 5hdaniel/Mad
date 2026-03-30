@@ -22,15 +22,12 @@ import {
   getAllChats,
   getAllContacts,
   getTransactionMessages,
-  getMessageStats,
   filterMessages,
 } from '../../electron/services/__tests__/fixtures/fake-ios-backup/iosBackupFixtureService';
 import {
   MockGmailProvider,
   MockOutlookProvider,
   MockiOSBackupProvider,
-  fakeEmailToProcessable,
-  fakeMessageToProcessable,
 } from './mockProviders';
 import type {
   TestSandboxOptions,

@@ -8,7 +8,6 @@
  */
 
 import { jest } from "@jest/globals";
-import path from "path";
 
 // Mock electron
 jest.mock("electron", () => ({

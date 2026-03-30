@@ -16,7 +16,7 @@ import React from "react";
 import { render, screen, act, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import "@testing-library/jest-dom";
-import AccountVerificationStep, {
+import {
   AccountVerificationContent,
   meta,
 } from "../AccountVerificationStep";

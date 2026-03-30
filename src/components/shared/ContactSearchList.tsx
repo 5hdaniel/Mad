@@ -75,14 +75,6 @@ export interface ContactSearchListProps {
 }
 
 /**
- * Checks if a contact is external (not yet imported to database).
- * External contacts have is_message_derived=true.
- */
-function isExternalContact(contact: ExtendedContact): boolean {
-  return contact.is_message_derived === true || contact.is_message_derived === 1;
-}
-
-/**
  * Checks if a contact matches the search query.
  * Searches by name, email, and phone (case-insensitive).
  */

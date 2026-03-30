@@ -80,7 +80,6 @@ describe("computeTransactionDateRange", () => {
     });
 
     it("should fall back to 2 years ago when no dates available", () => {
-      const before = new Date();
       const { start } = computeTransactionDateRange({});
       const twoYearsAgo = new Date();
       twoYearsAgo.setFullYear(twoYearsAgo.getFullYear() - 2);

@@ -13,11 +13,12 @@ import { type ApiResult, getErrorMessage } from "./index";
 export type PhoneType = "iphone" | "android";
 
 /**
- * Import source preference (TASK-1742)
+ * Import source preference (TASK-1742, BACKLOG-1447)
  * - 'macos-native': Import from macOS Messages.app and Contacts (default)
  * - 'iphone-sync': Import from connected iPhone via backup
+ * - 'android-companion': Import from Android phone via WiFi companion app
  */
-export type ImportSource = "macos-native" | "iphone-sync";
+export type ImportSource = "macos-native" | "iphone-sync" | "android-companion";
 
 /**
  * Messages-related preferences

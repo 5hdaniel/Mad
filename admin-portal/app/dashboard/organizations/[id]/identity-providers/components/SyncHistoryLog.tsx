@@ -40,8 +40,6 @@ interface SyncHistoryLogProps {
   onRefresh: () => Promise<{ entries: SyncLogEntry[]; total: number }>;
 }
 
-const PAGE_SIZE = 20;
-
 function StatusBadge({ status }: { status: number | null }) {
   if (status === null) {
     return (

@@ -232,7 +232,6 @@ describe("preferenceHelper", () => {
       const durationMonths = 6;
       const before = Date.now();
       const result = computeEmailCacheSinceDate(durationMonths);
-      const after = Date.now();
 
       const expectedMs = durationMonths * 30 * 24 * 60 * 60 * 1000;
       const toleranceMs = 24 * 60 * 60 * 1000; // 1 day

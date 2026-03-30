@@ -392,7 +392,7 @@ class OutlookService {
           } else {
             break;
           }
-        } while (nextLink && pageCount < maxPages);
+        } while (true);
 
         emailsToFetch = matchingEmailIds.slice(0, maxResults);
       }
@@ -578,23 +578,23 @@ class OutlookService {
             }
 
             // Remove all HTML tags (iterative to handle malformed HTML like <img src=">" onerror="...">)
+            // CodeQL: js/bad-tag-filter — while-loop handles nested/overlapping tags;
+            // output is written to plain-text file, not rendered as HTML
             prev = '';
             while (bodyText !== prev) {
               prev = bodyText;
               bodyText = bodyText.replace(/<[^>]+>/g, "");
             }
 
-            // Decode HTML entities for readable text output (loop for nested entities)
-            prev = '';
-            while (bodyText !== prev) {
-              prev = bodyText;
-              bodyText = bodyText
-                .replace(/&nbsp;/g, " ")
-                .replace(/&amp;/g, "&")
-                .replace(/&lt;/g, "<")
-                .replace(/&gt;/g, ">")
-                .replace(/&quot;/g, '"');
-            }
+            // Decode HTML entities for readable text output (single-pass only).
+            // &amp; MUST be decoded last — decoding it first would turn &amp;lt; into &lt;
+            // which the next replace would then decode to <, causing double-unescaping.
+            bodyText = bodyText
+              .replace(/&nbsp;/g, " ")
+              .replace(/&lt;/g, "<")
+              .replace(/&gt;/g, ">")
+              .replace(/&quot;/g, '"')
+              .replace(/&amp;/g, "&");
 
             bodyText = bodyText.trim();
           }

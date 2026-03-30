@@ -358,3 +358,145 @@ export async function backfillPhoneLastMessageTable(userId: string): Promise<num
 
   return count;
 }
+
+// ============================================
+// CONVERSATION LIST FROM MESSAGES TABLE (BACKLOG-1470)
+// ============================================
+
+/**
+ * Row shape returned by the SMS/iMessage conversation aggregation query.
+ */
+interface ConversationGroupRow {
+  thread_id: string;
+  participants_flat: string;
+  messageCount: number;
+  lastMessageTime: string;
+  lastMessage: string | null;
+  channel: string;
+}
+
+/**
+ * A single conversation entry derived from the messages table.
+ * Mirrors the shape expected by the renderer (ProcessedConversation).
+ */
+export interface MessagesConversation {
+  id: string;
+  name: string;
+  contactId: string | null;
+  phones: string[];
+  emails: string[];
+  showBothNameAndNumber: boolean;
+  messageCount: number;
+  lastMessageDate: string;
+  directChatCount: number;
+  directMessageCount: number;
+  groupChatCount: number;
+  groupMessageCount: number;
+}
+
+/**
+ * Build a conversation list from the local messages table.
+ *
+ * Groups SMS/iMessage rows by thread_id (preferred) or participants_flat,
+ * then resolves display names via the contacts + contact_phones tables.
+ *
+ * Used when the import source is android-companion or iphone-sync,
+ * where messages live in the local DB rather than macOS chat.db.
+ */
+export function getConversationsFromMessages(userId: string): MessagesConversation[] {
+  const db = ensureDb();
+
+  // Group messages by thread_id (preferred) falling back to participants_flat.
+  // thread_id is always set for Android SMS (android-thread-{id}) and
+  // usually set for iPhone sync data.
+  const rows = db.prepare(`
+    SELECT
+      COALESCE(thread_id, participants_flat) as thread_id,
+      participants_flat,
+      COUNT(*) as messageCount,
+      MAX(sent_at) as lastMessageTime,
+      channel
+    FROM messages
+    WHERE user_id = ?
+      AND channel IN ('sms', 'imessage')
+      AND (thread_id IS NOT NULL OR participants_flat IS NOT NULL)
+    GROUP BY COALESCE(thread_id, participants_flat)
+    ORDER BY lastMessageTime DESC
+  `).all(userId) as ConversationGroupRow[];
+
+  if (rows.length === 0) {
+    return [];
+  }
+
+  // For each conversation group, get the last message body separately
+  // to avoid correlated sub-query performance issues.
+  const lastMessageStmt = db.prepare(`
+    SELECT body_text FROM messages
+    WHERE user_id = ?
+      AND COALESCE(thread_id, participants_flat) = ?
+      AND channel IN ('sms', 'imessage')
+    ORDER BY sent_at DESC
+    LIMIT 1
+  `);
+
+  // Build a phone-to-contact lookup for name resolution.
+  // Uses contact_phones joined with contacts to resolve display names.
+  const contactLookup = db.prepare(`
+    SELECT
+      cp.phone_e164,
+      c.display_name,
+      c.id as contact_id
+    FROM contact_phones cp
+    JOIN contacts c ON cp.contact_id = c.id
+    WHERE c.user_id = ?
+  `).all(userId) as { phone_e164: string; display_name: string; contact_id: string }[];
+
+  // Normalize phone -> contact info map (last 10 digits as key)
+  const phoneToContact = new Map<string, { display_name: string; contact_id: string }>();
+  for (const row of contactLookup) {
+    const digits = row.phone_e164.replace(/\D/g, "");
+    const normalized = digits.length >= 10 ? digits.slice(-10) : digits;
+    if (normalized.length >= 7) {
+      phoneToContact.set(normalized, {
+        display_name: row.display_name,
+        contact_id: row.contact_id,
+      });
+    }
+  }
+
+  const conversations: MessagesConversation[] = [];
+
+  for (const row of rows) {
+    // Resolve the phone number from participants_flat
+    const phoneRaw = (row.participants_flat || "").split(",")[0].trim();
+    const phoneDigits = phoneRaw.replace(/\D/g, "");
+    const normalizedPhone = phoneDigits.length >= 10 ? phoneDigits.slice(-10) : phoneDigits;
+
+    // Look up contact name
+    const contactInfo = normalizedPhone.length >= 7
+      ? phoneToContact.get(normalizedPhone)
+      : undefined;
+
+    const displayName = contactInfo?.display_name || phoneRaw || row.thread_id;
+
+    // Get last message body
+    const lastMsgRow = lastMessageStmt.get(userId, row.thread_id) as { body_text: string | null } | undefined;
+
+    conversations.push({
+      id: row.thread_id,
+      name: displayName,
+      contactId: contactInfo?.contact_id || phoneRaw || null,
+      phones: phoneRaw ? [phoneRaw] : [],
+      emails: [],
+      showBothNameAndNumber: !!contactInfo && displayName !== phoneRaw,
+      messageCount: row.messageCount,
+      lastMessageDate: row.lastMessageTime,
+      directChatCount: 1,
+      directMessageCount: row.messageCount,
+      groupChatCount: 0,
+      groupMessageCount: 0,
+    });
+  }
+
+  return conversations;
+}

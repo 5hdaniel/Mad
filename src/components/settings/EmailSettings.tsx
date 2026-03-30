@@ -125,7 +125,6 @@ export function EmailSettings({
     } catch (error) {
       logger.error("Failed to connect Google:", error);
       setConnectingProvider(null);
-      if (cleanup) cleanup();
     }
   };
 
@@ -155,7 +154,6 @@ export function EmailSettings({
     } catch (error) {
       logger.error("Failed to connect Microsoft:", error);
       setConnectingProvider(null);
-      if (cleanup) cleanup();
     }
   };
 

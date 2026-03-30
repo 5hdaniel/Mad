@@ -9,7 +9,8 @@ import type { ConversationSummary, MessageAttachmentInfo } from "./common";
  * Messages API (iMessage/SMS - migrated from window.electron)
  */
 export interface WindowApiMessages {
-  getConversations: () => Promise<{
+  /** Get conversations — routes to macOS chat.db or local messages table based on phone type (BACKLOG-1470) */
+  getConversations: (userId?: string) => Promise<{
     success: boolean;
     conversations?: ConversationSummary[];
     error?: string;

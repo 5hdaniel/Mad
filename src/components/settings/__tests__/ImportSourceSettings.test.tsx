@@ -1,11 +1,12 @@
 /**
- * Tests for ImportSourceSettings.tsx (TASK-1742)
+ * Tests for ImportSourceSettings.tsx (TASK-1742, BACKLOG-1447)
  *
  * Covers:
- * - Platform-specific rendering (only shows on macOS)
+ * - Platform-specific rendering (macOS shows all 3 options, non-macOS shows 2)
  * - Loading and saving import source preference
  * - Radio button selection and state management
  * - iPhone sync instructions visibility
+ * - Android companion option visibility and pairing UI
  */
 
 import React from "react";
@@ -42,22 +43,28 @@ describe("ImportSourceSettings", () => {
   });
 
   describe("Platform Rendering", () => {
-    it("should render on macOS", async () => {
+    it("should render on macOS with all three options", async () => {
       render(<ImportSourceSettings userId={mockUserId} />);
 
       await waitFor(() => {
-        expect(screen.getByText("Import Source")).toBeInTheDocument();
+        expect(screen.getByText("macOS Messages + Contacts")).toBeInTheDocument();
       });
+
+      expect(screen.getByText("iPhone Sync")).toBeInTheDocument();
+      expect(screen.getByText("Android Companion")).toBeInTheDocument();
     });
 
-    it("should NOT render on non-macOS platforms", () => {
+    it("should render on non-macOS with iPhone Sync and Android Companion only", async () => {
       (usePlatform as jest.Mock).mockReturnValue({ isMacOS: false });
 
-      const { container } = render(
-        <ImportSourceSettings userId={mockUserId} />
-      );
+      render(<ImportSourceSettings userId={mockUserId} />);
 
-      expect(container.firstChild).toBeNull();
+      await waitFor(() => {
+        expect(screen.getByText("iPhone Sync")).toBeInTheDocument();
+      });
+
+      expect(screen.queryByText("macOS Messages + Contacts")).not.toBeInTheDocument();
+      expect(screen.getByText("Android Companion")).toBeInTheDocument();
     });
 
     it("should show description text", async () => {
@@ -74,7 +81,7 @@ describe("ImportSourceSettings", () => {
   describe("Loading State", () => {
     it("should show loading spinner while fetching preference", async () => {
       // Create a promise that won't resolve immediately
-      let resolvePreference: (value: any) => void;
+      let resolvePreference: (value: unknown) => void;
       window.api.preferences.get.mockImplementation(
         () =>
           new Promise((resolve) => {
@@ -152,6 +159,24 @@ describe("ImportSourceSettings", () => {
       });
     });
 
+    it("should load saved android-companion preference", async () => {
+      window.api.preferences.get.mockResolvedValue({
+        success: true,
+        preferences: {
+          messages: { source: "android-companion" },
+        },
+      });
+
+      render(<ImportSourceSettings userId={mockUserId} />);
+
+      await waitFor(() => {
+        const androidRadio = screen.getByRole("radio", {
+          name: /android companion/i,
+        });
+        expect(androidRadio).toBeChecked();
+      });
+    });
+
     it("should handle preference load error gracefully", async () => {
       window.api.preferences.get.mockRejectedValue(new Error("Network error"));
 
@@ -168,7 +193,7 @@ describe("ImportSourceSettings", () => {
   });
 
   describe("Radio Selection", () => {
-    it("should show both import source options", async () => {
+    it("should show all import source options on macOS", async () => {
       render(<ImportSourceSettings userId={mockUserId} />);
 
       await waitFor(() => {
@@ -176,6 +201,7 @@ describe("ImportSourceSettings", () => {
           screen.getByText("macOS Messages + Contacts")
         ).toBeInTheDocument();
         expect(screen.getByText("iPhone Sync")).toBeInTheDocument();
+        expect(screen.getByText("Android Companion")).toBeInTheDocument();
       });
     });
 
@@ -193,6 +219,22 @@ describe("ImportSourceSettings", () => {
       await user.click(iphoneRadio);
 
       expect(iphoneRadio).toBeChecked();
+    });
+
+    it("should update selection when Android Companion is clicked", async () => {
+      const user = userEvent.setup();
+      render(<ImportSourceSettings userId={mockUserId} />);
+
+      await waitFor(() => {
+        expect(screen.getByText("Android Companion")).toBeInTheDocument();
+      });
+
+      const androidRadio = screen.getByRole("radio", {
+        name: /android companion/i,
+      });
+      await user.click(androidRadio);
+
+      expect(androidRadio).toBeChecked();
     });
 
     it("should update selection when macOS Messages is clicked", async () => {
@@ -236,6 +278,24 @@ describe("ImportSourceSettings", () => {
 
       expect(window.api.preferences.update).toHaveBeenCalledWith(mockUserId, {
         messages: { source: "iphone-sync" },
+      });
+    });
+
+    it("should save preference when selection changes to android-companion", async () => {
+      const user = userEvent.setup();
+      render(<ImportSourceSettings userId={mockUserId} />);
+
+      await waitFor(() => {
+        expect(screen.getByText("Android Companion")).toBeInTheDocument();
+      });
+
+      const androidRadio = screen.getByRole("radio", {
+        name: /android companion/i,
+      });
+      await user.click(androidRadio);
+
+      expect(window.api.preferences.update).toHaveBeenCalledWith(mockUserId, {
+        messages: { source: "android-companion" },
       });
     });
 
@@ -298,8 +358,9 @@ describe("ImportSourceSettings", () => {
     it("should NOT show iPhone instructions when macos-native is selected", async () => {
       render(<ImportSourceSettings userId={mockUserId} />);
 
+      // Wait for loading to complete (radio buttons visible)
       await waitFor(() => {
-        expect(screen.getByText("Import Source")).toBeInTheDocument();
+        expect(screen.getByText("macOS Messages + Contacts")).toBeInTheDocument();
       });
 
       expect(screen.queryByText("To use iPhone Sync:")).not.toBeInTheDocument();
@@ -321,7 +382,7 @@ describe("ImportSourceSettings", () => {
 
       // Check for instruction steps
       expect(
-        screen.getByText("Connect your iPhone to this Mac via USB")
+        screen.getByText(/Connect your iPhone to this Mac via USB/)
       ).toBeInTheDocument();
       expect(
         screen.getByText("Trust this computer on your iPhone if prompted")
@@ -352,10 +413,84 @@ describe("ImportSourceSettings", () => {
     });
   });
 
+  describe("Android Companion Details (BACKLOG-1447)", () => {
+    it("should show Android pairing UI when android-companion is selected", async () => {
+      window.api.preferences.get.mockResolvedValue({
+        success: true,
+        preferences: {
+          messages: { source: "android-companion" },
+        },
+      });
+
+      render(<ImportSourceSettings userId={mockUserId} />);
+
+      await waitFor(() => {
+        expect(screen.getByText("Pair Android Phone")).toBeInTheDocument();
+      });
+    });
+
+    it("should show 'No devices paired' when no devices are paired", async () => {
+      window.api.preferences.get.mockResolvedValue({
+        success: true,
+        preferences: {
+          messages: { source: "android-companion" },
+        },
+      });
+
+      render(<ImportSourceSettings userId={mockUserId} />);
+
+      await waitFor(() => {
+        expect(screen.getByText("No devices paired. Tap below to get started.")).toBeInTheDocument();
+      });
+    });
+
+    it("should show paired devices when devices are paired", async () => {
+      window.api.preferences.get.mockResolvedValue({
+        success: true,
+        preferences: {
+          messages: { source: "android-companion" },
+        },
+      });
+
+      window.api.pairing.getStatus.mockResolvedValue({
+        success: true,
+        status: {
+          isPaired: true,
+          devices: [{
+            deviceId: "device-1",
+            deviceName: "Samsung Galaxy S24",
+            secret: "test-secret",
+            pairedAt: new Date().toISOString(),
+            lastSeen: new Date().toISOString(),
+          }],
+        },
+      });
+
+      render(<ImportSourceSettings userId={mockUserId} />);
+
+      await waitFor(() => {
+        expect(screen.getByText("Samsung Galaxy S24")).toBeInTheDocument();
+      });
+
+      expect(screen.getByText("Disconnect")).toBeInTheDocument();
+    });
+
+    it("should NOT show Android details when another source is selected", async () => {
+      render(<ImportSourceSettings userId={mockUserId} />);
+
+      // Wait for loading to complete (radio buttons visible)
+      await waitFor(() => {
+        expect(screen.getByText("macOS Messages + Contacts")).toBeInTheDocument();
+      });
+
+      expect(screen.queryByText("Pair Android Phone")).not.toBeInTheDocument();
+    });
+  });
+
   describe("Disabled State", () => {
     it("should disable radio buttons while saving", async () => {
       // Make the update take a while
-      let resolveUpdate: (value: any) => void;
+      let resolveUpdate: (value: unknown) => void;
       window.api.preferences.update.mockImplementation(
         () =>
           new Promise((resolve) => {
@@ -420,6 +555,24 @@ describe("ImportSourceSettings", () => {
       // macOS label should not have blue border
       const macosLabel = screen.getByText("macOS Messages + Contacts").closest("label");
       expect(macosLabel).not.toHaveClass("border-blue-500");
+    });
+
+    it("should show green border on Android Companion when selected", async () => {
+      const user = userEvent.setup();
+      render(<ImportSourceSettings userId={mockUserId} />);
+
+      await waitFor(() => {
+        expect(screen.getByText("Android Companion")).toBeInTheDocument();
+      });
+
+      const androidRadio = screen.getByRole("radio", {
+        name: /android companion/i,
+      });
+      await user.click(androidRadio);
+
+      // Android label should have green border
+      const androidLabel = screen.getByText("Android Companion").closest("label");
+      expect(androidLabel).toHaveClass("border-green-500");
     });
   });
 });
