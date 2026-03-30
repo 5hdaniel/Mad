@@ -30,6 +30,12 @@ import {
   getQueueSize,
 } from "./smsQueueService";
 import type { PairingInfo } from "../types/sync";
+import {
+  recordSyncSuccess,
+  recordSyncFailure,
+  shouldAutoUnpair,
+  autoUnpair,
+} from "./pairingManager";
 
 // ============================================
 // CONSTANTS
@@ -101,6 +107,19 @@ export interface SyncOperationResult {
  * This is called both by the background task and by the manual "Sync Now" button.
  */
 export async function performSync(): Promise<SyncOperationResult> {
+  // BACKLOG-1463: Check auto-unpair before attempting sync
+  if (await shouldAutoUnpair()) {
+    await autoUnpair();
+    return {
+      newMessages: 0,
+      sentMessages: 0,
+      contactsSynced: 0,
+      desktopReachable: false,
+      queueSize: 0,
+      error: "Auto-unpaired after 24h offline",
+    };
+  }
+
   // Load pairing info
   const pairingInfo = await loadPairingInfo();
   if (!pairingInfo) {
@@ -138,6 +157,8 @@ export async function performSync(): Promise<SyncOperationResult> {
   if (!desktopReachable) {
     const queueSize = await getQueueSize();
     await recordSyncAttempt(false, 0);
+    // BACKLOG-1463: Record failure for pairing health tracking
+    await recordSyncFailure();
     return {
       newMessages,
       sentMessages: 0,
@@ -203,6 +224,13 @@ export async function performSync(): Promise<SyncOperationResult> {
 
   // Step 5: Record stats
   await recordSyncAttempt(totalSent > 0, totalSent);
+
+  // BACKLOG-1463: Record success/failure for pairing health tracking
+  if (sendError) {
+    await recordSyncFailure();
+  } else {
+    await recordSyncSuccess();
+  }
 
   const queueSize = await getQueueSize();
 
