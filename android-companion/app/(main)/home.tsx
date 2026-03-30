@@ -89,9 +89,15 @@ export default function HomeScreen(): React.JSX.Element {
           result: 'base64',
         });
         setScreenshotBase64(base64);
+      } else {
+        console.warn('[Screenshot] screenRef is not attached, skipping capture');
+        setScreenshotBase64(null);
       }
-    } catch {
-      // Screenshot capture is best-effort; proceed without it
+    } catch (err) {
+      // Screenshot capture is best-effort; proceed without it.
+      // react-native-view-shot may fail if the native module is not linked
+      // (e.g. in Expo Go without a prebuild).
+      console.error('[Screenshot] Capture failed:', err);
       setScreenshotBase64(null);
     }
     setHelpVisible(true);
