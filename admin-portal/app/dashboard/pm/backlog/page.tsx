@@ -15,12 +15,13 @@
  * Pattern: Follows admin-portal/app/dashboard/support/page.tsx
  */
 
-import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { Plus, List, GitBranch } from 'lucide-react';
 import { listItems, listAssignableUsers } from '@/lib/pm-queries';
-import type { PmBacklogItem, SortableColumn, SortDirection, ItemStatus, ItemPriority, ItemType } from '@/lib/pm-types';
+import type { PmBacklogItem, PmSavedView, SortableColumn, SortDirection, ItemStatus, ItemPriority, ItemType } from '@/lib/pm-types';
 import { TaskStatsCards } from '../components/TaskStatsCards';
+import type { CustomGauge } from '../components/TaskStatsCards';
 import { TaskFilters } from '../components/TaskFilters';
 import { TaskTable } from '../components/TaskTable';
 import { TaskSearchBar } from '../components/TaskSearchBar';
@@ -161,6 +162,11 @@ export default function BacklogPage() {
   // Active stats card (selected via TaskStatsCards click)
   const [activeStatsCard, setActiveStatsCard] = useState<string | undefined>(undefined);
 
+  // Custom gauge state (pinned saved views)
+  const [customGauges, setCustomGauges] = useState<CustomGauge[]>([]);
+  const [gaugeViews, setGaugeViews] = useState<PmSavedView[]>([]);
+  const gaugeViewsRef = useRef<PmSavedView[]>([]);
+
   // User map for assignee name resolution
   const [userMap, setUserMap] = useState<Map<string, { display_name: string | null; email: string }>>(new Map());
   // Raw users list for assignee dropdown in inline editing
@@ -260,6 +266,113 @@ export default function BacklogPage() {
   }, []);
 
   // ---------------------------------------------------------------------------
+  // Custom gauge: load counts for pinned saved views
+  // ---------------------------------------------------------------------------
+
+  const handleViewsChanged = useCallback((views: PmSavedView[]) => {
+    const pinned = views.filter((v) => !!v.filters.displayAsGauge);
+    setGaugeViews(pinned);
+    gaugeViewsRef.current = pinned;
+  }, []);
+
+  // Load gauge counts whenever gaugeViews changes
+  useEffect(() => {
+    if (gaugeViews.length === 0) {
+      setCustomGauges([]);
+      return;
+    }
+
+    let cancelled = false;
+
+    async function loadGaugeCounts() {
+      const results: CustomGauge[] = [];
+
+      // Helper: convert saved filter value to array
+      const toArray = (val: unknown): string[] => {
+        if (Array.isArray(val)) return val as string[];
+        if (typeof val === 'string' && val) return [val];
+        return [];
+      };
+
+      // Helper: single value for RPC (only when exactly 1 value)
+      const toSingle = (val: unknown): string | null => {
+        const arr = toArray(val);
+        return arr.length === 1 ? arr[0] : null;
+      };
+
+      for (const view of gaugeViews) {
+        // Extract filter params from the saved view, stripping the displayAsGauge flag
+        const { displayAsGauge: _, ...filters } = view.filters;
+
+        const statuses = toArray(filters.status ?? filters.statuses);
+        const priorities = toArray(filters.priority ?? filters.priorities);
+        const types = toArray(filters.type ?? filters.types);
+        const areas = toArray(filters.area ?? filters.areas);
+        const sprintIds = toArray(filters.sprint_id ?? filters.sprintIds);
+        const projectIds = toArray(filters.project_id ?? filters.projectIds);
+
+        // Check if any filter has multiple values (needs client-side filtering)
+        const needsClientFilter =
+          statuses.length > 1 ||
+          priorities.length > 1 ||
+          types.length > 1 ||
+          areas.length > 1 ||
+          sprintIds.length > 1 ||
+          projectIds.length > 1;
+
+        try {
+          const data = await listItems({
+            status: toSingle(filters.status ?? filters.statuses) as ItemStatus | null,
+            priority: toSingle(filters.priority ?? filters.priorities) as ItemPriority | null,
+            type: toSingle(filters.type ?? filters.types) as ItemType | null,
+            area: toSingle(filters.area ?? filters.areas),
+            sprint_id: toSingle(filters.sprint_id ?? filters.sprintIds),
+            project_id: toSingle(filters.project_id ?? filters.projectIds),
+            page: 1,
+            page_size: needsClientFilter ? 500 : 1, // Need full set for client-side filtering
+          });
+
+          if (cancelled) return;
+
+          let count = data.total_count;
+
+          // Apply client-side filtering for multi-value filters
+          if (needsClientFilter) {
+            count = data.items.filter((item) =>
+              matchesMultiFilters(item, statuses, priorities, types, areas, sprintIds, projectIds)
+            ).length;
+          }
+
+          results.push({
+            id: view.id,
+            name: view.name,
+            count,
+            filterKey: `gauge_${view.id}`,
+          });
+        } catch (err) {
+          console.error(`Failed to load gauge count for "${view.name}":`, err);
+          if (cancelled) return;
+          results.push({
+            id: view.id,
+            name: view.name,
+            count: 0,
+            filterKey: `gauge_${view.id}`,
+          });
+        }
+      }
+
+      if (!cancelled) {
+        setCustomGauges(results);
+      }
+    }
+
+    loadGaugeCounts();
+    return () => {
+      cancelled = true;
+    };
+  }, [gaugeViews]);
+
+  // ---------------------------------------------------------------------------
   // Derived: sort the current page of items client-side
   // ---------------------------------------------------------------------------
 
@@ -355,6 +468,21 @@ export default function BacklogPage() {
   }
 
   // ---------------------------------------------------------------------------
+  // Custom gauge click handler -- apply the saved view's filter config
+  // ---------------------------------------------------------------------------
+
+  function handleGaugeClick(gauge: CustomGauge) {
+    // Find the saved view that corresponds to this gauge
+    const view = gaugeViewsRef.current.find((v) => v.id === gauge.id);
+    if (!view) return;
+
+    // Strip displayAsGauge and apply the rest as filters
+    const { displayAsGauge: _, ...filters } = view.filters;
+    handleLoadView(filters);
+    setActiveStatsCard(`gauge_${gauge.id}`);
+  }
+
+  // ---------------------------------------------------------------------------
   // Sort handler: toggle direction, or set new column
   // ---------------------------------------------------------------------------
 
@@ -441,7 +569,12 @@ export default function BacklogPage() {
       </div>
 
       {/* Stats Cards */}
-      <TaskStatsCards onCardClick={handleStatsCardClick} activeCard={activeStatsCard} />
+      <TaskStatsCards
+        onCardClick={handleStatsCardClick}
+        activeCard={activeStatsCard}
+        customGauges={customGauges}
+        onGaugeClick={handleGaugeClick}
+      />
 
       {/* Search Bar + Saved View Selector */}
       <div className="flex items-center gap-4 mb-4">
@@ -458,6 +591,7 @@ export default function BacklogPage() {
             projectIds: projectFilters,
           }}
           onLoadView={handleLoadView}
+          onViewsChanged={handleViewsChanged}
         />
       </div>
 
