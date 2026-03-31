@@ -243,7 +243,15 @@ export default function HomeScreen(): React.JSX.Element {
       setQueueSize(queue);
 
       if (result.error) {
-        Alert.alert('Sync Issue', result.error);
+        const title =
+          result.errorType === 'timeout'
+            ? 'Connection Timed Out'
+            : result.errorType === 'network_after_connect'
+              ? 'Transfer Failed'
+              : result.errorType === 'connection_refused'
+                ? 'Desktop Not Running'
+                : 'Sync Issue';
+        Alert.alert(title, result.error);
       } else if (result.sentMessages > 0) {
         Alert.alert(
           'Sync Complete',
