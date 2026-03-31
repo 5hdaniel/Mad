@@ -64,19 +64,20 @@ function Content({ onAction }: OnboardingStepContentProps) {
   const [error, setError] = useState<string | null>(null);
   const [countdown, setCountdown] = useState(60);
 
-  // Auto-advance timer
+  // Countdown timer — decrements only, no side effects in state updater
   useEffect(() => {
     const timer = setInterval(() => {
-      setCountdown((prev) => {
-        if (prev <= 1) {
-          onAction({ type: "NAVIGATE_NEXT" });
-          return 0;
-        }
-        return prev - 1;
-      });
+      setCountdown((prev) => (prev <= 0 ? 0 : prev - 1));
     }, 1000);
     return () => clearInterval(timer);
-  }, [onAction]);
+  }, []);
+
+  // Auto-advance when countdown reaches 0 (separate from state updater)
+  useEffect(() => {
+    if (countdown <= 0) {
+      onAction({ type: "NAVIGATE_NEXT" });
+    }
+  }, [countdown, onAction]);
 
   useEffect(() => {
     let cancelled = false;
