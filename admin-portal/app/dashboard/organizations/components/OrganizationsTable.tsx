@@ -5,12 +5,14 @@
  *
  * Receives server-fetched data and provides client-side search filtering.
  * Each row links to the organization detail page.
+ * Includes "Create Organization" button gated on canEdit prop.
  */
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { Building2, Search } from 'lucide-react';
+import { Building2, Plus, Search } from 'lucide-react';
 import { formatDate } from '@/lib/format';
+import { CreateOrganizationDialog } from './CreateOrganizationDialog';
 
 export interface OrganizationRow {
   id: string;
@@ -23,6 +25,7 @@ export interface OrganizationRow {
 
 interface OrganizationsTableProps {
   organizations: OrganizationRow[];
+  canEdit: boolean;
 }
 
 function PlanBadge({ plan }: { plan: string | null }) {
@@ -43,9 +46,10 @@ function PlanBadge({ plan }: { plan: string | null }) {
   );
 }
 
-export function OrganizationsTable({ organizations }: OrganizationsTableProps) {
+export function OrganizationsTable({ organizations, canEdit }: OrganizationsTableProps) {
   const router = useRouter();
   const [searchQuery, setSearchQuery] = useState('');
+  const [showCreateDialog, setShowCreateDialog] = useState(false);
 
   const filtered = organizations.filter((org) => {
     if (!searchQuery) return true;
@@ -68,18 +72,34 @@ export function OrganizationsTable({ organizations }: OrganizationsTableProps) {
     );
   }
 
+  const handleCreated = () => {
+    setShowCreateDialog(false);
+    router.refresh();
+  };
+
   return (
     <div className="space-y-4">
-      {/* Search bar */}
-      <div className="relative">
-        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
-        <input
-          type="text"
-          placeholder="Filter by name or slug..."
-          value={searchQuery}
-          onChange={(e) => setSearchQuery(e.target.value)}
-          className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent"
-        />
+      {/* Search bar + Create button */}
+      <div className="flex items-center gap-3">
+        <div className="relative flex-1">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+          <input
+            type="text"
+            placeholder="Filter by name or slug..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+          />
+        </div>
+        {canEdit && (
+          <button
+            onClick={() => setShowCreateDialog(true)}
+            className="inline-flex items-center gap-2 rounded-md bg-primary-600 px-4 py-2 text-sm font-medium text-white hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2 transition-colors whitespace-nowrap"
+          >
+            <Plus className="h-4 w-4" />
+            Create Organization
+          </button>
+        )}
       </div>
 
       {/* Table */}
@@ -156,6 +176,14 @@ export function OrganizationsTable({ organizations }: OrganizationsTableProps) {
           </tbody>
         </table>
       </div>
+
+      {/* Create Organization Dialog */}
+      {showCreateDialog && (
+        <CreateOrganizationDialog
+          onClose={() => setShowCreateDialog(false)}
+          onCreated={handleCreated}
+        />
+      )}
     </div>
   );
 }
