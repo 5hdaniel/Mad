@@ -158,6 +158,9 @@ export default function BacklogPage() {
   const [treeMode, setTreeMode] = useState(false);
   const [showCreateDialog, setShowCreateDialog] = useState(false);
 
+  // Active stats card (selected via TaskStatsCards click)
+  const [activeStatsCard, setActiveStatsCard] = useState<string | undefined>(undefined);
+
   // User map for assignee name resolution
   const [userMap, setUserMap] = useState<Map<string, { display_name: string | null; email: string }>>(new Map());
   // Raw users list for assignee dropdown in inline editing
@@ -273,6 +276,7 @@ export default function BacklogPage() {
 
   function handleStatusesChange(statuses: string[]) {
     setStatusFilters(statuses);
+    setActiveStatsCard(undefined);
     setPage(1);
     setSelectedIds(new Set());
   }
@@ -312,6 +316,43 @@ export default function BacklogPage() {
     setPage(1);
     setSelectedIds(new Set());
   }, []);
+
+  // ---------------------------------------------------------------------------
+  // Stats card click handler -- map card keys to filter state
+  // ---------------------------------------------------------------------------
+
+  function handleStatsCardClick(cardKey: string) {
+    switch (cardKey) {
+      case 'total_open':
+        // Clear status filters to show all open items
+        setStatusFilters([]);
+        setActiveStatsCard('total_open');
+        setPage(1);
+        setSelectedIds(new Set());
+        break;
+      case 'pending':
+        setStatusFilters(['pending']);
+        setActiveStatsCard('pending');
+        setPage(1);
+        setSelectedIds(new Set());
+        break;
+      case 'in_progress':
+        setStatusFilters(['in_progress']);
+        setActiveStatsCard('in_progress');
+        setPage(1);
+        setSelectedIds(new Set());
+        break;
+      case 'blocked':
+        setStatusFilters(['blocked']);
+        setActiveStatsCard('blocked');
+        setPage(1);
+        setSelectedIds(new Set());
+        break;
+      case 'active_sprints':
+        router.push('/dashboard/pm/sprints');
+        return; // Don't update activeCard for navigation
+    }
+  }
 
   // ---------------------------------------------------------------------------
   // Sort handler: toggle direction, or set new column
@@ -400,7 +441,7 @@ export default function BacklogPage() {
       </div>
 
       {/* Stats Cards */}
-      <TaskStatsCards />
+      <TaskStatsCards onCardClick={handleStatsCardClick} activeCard={activeStatsCard} />
 
       {/* Search Bar + Saved View Selector */}
       <div className="flex items-center gap-4 mb-4">

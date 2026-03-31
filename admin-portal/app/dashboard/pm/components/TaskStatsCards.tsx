@@ -11,7 +11,12 @@ import { Inbox, Clock, PlayCircle, AlertTriangle, Layers } from 'lucide-react';
 import { getStats } from '@/lib/pm-queries';
 import type { PmStats } from '@/lib/pm-types';
 
-export function TaskStatsCards() {
+interface TaskStatsCardsProps {
+  onCardClick?: (cardKey: string) => void;
+  activeCard?: string;
+}
+
+export function TaskStatsCards({ onCardClick, activeCard }: TaskStatsCardsProps) {
   const [stats, setStats] = useState<PmStats | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -45,30 +50,35 @@ export function TaskStatsCards() {
 
   const cards = [
     {
+      key: 'total_open',
       label: 'Total Open',
       value: stats?.total_open ?? 0,
       icon: Inbox,
       color: 'text-blue-600 bg-blue-50',
     },
     {
+      key: 'pending',
       label: 'Pending',
       value: stats?.by_status?.pending ?? 0,
       icon: Clock,
       color: 'text-gray-600 bg-gray-50',
     },
     {
+      key: 'in_progress',
       label: 'In Progress',
       value: stats?.by_status?.in_progress ?? 0,
       icon: PlayCircle,
       color: 'text-blue-600 bg-blue-50',
     },
     {
+      key: 'blocked',
       label: 'Blocked',
       value: stats?.by_status?.blocked ?? 0,
       icon: AlertTriangle,
       color: 'text-red-600 bg-red-50',
     },
     {
+      key: 'active_sprints',
       label: 'Active Sprints',
       value: stats?.active_sprints ?? 0,
       icon: Layers,
@@ -80,10 +90,26 @@ export function TaskStatsCards() {
     <div className="grid grid-cols-1 gap-4 sm:grid-cols-3 lg:grid-cols-5 mb-6">
       {cards.map((card) => {
         const Icon = card.icon;
+        const isActive = activeCard === card.key;
         return (
           <div
-            key={card.label}
-            className="bg-white rounded-lg border border-gray-200 p-4"
+            key={card.key}
+            role={onCardClick ? 'button' : undefined}
+            tabIndex={onCardClick ? 0 : undefined}
+            onClick={() => onCardClick?.(card.key)}
+            onKeyDown={(e) => {
+              if (onCardClick && (e.key === 'Enter' || e.key === ' ')) {
+                e.preventDefault();
+                onCardClick(card.key);
+              }
+            }}
+            className={`bg-white rounded-lg border p-4 transition-all ${
+              onCardClick ? 'cursor-pointer hover:border-blue-300 hover:shadow-sm' : ''
+            } ${
+              isActive
+                ? 'border-blue-500 ring-2 ring-blue-200'
+                : 'border-gray-200'
+            }`}
           >
             <p className="text-sm font-medium text-gray-500 mb-2 truncate">{card.label}</p>
             <div className="flex items-center gap-3">
