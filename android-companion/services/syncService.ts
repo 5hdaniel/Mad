@@ -14,10 +14,69 @@ import type {
   SyncMessage,
   SyncPayload,
   SyncResult,
+  SyncErrorType,
   PairingInfo,
   ContactSyncPayload,
 } from "../types/sync";
 import type { SyncContact } from "../types/contacts";
+
+/**
+ * Classify a network error into a specific SyncErrorType.
+ *
+ * BACKLOG-1496: Distinguish network errors so the UI can show
+ * targeted guidance instead of a generic "Desktop not reachable" message.
+ *
+ * Classification logic:
+ * - AbortError → timeout (request exceeded REQUEST_TIMEOUT_MS)
+ * - "Network request failed" / ECONNREFUSED → connection_refused (desktop not running)
+ * - Any other Error → unknown
+ */
+function classifySyncError(err: Error): SyncErrorType {
+  if (err.name === "AbortError") {
+    return "timeout";
+  }
+
+  const msg = err.message.toLowerCase();
+
+  // Connection refused — desktop app is not running or port is blocked
+  if (
+    msg.includes("econnrefused") ||
+    msg.includes("connection refused") ||
+    msg.includes("network request failed")
+  ) {
+    return "connection_refused";
+  }
+
+  // Connection reset / broken pipe — connected but transfer failed
+  if (
+    msg.includes("econnreset") ||
+    msg.includes("broken pipe") ||
+    msg.includes("epipe") ||
+    msg.includes("socket hang up") ||
+    msg.includes("network error")
+  ) {
+    return "network_after_connect";
+  }
+
+  return "unknown";
+}
+
+/** Map a SyncErrorType to a user-facing error message */
+function userMessageForErrorType(errorType: SyncErrorType): string {
+  switch (errorType) {
+    case "connection_refused":
+      return "Desktop app is not running. Open Keepr on your computer and try again.";
+    case "timeout":
+      return "Connection timed out. Your network may limit device-to-device transfers.";
+    case "network_after_connect":
+      return "Connected to desktop but unable to sync data. Try a different WiFi network or use your phone's hotspot.";
+    case "server_error":
+      return "Desktop received the request but returned an error.";
+    case "unknown":
+    default:
+      return "Could not reach the desktop app. Make sure both devices are on the same network.";
+  }
+}
 
 /** HTTP request timeout in milliseconds */
 const REQUEST_TIMEOUT_MS = 10_000;
@@ -107,6 +166,7 @@ export async function sendMessages(
       return {
         success: false,
         error: `Server responded with ${response.status}: ${errorBody}`,
+        errorType: "server_error",
       };
     }
 
@@ -120,16 +180,17 @@ export async function sendMessages(
     return result;
   } catch (err) {
     if (err instanceof Error) {
+      const errorType = classifySyncError(err);
       Sentry.captureException(err, {
-        tags: { component: "syncService", operation: "sendMessages" },
+        tags: { component: "syncService", operation: "sendMessages", errorType },
       });
-      if (err.name === "AbortError") {
-        return { success: false, error: "Request timed out" };
-      }
-      // Network errors: unreachable, refused, etc.
-      return { success: false, error: `Network error: ${err.message}` };
+      return {
+        success: false,
+        error: userMessageForErrorType(errorType),
+        errorType,
+      };
     }
-    return { success: false, error: "Unknown error" };
+    return { success: false, error: "Unknown error", errorType: "unknown" };
   }
 }
 
@@ -188,6 +249,7 @@ export async function sendContacts(
       return {
         success: false,
         error: `Server responded with ${response.status}: ${errorBody}`,
+        errorType: "server_error",
       };
     }
 
@@ -201,15 +263,17 @@ export async function sendContacts(
     return result;
   } catch (err) {
     if (err instanceof Error) {
+      const errorType = classifySyncError(err);
       Sentry.captureException(err, {
-        tags: { component: "syncService", operation: "sendContacts" },
+        tags: { component: "syncService", operation: "sendContacts", errorType },
       });
-      if (err.name === "AbortError") {
-        return { success: false, error: "Request timed out" };
-      }
-      return { success: false, error: `Network error: ${err.message}` };
+      return {
+        success: false,
+        error: userMessageForErrorType(errorType),
+        errorType,
+      };
     }
-    return { success: false, error: "Unknown error" };
+    return { success: false, error: "Unknown error", errorType: "unknown" };
   }
 }
 
@@ -260,6 +324,7 @@ export async function registerDevice(
       return {
         success: false,
         error: `Server responded with ${response.status}: ${errorBody}`,
+        errorType: "server_error",
       };
     }
 
@@ -272,15 +337,17 @@ export async function registerDevice(
     return result;
   } catch (err) {
     if (err instanceof Error) {
+      const errorType = classifySyncError(err);
       Sentry.captureException(err, {
-        tags: { component: "syncService", operation: "registerDevice" },
+        tags: { component: "syncService", operation: "registerDevice", errorType },
       });
-      if (err.name === "AbortError") {
-        return { success: false, error: "Request timed out" };
-      }
-      return { success: false, error: `Network error: ${err.message}` };
+      return {
+        success: false,
+        error: userMessageForErrorType(errorType),
+        errorType,
+      };
     }
-    return { success: false, error: "Unknown error" };
+    return { success: false, error: "Unknown error", errorType: "unknown" };
   }
 }
 

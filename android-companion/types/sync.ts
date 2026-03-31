@@ -74,6 +74,22 @@ export interface EncryptedPayload {
 }
 
 // ============================================
+// ERROR TYPES
+// ============================================
+
+/**
+ * Categorized sync error types for user-facing guidance.
+ *
+ * BACKLOG-1496: Distinguish network errors in companion app
+ */
+export type SyncErrorType =
+  | "connection_refused"
+  | "timeout"
+  | "network_after_connect"
+  | "server_error"
+  | "unknown";
+
+// ============================================
 // RESULT TYPES
 // ============================================
 
@@ -86,6 +102,8 @@ export interface SyncResult {
   messagesReceived?: number;
   /** Error message if success is false */
   error?: string;
+  /** Categorized error type for UI guidance (BACKLOG-1496) */
+  errorType?: SyncErrorType;
 }
 
 /**
