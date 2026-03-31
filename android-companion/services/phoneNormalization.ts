@@ -3,21 +3,32 @@
  * Normalizes raw phone numbers to a consistent format for matching.
  *
  * TASK-1430: SMS BroadcastReceiver + background sync service
+ * BACKLOG-1493/1495: Data parsing specification
  *
  * The Electron desktop side (messageMatchingService.ts) does its own
  * normalization, so we aim for a best-effort E.164-ish format here.
+ *
+ * ## Phone Number Categories (BACKLOG-1495 Data Parsing Spec)
+ *
+ * 1. International format: "+1..." or "+44..." — kept as +digits
+ * 2. US/Canada 10-digit: "5551234567" — normalized to "+15551234567"
+ * 3. US/Canada 11-digit: "15551234567" — normalized to "+15551234567"
+ * 4. Short codes (5-6 digits): "72645", "227263" — returned as-is (digits only)
+ *    These are carrier/marketing SMS short codes and must NOT be filtered out.
+ * 5. Alphanumeric senders: "T-Mobile", "BANK OF AMERICA" — returned as-is (trimmed)
+ *    These are carrier alerts, marketing, or service messages with non-numeric senders.
+ *    Stripping non-digits would produce empty string, hiding these messages entirely.
  */
 
 /**
  * Normalize a phone number to a consistent format.
  *
- * - Strips all non-digit characters (except leading +)
- * - Prepends +1 for 10-digit US numbers
- * - Keeps international numbers as-is if they already have a country code
- * - Returns the raw digits if normalization cannot determine the format
+ * - For numeric phone numbers: strips formatting, adds country code
+ * - For alphanumeric senders (carrier names, service IDs): returns trimmed original
+ * - For short codes (< 7 digits): returns digits as-is (no country code)
  *
- * @param raw - The raw phone number string from Android SMS content provider
- * @returns Normalized phone number string
+ * @param raw - The raw phone number or sender string from Android SMS content provider
+ * @returns Normalized sender string — never empty for non-empty input
  */
 export function normalizePhoneNumber(raw: string): string {
   if (!raw || raw.trim().length === 0) {
@@ -26,15 +37,25 @@ export function normalizePhoneNumber(raw: string): string {
 
   const trimmed = raw.trim();
 
-  // Check if it starts with + (international format)
-  const hasPlus = trimmed.startsWith("+");
-
-  // Strip everything except digits
+  // Strip everything except digits to check if this is a numeric sender
   const digits = trimmed.replace(/\D/g, "");
 
+  // BACKLOG-1493: If stripping non-digits produces empty string, this is an
+  // alphanumeric sender (e.g., "T-Mobile", "BANK OF AMERICA", "MyService").
+  // Return the trimmed original to preserve the sender identity.
   if (digits.length === 0) {
-    return raw;
+    return trimmed;
   }
+
+  // BACKLOG-1493: Short codes (typically 5-6 digits) — return digits only.
+  // These are carrier/marketing SMS codes and must be preserved, not filtered.
+  // We treat anything with fewer than 7 digits as a short code.
+  if (digits.length < 7) {
+    return digits;
+  }
+
+  // Check if it starts with + (international format)
+  const hasPlus = trimmed.startsWith("+");
 
   // Already has country code with + prefix
   if (hasPlus) {
@@ -52,7 +73,6 @@ export function normalizePhoneNumber(raw: string): string {
   }
 
   // 7 digits — local number, cannot reliably add country code
-  // Return as-is with whatever prefix makes sense
   if (digits.length === 7) {
     return digits;
   }
@@ -63,6 +83,6 @@ export function normalizePhoneNumber(raw: string): string {
     return `+${digits}`;
   }
 
-  // Short codes or other formats — return digits only
+  // Fallback — return digits only
   return digits;
 }

@@ -624,6 +624,23 @@ class LocalSyncService {
    * Store received SMS messages in the local database.
    * Follows the same pattern as iPhoneSyncStorageService for message storage.
    *
+   * BACKLOG-1493: Fixed participants_flat to always contain a value for all sender types.
+   * BACKLOG-1495: Data parsing specification — see inline comments for normalization rules.
+   *
+   * ## Data Parsing Spec (BACKLOG-1495)
+   *
+   * **participants_flat** — Used for conversation grouping and contact matching:
+   *   - Standard phone numbers (7+ digits): raw digits from sender (e.g., "5551234567")
+   *   - Short codes (< 7 digits): digits as-is (e.g., "72645")
+   *   - Alphanumeric senders: full normalized string (e.g., "T-Mobile", "BANK OF AMERICA")
+   *   - Never empty — falls back to normalized sender string
+   *
+   * **thread_id** — Conversation grouping key:
+   *   - If Android provides a thread_id: "android-thread-{androidThreadId}"
+   *   - Fallback: "android-thread-{normalizedSender}" for consistent grouping
+   *
+   * **Dedup**: SHA-256 hash of sender + timestamp + body (generateExternalId)
+   *
    * @param userId - User ID for message ownership
    * @param deviceId - Android device ID from pairing
    * @param messages - Array of SyncMessage from the Android device
@@ -640,9 +657,18 @@ class LocalSyncService {
         to: msg.direction === "inbound" ? ["me"] : [normalizedSender],
       });
 
-      // Extract digits for fast phone number matching
+      // BACKLOG-1493: Build participants_flat for conversation grouping.
+      // For numeric senders, use digits for phone matching.
+      // For alphanumeric senders (carrier alerts, marketing), use the full string
+      // so they are not filtered out or collapsed into empty groups.
       const senderDigits = msg.sender.replace(/\D/g, "");
-      const participantsFlat = senderDigits || normalizedSender;
+      const participantsFlat = senderDigits.length > 0 ? senderDigits : normalizedSender;
+
+      // BACKLOG-1493: Ensure thread_id is always set for consistent conversation grouping.
+      // Use Android's thread_id when available, fall back to sender-based grouping.
+      const threadId = msg.threadId
+        ? `android-thread-${msg.threadId}`
+        : `android-thread-${normalizedSender}`;
 
       const metadata = JSON.stringify({
         source: "android_wifi_sync",
@@ -660,7 +686,7 @@ class LocalSyncService {
         bodyText: msg.body,
         participants,
         participantsFlat,
-        threadId: msg.threadId ? `android-thread-${msg.threadId}` : "",
+        threadId,
         sentAt: new Date(msg.timestamp).toISOString(),
         hasAttachments: 0,
         messageType: "text" as const,
