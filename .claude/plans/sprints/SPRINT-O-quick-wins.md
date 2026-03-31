@@ -19,10 +19,10 @@ Merge the pending feature gate fix, resolve desktop UI gaps (support widget visi
 | # | Task | Backlog | Area | Est. Tokens | Execution |
 |---|------|---------|------|-------------|-----------|
 | 1 | TASK-2311: Merge feature gate fix PR #1400 | BACKLOG-1339 | desktop | ~1K | Manual (merge only) |
-| 2 | TASK-2312: Support widget visible on all screens | BACKLOG-1341 | desktop (src/) | ~15K | Sequential |
+| 2 | ~~TASK-2312: Support widget visible on all screens~~ | BACKLOG-1341 | desktop (src/) | ~15K | **Moved to SPRINT-P** |
 | 3 | TASK-2313: Backlog links panel on ticket detail | BACKLOG-1343 | admin-portal | ~15K | Parallel with 2 |
 | 4 | TASK-2314: Reply textarea bigger + resizable | BACKLOG-1166 | admin-portal | ~2K | Parallel with 3 |
-| 5 | TASK-2315: Edit/delete internal comments | BACKLOG-1344 | admin-portal | ~25K | Sequential (after 4, shared file) |
+| 5 | ~~TASK-2315: Edit/delete internal comments~~ | BACKLOG-1344 | admin-portal | ~25K | **Moved to SPRINT-P** |
 
 **Total Estimated Tokens:** ~58K (excluding TASK-2311 merge-only)
 
@@ -81,7 +81,7 @@ All branches from `int/identity-provisioning`, all PRs target `int/identity-prov
 | Task | Status | PR | Merged |
 |------|--------|----|--------|
 | TASK-2311 | Pending (user test) | #1400 | |
-| TASK-2312 | Pending | | |
+| TASK-2312 | **Moved to SPRINT-P** | | |
 | TASK-2313 | Pending | | |
 | TASK-2314 | Pending | | |
-| TASK-2315 | Pending | | |
+| TASK-2315 | **Moved to SPRINT-P** | | |

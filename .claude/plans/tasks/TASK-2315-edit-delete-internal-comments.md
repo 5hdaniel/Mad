@@ -1,7 +1,7 @@
 # TASK-2315: Edit/Delete Internal Comments on Support Tickets
 
 **Backlog ID:** BACKLOG-1344
-**Sprint:** SPRINT-O
+**Sprint:** SPRINT-P (moved from SPRINT-O)
 **Branch:** `feature/task-2315-edit-delete-internal-comments`
 **Branch From:** `int/identity-provisioning`
 **Branch Into:** `int/identity-provisioning`
