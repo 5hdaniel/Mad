@@ -241,27 +241,27 @@ Without this data, PM cannot label metrics entries, `sum_effort.py` cannot aggre
 
 **Who:** PM Agent or PM (human) — engineers do NOT update status files.
 
-**Files Updated:**
-- `.claude/plans/sprints/SPRINT-XXX.md` — In-Scope table `Status` column
-- `.claude/plans/backlog/data/backlog.csv` — `status` column for each BACKLOG-XXX
+**Updated via Supabase** (source of truth):
+- `pm_backlog_items` table — `status` column for each item
+- `pm_sprints` table — sprint status
 
-**Valid CSV Statuses:** `Pending`, `In Progress`, `Testing`, `Completed`, `Deferred`
+**Valid Statuses:** `pending`, `in_progress`, `testing`, `completed`, `deferred`
 
 ### When PM Updates Status
 
-| Transition | Backlog CSV | Sprint Table | Trigger |
-|-----------|-------------|--------------|---------|
-| Engineer agent assigned (Step 5) | → `In Progress` | → `In Progress` | PM kicks off engineer |
-| PR created + CI passes (Step 12) | → `Testing` | → `Testing` | SR notifies PM |
-| PR merged (Step 12b) | → `Completed` | → `Completed` | SR confirms merge |
-| Plan rejected (Step 8) | → `Deferred` | → `Deferred` | SR rejects plan |
+| Transition | Supabase pm_backlog_items | Trigger |
+|-----------|--------------------------|---------|
+| Engineer agent assigned (Step 5) | → `in_progress` | PM kicks off engineer |
+| PR created + CI passes (Step 12) | → `testing` | SR notifies PM |
+| PR merged (Step 12b) | → `completed` | SR confirms merge |
+| Plan rejected (Step 8) | → `deferred` | SR rejects plan |
 
 ### PM Final Update (After Merge)
 
 After each task's PR merges:
 
 **PM Actions:**
-1. Verify backlog CSV status is `Completed`
+1. Verify Supabase pm_backlog_items status is `completed`
 2. Verify sprint plan In-Scope table status is `Completed`
 3. Record actual metrics vs estimates
 4. Log metrics to `.claude/metrics/tokens.csv`

@@ -1,185 +1,99 @@
-# CSV Reference for Agents
+# Backlog Query Reference for Agents
 
-This document provides efficient patterns for querying backlog data with minimal token usage.
+## Source of Truth
 
----
+**Supabase `pm_backlog_items` table is the ONLY source of truth.** Query via MCP `execute_sql`.
 
-## File Locations
-
-```
-.claude/plans/backlog/data/backlog.csv   # Main table (280 items)
-.claude/plans/backlog/data/sprints.csv   # Sprint history (35 sprints)
-.claude/plans/backlog/data/changelog.csv # Audit trail (153 entries)
-```
+The CSV files at `.claude/plans/backlog/data/` are a **legacy archive** (frozen ~BACKLOG-967). Do NOT read or write them for current data.
 
 ---
 
-## Python Patterns (Preferred)
+## Common Queries
 
-### Load and Filter
+### Search by keyword
 
-```python
-import csv
-
-def load_backlog():
-    with open('.claude/plans/backlog/data/backlog.csv') as f:
-        return list(csv.DictReader(f))
-
-# Get all pending items
-pending = [i for i in load_backlog() if i['status'].lower() == 'pending']
-
-# Get high priority pending
-high_pending = [
-    i for i in load_backlog()
-    if i['status'].lower() == 'pending'
-    and i['priority'].lower() == 'high'
-]
-
-# Search by title
-def search(query):
-    q = query.lower()
-    return [i for i in load_backlog() if q in i['title'].lower()]
+```sql
+SELECT item_number, title, status, priority, area
+FROM pm_backlog_items
+WHERE title ILIKE '%keyword%'
+ORDER BY item_number;
 ```
 
-### Count by Category
+### Get pending items by priority
 
-```python
-from collections import Counter
-
-items = load_backlog()
-by_status = Counter(i['status'].lower() for i in items)
-# {'pending': 176, 'completed': 97, ...}
+```sql
+SELECT item_number, title, type, priority, area, est_tokens
+FROM pm_backlog_items
+WHERE status = 'pending'
+ORDER BY
+  CASE priority WHEN 'critical' THEN 0 WHEN 'high' THEN 1 WHEN 'medium' THEN 2 WHEN 'low' THEN 3 END;
 ```
 
-### Sprint Items
+### Get sprint items
 
-```python
-def get_sprint_items(sprint_id):
-    return [
-        i for i in load_backlog()
-        if i['sprint'].upper() == sprint_id.upper()
-    ]
+```sql
+SELECT i.item_number, i.title, i.status, i.priority, i.type
+FROM pm_backlog_items i
+WHERE i.sprint_id = '<sprint-uuid>'
+ORDER BY i.item_number;
+```
 
-sprint_42 = get_sprint_items('SPRINT-042')
+### Count by status
+
+```sql
+SELECT status, COUNT(*) as count
+FROM pm_backlog_items
+WHERE status != 'obsolete'
+GROUP BY status
+ORDER BY count DESC;
+```
+
+### Find duplicates before creating
+
+```sql
+SELECT item_number, title, status
+FROM pm_backlog_items
+WHERE title ILIKE '%invite%' OR title ILIKE '%provision%';
 ```
 
 ---
 
-## Bash Patterns (Quick Lookups)
+## Schema Quick Reference
 
-### Basic Queries
+### pm_backlog_items columns
 
-```bash
-# Count items by status
-cut -d',' -f5 .claude/plans/backlog/data/backlog.csv | sort | uniq -c
+| Column | Type | Description |
+|--------|------|-------------|
+| id | uuid | Primary key |
+| item_number | int | Human-readable ID (BACKLOG-XXX) |
+| title | text | Brief description |
+| type | text | feature/bug/refactor/chore/test/spike/epic |
+| area | text | Component area tag |
+| priority | text | critical/high/medium/low |
+| status | text | pending/in_progress/testing/completed/blocked/deferred/obsolete/reopened |
+| sprint_id | uuid | FK to pm_sprints |
+| est_tokens | int | Estimated tokens |
+| actual_tokens | int | Actual tokens used |
+| description | text | Full description |
+| body | text | Detailed task body (for engineer consumption) |
+| created_at | timestamptz | Creation date |
+| completed_at | timestamptz | Completion date |
 
-# Find all pending high priority
-grep ",high,pending," .claude/plans/backlog/data/backlog.csv
+### pm_sprints columns
 
-# Search titles
-grep -i "sync" .claude/plans/backlog/data/backlog.csv
+| Column | Type | Description |
+|--------|------|-------------|
+| id | uuid | Primary key |
+| name | text | Sprint name |
+| status | text | planned/active/completed/cancelled |
+| goal | text | Sprint goal |
+| start_date | date | Start date |
+| end_date | date | End date |
 
-# Get sprint items
-grep ",SPRINT-042," .claude/plans/backlog/data/backlog.csv
-```
+### pm_task_links columns
 
-### Using the Query Script
-
-```bash
-# More reliable than grep for complex queries
-python .claude/plans/backlog/scripts/queries.py status pending
-python .claude/plans/backlog/scripts/queries.py priority high --status pending
-python .claude/plans/backlog/scripts/queries.py search "message"
-python .claude/plans/backlog/scripts/queries.py stats
-```
-
----
-
-## CSV Schema Quick Reference
-
-### backlog.csv Columns
-
-| # | Column | Description |
-|---|--------|-------------|
-| 1 | id | BACKLOG-XXX |
-| 2 | title | Brief description |
-| 3 | category | bug/feature/enhancement/refactor/... |
-| 4 | priority | critical/high/medium/low |
-| 5 | status | pending/in-progress/completed/... |
-| 6 | sprint | SPRINT-XXX or - |
-| 7 | est_tokens | ~30K or - |
-| 8 | actual_tokens | 28K or - |
-| 9 | variance | -7% or - |
-| 10 | file | [BACKLOG-XXX.md] |
-
-### sprints.csv Columns
-
-| # | Column | Description |
-|---|--------|-------------|
-| 1 | sprint_id | SPRINT-XXX |
-| 2 | name | Sprint name |
-| 3 | status | planning/active/completed/deprecated |
-| 4 | items_completed | Summary of completed items |
-
----
-
-## Token Efficiency Tips
-
-1. **Use Python over bash** - CSV module handles quoting/escaping correctly
-2. **Filter early** - Don't load all items then filter in memory
-3. **Query script first** - Use queries.py before writing custom code
-4. **Avoid reading INDEX-archive.md** - It's 25K+ tokens; use CSVs instead (~500 tokens per query)
-
----
-
-## Modifying Data
-
-### Add Row
-
-```python
-import csv
-
-new_item = {
-    'id': 'BACKLOG-303',
-    'title': 'New Feature',
-    'category': 'feature',
-    'priority': 'medium',
-    'status': 'pending',
-    'sprint': '-',
-    'est_tokens': '~20K',
-    'actual_tokens': '-',
-    'variance': '-',
-    'file': '[BACKLOG-303.md]'
-}
-
-with open('.claude/plans/backlog/data/backlog.csv', 'a', newline='') as f:
-    writer = csv.DictWriter(f, fieldnames=new_item.keys())
-    writer.writerow(new_item)
-```
-
-### Update Row
-
-```python
-import csv
-
-def update_status(item_id, new_status):
-    with open('.claude/plans/backlog/data/backlog.csv') as f:
-        rows = list(csv.DictReader(f))
-
-    for row in rows:
-        if row['id'] == item_id:
-            row['status'] = new_status
-
-    with open('.claude/plans/backlog/data/backlog.csv', 'w', newline='') as f:
-        writer = csv.DictWriter(f, fieldnames=rows[0].keys())
-        writer.writeheader()
-        writer.writerows(rows)
-
-update_status('BACKLOG-220', 'completed')
-```
-
-### Always Validate After Changes
-
-```bash
-python .claude/plans/backlog/scripts/validate.py
-```
+| Column | Type | Description |
+|--------|------|-------------|
+| source_id | uuid | FK to pm_backlog_items |
+| target_id | uuid | FK to pm_backlog_items |
+| link_type | text | related_to/blocks/depends_on/duplicates |
