@@ -20,6 +20,7 @@ export function CreateOrganizationDialog({ onClose, onCreated }: CreateOrganizat
   const [name, setName] = useState('');
   const [maxSeats, setMaxSeats] = useState(5);
   const [selectedPlanId, setSelectedPlanId] = useState('');
+  const [defaultLicenseStatus, setDefaultLicenseStatus] = useState<'trial' | 'active'>('trial');
   const [plans, setPlans] = useState<Plan[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [isLoadingPlans, setIsLoadingPlans] = useState(true);
@@ -166,6 +167,26 @@ export function CreateOrganizationDialog({ onClose, onCreated }: CreateOrganizat
                 </option>
               ))}
             </select>
+          </div>
+
+          {/* Default License Status */}
+          <div>
+            <label htmlFor="org-license-status" className="block text-sm font-medium text-gray-700">
+              Default License Status
+            </label>
+            <select
+              id="org-license-status"
+              value={defaultLicenseStatus}
+              onChange={(e) => setDefaultLicenseStatus(e.target.value as 'trial' | 'active')}
+              disabled={isLoading}
+              className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm text-gray-900 shadow-sm focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500 disabled:opacity-50"
+            >
+              <option value="trial">Trial</option>
+              <option value="active">Active</option>
+            </select>
+            <p className="mt-1 text-xs text-gray-400">
+              License status applied to members who join this organization.
+            </p>
           </div>
 
           {/* Error */}

@@ -408,6 +408,26 @@ export async function getActivePlansForOrgs(): Promise<{ data: Plan[] | null; er
 }
 
 /**
+ * Fetch all active plans (all tiers, including Individual).
+ * Used for individual user invite where any plan can be selected.
+ */
+export async function getActivePlans(): Promise<{ data: Plan[] | null; error: Error | null }> {
+  const supabase = createClient();
+
+  const { data, error } = await supabase
+    .from('plans')
+    .select('*')
+    .eq('is_active', true)
+    .order('sort_order');
+
+  if (error) {
+    return { data: null, error: new Error(error.message) };
+  }
+
+  return { data: data as Plan[], error: null };
+}
+
+/**
  * Delete a plan. Blocked if any organizations are assigned to it.
  */
 export async function deletePlan(planId: string): Promise<RpcResult> {

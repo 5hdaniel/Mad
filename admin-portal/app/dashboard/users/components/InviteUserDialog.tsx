@@ -14,6 +14,7 @@
 import { useState, useEffect, useRef, useId, useMemo } from 'react';
 import { createClient } from '@/lib/supabase/client';
 import { inviteUser } from '@/lib/actions/inviteUser';
+import { getActivePlans, type Plan } from '@/lib/admin-queries';
 
 const ROLE_OPTIONS = [
   { value: 'agent', label: 'Agent' },
@@ -37,6 +38,8 @@ export function InviteUserDialog({ onClose, onInvited }: InviteUserDialogProps) 
   const [lastName, setLastName] = useState('');
   const [organizationId, setOrganizationId] = useState('');
   const [role, setRole] = useState<'agent' | 'broker' | 'admin'>('agent');
+  const [licenseStatus, setLicenseStatus] = useState<'trial' | 'active'>('trial');
+  const [selectedPlanId, setSelectedPlanId] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [successResult, setSuccessResult] = useState<{
@@ -48,6 +51,10 @@ export function InviteUserDialog({ onClose, onInvited }: InviteUserDialogProps) 
   const [organizations, setOrganizations] = useState<Organization[]>([]);
   const [orgSearch, setOrgSearch] = useState('');
   const [orgsLoading, setOrgsLoading] = useState(true);
+
+  // Plans for individual invite (no org selected)
+  const [plans, setPlans] = useState<Plan[]>([]);
+  const [plansLoading, setPlansLoading] = useState(true);
 
   const dialogRef = useRef<HTMLDivElement>(null);
   const titleId = useId();
@@ -64,6 +71,18 @@ export function InviteUserDialog({ onClose, onInvited }: InviteUserDialogProps) 
       setOrgsLoading(false);
     }
     loadOrgs();
+  }, []);
+
+  // Load plans for individual invite (all active plans)
+  useEffect(() => {
+    async function loadPlans() {
+      const result = await getActivePlans();
+      if (result.data) {
+        setPlans(result.data);
+      }
+      setPlansLoading(false);
+    }
+    loadPlans();
   }, []);
 
   useEffect(() => {
@@ -108,6 +127,8 @@ export function InviteUserDialog({ onClose, onInvited }: InviteUserDialogProps) 
       lastName: lastName.trim(),
       role,
       organizationId: organizationId || null,
+      licenseStatus,
+      planId: !organizationId && selectedPlanId ? selectedPlanId : null,
     });
 
     if (!result.success) {
@@ -351,6 +372,46 @@ export function InviteUserDialog({ onClose, onInvited }: InviteUserDialogProps) 
               </select>
             </div>
           )}
+
+          {/* Plan (only shown for individual invite — no org selected) */}
+          {!organizationId && (
+            <div>
+              <label htmlFor="invite-plan" className="block text-sm font-medium text-gray-700">
+                Plan
+              </label>
+              <select
+                id="invite-plan"
+                value={selectedPlanId}
+                onChange={(e) => setSelectedPlanId(e.target.value)}
+                disabled={isLoading || plansLoading}
+                className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm text-gray-900 shadow-sm focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500 disabled:opacity-50"
+              >
+                <option value="">No plan</option>
+                {plans.map((plan) => (
+                  <option key={plan.id} value={plan.id}>
+                    {plan.name} ({plan.tier})
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
+
+          {/* License Status */}
+          <div>
+            <label htmlFor="invite-license-status" className="block text-sm font-medium text-gray-700">
+              License Status
+            </label>
+            <select
+              id="invite-license-status"
+              value={licenseStatus}
+              onChange={(e) => setLicenseStatus(e.target.value as 'trial' | 'active')}
+              disabled={isLoading}
+              className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm text-gray-900 shadow-sm focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500 disabled:opacity-50"
+            >
+              <option value="trial">Trial</option>
+              <option value="active">Active</option>
+            </select>
+          </div>
 
           {/* Error */}
           {error && (
