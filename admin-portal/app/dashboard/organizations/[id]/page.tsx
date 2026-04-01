@@ -55,7 +55,7 @@ export default async function OrganizationDetailPage({
   const [orgResult, membersResult] = await Promise.all([
     supabase
       .from('organizations')
-      .select('id, name, slug, plan, max_seats, created_at')
+      .select('id, name, slug, max_seats, created_at, organization_plans(plan_id, plans(id, name, tier))')
       .eq('id', id)
       .single(),
     supabase
@@ -70,6 +70,12 @@ export default async function OrganizationDetailPage({
   }
 
   const org = orgResult.data;
+
+  // Extract plan from organization_plans join (same pattern as user detail page)
+  const orgPlans = org.organization_plans as unknown as { plan_id: string; plans: { id: string; name: string; tier: string } | null }[] | null;
+  const activePlan = orgPlans?.[0]?.plans ?? null;
+  const planName = activePlan?.name ?? 'None';
+  const planTier = activePlan?.tier ?? null;
 
   // Transform members to include user info
   const members: MemberRow[] = (membersResult.data ?? []).map((m) => {
@@ -111,7 +117,7 @@ export default async function OrganizationDetailPage({
         <div className="mt-6 grid grid-cols-2 md:grid-cols-4 gap-4">
           <div>
             <dt className="text-xs font-medium text-gray-500 uppercase tracking-wider">Plan</dt>
-            <dd className="mt-1 text-sm text-gray-900">{org.plan || 'None'}</dd>
+            <dd className="mt-1 text-sm text-gray-900">{planName}</dd>
           </div>
           <div>
             <dt className="text-xs font-medium text-gray-500 uppercase tracking-wider">Max Seats</dt>
