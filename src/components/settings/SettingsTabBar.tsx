@@ -25,7 +25,7 @@ export function SettingsTabBar({ tabs, activeTabId, onTabClick }: SettingsTabBar
     const containerRect = container.getBoundingClientRect();
     const btnRect = activeBtn.getBoundingClientRect();
     const scrollLeft = container.scrollLeft + (btnRect.left - containerRect.left) - (containerRect.width / 2) + (btnRect.width / 2);
-    container.scrollTo({ left: scrollLeft, behavior: "smooth" });
+    container.scrollTo?.({ left: scrollLeft, behavior: "smooth" });
   }, [activeTabId]);
 
   return (
