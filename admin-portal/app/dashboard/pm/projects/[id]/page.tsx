@@ -12,6 +12,7 @@
 
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useParams, useRouter } from 'next/navigation';
+import { DndContext, DragOverlay } from '@dnd-kit/core';
 import {
   getProjectDetail,
   listItems,
@@ -28,6 +29,8 @@ import type {
 import { ProjectHeader, DeleteConfirmation, ProjectLoadingSkeleton, ProjectNotFound } from './components/ProjectHeader';
 import { StatusSummary, TokenMetricCards, InlineSprintCreate } from './components/ProjectSprints';
 import { BacklogPanel, SprintSection } from './components/ProjectTasks';
+import { DraggableItemRow } from './components/DraggableItemRow';
+import { useProjectDragDrop } from './hooks/useProjectDragDrop';
 
 // ---------------------------------------------------------------------------
 // Main page component
@@ -118,6 +121,10 @@ export default function ProjectDetailPage() {
     loadItems();
   }, [loadDetail, loadItems]);
 
+  // Drag-and-drop
+  const { sensors, activeDragItem, handleDragStart, handleDragEnd } =
+    useProjectDragDrop({ onRefresh: refreshAll });
+
   // Update project field handler
   const handleUpdateField = useCallback(async (field: ProjectField, value: string | null) => {
     await updateProjectField(projectId, field, value);
@@ -170,47 +177,65 @@ export default function ProjectDetailPage() {
 
       <TokenMetricCards tokenSums={tokenSums} project={project} />
 
-      {/* Responsive layout: Backlog panel + Sprint sections */}
-      <div className="flex flex-col lg:flex-row gap-6">
-        <div className="w-full lg:w-1/3 lg:max-h-[calc(100vh-200px)] lg:overflow-y-auto">
-          <div className="flex items-center gap-2 mb-4">
-            <h2 className="text-lg font-semibold text-gray-900">Backlog</h2>
-            <span className="text-sm text-gray-500">({backlogItems.length})</span>
-          </div>
-          <BacklogPanel
-            items={backlogItems}
-            projectId={projectId}
-            loading={loadingItems}
-            onRefresh={refreshAll}
-          />
-        </div>
-
-        <div className="flex-1 space-y-4">
-          <div className="flex items-center gap-2 mb-4">
-            <h2 className="text-lg font-semibold text-gray-900">Sprints</h2>
-            <span className="text-sm text-gray-500">({sortedSprints.length})</span>
-          </div>
-
-          {sortedSprints.length === 0 ? (
-            <div className="border border-gray-200 rounded-lg p-8 text-center">
-              <p className="text-sm text-gray-400">
-                No sprints yet. Create one below.
-              </p>
+      {/* Responsive layout: Backlog panel + Sprint sections (drag-and-drop) */}
+      <DndContext
+        sensors={sensors}
+        onDragStart={handleDragStart}
+        onDragEnd={handleDragEnd}
+      >
+        <div className="flex flex-col lg:flex-row gap-6">
+          <div className="w-full lg:w-1/3 lg:max-h-[calc(100vh-200px)] lg:overflow-y-auto">
+            <div className="flex items-center gap-2 mb-4">
+              <h2 className="text-lg font-semibold text-gray-900">Backlog</h2>
+              <span className="text-sm text-gray-500">({backlogItems.length})</span>
             </div>
-          ) : (
-            sortedSprints.map((sprint) => (
-              <SprintSection
-                key={sprint.id}
-                sprint={sprint}
-                projectId={projectId}
-                onRefresh={refreshAll}
-              />
-            ))
-          )}
+            <BacklogPanel
+              items={backlogItems}
+              projectId={projectId}
+              loading={loadingItems}
+              onRefresh={refreshAll}
+            />
+          </div>
 
-          <InlineSprintCreate projectId={projectId} onCreated={refreshAll} />
+          <div className="flex-1 space-y-4">
+            <div className="flex items-center gap-2 mb-4">
+              <h2 className="text-lg font-semibold text-gray-900">Sprints</h2>
+              <span className="text-sm text-gray-500">({sortedSprints.length})</span>
+            </div>
+
+            {sortedSprints.length === 0 ? (
+              <div className="border border-gray-200 rounded-lg p-8 text-center">
+                <p className="text-sm text-gray-400">
+                  No sprints yet. Create one below.
+                </p>
+              </div>
+            ) : (
+              sortedSprints.map((sprint) => (
+                <SprintSection
+                  key={sprint.id}
+                  sprint={sprint}
+                  projectId={projectId}
+                  onRefresh={refreshAll}
+                />
+              ))
+            )}
+
+            <InlineSprintCreate projectId={projectId} onCreated={refreshAll} />
+          </div>
         </div>
-      </div>
+
+        {/* Drag overlay: floating preview card */}
+        <DragOverlay>
+          {activeDragItem ? (
+            <DraggableItemRow
+              item={activeDragItem}
+              projectId={projectId}
+              containerId=""
+              isDragOverlay
+            />
+          ) : null}
+        </DragOverlay>
+      </DndContext>
     </div>
   );
 }
