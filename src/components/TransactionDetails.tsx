@@ -594,6 +594,7 @@ function TransactionDetails({
               syncingCommunications={syncingCommunications}
               globalSyncRunning={globalSyncRunning}
               isOnline={isOnline}
+              onContactUpdated={loadDetails}
             />
           )}
 
