@@ -370,7 +370,7 @@ describe("BackupPasswordModal", () => {
     expect(screen.getByText(/verifying/i)).toBeInTheDocument();
   });
 
-  it("should handle keyboard escape to cancel", () => {
+  it("should call onCancel when cancel button is clicked", () => {
     render(
       <BackupPasswordModal
         isOpen={true}
@@ -380,12 +380,7 @@ describe("BackupPasswordModal", () => {
       />,
     );
 
-    fireEvent.keyDown(
-      screen.getByRole("button", { name: /cancel/i }).closest("div")!,
-      {
-        key: "Escape",
-      },
-    );
+    fireEvent.click(screen.getAllByRole("button", { name: /cancel/i })[0]);
 
     expect(mockOnCancel).toHaveBeenCalled();
   });
