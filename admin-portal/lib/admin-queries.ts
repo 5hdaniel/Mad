@@ -536,6 +536,70 @@ export async function createOrganization(
 }
 
 // ---------------------------------------------------------------------------
+// Device Management
+// ---------------------------------------------------------------------------
+
+export interface AdminDevice {
+  id: string;
+  device_name: string | null;
+  device_id: string;
+  os: string | null;
+  app_version: string | null;
+  platform: string | null;
+  is_active: boolean;
+  last_seen_at: string | null;
+  activated_at: string | null;
+}
+
+/**
+ * List all devices for a user via admin_list_user_devices RPC.
+ *
+ * @param userId - The target user's UUID
+ */
+export async function listUserDevices(
+  userId: string
+): Promise<{ data: AdminDevice[] | null; error: Error | null }> {
+  const supabase = createClient();
+
+  const { data, error } = await supabase.rpc('admin_list_user_devices', {
+    p_user_id: userId,
+  });
+
+  if (error) {
+    return { data: null, error: new Error(error.message) };
+  }
+
+  return { data: data as AdminDevice[], error: null };
+}
+
+/**
+ * Deactivate a device via admin_deactivate_device RPC.
+ *
+ * @param deviceId - The device UUID to deactivate
+ * @param userId - The owning user's UUID (for verification)
+ */
+export async function deactivateDevice(
+  deviceId: string,
+  userId: string
+): Promise<RpcResult<{ success: boolean; device_id: string; device_name: string | null }>> {
+  const supabase = createClient();
+
+  const { data, error } = await supabase.rpc('admin_deactivate_device', {
+    p_device_id: deviceId,
+    p_user_id: userId,
+  });
+
+  if (error) {
+    return { data: null, error: new Error(error.message) };
+  }
+
+  return {
+    data: data as { success: boolean; device_id: string; device_name: string | null },
+    error: null,
+  };
+}
+
+// ---------------------------------------------------------------------------
 // Impersonation
 // ---------------------------------------------------------------------------
 
