@@ -150,7 +150,9 @@ export async function inviteUser(input: InviteUserInput): Promise<InviteUserResu
         `INTERNAL_API_SECRET=${apiSecret ? 'set' : 'MISSING'}`
       );
     } else {
-      const inviterName = `${input.firstName} ${input.lastName}`.trim() || 'Keepr Support';
+      // Use the admin's name (from auth metadata), not the invited user's name
+      const inviterName = [user.user_metadata?.first_name, user.user_metadata?.last_name]
+        .filter(Boolean).join(' ') || user.email || 'Keepr Support';
 
       const response = await fetch(`${brokerPortalUrl}/api/email/send-invite`, {
         method: 'POST',
