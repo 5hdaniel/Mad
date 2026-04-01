@@ -64,8 +64,8 @@ function emailInfoToCommunication(email: EmailInfo): Communication & { body_prev
 
 // Pagination constants to prevent UI freeze from rendering too many items
 const THREADS_PER_PAGE = 25;
-const MAX_THREADS = 200;
-const DEFAULT_MAX_RESULTS = 100;
+const MAX_THREADS = 500;
+const DEFAULT_MAX_RESULTS = 250;
 const LOAD_MORE_INCREMENT = 100;
 
 export function AttachEmailsModal({
