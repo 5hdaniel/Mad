@@ -40,6 +40,8 @@ interface TransactionDetailsTabProps {
   globalSyncRunning?: boolean;
   /** TASK-2074: Whether the app is online (network connectivity) */
   isOnline?: boolean;
+  /** BACKLOG-1548: Callback to refresh contact data after editing a contact */
+  onContactUpdated?: () => void;
 }
 
 // Helper function to format date in readable format
@@ -84,6 +86,7 @@ export function TransactionDetailsTab({
   syncingCommunications = false,
   globalSyncRunning = false,
   isOnline = true,
+  onContactUpdated,
 }: TransactionDetailsTabProps): React.ReactElement {
   // TASK-2074: Disable sync when offline, already syncing, or when a global dashboard sync is running
   const syncDisabled = !isOnline || syncingCommunications || globalSyncRunning;
@@ -520,7 +523,10 @@ export function TransactionDetailsTab({
           userId={userId}
           contact={editContact}
           onClose={() => setEditContact(null)}
-          onSuccess={() => setEditContact(null)}
+          onSuccess={() => {
+            setEditContact(null);
+            onContactUpdated?.();
+          }}
         />
       )}
     </>

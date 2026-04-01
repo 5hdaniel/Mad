@@ -13,6 +13,11 @@ import React from "react";
 import { render, screen, fireEvent, waitFor, act } from "@testing-library/react";
 import { SupportWidget } from "../SupportWidget";
 
+// Mock platform context - default to macOS (non-Windows)
+jest.mock("../../../contexts/PlatformContext", () => ({
+  usePlatform: jest.fn(() => ({ isMacOS: true, isWindows: false, isLinux: false, platform: "macos" })),
+}));
+
 // Mock SupportTicketDialog to avoid complex setup
 jest.mock("../SupportTicketDialog", () => ({
   SupportTicketDialog: ({
@@ -171,5 +176,37 @@ describe("SupportWidget", () => {
     });
 
     expect(screen.getByTestId("support-dialog")).toBeInTheDocument();
+  });
+
+  // BACKLOG-1554: Platform-specific positioning tests
+  it("uses bottom-4 left-4 positioning on macOS", () => {
+    render(<SupportWidget />);
+    const button = screen.getByLabelText("Open support dialog");
+    expect(button.className).toContain("bottom-4");
+    expect(button.className).toContain("left-4");
+  });
+
+  it("uses bottom-8 left-8 positioning on Windows to avoid resize zone", () => {
+    // Override the mock to return Windows
+    const { usePlatform } = require("../../../contexts/PlatformContext");
+    (usePlatform as jest.Mock).mockReturnValue({
+      isMacOS: false,
+      isWindows: true,
+      isLinux: false,
+      platform: "windows",
+    });
+
+    render(<SupportWidget />);
+    const button = screen.getByLabelText("Open support dialog");
+    expect(button.className).toContain("bottom-8");
+    expect(button.className).toContain("left-8");
+
+    // Restore default mock
+    (usePlatform as jest.Mock).mockReturnValue({
+      isMacOS: true,
+      isWindows: false,
+      isLinux: false,
+      platform: "macos",
+    });
   });
 });
