@@ -1,4 +1,5 @@
 import React, { useState, useRef, useEffect, useCallback } from "react";
+import { ResponsiveModal } from "./common/ResponsiveModal";
 import type { ExtendedContact } from "../types/components";
 import { ImportContactsModal, ContactFormModal } from "./contact";
 import { ContactPreview } from "./shared/ContactPreview";
@@ -254,8 +255,7 @@ function ContactSelectModal({
   };
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center z-[70] p-4">
-      <div className="bg-white rounded-xl shadow-2xl w-full max-w-3xl h-[70vh] max-h-[80vh] flex flex-col">
+    <ResponsiveModal onClose={onClose} zIndex="z-[70]" panelClassName="max-w-3xl sm:h-[70vh] sm:max-h-[80vh]">
         {/* Header */}
         <div className="flex-shrink-0 bg-gradient-to-r from-purple-500 to-pink-600 px-6 py-4 flex items-center justify-between rounded-t-xl">
           <div>
@@ -297,13 +297,13 @@ function ContactSelectModal({
                 placeholder="Search contacts by name, email, or company..."
                 value={searchQuery}
                 onChange={(e) => handleSearchChange(e.target.value)}
-                className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500"
+                className="w-full pl-10 pr-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500 text-gray-900 bg-white min-h-[44px]"
                 autoFocus
               />
               {/* Search icon - shows spinner when searching */}
               {isSearching ? (
                 <svg
-                  className="w-5 h-5 text-purple-500 absolute left-3 top-2.5 animate-spin"
+                  className="w-5 h-5 text-purple-500 absolute left-3 top-1/2 -translate-y-1/2 animate-spin"
                   fill="none"
                   viewBox="0 0 24 24"
                 >
@@ -323,7 +323,7 @@ function ContactSelectModal({
                 </svg>
               ) : (
                 <svg
-                  className="w-5 h-5 text-gray-400 absolute left-3 top-2.5"
+                  className="w-5 h-5 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2"
                   fill="none"
                   stroke="currentColor"
                   viewBox="0 0 24 24"
@@ -343,7 +343,7 @@ function ContactSelectModal({
                 type="checkbox"
                 checked={showMessageContacts}
                 onChange={(e) => setShowMessageContacts(e.target.checked)}
-                className="w-4 h-4 rounded border-gray-300 text-purple-600 focus:ring-purple-500 cursor-pointer"
+                className="w-5 h-5 rounded border-gray-300 text-purple-600 focus:ring-purple-500 cursor-pointer"
               />
               <span>Include message contacts</span>
             </label>
@@ -559,7 +559,6 @@ function ContactSelectModal({
             Add {selectedIds.length > 0 && `(${selectedIds.length})`}
           </button>
         </div>
-      </div>
 
       {/* Contact Preview Modal */}
       {previewContact && (
@@ -608,7 +607,7 @@ function ContactSelectModal({
           }}
         />
       )}
-    </div>
+    </ResponsiveModal>
   );
 }
 

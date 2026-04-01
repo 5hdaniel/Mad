@@ -213,8 +213,8 @@ export function MessageThreadCard({
         data-thread-id={threadId}
       >
         {/* Compact single-line layout */}
-        <div className="bg-gray-50 px-4 py-3 flex items-center justify-between">
-          <div className="flex items-center gap-3 min-w-0 flex-1">
+        <div className="bg-gray-50 px-3 py-3 sm:px-4 flex items-center justify-between gap-2">
+          <div className="flex items-center gap-2 sm:gap-3 min-w-0 flex-1">
             {/* Avatar - Purple for group, Green for 1:1 */}
             {isGroup ? (
               <div className="w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 bg-purple-100">
@@ -268,7 +268,7 @@ export function MessageThreadCard({
           </div>
 
           {/* Date range and action buttons */}
-          <div className="flex items-center gap-4 flex-shrink-0">
+          <div className="flex items-center gap-2 sm:gap-4 flex-shrink-0">
             <span className="text-sm text-gray-500 hidden sm:inline">
               {getDateRange()}
             </span>

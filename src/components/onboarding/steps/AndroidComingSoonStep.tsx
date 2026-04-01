@@ -29,7 +29,7 @@ import logger from "../../../utils/logger";
 export const meta: OnboardingStepMeta = {
   id: "android-coming-soon",
   progressLabel: "Android",
-  platforms: ["macos", "windows"],
+  platforms: ["macos", "windows", "android", "ios"],
   navigation: {
     showBack: false,
     hideContinue: true,
@@ -157,9 +157,9 @@ function Content({ context, onAction }: OnboardingStepContentProps) {
     <div className="text-center">
       {/* Android Icon */}
       <div className="relative inline-block mb-4">
-        <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto">
+        <div className="w-14 h-14 sm:w-16 sm:h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto">
           <svg
-            className="w-10 h-10 text-green-500"
+            className="w-8 h-8 sm:w-10 sm:h-10 text-green-500"
             viewBox="0 0 24 24"
             fill="currentColor"
           >
@@ -176,7 +176,7 @@ function Content({ context, onAction }: OnboardingStepContentProps) {
       </div>
 
       {/* Header */}
-      <h1 className="text-xl font-bold text-gray-900 mb-2">
+      <h1 className="text-lg sm:text-xl font-bold text-gray-900 mb-2">
         {paired ? "Android Phone Connected!" : "Pair Your Android Phone"}
       </h1>
 
@@ -210,7 +210,7 @@ function Content({ context, onAction }: OnboardingStepContentProps) {
               <button
                 onClick={handleGenerateQR}
                 disabled={generating}
-                className="px-6 py-3 bg-green-500 text-white rounded-lg font-semibold hover:bg-green-600 transition-all shadow-md hover:shadow-lg disabled:opacity-50 disabled:cursor-not-allowed"
+                className="px-6 py-3 min-h-[44px] bg-green-500 text-white rounded-lg font-semibold hover:bg-green-600 active:bg-green-700 transition-all shadow-md hover:shadow-lg disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 {generating ? (
                   <span className="flex items-center gap-2">
@@ -252,10 +252,10 @@ function Content({ context, onAction }: OnboardingStepContentProps) {
 
       {/* Info Box (shown before QR code is generated) */}
       {!qrDataUrl && !paired && (
-        <div className="bg-gradient-to-r from-green-50 to-emerald-50 rounded-xl p-4 mb-4 text-left">
-          <h3 className="font-semibold text-gray-900 mb-2 flex items-center gap-2">
+        <div className="bg-gradient-to-r from-green-50 to-emerald-50 rounded-xl p-3 sm:p-4 mb-4 text-left">
+          <h3 className="font-semibold text-gray-900 mb-2 flex items-center gap-2 text-sm sm:text-base">
             <svg
-              className="w-5 h-5 text-green-500"
+              className="w-5 h-5 text-green-500 flex-shrink-0"
               fill="none"
               stroke="currentColor"
               viewBox="0 0 24 24"
@@ -308,7 +308,7 @@ function Content({ context, onAction }: OnboardingStepContentProps) {
       <div className="space-y-2">
         <button
           onClick={handleContinue}
-          className="w-full py-2.5 px-4 bg-blue-500 text-white rounded-lg font-semibold hover:bg-blue-600 transition-all shadow-md hover:shadow-lg"
+          className="w-full min-h-[44px] py-2.5 px-4 bg-blue-500 text-white rounded-lg font-semibold hover:bg-blue-600 active:bg-blue-700 transition-all shadow-md hover:shadow-lg"
         >
           {paired ? "Continue" : "Skip & Continue with Email Only"}
         </button>
@@ -316,7 +316,7 @@ function Content({ context, onAction }: OnboardingStepContentProps) {
         {!paired && (
           <button
             onClick={handleGoBack}
-            className="w-full py-2.5 px-4 border border-gray-300 text-gray-700 rounded-lg font-medium hover:bg-gray-50 transition-all flex items-center justify-center gap-2"
+            className="w-full min-h-[44px] py-2.5 px-4 border border-gray-300 text-gray-700 rounded-lg font-medium hover:bg-gray-50 active:bg-gray-100 transition-all flex items-center justify-center gap-2"
           >
             <svg
               className="w-4 h-4"

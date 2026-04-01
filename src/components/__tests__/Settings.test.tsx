@@ -11,6 +11,11 @@ import Settings from "../Settings";
 import { PlatformProvider } from "../../contexts/PlatformContext";
 import { NotificationProvider } from "../../contexts/NotificationContext";
 
+// Polyfill Element.scrollTo for jsdom (SettingsTabBar uses it)
+if (typeof Element.prototype.scrollTo !== "function") {
+  Element.prototype.scrollTo = jest.fn();
+}
+
 // Mock the useLicense hook (still used by some sub-components)
 jest.mock("@/contexts/LicenseContext", () => ({
   useLicense: jest.fn(() => ({
@@ -25,13 +30,14 @@ jest.mock("@/contexts/LicenseContext", () => ({
   })),
 }));
 
-// TASK-2159: Mock the useFeatureGate hook (Settings + LicenseGate now use this)
+// TASK-2159: Mock the useFeatureGate hook (Settings + FeatureGate now use this)
 const mockIsAllowed = jest.fn().mockReturnValue(true); // Default: all features allowed
 jest.mock("@/hooks/useFeatureGate", () => ({
   useFeatureGate: () => ({
     isAllowed: mockIsAllowed,
     features: {},
     loading: false,
+    hasInitialized: true,
     refresh: jest.fn(),
   }),
 }));
@@ -131,6 +137,19 @@ describe("Settings", () => {
         platformUsed: 0,
       },
     });
+
+    // Update mocks for GeneralSettings (Check for Updates button)
+    window.api.update.checkForUpdates = jest.fn().mockResolvedValue({ updateAvailable: false });
+
+    // Security mocks for SecuritySettings
+    window.api.auth.getActiveDevices = jest.fn().mockResolvedValue({ success: true, devices: [] });
+    window.api.auth.signOutAllDevices = jest.fn().mockResolvedValue({ success: true });
+
+    // Email re-cache mock for EmailSettings (BACKLOG-1362)
+    window.api.transactions.precacheEmails = jest.fn().mockResolvedValue({ success: true, emailsFetched: 0, emailsStored: 0 });
+
+    // Preferences save mock (used by settingsService.savePreferences)
+    window.api.preferences.save = jest.fn().mockResolvedValue({ success: true });
   });
 
   // Helper to get the export format combobox (has PDF option)
@@ -147,7 +166,8 @@ describe("Settings", () => {
     it("should render settings modal with title", async () => {
       await renderSettings({ userId: mockUserId, onClose: mockOnClose });
 
-      expect(screen.getByText("Settings")).toBeInTheDocument();
+      // Responsive layout renders both mobile and desktop headers
+      expect(screen.getAllByText("Settings").length).toBeGreaterThanOrEqual(1);
     });
 
     it("should show all settings sections", async () => {
@@ -793,9 +813,9 @@ describe("Settings", () => {
 
       await renderSettings({ userId: mockUserId, onClose: mockOnClose });
 
-      // Should still render without crashing
+      // Should still render without crashing (responsive layout has mobile + desktop headers)
       await waitFor(() => {
-        expect(screen.getByText("Settings")).toBeInTheDocument();
+        expect(screen.getAllByText("Settings").length).toBeGreaterThanOrEqual(1);
       });
     });
 

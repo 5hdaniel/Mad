@@ -3,6 +3,7 @@
  * Modal for editing transaction details and contact assignments
  */
 import React, { useState, useEffect } from "react";
+import { ResponsiveModal } from "../../common/ResponsiveModal";
 import type { Transaction } from "../../../../electron/types/models";
 import type { ExtendedContact } from "../../../types/components";
 import {
@@ -281,8 +282,7 @@ export function EditTransactionModal({
   };
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center z-[70] p-4">
-      <div className="bg-white rounded-xl shadow-2xl w-full max-w-4xl max-h-[90vh] flex flex-col">
+    <ResponsiveModal onClose={onClose} zIndex="z-[70]" panelClassName="max-w-4xl sm:max-h-[90vh]">
         {/* Header */}
         <div className="flex-shrink-0 bg-gradient-to-r from-blue-500 to-indigo-600 px-6 py-4 flex items-center justify-between rounded-t-xl">
           <h3 className="text-xl font-bold text-white">Edit Transaction</h3>
@@ -353,7 +353,7 @@ export function EditTransactionModal({
                   onChange={(e) =>
                     handleChange("property_address", e.target.value)
                   }
-                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-gray-900 bg-white min-h-[44px]"
                 />
               </div>
 
@@ -404,10 +404,10 @@ export function EditTransactionModal({
                     onChange={(e) =>
                       handleChange("started_at", e.target.value)
                     }
-                    className={`w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${
+                    className={`w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-gray-900 min-h-[44px] ${
                       !formData.started_at
                         ? "border-red-300 bg-red-50"
-                        : "border-gray-300"
+                        : "border-gray-300 bg-white"
                     }`}
                     required
                   />
@@ -425,7 +425,7 @@ export function EditTransactionModal({
                     onChange={(e) =>
                       handleChange("closed_at", e.target.value)
                     }
-                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-gray-900 bg-white min-h-[44px]"
                   />
                 </div>
               </div>
@@ -441,7 +441,7 @@ export function EditTransactionModal({
                     value={formData.sale_price}
                     onChange={(e) => handleChange("sale_price", e.target.value)}
                     placeholder="0"
-                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-gray-900 bg-white min-h-[44px]"
                   />
                 </div>
                 <div>
@@ -455,7 +455,7 @@ export function EditTransactionModal({
                       handleChange("listing_price", e.target.value)
                     }
                     placeholder="0"
-                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-gray-900 bg-white min-h-[44px]"
                   />
                 </div>
               </div>
@@ -508,8 +508,7 @@ export function EditTransactionModal({
             {saving ? "Saving..." : "Save Changes"}
           </button>
         </div>
-      </div>
-    </div>
+    </ResponsiveModal>
   );
 }
 

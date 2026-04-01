@@ -6,6 +6,7 @@
  */
 
 import React, { useEffect } from "react";
+import { ResponsiveModal } from "../../components/common/ResponsiveModal";
 import { IPhoneSyncFlow } from "../../components/iphone/IPhoneSyncFlow";
 import logger from "../../utils/logger";
 
@@ -20,8 +21,7 @@ export function IPhoneSyncModal({ onClose }: IPhoneSyncModalProps) {
   }, []);
 
   return (
-    <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/50">
-      <div className="bg-white rounded-2xl shadow-2xl max-w-lg w-full mx-4 max-h-[90vh] overflow-y-auto">
+    <ResponsiveModal onClose={onClose} zIndex="z-[60]" overlayClassName="bg-black/50" panelClassName="max-w-lg sm:max-h-[90vh] sm:overflow-y-auto">
         {/* Minimize button — dismisses modal without stopping sync */}
         <div className="flex justify-end p-4 pb-0">
           <button
@@ -35,7 +35,6 @@ export function IPhoneSyncModal({ onClose }: IPhoneSyncModalProps) {
           </button>
         </div>
         <IPhoneSyncFlow onClose={onClose} onSyncStarted={onClose} />
-      </div>
-    </div>
+    </ResponsiveModal>
   );
 }

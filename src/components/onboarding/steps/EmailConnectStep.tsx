@@ -116,13 +116,13 @@ function ProviderCard({
     // Primary provider card - larger and highlighted
     return (
       <div className="mb-4">
-        <div className="p-4 bg-gradient-to-r from-blue-50 to-purple-50 rounded-xl border-2 border-blue-200">
+        <div className="p-3 sm:p-4 bg-gradient-to-r from-blue-50 to-purple-50 rounded-xl border-2 border-blue-200">
           <div className="flex items-center justify-between mb-2">
-            <div className="flex items-center gap-2">
-              <div className="w-10 h-10 bg-white rounded-lg shadow-md flex items-center justify-center">
+            <div className="flex items-center gap-2 min-w-0">
+              <div className="w-10 h-10 bg-white rounded-lg shadow-md flex items-center justify-center flex-shrink-0">
                 {config.icon}
               </div>
-              <div>
+              <div className="min-w-0">
                 <h4 className="text-sm font-semibold text-gray-900">
                   {config.name}
                 </h4>
@@ -160,7 +160,7 @@ function ProviderCard({
           {isConnected ? (
             <button
               onClick={onContinue}
-              className="w-full px-4 py-2.5 bg-green-500 hover:bg-green-600 text-white text-sm font-semibold rounded-lg transition-all flex items-center justify-center gap-2 shadow-md"
+              className="w-full min-h-[44px] px-4 py-2.5 bg-green-500 hover:bg-green-600 active:bg-green-700 text-white text-sm font-semibold rounded-lg transition-all flex items-center justify-center gap-2 shadow-md"
             >
               <span>Continue</span>
               <svg
@@ -181,7 +181,7 @@ function ProviderCard({
             <button
               onClick={onConnect}
               disabled={isConnecting || isLoading}
-              className="w-full px-4 py-2.5 bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700 text-white text-sm font-semibold rounded-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 shadow-md"
+              className="w-full min-h-[44px] px-4 py-2.5 bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700 active:from-blue-700 active:to-purple-800 text-white text-sm font-semibold rounded-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 shadow-md"
             >
               {isConnecting ? (
                 <>
@@ -206,11 +206,11 @@ function ProviderCard({
       </p>
       <div className="p-3 bg-gray-50 rounded-xl border border-gray-200">
         <div className="flex items-center justify-between mb-2">
-          <div className="flex items-center gap-2">
-            <div className="w-9 h-9 bg-white rounded-lg shadow flex items-center justify-center">
+          <div className="flex items-center gap-2 min-w-0">
+            <div className="w-9 h-9 bg-white rounded-lg shadow flex items-center justify-center flex-shrink-0">
               {config.icon}
             </div>
-            <div>
+            <div className="min-w-0">
               <h4 className="text-sm font-semibold text-gray-900">
                 {config.name}
               </h4>
@@ -246,7 +246,7 @@ function ProviderCard({
         {isConnected ? (
           <button
             onClick={onContinue}
-            className="w-full px-4 py-2 bg-green-500 hover:bg-green-600 text-white text-sm font-semibold rounded-lg transition-all flex items-center justify-center gap-2 shadow-md"
+            className="w-full min-h-[44px] px-4 py-2 bg-green-500 hover:bg-green-600 active:bg-green-700 text-white text-sm font-semibold rounded-lg transition-all flex items-center justify-center gap-2 shadow-md"
           >
             <span>Continue</span>
             <svg
@@ -267,7 +267,7 @@ function ProviderCard({
           <button
             onClick={onConnect}
             disabled={isConnecting || isLoading}
-            className="w-full px-4 py-2 bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700 text-white text-sm font-semibold rounded-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 shadow-md"
+            className="w-full min-h-[44px] px-4 py-2 bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700 active:from-blue-700 active:to-purple-800 text-white text-sm font-semibold rounded-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 shadow-md"
           >
             {isConnecting ? (
               <>
@@ -340,7 +340,7 @@ export function Content({
   return (
     <>
       {/* Header */}
-      <div className="text-center mb-5">
+      <div className="text-center mb-4 sm:mb-5">
         <div className="inline-flex items-center justify-center w-14 h-14 bg-gradient-to-br from-blue-500 to-purple-600 rounded-full mb-3 shadow-lg">
           <svg
             className="w-7 h-7 text-white"
@@ -356,7 +356,7 @@ export function Content({
             />
           </svg>
         </div>
-        <h2 className="text-xl font-bold text-gray-900 mb-2">
+        <h2 className="text-lg sm:text-xl font-bold text-gray-900 mb-2">
           Connect Your Email
         </h2>
         <p className="text-sm text-gray-600">

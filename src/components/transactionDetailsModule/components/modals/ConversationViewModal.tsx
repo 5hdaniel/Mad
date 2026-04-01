@@ -4,6 +4,7 @@
  * Supports inline display of image/GIF attachments (TASK-1012).
  */
 import React, { useEffect, useState, useRef } from "react";
+import { ResponsiveModal } from "../../../common/ResponsiveModal";
 import type { MessageLike } from "../MessageThreadCard";
 import { parseDateSafe } from "../../../../utils/dateFormatters";
 import { normalizePhoneForLookup, getSenderPhone } from "../../../../utils/phoneNormalization";
@@ -110,7 +111,7 @@ function AttachmentImage({
       <img
         src={dataUrl}
         alt={attachment.filename || "Attachment"}
-        className="max-w-full max-h-64 rounded-lg cursor-pointer hover:opacity-90 transition-opacity"
+        className="max-w-full max-h-48 sm:max-h-64 rounded-lg cursor-pointer hover:opacity-90 transition-opacity"
         onLoad={() => setIsLoading(false)}
         onError={() => {
           setIsLoading(false);
@@ -307,14 +308,7 @@ export function ConversationViewModal({
   }, [attachmentsKey]);
 
   return (
-    <div
-      className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[80]"
-      onClick={onClose}
-    >
-      <div
-        className="bg-gray-100 w-full max-w-md h-[600px] rounded-2xl shadow-2xl flex flex-col overflow-hidden"
-        onClick={(e) => e.stopPropagation()}
-      >
+    <ResponsiveModal onClose={onClose} zIndex="z-[80]" overlayClassName="bg-black bg-opacity-50" panelBg="bg-gray-100" panelClassName="max-w-md sm:h-[600px] sm:rounded-2xl sm:overflow-hidden">
         {/* Phone-style header */}
         <div className="bg-gradient-to-r from-green-500 to-teal-600 px-4 py-3 flex items-center gap-3">
           <button
@@ -356,7 +350,7 @@ export function ConversationViewModal({
                 type="checkbox"
                 checked={showAuditPeriodOnly}
                 onChange={(e) => setShowAuditPeriodOnly(e.target.checked)}
-                className="w-4 h-4 rounded border-gray-300 text-green-500 focus:ring-green-500"
+                className="w-5 h-5 rounded border-gray-300 text-green-500 focus:ring-green-500"
               />
               <span className="text-sm text-gray-700">
                 Show audit period only ({formatDateRangeLabel(parsedStartDate, parsedEndDate)})
@@ -426,7 +420,7 @@ export function ConversationViewModal({
                 className={`flex ${isOutbound ? "justify-end" : "justify-start"}`}
               >
                 <div
-                  className={`max-w-[80%] rounded-2xl px-4 py-2 ${
+                  className={`max-w-[85%] sm:max-w-[80%] rounded-2xl px-3 py-2 sm:px-4 ${
                     isOutbound
                       ? "bg-green-500 text-white rounded-br-md"
                       : "bg-white text-gray-900 rounded-bl-md shadow-sm"
@@ -526,8 +520,7 @@ export function ConversationViewModal({
             Close
           </button>
         </div>
-      </div>
-    </div>
+    </ResponsiveModal>
   );
 }
 

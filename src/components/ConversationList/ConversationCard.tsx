@@ -36,7 +36,7 @@ export const ConversationCard = React.memo(function ConversationCard({
     <div
       onClick={handleCardClick}
       data-tour={isFirstCard ? "contact-list" : undefined}
-      className={`p-4 bg-white border-2 rounded-lg cursor-pointer transition-all ${
+      className={`p-3 sm:p-4 bg-white border-2 rounded-lg cursor-pointer transition-all ${
         isSelected
           ? "border-primary bg-blue-50"
           : "border-gray-200 hover:border-gray-300"
@@ -46,7 +46,7 @@ export const ConversationCard = React.memo(function ConversationCard({
         <div className="flex items-center flex-1 min-w-0">
           {/* Checkbox */}
           <div
-            className={`flex-shrink-0 w-5 h-5 rounded border-2 mr-4 flex items-center justify-center ${
+            className={`flex-shrink-0 w-6 h-6 sm:w-5 sm:h-5 rounded border-2 mr-3 sm:mr-4 flex items-center justify-center ${
               isSelected ? "bg-primary border-primary" : "border-gray-300"
             }`}
           >
@@ -136,7 +136,7 @@ export const ConversationCard = React.memo(function ConversationCard({
         </div>
 
         {/* Action buttons */}
-        <div className="ml-4 flex gap-2 items-center">
+        <div className="ml-2 sm:ml-4 flex gap-2 items-center">
           {/* Contact Info Button */}
           {(conversation.phones?.length || conversation.emails?.length) && (
             <button

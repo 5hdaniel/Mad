@@ -6,6 +6,17 @@
  */
 
 /**
+ * Remove trailing ", USA" or ", US" from an address for cleaner display.
+ */
+export function formatAddress(address: string | null | undefined): string {
+  if (!address) return "";
+  return address.replace(/,\s*(USA|US)$/i, "");
+}
+
+/*
+ */
+
+/**
  * Format file size in human-readable format.
  * Handles null input for cases where file size is unknown.
  *

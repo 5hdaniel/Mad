@@ -10,6 +10,7 @@
  * - Various modal dialogs
  */
 import React, { useState, useEffect, useCallback, useMemo } from "react";
+import { ResponsiveModal } from "./common/ResponsiveModal";
 import type { Transaction } from "@/types";
 import { transactionService } from '../services';
 import ExportModal from "./ExportModal";
@@ -512,18 +513,15 @@ function TransactionDetails({
   // Show a loading overlay while initial data loads
   if (loading && contactAssignments.length === 0) {
     return (
-      <div className="fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center z-[60] p-4">
-        <div className="bg-white rounded-xl shadow-2xl w-full max-w-4xl h-[70vh] max-h-[90vh] flex flex-col items-center justify-center">
+      <ResponsiveModal zIndex="z-[60]" panelClassName="max-w-4xl sm:h-[70vh] sm:max-h-[90vh] items-center justify-center">
           <div className="w-10 h-10 border-4 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
           <p className="text-gray-500 mt-4">Loading transaction...</p>
-        </div>
-      </div>
+      </ResponsiveModal>
     );
   }
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center z-[60] p-4">
-      <div className="bg-white rounded-xl shadow-2xl w-full max-w-4xl h-[70vh] max-h-[90vh] flex flex-col">
+    <ResponsiveModal onClose={onClose} zIndex="z-[60]" panelClassName="max-w-4xl sm:h-[70vh] sm:max-h-[90vh]">
         {/* Header */}
         <TransactionHeader
           transaction={transaction}
@@ -567,7 +565,7 @@ function TransactionDetails({
         <OfflineNotice />
 
         {/* Content */}
-        <div className="flex-1 overflow-y-auto p-6">
+        <div className="flex-1 overflow-y-auto p-3 sm:p-6">
           {/* Review Notes Panel - shown when broker requests changes (BACKLOG-395) */}
           {transaction.submission_status === "needs_changes" && transaction.last_review_notes && (
             <ReviewNotesPanel
@@ -653,7 +651,6 @@ function TransactionDetails({
             />
           )}
         </div>
-      </div>
 
       {/* Export Modal */}
       {showExportModal && (
@@ -789,7 +786,7 @@ function TransactionDetails({
       {(!onShowSuccess && !onShowError || localToast.toasts.length > 0) && (
         <ToastContainer toasts={localToast.toasts} onDismiss={localToast.removeToast} />
       )}
-    </div>
+    </ResponsiveModal>
   );
 }
 

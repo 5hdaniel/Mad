@@ -91,7 +91,7 @@ function ContactRoleRow({
 
       {/* Role Dropdown */}
       <select
-        className="px-3 py-2 text-sm border border-gray-300 rounded-lg bg-white focus:ring-2 focus:ring-purple-500 focus:border-purple-500 focus:outline-none min-w-[160px]"
+        className="px-3 py-2.5 text-sm border border-gray-300 rounded-lg bg-white text-gray-900 focus:ring-2 focus:ring-purple-500 focus:border-purple-500 focus:outline-none min-w-[160px] min-h-[44px]"
         value={currentRole}
         onChange={(e) => onRoleChange(e.target.value)}
         aria-label={`Role for ${displayName}`}

@@ -84,8 +84,8 @@ export function EmailThreadCard({
         data-thread-id={thread.id}
       >
         {/* Compact single-line layout */}
-        <div className="bg-gray-50 px-4 py-3 flex items-center justify-between">
-          <div className="flex items-center gap-3 min-w-0 flex-1">
+        <div className="bg-gray-50 px-3 py-3 sm:px-4 flex items-center justify-between gap-2">
+          <div className="flex items-center gap-2 sm:gap-3 min-w-0 flex-1">
             {/* Avatar - Blue for email */}
             <div className="w-8 h-8 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-full flex items-center justify-center text-white font-semibold text-sm flex-shrink-0">
               {avatarInitial}
@@ -94,10 +94,10 @@ export function EmailThreadCard({
             {/* Thread info: Subject and participants */}
             <div className="min-w-0 flex-1">
               <div data-testid="thread-subject">
-                <span className="font-semibold text-gray-900 block truncate">
+                <span className="font-semibold text-gray-900 block truncate text-sm sm:text-base">
                   {thread.subject || "(No Subject)"}
                 </span>
-                <span className="font-normal text-gray-500 text-sm block truncate">
+                <span className="font-normal text-gray-500 text-xs sm:text-sm block truncate">
                   {formatParticipants(otherParticipants)}
                   {isMultipleEmails && (
                     <span className="ml-2 text-gray-400">
@@ -106,7 +106,7 @@ export function EmailThreadCard({
                   )}
                 </span>
                 {bodyPreview && (
-                  <span className="text-xs text-gray-400 block truncate mt-0.5">
+                  <span className="text-xs text-gray-400 block truncate mt-0.5 hidden sm:block">
                     {bodyPreview.length > 120 ? bodyPreview.substring(0, 120) + "..." : bodyPreview}
                   </span>
                 )}
@@ -115,7 +115,7 @@ export function EmailThreadCard({
           </div>
 
           {/* Attachment icon, date range, and action buttons */}
-          <div className="flex items-center gap-4 flex-shrink-0">
+          <div className="flex items-center gap-2 sm:gap-4 flex-shrink-0">
             {threadHasAttachments && (
               <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13" />

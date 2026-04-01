@@ -46,3 +46,7 @@ export type { TransactionListCardProps } from "./TransactionListCard";
 // TransactionsToolbar
 export { TransactionsToolbar } from "./TransactionsToolbar";
 export type { TransactionsToolbarProps } from "./TransactionsToolbar";
+
+// TransactionMobileCard (TASK-1440: mobile responsive card)
+export { TransactionMobileCard } from "./TransactionMobileCard";
+export type { TransactionMobileCardProps } from "./TransactionMobileCard";
