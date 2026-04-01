@@ -118,6 +118,11 @@ export function InviteUserDialog({ onClose, onInvited }: InviteUserDialogProps) 
       return;
     }
 
+    if (!organizationId && !selectedPlanId) {
+      setError('Plan is required for individual invites.');
+      return;
+    }
+
     setIsLoading(true);
     setError(null);
 
@@ -377,7 +382,7 @@ export function InviteUserDialog({ onClose, onInvited }: InviteUserDialogProps) 
           {!organizationId && (
             <div>
               <label htmlFor="invite-plan" className="block text-sm font-medium text-gray-700">
-                Plan
+                Plan <span className="text-red-500">*</span>
               </label>
               <select
                 id="invite-plan"
@@ -386,7 +391,7 @@ export function InviteUserDialog({ onClose, onInvited }: InviteUserDialogProps) 
                 disabled={isLoading || plansLoading}
                 className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm text-gray-900 shadow-sm focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500 disabled:opacity-50"
               >
-                <option value="">No plan</option>
+                <option value="">Select a plan...</option>
                 {plans.map((plan) => (
                   <option key={plan.id} value={plan.id}>
                     {plan.name} ({plan.tier})
