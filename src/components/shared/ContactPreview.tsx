@@ -1,4 +1,5 @@
 import React from "react";
+import { ResponsiveModal } from "../common/ResponsiveModal";
 import { SourcePill, ImportStatusPill, mapToSourcePillSource } from "./SourcePill";
 import { formatRoleLabel } from "../../utils/transactionRoleUtils";
 import type { ExtendedContact } from "../../types/components";
@@ -112,20 +113,13 @@ export function ContactPreview({
   };
 
   return (
-    <div
-      className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4"
-      onClick={handleBackdropClick}
-      data-testid="contact-preview-backdrop"
-    >
-      <div
-        className="bg-white rounded-xl shadow-2xl w-full max-w-md max-h-[80vh] flex flex-col"
-        data-testid="contact-preview-modal"
-      >
+    <ResponsiveModal onClose={onClose} overlayClassName="bg-black bg-opacity-50" testId="contact-preview-backdrop" panelClassName="max-w-md max-h-[80vh] !h-auto !w-[calc(100%-2rem)] rounded-xl shadow-2xl">
+      <div data-testid="contact-preview-modal">
         {/* Header with close button */}
-        <div className="flex justify-end p-4">
+        <div className="flex justify-end p-3 sm:p-4">
           <button
             onClick={onClose}
-            className="text-gray-400 hover:text-gray-600 transition-colors"
+            className="text-gray-400 hover:text-gray-600 transition-colors p-1"
             aria-label="Close preview"
             data-testid="contact-preview-close"
           >
@@ -230,7 +224,7 @@ export function ContactPreview({
         )}
 
         {/* Footer with Action Buttons */}
-        <div className="border-t border-gray-200 p-4 flex justify-between">
+        <div className="border-t border-gray-200 p-4 pb-safe flex justify-between gap-3">
           {isExternal ? (
             <button
               onClick={onImport}
@@ -263,7 +257,7 @@ export function ContactPreview({
           )}
         </div>
       </div>
-    </div>
+    </ResponsiveModal>
   );
 }
 

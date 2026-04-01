@@ -315,10 +315,10 @@ export function ContactSelector({
             onKeyDown={handleKeyDown}
             placeholder={searchPlaceholder}
             aria-label="Search contacts"
-            className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500 focus:outline-none"
+            className="w-full pl-10 pr-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500 focus:outline-none text-gray-900 bg-white min-h-[44px]"
           />
           <svg
-            className="w-5 h-5 text-gray-400 absolute left-3 top-2.5"
+            className="w-5 h-5 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2"
             fill="none"
             stroke="currentColor"
             viewBox="0 0 24 24"
@@ -342,7 +342,7 @@ export function ContactSelector({
               type="checkbox"
               checked={includeMessageContacts}
               onChange={(e) => setIncludeMessageContacts(e.target.checked)}
-              className="w-4 h-4 rounded border-gray-300 text-purple-600 focus:ring-purple-500 cursor-pointer"
+              className="w-5 h-5 rounded border-gray-300 text-purple-600 focus:ring-purple-500 cursor-pointer"
             />
             <span>Include message contacts</span>
           </label>

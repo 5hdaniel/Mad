@@ -5,6 +5,7 @@
  * TASK-1993: Server-side search with debounce, date filter, and provider-level load more.
  */
 import React, { useState, useEffect, useMemo, useCallback, useRef } from "react";
+import { ResponsiveModal } from "../../../common/ResponsiveModal";
 import {
   processEmailThreads,
 } from "../EmailThreadCard";
@@ -307,30 +308,42 @@ export function AttachEmailsModal({
 
   return (
     <>
-    <div
-      className="fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center z-[70] p-4"
-      data-testid="attach-emails-modal"
-    >
-      <div className="bg-white rounded-xl shadow-2xl w-full max-w-3xl max-h-[80vh] flex flex-col">
+    <ResponsiveModal onClose={onClose} zIndex="z-[70]" testId="attach-emails-modal" panelClassName="max-w-3xl sm:max-h-[80vh]">
         {/* Header */}
-        <div className="flex-shrink-0 bg-gradient-to-r from-blue-500 to-indigo-600 px-6 py-4 flex items-center justify-between rounded-t-xl">
-          <div>
+        <div className="flex-shrink-0 bg-gradient-to-r from-blue-500 to-indigo-600 px-3 sm:px-6 pt-6 sm:pt-4 pb-3 sm:pb-4 sm:rounded-t-xl shadow-lg">
+          {/* Mobile */}
+          <div className="sm:hidden flex items-center justify-between">
+            <button
+              onClick={onClose}
+              className="text-white hover:bg-white hover:bg-opacity-20 rounded-lg px-2 py-2 transition-all flex items-center gap-1 font-medium text-sm"
+              data-testid="close-modal-button"
+            >
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
+              </svg>
+              Back
+            </button>
             <h3 className="text-lg font-bold text-white">Attach Emails</h3>
-            <p className="text-blue-100 text-sm">
-              {propertyAddress
-                ? `Select emails to link to ${propertyAddress}`
-                : "Select emails to attach to this transaction"}
-            </p>
           </div>
-          <button
-            onClick={onClose}
-            className="text-white hover:bg-white hover:bg-opacity-20 rounded-full p-1 transition-all"
-            data-testid="close-modal-button"
-          >
-            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-            </svg>
-          </button>
+          {/* Desktop */}
+          <div className="hidden sm:flex items-center justify-between">
+            <div>
+              <h3 className="text-lg font-bold text-white">Attach Emails</h3>
+              <p className="text-blue-100 text-sm">
+                {propertyAddress
+                  ? `Select emails to link to ${propertyAddress}`
+                  : "Select emails to attach to this transaction"}
+              </p>
+            </div>
+            <button
+              onClick={onClose}
+              className="text-white hover:bg-white hover:bg-opacity-20 rounded-full p-1 transition-all"
+            >
+              <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
+          </div>
         </div>
 
         {/* Search Bar + Date Filter */}
@@ -341,18 +354,18 @@ export function AttachEmailsModal({
               placeholder="Search by name, email, subject, or content..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full pl-10 pr-10 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              className="w-full pl-10 pr-10 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-gray-900 bg-white min-h-[44px]"
               data-testid="search-input"
             />
             {/* Search icon or loading spinner */}
             {searching ? (
               <div
-                className="w-5 h-5 absolute left-3 top-2.5 border-2 border-blue-600 border-t-transparent rounded-full animate-spin"
+                className="w-5 h-5 absolute left-3 top-1/2 -translate-y-1/2 border-2 border-blue-600 border-t-transparent rounded-full animate-spin"
                 data-testid="search-spinner"
               />
             ) : (
               <svg
-                className="w-5 h-5 text-gray-400 absolute left-3 top-2.5"
+                className="w-5 h-5 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2"
                 fill="none"
                 stroke="currentColor"
                 viewBox="0 0 24 24"
@@ -363,23 +376,25 @@ export function AttachEmailsModal({
           </div>
 
           {/* Date Filter */}
-          <div className="flex items-center gap-3 mt-3" data-testid="date-filter">
-            <label className="text-sm text-gray-600 whitespace-nowrap">Date range:</label>
-            <input
-              type="date"
-              value={afterDate}
-              onChange={(e) => setAfterDate(e.target.value)}
-              className="px-2 py-1 text-sm border border-gray-300 rounded focus:ring-2 focus:ring-blue-500"
-              data-testid="after-date-input"
-            />
-            <span className="text-gray-400">to</span>
-            <input
-              type="date"
-              value={beforeDate}
-              onChange={(e) => setBeforeDate(e.target.value)}
-              className="px-2 py-1 text-sm border border-gray-300 rounded focus:ring-2 focus:ring-blue-500"
-              data-testid="before-date-input"
-            />
+          <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-3 mt-3" data-testid="date-filter">
+            <label className="text-sm text-gray-600 whitespace-nowrap hidden sm:inline">Date range:</label>
+            <div className="flex items-center gap-2 w-full sm:w-auto">
+              <input
+                type="date"
+                value={afterDate}
+                onChange={(e) => setAfterDate(e.target.value)}
+                className="flex-1 sm:flex-none px-2 sm:px-3 py-2 text-sm border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 text-gray-900 bg-white min-h-[44px]"
+                data-testid="after-date-input"
+              />
+              <span className="text-gray-400 text-sm">to</span>
+              <input
+                type="date"
+                value={beforeDate}
+                onChange={(e) => setBeforeDate(e.target.value)}
+                className="flex-1 sm:flex-none px-2 sm:px-3 py-2 text-sm border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 text-gray-900 bg-white min-h-[44px]"
+                data-testid="before-date-input"
+              />
+            </div>
             {(auditStartDate || auditEndDate) && (
               <button
                 onClick={() => {
@@ -506,8 +521,8 @@ export function AttachEmailsModal({
                           )}
                         </div>
 
-                        {/* Avatar - Blue for email */}
-                        <div className="w-8 h-8 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-full flex items-center justify-center text-white font-semibold text-sm flex-shrink-0">
+                        {/* Avatar - Blue for email, hidden on mobile */}
+                        <div className="w-8 h-8 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-full items-center justify-center text-white font-semibold text-sm flex-shrink-0 hidden sm:flex">
                           {avatarInitial}
                         </div>
 
@@ -578,17 +593,17 @@ export function AttachEmailsModal({
         </div>
 
         {/* Footer */}
-        <div className="flex-shrink-0 px-6 py-4 bg-gray-50 rounded-b-xl flex items-center gap-3 justify-between border-t border-gray-200">
-          <span className="text-sm text-gray-600">
+        <div className="flex-shrink-0 px-3 sm:px-6 py-3 sm:py-4 bg-gray-50 rounded-b-xl flex items-center gap-3 justify-end sm:justify-between border-t border-gray-200">
+          <span className="text-sm text-gray-600 hidden sm:inline">
             {selectedThreadIds.size > 0
-              ? `${selectedThreadIds.size} conversation${selectedThreadIds.size !== 1 ? "s" : ""} selected (${selectedEmailCount} email${selectedEmailCount !== 1 ? "s" : ""})`
+              ? `${selectedThreadIds.size} selected`
               : "Select conversations to attach"}
           </span>
           <div className="flex items-center gap-3">
             <button
               onClick={onClose}
               disabled={attaching}
-              className="px-4 py-2 text-gray-700 hover:bg-gray-200 rounded-lg font-medium transition-all disabled:opacity-50"
+              className="hidden sm:block px-4 py-2 text-gray-700 hover:bg-gray-200 rounded-lg font-medium transition-all disabled:opacity-50"
               data-testid="cancel-button"
             >
               Cancel
@@ -617,8 +632,7 @@ export function AttachEmailsModal({
             </button>
           </div>
         </div>
-      </div>
-    </div>
+    </ResponsiveModal>
 
     {/* Thread view modal */}
     {viewingThread && (

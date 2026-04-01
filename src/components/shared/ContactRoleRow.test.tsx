@@ -146,7 +146,7 @@ describe("ContactRoleRow", () => {
   describe("Role Dropdown", () => {
     it("shows 'Select role...' as first option", () => {
       renderContactRoleRow();
-      const select = screen.getByRole("combobox");
+      const select = screen.getAllByRole("combobox")[0];
       const options = select.querySelectorAll("option");
       expect(options[0]).toHaveTextContent("Select role...");
       expect(options[0]).toHaveValue("");
@@ -154,7 +154,7 @@ describe("ContactRoleRow", () => {
 
     it("shows all provided role options", () => {
       renderContactRoleRow();
-      const select = screen.getByRole("combobox");
+      const select = screen.getAllByRole("combobox")[0];
       const options = select.querySelectorAll("option");
       // First option is placeholder + 4 role options
       expect(options).toHaveLength(5);
@@ -166,19 +166,19 @@ describe("ContactRoleRow", () => {
 
     it("shows current role as selected", () => {
       renderContactRoleRow({ currentRole: "buyer_agent" });
-      const select = screen.getByRole("combobox") as HTMLSelectElement;
+      const select = screen.getAllByRole("combobox")[0] as HTMLSelectElement;
       expect(select.value).toBe("buyer_agent");
     });
 
     it("shows empty selection when currentRole is empty", () => {
       renderContactRoleRow({ currentRole: "" });
-      const select = screen.getByRole("combobox") as HTMLSelectElement;
+      const select = screen.getAllByRole("combobox")[0] as HTMLSelectElement;
       expect(select.value).toBe("");
     });
 
     it("displays correct option values", () => {
       renderContactRoleRow();
-      const select = screen.getByRole("combobox");
+      const select = screen.getAllByRole("combobox")[0];
       const options = select.querySelectorAll("option");
       expect(options[1]).toHaveValue("buyer");
       expect(options[2]).toHaveValue("seller");
@@ -192,7 +192,7 @@ describe("ContactRoleRow", () => {
       const onRoleChange = jest.fn();
       renderContactRoleRow({ onRoleChange });
 
-      const select = screen.getByRole("combobox");
+      const select = screen.getAllByRole("combobox")[0];
       await userEvent.selectOptions(select, "buyer");
       expect(onRoleChange).toHaveBeenCalledTimes(1);
     });
@@ -201,7 +201,7 @@ describe("ContactRoleRow", () => {
       const onRoleChange = jest.fn();
       renderContactRoleRow({ onRoleChange });
 
-      const select = screen.getByRole("combobox");
+      const select = screen.getAllByRole("combobox")[0];
       await userEvent.selectOptions(select, "seller_agent");
       expect(onRoleChange).toHaveBeenCalledWith("seller_agent");
     });
@@ -210,7 +210,7 @@ describe("ContactRoleRow", () => {
       const onRoleChange = jest.fn();
       renderContactRoleRow({ onRoleChange, currentRole: "buyer" });
 
-      const select = screen.getByRole("combobox");
+      const select = screen.getAllByRole("combobox")[0];
       await userEvent.selectOptions(select, "");
       expect(onRoleChange).toHaveBeenCalledWith("");
     });
@@ -219,7 +219,7 @@ describe("ContactRoleRow", () => {
       const onRoleChange = jest.fn();
       renderContactRoleRow({ onRoleChange });
 
-      const select = screen.getByRole("combobox");
+      const select = screen.getAllByRole("combobox")[0];
       fireEvent.change(select, { target: { value: "buyer" } });
       expect(onRoleChange).toHaveBeenCalledWith("buyer");
     });
@@ -230,7 +230,7 @@ describe("ContactRoleRow", () => {
       renderContactRoleRow({
         contact: createTestContact({ display_name: "Jane Smith" }),
       });
-      const select = screen.getByRole("combobox");
+      const select = screen.getAllByRole("combobox")[0];
       expect(select).toHaveAttribute("aria-label", "Role for Jane Smith");
     });
 
@@ -247,12 +247,12 @@ describe("ContactRoleRow", () => {
       renderContactRoleRow({
         contact: createTestContact({ id: "contact-456" }),
       });
-      expect(screen.getByTestId("role-select-contact-456")).toBeInTheDocument();
+      expect(screen.getAllByTestId("role-select-contact-456")[0]).toBeInTheDocument();
     });
 
     it("select is focusable", () => {
       renderContactRoleRow();
-      const select = screen.getByRole("combobox");
+      const select = screen.getAllByRole("combobox")[0];
       select.focus();
       expect(select).toHaveFocus();
     });
@@ -313,7 +313,7 @@ describe("ContactRoleRow", () => {
     it("shows remove button when onRemove is provided", () => {
       renderContactRoleRow({ onRemove: jest.fn() });
       expect(
-        screen.getByTestId("remove-contact-test-contact-1")
+        screen.getAllByTestId("remove-contact-test-contact-1")[0]
       ).toBeInTheDocument();
     });
 
@@ -321,7 +321,7 @@ describe("ContactRoleRow", () => {
       const onRemove = jest.fn();
       renderContactRoleRow({ onRemove });
 
-      const removeBtn = screen.getByTestId("remove-contact-test-contact-1");
+      const removeBtn = screen.getAllByTestId("remove-contact-test-contact-1")[0];
       await userEvent.click(removeBtn);
       expect(onRemove).toHaveBeenCalledTimes(1);
     });
@@ -331,7 +331,7 @@ describe("ContactRoleRow", () => {
         onRemove: jest.fn(),
         contact: createTestContact({ display_name: "Jane Smith" }),
       });
-      const removeBtn = screen.getByTestId("remove-contact-test-contact-1");
+      const removeBtn = screen.getAllByTestId("remove-contact-test-contact-1")[0];
       expect(removeBtn).toHaveAttribute(
         "aria-label",
         "Remove Jane Smith from transaction"
@@ -349,8 +349,8 @@ describe("ContactRoleRow", () => {
     it("preserves default classes when custom className added", () => {
       renderContactRoleRow({ className: "my-custom-class" });
       const row = screen.getByTestId("contact-role-row-test-contact-1");
-      expect(row).toHaveClass("flex");
-      expect(row).toHaveClass("items-center");
+      expect(row).toHaveClass("p-3");
+      expect(row).toHaveClass("rounded-lg");
       expect(row).toHaveClass("my-custom-class");
     });
   });

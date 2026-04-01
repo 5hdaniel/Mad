@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback } from "react";
+import { ResponsiveModal } from "../../common/ResponsiveModal";
 import { ExtendedContact } from "../types";
 import { OfflineNotice } from "../../common/OfflineNotice";
 
@@ -122,8 +123,7 @@ function ImportContactsModal({
   );
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center z-[60] p-4">
-      <div className="bg-white rounded-xl shadow-2xl max-w-4xl w-full max-h-[90vh] flex flex-col">
+    <ResponsiveModal onClose={onClose} zIndex="z-[60]" panelClassName="max-w-4xl sm:max-h-[90vh]">
         {/* Header */}
         <div className="bg-gradient-to-r from-purple-500 to-pink-600 px-6 py-4 flex items-center justify-between rounded-t-xl flex-shrink-0">
           <h3 className="text-lg font-bold text-white">Import Contacts</h3>
@@ -159,10 +159,10 @@ function ImportContactsModal({
                 placeholder="Search available contacts..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500"
+                className="w-full pl-10 pr-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500 text-gray-900 bg-white min-h-[44px]"
               />
               <svg
-                className="w-5 h-5 text-gray-400 absolute left-3 top-2.5"
+                className="w-5 h-5 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2"
                 fill="none"
                 stroke="currentColor"
                 viewBox="0 0 24 24"
@@ -353,8 +353,7 @@ function ImportContactsModal({
               : `Import Selected (${selectedContacts.size})`}
           </button>
         </div>
-      </div>
-    </div>
+    </ResponsiveModal>
   );
 }
 

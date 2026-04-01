@@ -95,10 +95,10 @@ export interface SupportTicketActions {
  * Hook for managing support ticket creation flow.
  * All Supabase operations go through the main process IPC handlers.
  */
-export function useSupportTicket(): SupportTicketState & SupportTicketActions {
+export function useSupportTicket(initialScreenshot?: string | null): SupportTicketState & SupportTicketActions {
   const [diagnostics, setDiagnostics] = useState<AppDiagnostics | null>(null);
   const [diagnosticsLoading, setDiagnosticsLoading] = useState(false);
-  const [screenshot, setScreenshot] = useState<string | null>(null);
+  const [screenshot, setScreenshot] = useState<string | null>(initialScreenshot || null);
   const [screenshotLoading, setScreenshotLoading] = useState(false);
   const [categories, setCategories] = useState<SupportCategory[]>([]);
   const [categoriesLoading, setCategoriesLoading] = useState(false);

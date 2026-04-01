@@ -1,4 +1,5 @@
 import React from "react";
+import { ResponsiveModal } from "../common/ResponsiveModal";
 
 interface CancelSyncModalProps {
   isOpen: boolean;
@@ -14,8 +15,7 @@ export const CancelSyncModal: React.FC<CancelSyncModalProps> = ({
   if (!isOpen) return null;
 
   return (
-    <div className="modal-overlay fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-      <div className="modal-content bg-white rounded-lg p-6 max-w-sm mx-4 shadow-xl">
+    <ResponsiveModal onClose={onCancel} overlayClassName="bg-black bg-opacity-50" panelClassName="max-w-sm p-6">
         <h2 className="text-lg font-semibold mb-2">Cancel Sync?</h2>
         <p className="text-gray-600 mb-4">
           The sync is still in progress. If you cancel now, no data will be
@@ -35,7 +35,6 @@ export const CancelSyncModal: React.FC<CancelSyncModalProps> = ({
             Cancel Sync
           </button>
         </div>
-      </div>
-    </div>
+    </ResponsiveModal>
   );
 };

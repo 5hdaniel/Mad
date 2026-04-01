@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback } from "react";
+import { ResponsiveModal } from "../../common/ResponsiveModal";
 import { ExtendedContact, ContactFormData, ContactEmailEntry, ContactPhoneEntry } from "../types";
 import { ROLE_DISPLAY_NAMES } from "../../../constants/contactRoles";
 import { contactService } from "../../../services/contactService";
@@ -270,38 +271,45 @@ function ContactFormModal({
   };
 
   const inputClass =
-    "w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500";
+    "w-full px-3 py-2.5 sm:py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500 text-gray-900 bg-white min-h-[44px]";
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center z-[70] p-4">
-      <div className="bg-white rounded-xl shadow-2xl max-w-md w-full max-h-[90vh] flex flex-col">
+    <ResponsiveModal onClose={onClose} zIndex="z-[70]" panelClassName="max-w-md sm:max-h-[90vh]">
         {/* Header */}
-        <div className="bg-gradient-to-r from-purple-500 to-pink-600 px-6 py-4 flex items-center justify-between rounded-t-xl flex-shrink-0">
-          <h3 className="text-lg font-bold text-white">
-            {contact ? "Edit Contact" : "Add New Contact"}
-          </h3>
-          <button
-            onClick={onClose}
-            className="text-white hover:bg-white hover:bg-opacity-20 rounded-full p-1 transition-all"
-          >
-            <svg
-              className="w-5 h-5"
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
+        <div className="bg-gradient-to-r from-purple-500 to-pink-600 px-3 sm:px-6 pt-6 sm:pt-4 pb-3 sm:pb-4 sm:rounded-t-xl flex-shrink-0 shadow-lg">
+          {/* Mobile */}
+          <div className="sm:hidden flex items-center justify-between">
+            <button
+              onClick={onClose}
+              className="text-white hover:bg-white hover:bg-opacity-20 rounded-lg px-2 py-2 transition-all flex items-center gap-1 font-medium text-sm"
             >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M6 18L18 6M6 6l12 12"
-              />
-            </svg>
-          </button>
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
+              </svg>
+              Back
+            </button>
+            <h3 className="text-lg font-bold text-white">
+              {contact ? "Edit Contact" : "Add Contact"}
+            </h3>
+          </div>
+          {/* Desktop */}
+          <div className="hidden sm:flex items-center justify-between">
+            <h3 className="text-lg font-bold text-white">
+              {contact ? "Edit Contact" : "Add New Contact"}
+            </h3>
+            <button
+              onClick={onClose}
+              className="text-white hover:bg-white hover:bg-opacity-20 rounded-full p-1 transition-all"
+            >
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
+          </div>
         </div>
 
         {/* Form (scrollable) */}
-        <div className="p-6 space-y-4 overflow-y-auto flex-1">
+        <div className="p-3 sm:p-6 space-y-4 overflow-y-auto flex-1">
           {/* Missing contact info warning */}
           {showMissingInfoWarning && (
             <div className="p-3 bg-amber-50 border border-amber-200 rounded-lg">
@@ -339,7 +347,7 @@ function ContactFormModal({
                       type="email"
                       value={entry.email}
                       onChange={(e) => handleEmailChange(index, e.target.value)}
-                      className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500 text-sm"
+                      className="flex-1 px-3 py-2.5 sm:py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500 text-sm text-gray-900 bg-white min-h-[44px]"
                       placeholder="email@example.com"
                     />
                     <button
@@ -409,7 +417,7 @@ function ContactFormModal({
                       type="tel"
                       value={entry.phone}
                       onChange={(e) => handlePhoneChange(index, e.target.value)}
-                      className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500 text-sm"
+                      className="flex-1 px-3 py-2.5 sm:py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500 text-sm text-gray-900 bg-white min-h-[44px]"
                       placeholder="(555) 123-4567"
                     />
                     <button
@@ -501,7 +509,7 @@ function ContactFormModal({
             <select
               value={formData.defaultRole || ""}
               onChange={(e) => handleChange("defaultRole", e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500 text-gray-900 bg-white"
+              className="w-full px-3 py-2.5 sm:py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500 text-gray-900 bg-white min-h-[44px]"
             >
               <option value="">None</option>
               {Object.entries(ROLE_DISPLAY_NAMES).map(([value, label]) => (
@@ -524,7 +532,7 @@ function ContactFormModal({
         </div>
 
         {/* Actions */}
-        <div className="px-6 py-4 bg-gray-50 rounded-b-xl flex items-center gap-3 justify-end flex-shrink-0">
+        <div className="px-4 py-4 sm:px-6 bg-gray-50 sm:rounded-b-xl flex items-center gap-3 justify-end flex-shrink-0 pb-safe">
           <button
             onClick={onClose}
             className="px-4 py-2 text-gray-700 hover:bg-gray-200 rounded-lg font-medium transition-all"
@@ -543,8 +551,7 @@ function ContactFormModal({
             {saving ? "Saving..." : contact ? "Update Contact" : "Add Contact"}
           </button>
         </div>
-      </div>
-    </div>
+    </ResponsiveModal>
   );
 }
 

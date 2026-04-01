@@ -88,7 +88,7 @@ function ContactCard({ contact, onClick, onImport }: ContactCardProps) {
   return (
     <div
       onClick={() => onClick(contact)}
-      className="bg-white border-2 border-gray-200 rounded-xl p-6 hover:border-purple-400 hover:shadow-xl transition-all flex flex-col h-full cursor-pointer"
+      className="bg-white border-2 border-gray-200 rounded-xl p-4 sm:p-6 hover:border-purple-400 hover:shadow-xl transition-all flex flex-col h-full cursor-pointer"
       data-testid={`contact-card-${contact.id}`}
     >
       {/* Contact Header */}

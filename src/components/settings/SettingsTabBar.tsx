@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useRef, useEffect } from "react";
 
 interface SettingsTab {
   id: string;
@@ -12,12 +12,29 @@ interface SettingsTabBarProps {
 }
 
 export function SettingsTabBar({ tabs, activeTabId, onTabClick }: SettingsTabBarProps) {
+  const scrollContainerRef = useRef<HTMLDivElement>(null);
+  const activeRef = useRef<HTMLButtonElement>(null);
+
+  // Auto-scroll the tab bar horizontally to show the active tab
+  useEffect(() => {
+    const container = scrollContainerRef.current;
+    const activeBtn = activeRef.current;
+    if (!container || !activeBtn) return;
+
+    // Calculate scroll position to center the active tab
+    const containerRect = container.getBoundingClientRect();
+    const btnRect = activeBtn.getBoundingClientRect();
+    const scrollLeft = container.scrollLeft + (btnRect.left - containerRect.left) - (containerRect.width / 2) + (btnRect.width / 2);
+    container.scrollTo?.({ left: scrollLeft, behavior: "smooth" });
+  }, [activeTabId]);
+
   return (
-    <div className="sticky top-0 z-10 bg-white border-b border-gray-200 -mx-6 px-6 overflow-x-auto scrollbar-hide" style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}>
-      <div className="flex gap-1 justify-center" role="tablist">
+    <div ref={scrollContainerRef} className="sticky top-0 z-10 bg-white border-b border-gray-200 -mx-6 px-6 overflow-x-auto scrollbar-hide" style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}>
+      <div className="flex gap-1 sm:justify-center" role="tablist">
         {tabs.map((tab) => (
           <button
             key={tab.id}
+            ref={activeTabId === tab.id ? activeRef : undefined}
             role="tab"
             aria-selected={activeTabId === tab.id}
             onClick={() => onTabClick(tab.id)}

@@ -11,6 +11,7 @@ import {
   Platform,
   getPlatform,
   isFeatureAvailable,
+  isElectron as checkIsElectron,
   FeatureName,
 } from "../utils/platform";
 
@@ -25,6 +26,8 @@ interface PlatformContextType {
   isWindows: boolean;
   /** True if running on Linux */
   isLinux: boolean;
+  /** True if running inside Electron (desktop app) */
+  isElectron: boolean;
 }
 
 const PlatformContext = createContext<PlatformContextType | null>(null);
@@ -46,6 +49,7 @@ export function PlatformProvider({ children }: PlatformProviderProps) {
       isMacOS: platform === "macos",
       isWindows: platform === "windows",
       isLinux: platform === "linux",
+      isElectron: checkIsElectron(),
     };
   }, []);
 

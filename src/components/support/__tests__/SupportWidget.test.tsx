@@ -71,47 +71,53 @@ describe("SupportWidget", () => {
     expect(button).toBeInTheDocument();
   });
 
-  it("opens the dialog when clicked", () => {
+  it("opens the dialog when clicked", async () => {
     render(<SupportWidget />);
 
     const button = screen.getByLabelText("Open support dialog");
-    fireEvent.click(button);
+    await act(async () => { fireEvent.click(button); });
 
-    expect(screen.getByTestId("support-dialog")).toBeInTheDocument();
+    await waitFor(() => {
+      expect(screen.getByTestId("support-dialog")).toBeInTheDocument();
+    });
   });
 
-  it("closes the dialog when close is clicked", () => {
+  it("closes the dialog when close is clicked", async () => {
     render(<SupportWidget />);
 
     // Open dialog
-    fireEvent.click(screen.getByLabelText("Open support dialog"));
-    expect(screen.getByTestId("support-dialog")).toBeInTheDocument();
+    await act(async () => { fireEvent.click(screen.getByLabelText("Open support dialog")); });
+    await waitFor(() => {
+      expect(screen.getByTestId("support-dialog")).toBeInTheDocument();
+    });
 
     // Close dialog
     fireEvent.click(screen.getByTestId("close-dialog"));
     expect(screen.queryByTestId("support-dialog")).not.toBeInTheDocument();
   });
 
-  it("passes empty strings when no user detected (unauthenticated)", () => {
+  it("passes empty strings when no user detected (unauthenticated)", async () => {
     // Default mock returns success: false for getCurrentUser
     render(<SupportWidget />);
 
-    fireEvent.click(screen.getByLabelText("Open support dialog"));
+    await act(async () => { fireEvent.click(screen.getByLabelText("Open support dialog")); });
 
     expect(screen.getByTestId("dialog-email")).toHaveTextContent("");
     expect(screen.getByTestId("dialog-name")).toHaveTextContent("");
   });
 
-  it("passes user info when props are provided (authenticated)", () => {
+  it("passes user info when props are provided (authenticated)", async () => {
     render(
       <SupportWidget userEmail="user@example.com" userName="Jane Doe" />
     );
 
-    fireEvent.click(screen.getByLabelText("Open support dialog"));
+    await act(async () => { fireEvent.click(screen.getByLabelText("Open support dialog")); });
 
-    expect(screen.getByTestId("dialog-email")).toHaveTextContent(
-      "user@example.com"
-    );
+    await waitFor(() => {
+      expect(screen.getByTestId("dialog-email")).toHaveTextContent(
+        "user@example.com"
+      );
+    });
     expect(screen.getByTestId("dialog-name")).toHaveTextContent("Jane Doe");
   });
 

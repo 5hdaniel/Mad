@@ -4,6 +4,7 @@
  * Uses a contact-first approach for better performance with large message databases
  */
 import React, { useState, useEffect, useMemo } from "react";
+import { ResponsiveModal } from "../../../common/ResponsiveModal";
 import {
   groupMessagesByThread,
   sortThreadsByRecent,
@@ -402,65 +403,82 @@ export function AttachMessagesModal({
   };
 
   return (
-    <div
-      className="fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center z-[70] p-4"
-      data-testid="attach-messages-modal"
-    >
-      <div className="bg-white rounded-xl shadow-2xl w-full max-w-3xl max-h-[80vh] flex flex-col">
+    <ResponsiveModal onClose={onClose} zIndex="z-[70]" testId="attach-messages-modal" panelClassName="max-w-3xl sm:max-h-[80vh]">
         {/* Header */}
-        <div className="flex-shrink-0 bg-gradient-to-r from-green-500 to-teal-600 px-6 py-4 flex items-center justify-between rounded-t-xl">
-          <div className="flex items-center gap-3">
-            {view === "threads" && (
-              <button
-                onClick={handleBackToContacts}
-                className="text-white hover:bg-white hover:bg-opacity-20 rounded-full p-1 transition-all"
-                data-testid="back-button"
-              >
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-                </svg>
-              </button>
-            )}
-            <div>
-              <h3 className="text-lg font-bold text-white">
-                {view === "contacts"
-                  ? "Select Contact"
-                  : selectedContactName || formatPhoneNumber(selectedContact || "")}
-              </h3>
-              <p className="text-green-100 text-sm">
-                {propertyAddress
-                  ? `Link chats to ${propertyAddress}`
-                  : view === "contacts"
-                  ? "Choose a contact to view their chats"
-                  : "Select chats to attach to this transaction"}
-              </p>
-            </div>
+        <div className="flex-shrink-0 bg-gradient-to-r from-green-500 to-teal-600 px-3 sm:px-6 pt-6 sm:pt-4 pb-3 sm:pb-4 sm:rounded-t-xl shadow-lg">
+          {/* Mobile */}
+          <div className="sm:hidden flex items-center justify-between">
+            <button
+              onClick={view === "threads" ? handleBackToContacts : onClose}
+              className="text-white hover:bg-white hover:bg-opacity-20 rounded-lg px-2 py-2 transition-all flex items-center gap-1 font-medium text-sm"
+              data-testid={view === "threads" ? "back-button" : "close-modal-button"}
+            >
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
+              </svg>
+              Back
+            </button>
+            <h3 className="text-lg font-bold text-white">
+              {view === "contacts"
+                ? "Select Contact"
+                : selectedContactName || formatPhoneNumber(selectedContact || "")}
+            </h3>
           </div>
-          <button
-            onClick={onClose}
-            className="text-white hover:bg-white hover:bg-opacity-20 rounded-full p-1 transition-all"
-            data-testid="close-modal-button"
-          >
-            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-            </svg>
-          </button>
+          {/* Desktop */}
+          <div className="hidden sm:flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              {view === "threads" && (
+                <button
+                  onClick={handleBackToContacts}
+                  className="text-white hover:bg-white hover:bg-opacity-20 rounded-full p-1 transition-all"
+                  data-testid="back-button"
+                >
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+                  </svg>
+                </button>
+              )}
+              <div>
+                <h3 className="text-lg font-bold text-white">
+                  {view === "contacts"
+                    ? "Select Contact"
+                    : selectedContactName || formatPhoneNumber(selectedContact || "")}
+                </h3>
+                <p className="text-green-100 text-sm">
+                  {propertyAddress
+                    ? `Link chats to ${propertyAddress}`
+                    : view === "contacts"
+                    ? "Choose a contact to view their chats"
+                    : "Select chats to attach to this transaction"}
+                </p>
+              </div>
+            </div>
+            <button
+              onClick={onClose}
+              className="text-white hover:bg-white hover:bg-opacity-20 rounded-full p-1 transition-all"
+              data-testid="close-modal-button"
+            >
+              <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
+          </div>
         </div>
 
         {/* Search Bar (contacts view only) */}
         {view === "contacts" && (
-          <div className="flex-shrink-0 p-4 border-b border-gray-200">
+          <div className="flex-shrink-0 p-2 sm:p-4 border-b border-gray-200">
             <div className="relative">
               <input
                 type="text"
                 placeholder="Search by name or phone number..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500"
+                className="w-full pl-10 pr-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500 text-gray-900 bg-white min-h-[44px]"
                 data-testid="search-input"
               />
               <svg
-                className="w-5 h-5 text-gray-400 absolute left-3 top-2.5"
+                className="w-5 h-5 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2"
                 fill="none"
                 stroke="currentColor"
                 viewBox="0 0 24 24"
@@ -493,7 +511,7 @@ export function AttachMessagesModal({
         )}
 
         {/* Content */}
-        <div className="flex-1 overflow-y-auto p-4">
+        <div className="flex-1 min-w-0 overflow-y-auto overflow-x-hidden p-2 sm:p-4">
           {/* Loading */}
           {(loadingContacts || loadingThreads) && (
             <div className="text-center py-12">
@@ -532,11 +550,11 @@ export function AttachMessagesModal({
                     <button
                       key={contact.contact}
                       onClick={() => handleSelectContact(contact.contact, contact.contactName)}
-                      className="text-left p-4 rounded-lg border-2 border-gray-200 bg-white hover:border-green-300 hover:bg-green-50 transition-all"
+                      className="text-left w-full max-w-full min-w-0 overflow-hidden p-3 sm:p-4 rounded-lg border border-gray-200 bg-white hover:border-green-300 hover:bg-green-50 transition-all"
                       data-testid={`contact-${contact.contact}`}
                     >
                       <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 bg-gradient-to-br from-green-500 to-teal-600 rounded-full flex items-center justify-center text-white font-bold flex-shrink-0">
+                        <div className="w-10 h-10 bg-gradient-to-br from-green-500 to-teal-600 rounded-full items-center justify-center text-white font-bold flex-shrink-0 hidden sm:flex">
                           {contact.contactName ? contact.contactName.charAt(0).toUpperCase() : "#"}
                         </div>
                         <div className="flex-1 min-w-0">
@@ -548,12 +566,12 @@ export function AttachMessagesModal({
                               {contact.messageCount} {contact.messageCount === 1 ? "msg" : "msgs"}
                             </span>
                           </div>
-                          <p className="text-xs text-gray-500 mt-1">
+                          <div className="flex flex-col sm:flex-row sm:items-center gap-0.5 sm:gap-0 text-xs text-gray-500 mt-1">
                             {contact.contactName && (
-                              <span className="mr-2">{formatPhoneNumber(contact.contact)}</span>
+                              <span className="sm:mr-2">{formatPhoneNumber(contact.contact)}</span>
                             )}
-                            Last message: {formatDate(contact.lastMessageAt)}
-                          </p>
+                            <span>Last: {formatDate(contact.lastMessageAt)}</span>
+                          </div>
                         </div>
                         <svg className="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
@@ -597,17 +615,17 @@ export function AttachMessagesModal({
                         tabIndex={0}
                         onClick={() => handleToggleThread(threadId)}
                         onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); handleToggleThread(threadId); } }}
-                        className={`text-left p-4 rounded-lg border-2 transition-all cursor-pointer ${
+                        className={`text-left w-full max-w-full min-w-0 overflow-hidden p-3 sm:p-4 rounded-lg border sm:border-2 transition-all cursor-pointer ${
                           isSelected
                             ? "border-green-500 bg-green-50"
                             : "border-gray-200 bg-white hover:border-green-300 hover:bg-green-50"
                         }`}
                         data-testid={`thread-${threadId}`}
                       >
-                        <div className="flex items-start gap-3">
+                        <div className="flex items-start gap-2 sm:gap-3">
                           {/* Checkbox */}
                           <div
-                            className={`w-5 h-5 rounded border-2 flex items-center justify-center flex-shrink-0 mt-1 ${
+                            className={`w-5 h-5 rounded border-2 flex items-center justify-center flex-shrink-0 mt-0.5 ${
                               isSelected ? "bg-green-500 border-green-500" : "border-gray-300 bg-white"
                             }`}
                           >
@@ -618,8 +636,8 @@ export function AttachMessagesModal({
                             )}
                           </div>
 
-                          {/* Chat Icon */}
-                          <div className={`w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0 ${
+                          {/* Chat Icon — hidden on mobile */}
+                          <div className={`w-10 h-10 rounded-full items-center justify-center flex-shrink-0 hidden sm:flex ${
                             isGroup ? "bg-purple-100" : "bg-blue-100"
                           }`}>
                             {isGroup ? (
@@ -635,48 +653,46 @@ export function AttachMessagesModal({
 
                           {/* Thread Info */}
                           <div className="flex-1 min-w-0">
-                            {/* Thread title - participants */}
-                            <div className="flex items-center gap-2 flex-wrap">
-                              <h4 className="font-semibold text-gray-900">
+                            <div className="flex items-center gap-1.5 min-w-0">
+                              <h4 className="font-semibold text-gray-900 text-sm truncate">
                                 {isGroup ? "Group Chat" : `Chat with ${selectedContactName || formatPhoneNumber(selectedContact || "")}`}
                               </h4>
                               {isGroup && (
-                                <span className="inline-block px-2 py-0.5 bg-purple-100 text-purple-700 text-xs font-medium rounded-full">
-                                  {uniqueParticipantNames.length + 1} people
+                                <span className="inline-block px-2 py-0.5 bg-purple-100 text-purple-700 text-xs font-medium rounded-full flex-shrink-0">
+                                  {uniqueParticipantNames.length + 1}
                                 </span>
                               )}
                             </div>
 
                             {/* Other participants in group */}
                             {isGroup && uniqueParticipantNames.length > 0 && (
-                              <p className="text-xs text-gray-500 mt-1">
-                                Also includes: {uniqueParticipantNames.slice(0, 3).join(", ")}
+                              <p className="text-xs text-gray-500 mt-0.5 truncate">
+                                {uniqueParticipantNames.slice(0, 3).join(", ")}
                                 {uniqueParticipantNames.length > 3 && ` +${uniqueParticipantNames.length - 3} more`}
                               </p>
                             )}
 
                             {/* Metadata row */}
-                            <div className="flex items-center gap-3 mt-2">
-                              <span className="text-xs text-gray-500">{dateRange}</span>
-                              <span className="text-xs text-gray-400">•</span>
-                              <span className="text-xs text-gray-500">
-                                {messages.length} {messages.length === 1 ? "message" : "messages"}
-                              </span>
+                            <div className="flex items-center justify-between mt-1.5 text-xs text-gray-500">
+                              <div className="flex items-center gap-2">
+                                <span>{messages.length} {messages.length === 1 ? "msg" : "msgs"}</span>
+                                <span className="text-gray-400">•</span>
+                                <span>{dateRange}</span>
+                              </div>
+                              {/* View button */}
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setViewingThreadId(threadId);
+                                }}
+                                className="text-blue-600 hover:text-blue-800 font-medium flex-shrink-0"
+                                data-testid={`view-thread-${threadId}`}
+                              >
+                                View
+                              </button>
                             </div>
                           </div>
-
-                          {/* View button */}
-                          <button
-                            type="button"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              setViewingThreadId(threadId);
-                            }}
-                            className="px-3 py-1.5 text-sm text-blue-600 hover:bg-blue-50 rounded-lg font-medium transition-all flex-shrink-0"
-                            data-testid={`view-thread-${threadId}`}
-                          >
-                            View
-                          </button>
                         </div>
                       </div>
                     );
@@ -688,19 +704,15 @@ export function AttachMessagesModal({
         </div>
 
         {/* Footer */}
-        <div className="flex-shrink-0 px-6 py-4 bg-gray-50 rounded-b-xl flex items-center gap-3 justify-between border-t border-gray-200">
-          <span className="text-sm text-gray-600">
-            {view === "contacts"
-              ? "Select a contact to view their chats"
-              : selectedThreadIds.size > 0
-              ? `${selectedThreadIds.size} chat${selectedThreadIds.size !== 1 ? "s" : ""} selected`
-              : "Select chats to attach"}
+        <div className="flex-shrink-0 px-3 sm:px-6 py-3 sm:py-4 bg-gray-50 rounded-b-xl flex items-center gap-3 justify-end sm:justify-between border-t border-gray-200">
+          <span className="text-sm text-gray-600 hidden sm:inline">
+            {view === "contacts" ? "Select a contact to view their chats" : selectedThreadIds.size > 0 ? `${selectedThreadIds.size} selected` : "Select chats to attach"}
           </span>
           <div className="flex items-center gap-3">
             <button
               onClick={onClose}
               disabled={attaching}
-              className="px-4 py-2 text-gray-700 hover:bg-gray-200 rounded-lg font-medium transition-all disabled:opacity-50"
+              className="hidden sm:block px-4 py-2 text-gray-700 hover:bg-gray-200 rounded-lg font-medium transition-all disabled:opacity-50"
               data-testid="cancel-button"
             >
               Cancel
@@ -731,12 +743,10 @@ export function AttachMessagesModal({
             )}
           </div>
         </div>
-      </div>
 
       {/* Message Viewer Panel */}
       {viewingThreadId && threads.get(viewingThreadId) && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[80]">
-          <div className="bg-gray-100 w-full max-w-md h-[600px] rounded-2xl shadow-2xl flex flex-col overflow-hidden">
+        <ResponsiveModal onClose={() => setViewingThreadId(null)} zIndex="z-[80]" overlayClassName="bg-black bg-opacity-50" panelBg="bg-gray-100" panelClassName="max-w-md sm:h-[600px] sm:rounded-2xl sm:overflow-hidden">
             {/* Phone-style header */}
             <div className="bg-gradient-to-r from-blue-500 to-blue-600 px-4 py-3 flex items-center gap-3">
               <button
@@ -802,9 +812,8 @@ export function AttachMessagesModal({
                 Close
               </button>
             </div>
-          </div>
-        </div>
+        </ResponsiveModal>
       )}
-    </div>
+    </ResponsiveModal>
   );
 }

@@ -106,57 +106,52 @@ export function ContactRoleRow({
 
   return (
     <div
-      className={`flex flex-wrap items-center gap-3 p-3 rounded-lg border ${borderClass} ${className}`.trim()}
+      className={`p-3 rounded-lg border ${borderClass} ${className}`.trim()}
       data-testid={`contact-role-row-${contact.id}`}
     >
-      {/* Avatar + Contact Info - clickable area for viewing details */}
-      <div
-        className={`flex items-center gap-3 flex-1 min-w-0${onClick ? " cursor-pointer hover:bg-gray-50 rounded-lg -m-1 p-1 transition-colors" : ""}`}
-        onClick={onClick}
-        role={onClick ? "button" : undefined}
-        tabIndex={onClick ? 0 : undefined}
-        onKeyDown={onClick ? (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onClick(); } } : undefined}
-        data-testid="contact-role-row-info"
-      >
-        {/* Avatar */}
-        <div
-          className="w-8 h-8 bg-gradient-to-br from-purple-500 to-pink-600 rounded-full flex items-center justify-center flex-shrink-0"
-          data-testid="contact-role-row-avatar"
-        >
-          <span className="text-white text-sm font-bold">{initial}</span>
-        </div>
-
-        {/* Contact Info with Source Pill */}
-        <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-2 flex-wrap">
+      {/* Mobile layout: stacked */}
+      <div className="sm:hidden">
+        {/* Row 1: Name + remove button */}
+        <div className="flex items-center justify-between gap-2">
+          <div
+            className={`flex-1 min-w-0${onClick ? " cursor-pointer" : ""}`}
+            onClick={onClick}
+            role={onClick ? "button" : undefined}
+            tabIndex={onClick ? 0 : undefined}
+            onKeyDown={onClick ? (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onClick(); } } : undefined}
+            data-testid="contact-role-row-info"
+          >
             <p
-              className={`font-medium text-gray-900 text-sm${onClick ? " hover:text-purple-700" : ""}`}
+              className={`font-medium text-gray-900 text-sm truncate${onClick ? " hover:text-purple-700" : ""}`}
               data-testid="contact-role-row-name"
             >
               {displayName}
             </p>
-            <SourcePill
-              source={mapToSourcePillSource(contact.source, isExternal)}
-              size="sm"
-            />
-            <ImportStatusPill isImported={!isExternal} size="sm" />
+            {email && (
+              <p className="text-xs text-gray-500 truncate" data-testid="contact-role-row-email">
+                {email}
+              </p>
+            )}
           </div>
-          {email && (
-            <p
-              className="text-xs text-gray-500 truncate"
-              data-testid="contact-role-row-email"
+          {onRemove && (
+            <button
+              type="button"
+              onClick={onRemove}
+              className="p-1.5 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-full transition-colors flex-shrink-0"
+              aria-label={`Remove ${displayName} from transaction`}
+              data-testid={`remove-contact-${contact.id}`}
             >
-              {email}
-            </p>
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
           )}
         </div>
-      </div>
-
-      {/* Role Dropdown and Remove Button - wrap together on small screens */}
-      <div className="flex items-center gap-2 flex-shrink-0">
-        <div className="flex items-center gap-1">
+        {/* Row 2: Full-width role dropdown */}
+        <div className="mt-2 flex items-center gap-1">
+          <div className="relative w-full">
           <select
-            className="px-3 py-2 text-sm border border-gray-300 rounded-lg bg-white text-gray-900 focus:ring-2 focus:ring-purple-500 focus:border-purple-500 focus:outline-none min-w-[140px]"
+            className="w-full appearance-none px-3 pr-10 py-2.5 text-sm border border-gray-300 rounded-lg bg-white text-gray-900 focus:ring-2 focus:ring-purple-500 focus:border-purple-500 focus:outline-none min-h-[44px]"
             value={currentRole}
             onChange={(e) => onRoleChange(e.target.value)}
             aria-label={`Role for ${displayName}`}
@@ -169,30 +164,94 @@ export function ContactRoleRow({
               </option>
             ))}
           </select>
+          <svg className="w-4 h-4 text-gray-400 absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+          </svg>
+          </div>
           {isAutoFilled && (
-            <span
-              className="text-xs text-purple-500 ml-1 font-medium"
-              data-testid={`auto-filled-badge-${contact.id}`}
-            >
+            <span className="text-xs text-purple-500 ml-1 font-medium" data-testid={`auto-filled-badge-${contact.id}`}>
               (Auto)
             </span>
           )}
         </div>
+      </div>
 
-        {/* Remove Button */}
-        {onRemove && (
-          <button
-            type="button"
-            onClick={onRemove}
-            className="p-1.5 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-full transition-colors flex-shrink-0"
-            aria-label={`Remove ${displayName} from transaction`}
-            data-testid={`remove-contact-${contact.id}`}
+      {/* Desktop layout: single row */}
+      <div className="hidden sm:flex flex-wrap items-center gap-3">
+        {/* Avatar + Contact Info */}
+        <div
+          className={`flex items-center gap-3 flex-1 min-w-0${onClick ? " cursor-pointer hover:bg-gray-50 rounded-lg -m-1 p-1 transition-colors" : ""}`}
+          onClick={onClick}
+          role={onClick ? "button" : undefined}
+          tabIndex={onClick ? 0 : undefined}
+          onKeyDown={onClick ? (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onClick(); } } : undefined}
+        >
+          {/* Avatar */}
+          <div
+            className="w-8 h-8 bg-gradient-to-br from-purple-500 to-pink-600 rounded-full flex items-center justify-center flex-shrink-0"
+            data-testid="contact-role-row-avatar"
           >
-            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-            </svg>
-          </button>
-        )}
+            <span className="text-white text-sm font-bold">{initial}</span>
+          </div>
+          {/* Contact Info with Source Pill */}
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center gap-2 flex-wrap">
+              <p
+                className={`font-medium text-gray-900 text-sm${onClick ? " hover:text-purple-700" : ""}`}
+              >
+                {displayName}
+              </p>
+              <SourcePill
+                source={mapToSourcePillSource(contact.source, isExternal)}
+                size="sm"
+              />
+              <ImportStatusPill isImported={!isExternal} size="sm" />
+            </div>
+            {email && (
+              <p className="text-xs text-gray-500 truncate">
+                {email}
+              </p>
+            )}
+          </div>
+        </div>
+
+        {/* Role Dropdown and Remove Button */}
+        <div className="flex items-center gap-2 flex-shrink-0">
+          <div className="flex items-center gap-1">
+            <select
+              className="px-3 py-2.5 text-sm border border-gray-300 rounded-lg bg-white text-gray-900 focus:ring-2 focus:ring-purple-500 focus:border-purple-500 focus:outline-none min-w-[140px] min-h-[44px]"
+              value={currentRole}
+              onChange={(e) => onRoleChange(e.target.value)}
+              aria-label={`Role for ${displayName}`}
+              data-testid={`role-select-${contact.id}`}
+            >
+              <option value="">Select role...</option>
+              {roleOptions.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
+            </select>
+            {isAutoFilled && (
+              <span className="text-xs text-purple-500 ml-1 font-medium" data-testid={`auto-filled-badge-${contact.id}`}>
+                (Auto)
+              </span>
+            )}
+          </div>
+          {onRemove && (
+            <button
+              type="button"
+              onClick={onRemove}
+              className="p-1.5 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-full transition-colors flex-shrink-0"
+              aria-label={`Remove ${displayName} from transaction`}
+              data-testid={`remove-contact-${contact.id}`}
+            >
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
+          )}
+        </div>
       </div>
     </div>
   );

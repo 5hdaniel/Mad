@@ -6,6 +6,7 @@
  */
 
 import React from "react";
+import { ResponsiveModal } from "./ResponsiveModal";
 
 interface TransactionLimitModalProps {
   transactionCount: number;
@@ -19,8 +20,7 @@ export function TransactionLimitModal({
   onClose,
 }: TransactionLimitModalProps): React.ReactElement {
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-      <div className="bg-white rounded-xl shadow-2xl max-w-md w-full mx-4 p-6">
+    <ResponsiveModal onClose={onClose} overlayClassName="bg-black/50" panelClassName="max-w-md p-6">
         {/* Icon */}
         <div className="flex justify-center mb-4">
           <div className="w-14 h-14 bg-orange-100 rounded-full flex items-center justify-center">
@@ -84,7 +84,6 @@ export function TransactionLimitModal({
             Close
           </button>
         </div>
-      </div>
-    </div>
+    </ResponsiveModal>
   );
 }

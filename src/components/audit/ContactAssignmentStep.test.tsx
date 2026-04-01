@@ -200,15 +200,15 @@ describe("ContactAssignmentStep", () => {
     it("shows selected contacts with role dropdowns", () => {
       render(<ContactAssignmentStep {...step3Props} />);
 
-      // Should show both selected contacts
-      expect(screen.getByText("John Client")).toBeInTheDocument();
-      expect(screen.getByText("Jane Agent")).toBeInTheDocument();
+      // Should show both selected contacts (responsive layout renders mobile + desktop)
+      expect(screen.getAllByText("John Client").length).toBeGreaterThan(0);
+      expect(screen.getAllByText("Jane Agent").length).toBeGreaterThan(0);
       // Bob was not selected, should not appear
       expect(screen.queryByText("Bob Inspector")).not.toBeInTheDocument();
 
       // Should have role dropdowns
-      expect(screen.getByTestId("role-select-contact-1")).toBeInTheDocument();
-      expect(screen.getByTestId("role-select-contact-2")).toBeInTheDocument();
+      expect(screen.getAllByTestId("role-select-contact-1").length).toBeGreaterThan(0);
+      expect(screen.getAllByTestId("role-select-contact-2").length).toBeGreaterThan(0);
     });
 
     it("displays assigned count", () => {
@@ -229,8 +229,8 @@ describe("ContactAssignmentStep", () => {
         />
       );
 
-      // Select a role for John
-      const roleSelect = screen.getByTestId("role-select-contact-1");
+      // Select a role for John (first match from dual mobile/desktop render)
+      const roleSelect = screen.getAllByTestId("role-select-contact-1")[0];
       await user.selectOptions(roleSelect, "client");
 
       expect(onAssignContact).toHaveBeenCalledWith(
@@ -256,8 +256,8 @@ describe("ContactAssignmentStep", () => {
     it("shows remove button on each contact row in Step 3", () => {
       render(<ContactAssignmentStep {...step3Props} />);
 
-      expect(screen.getByTestId("remove-contact-contact-1")).toBeInTheDocument();
-      expect(screen.getByTestId("remove-contact-contact-2")).toBeInTheDocument();
+      expect(screen.getAllByTestId("remove-contact-contact-1").length).toBeGreaterThan(0);
+      expect(screen.getAllByTestId("remove-contact-contact-2").length).toBeGreaterThan(0);
     });
 
     it("calls onSelectedContactIdsChange when remove button is clicked", async () => {
@@ -271,8 +271,8 @@ describe("ContactAssignmentStep", () => {
         />
       );
 
-      // Click remove on contact-1
-      const removeBtn = screen.getByTestId("remove-contact-contact-1");
+      // Click remove on contact-1 (first match from dual layout)
+      const removeBtn = screen.getAllByTestId("remove-contact-contact-1")[0];
       await user.click(removeBtn);
 
       // Should remove contact-1 from selectedContactIds
@@ -294,7 +294,7 @@ describe("ContactAssignmentStep", () => {
       );
 
       // Click remove on contact-1 (which has the buyer role)
-      const removeBtn = screen.getByTestId("remove-contact-contact-1");
+      const removeBtn = screen.getAllByTestId("remove-contact-contact-1")[0];
       await user.click(removeBtn);
 
       // Should call onRemoveContact to clear the buyer role assignment
