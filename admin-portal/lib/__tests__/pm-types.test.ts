@@ -1,3 +1,4 @@
+import { describe, it, expect } from 'vitest';
 import {
   ALLOWED_TRANSITIONS,
   STATUS_LABELS,
