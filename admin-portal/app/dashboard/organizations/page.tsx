@@ -42,43 +42,31 @@ export default async function OrganizationsPage() {
     required_permission: 'organizations.edit',
   });
 
-  // Fetch all organizations with member counts
-  const { data: orgs, error } = await supabase
-    .from('organizations')
-    .select('id, name, slug, created_at, organization_members(count), organization_plans(plan_id, plans(id, name, tier))')
-    .order('name');
+  // Fetch all organizations via SECURITY DEFINER RPC (bypasses RLS join issues)
+  const { data: rpcResult, error } = await supabase.rpc('admin_list_organizations');
 
-  if (error) {
+  if (error || !rpcResult?.success) {
     return (
       <div className="max-w-7xl mx-auto">
         <div className="mb-6">
           <h1 className="text-2xl font-bold text-gray-900">Organizations</h1>
         </div>
         <div className="bg-white rounded-lg shadow-sm border border-danger-500/20 p-8 text-center">
-          <p className="text-danger-600 text-sm">Failed to load organizations: {error.message}</p>
+          <p className="text-danger-600 text-sm">Failed to load organizations: {error?.message || rpcResult?.error}</p>
         </div>
       </div>
     );
   }
 
-  // Transform data to extract member counts and plan from nested joins
-  const organizations: OrganizationRow[] = (orgs ?? []).map((org) => {
-    const memberAgg = org.organization_members as unknown as { count: number }[];
-    const memberCount = memberAgg?.[0]?.count ?? 0;
-
-    const orgPlans = org.organization_plans as unknown as { plan_id: string; plans: { id: string; name: string; tier: string } | null }[] | null;
-    const activePlan = orgPlans?.[0]?.plans ?? null;
-
-    return {
-      id: org.id,
-      name: org.name,
-      slug: org.slug,
-      plan_name: activePlan?.name ?? null,
-      plan_tier: activePlan?.tier ?? null,
-      created_at: org.created_at,
-      member_count: memberCount,
-    };
-  });
+  const organizations: OrganizationRow[] = ((rpcResult.organizations as Array<Record<string, unknown>>) ?? []).map((org) => ({
+    id: org.id as string,
+    name: org.name as string,
+    slug: org.slug as string,
+    plan_name: (org.plan_name as string) ?? null,
+    plan_tier: (org.plan_tier as string) ?? null,
+    created_at: org.created_at as string,
+    member_count: (org.member_count as number) ?? 0,
+  }));
 
   return (
     <div className="max-w-7xl mx-auto">
