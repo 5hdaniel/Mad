@@ -7,10 +7,10 @@
  * - InlineItemCreate: "+ Add item" row for creating new items
  * - ItemCardList: Flex-based draggable card list (replaces MiniItemTable)
  * - BacklogPanel: Droppable backlog container (items not assigned to any sprint)
- * - SprintSection: Droppable collapsible sprint with lazy-loaded items
+ * - SprintSection: Droppable collapsible sprint with parent-provided items
  */
 
-import { useState, useCallback, useEffect } from 'react';
+import { useState } from 'react';
 import Link from 'next/link';
 import {
   Plus,
@@ -19,7 +19,7 @@ import {
   Loader2,
   Package,
 } from 'lucide-react';
-import { listItems, createItem } from '@/lib/pm-queries';
+import { createItem } from '@/lib/pm-queries';
 import type { PmBacklogItem, PmSprint } from '@/lib/pm-types';
 import {
   SPRINT_STATUS_LABELS,
@@ -136,52 +136,25 @@ export function ItemCardList({ items, projectId, containerId }: ItemCardListProp
 }
 
 // ---------------------------------------------------------------------------
-// SprintSection -- Collapsible sprint with lazy-loaded items
+// SprintSection -- Collapsible sprint with parent-provided items
 // ---------------------------------------------------------------------------
 
 interface SprintSectionProps {
   sprint: PmSprint;
   projectId: string;
+  /** Items for this sprint, filtered by the parent from the allItems array */
+  items: PmBacklogItem[];
   onRefresh: () => void;
 }
 
-export function SprintSection({ sprint, projectId, onRefresh }: SprintSectionProps) {
+export function SprintSection({ sprint, projectId, items, onRefresh }: SprintSectionProps) {
   const defaultExpanded =
     sprint.status === 'active' || sprint.status === 'planned';
   const [expanded, setExpanded] = useState(defaultExpanded);
-  const [items, setItems] = useState<PmBacklogItem[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [loaded, setLoaded] = useState(false);
-
-  const loadItems = useCallback(async () => {
-    setLoading(true);
-    try {
-      const res = await listItems({
-        sprint_id: sprint.id,
-        project_id: projectId,
-        page_size: 200,
-      });
-      setItems(res.items);
-      setLoaded(true);
-    } catch (err) {
-      console.error('Failed to load project data:', err);
-    } finally {
-      setLoading(false);
-    }
-  }, [sprint.id, projectId]);
-
-  useEffect(() => {
-    if (expanded && !loaded) loadItems();
-  }, [expanded, loaded, loadItems]);
 
   const completed = sprint.item_counts?.completed ?? 0;
   const total = sprint.total_items ?? 0;
   const pct = total > 0 ? Math.round((completed / total) * 100) : 0;
-
-  const handleItemCreated = useCallback(() => {
-    loadItems();
-    onRefresh();
-  }, [loadItems, onRefresh]);
 
   return (
     <DroppableContainer droppableId={sprint.id}>
@@ -223,18 +196,11 @@ export function SprintSection({ sprint, projectId, onRefresh }: SprintSectionPro
 
         {expanded && (
           <div className="px-4 py-2 border-t border-gray-100">
-            {loading ? (
-              <div className="flex items-center gap-2 py-4 justify-center text-gray-400">
-                <Loader2 className="h-4 w-4 animate-spin" />
-                <span className="text-xs">Loading items...</span>
-              </div>
-            ) : (
-              <ItemCardList items={items} projectId={projectId} containerId={sprint.id} />
-            )}
+            <ItemCardList items={items} projectId={projectId} containerId={sprint.id} />
             <InlineItemCreate
               projectId={projectId}
               sprintId={sprint.id}
-              onCreated={handleItemCreated}
+              onCreated={onRefresh}
             />
           </div>
         )}

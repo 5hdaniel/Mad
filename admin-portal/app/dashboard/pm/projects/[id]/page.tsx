@@ -121,9 +121,18 @@ export default function ProjectDetailPage() {
     loadItems();
   }, [loadDetail, loadItems]);
 
+  // Optimistic move: update allItems locally by changing an item's sprint_id
+  const moveItem = useCallback((itemId: string, targetSprintId: string | null) => {
+    setAllItems((prev) =>
+      prev.map((item) =>
+        item.id === itemId ? { ...item, sprint_id: targetSprintId } : item
+      )
+    );
+  }, []);
+
   // Drag-and-drop
   const { sensors, activeDragItem, handleDragStart, handleDragEnd } =
-    useProjectDragDrop({ onRefresh: refreshAll });
+    useProjectDragDrop({ moveItem, onRefreshFallback: refreshAll });
 
   // Update project field handler
   const handleUpdateField = useCallback(async (field: ProjectField, value: string | null) => {
@@ -216,6 +225,7 @@ export default function ProjectDetailPage() {
                   key={sprint.id}
                   sprint={sprint}
                   projectId={projectId}
+                  items={allItems.filter((i) => i.sprint_id === sprint.id)}
                   onRefresh={refreshAll}
                 />
               ))
