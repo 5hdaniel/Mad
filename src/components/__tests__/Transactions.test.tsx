@@ -1,6 +1,10 @@
 /**
  * Tests for Transactions.tsx
  * Covers transaction listing, CRUD operations, filtering, and export
+ *
+ * Updated for responsive UI refactor: TransactionMobileCard is now the
+ * only card component (no desktop TransactionCard/TransactionStatusWrapper).
+ * TransactionsToolbar has collapsible search, renamed buttons, and FeatureGate.
  */
 
 import React from "react";
@@ -47,6 +51,26 @@ jest.mock("../../contexts/LicenseContext", () => ({
     transactionLimit: 100,
     isLoading: false,
     refresh: jest.fn(),
+  }),
+}));
+
+// Mock useFeatureGate so FeatureGate renders scan button (ai_addon -> ai_detection allowed)
+jest.mock("../../hooks/useFeatureGate", () => ({
+  useFeatureGate: () => ({
+    isAllowed: () => true, // Allow all features in tests
+    features: {},
+    loading: false,
+    hasInitialized: true,
+    refresh: jest.fn(),
+  }),
+}));
+
+// Mock useSubmissionSync (used by Transactions component for cloud status sync)
+jest.mock("../../hooks/useSubmissionSync", () => ({
+  useSubmissionSync: () => ({
+    isSyncing: false,
+    lastSync: null,
+    syncNow: jest.fn(),
   }),
 }));
 
@@ -126,17 +150,16 @@ describe("Transactions", () => {
       );
 
       // Wait for transactions to load
-      // TASK-1440: Both mobile and desktop cards render in DOM (CSS controls visibility)
       await waitFor(() => {
-        expect(screen.getAllByText("123 Main Street").length).toBeGreaterThan(0);
+        expect(screen.getByText("123 Main Street")).toBeInTheDocument();
       });
 
       // Verify API was called
       expect(window.api.transactions.getAll).toHaveBeenCalledWith(mockUserId);
 
       // All active transactions should be visible (default filter is 'active')
-      expect(screen.getAllByText("123 Main Street").length).toBeGreaterThan(0);
-      expect(screen.getAllByText("789 Pine Road").length).toBeGreaterThan(0);
+      expect(screen.getByText("123 Main Street")).toBeInTheDocument();
+      expect(screen.getByText("789 Pine Road")).toBeInTheDocument();
     });
 
     it("should show loading state initially", () => {
@@ -221,14 +244,13 @@ describe("Transactions", () => {
         />,
       );
 
-      // TASK-1440: Both mobile and desktop cards render in DOM (CSS controls visibility)
       await waitFor(() => {
-        expect(screen.getAllByText("123 Main Street").length).toBeGreaterThan(0);
+        expect(screen.getByText("123 Main Street")).toBeInTheDocument();
       });
 
       // Active transactions visible
-      expect(screen.getAllByText("123 Main Street").length).toBeGreaterThan(0);
-      expect(screen.getAllByText("789 Pine Road").length).toBeGreaterThan(0);
+      expect(screen.getByText("123 Main Street")).toBeInTheDocument();
+      expect(screen.getByText("789 Pine Road")).toBeInTheDocument();
 
       // Closed transaction not visible
       expect(screen.queryByText("456 Oak Avenue")).not.toBeInTheDocument();
@@ -243,9 +265,8 @@ describe("Transactions", () => {
         />,
       );
 
-      // TASK-1440: Both mobile and desktop cards render in DOM (CSS controls visibility)
       await waitFor(() => {
-        expect(screen.getAllByText("123 Main Street").length).toBeGreaterThan(0);
+        expect(screen.getByText("123 Main Street")).toBeInTheDocument();
       });
 
       // Click closed filter
@@ -254,7 +275,7 @@ describe("Transactions", () => {
 
       // Closed transaction visible
       await waitFor(() => {
-        expect(screen.getAllByText("456 Oak Avenue").length).toBeGreaterThan(0);
+        expect(screen.getByText("456 Oak Avenue")).toBeInTheDocument();
       });
 
       // Active transactions not visible
@@ -271,20 +292,19 @@ describe("Transactions", () => {
         />,
       );
 
-      // TASK-1440: Both mobile and desktop cards render in DOM (CSS controls visibility)
       await waitFor(() => {
-        expect(screen.getAllByText("123 Main Street").length).toBeGreaterThan(0);
+        expect(screen.getByText("123 Main Street")).toBeInTheDocument();
       });
 
-      // Click all filter
-      const allButton = screen.getByRole("button", { name: /all \(/i });
+      // Click "All" filter tab (accessible name is "All 3" — text + count span)
+      const allButton = screen.getByRole("button", { name: /^all\s/i });
       await userEvent.click(allButton);
 
       // All transactions visible
       await waitFor(() => {
-        expect(screen.getAllByText("123 Main Street").length).toBeGreaterThan(0);
-        expect(screen.getAllByText("456 Oak Avenue").length).toBeGreaterThan(0);
-        expect(screen.getAllByText("789 Pine Road").length).toBeGreaterThan(0);
+        expect(screen.getByText("123 Main Street")).toBeInTheDocument();
+        expect(screen.getByText("456 Oak Avenue")).toBeInTheDocument();
+        expect(screen.getByText("789 Pine Road")).toBeInTheDocument();
       });
     });
 
@@ -297,19 +317,22 @@ describe("Transactions", () => {
         />,
       );
 
-      // TASK-1440: Both mobile and desktop cards render in DOM (CSS controls visibility)
       await waitFor(() => {
-        expect(screen.getAllByText("123 Main Street").length).toBeGreaterThan(0);
+        expect(screen.getByText("123 Main Street")).toBeInTheDocument();
       });
 
-      // Type in search
+      // Search is collapsible — click search icon button to expand
+      const searchToggle = screen.getByRole("button", { name: /search transactions/i });
+      await userEvent.click(searchToggle);
+
+      // Type in the now-visible search input
       const searchInput = screen.getByPlaceholderText(/search by address/i);
       await userEvent.type(searchInput, "Main");
 
       // BACKLOG-1106: Wait for 300ms debounce to apply filter
       await waitFor(() => {
         // Only matching transaction visible
-        expect(screen.getAllByText("123 Main Street").length).toBeGreaterThan(0);
+        expect(screen.getByText("123 Main Street")).toBeInTheDocument();
         expect(screen.queryByText("789 Pine Road")).not.toBeInTheDocument();
       });
     });
@@ -323,10 +346,13 @@ describe("Transactions", () => {
         />,
       );
 
-      // TASK-1440: Both mobile and desktop cards render in DOM (CSS controls visibility)
       await waitFor(() => {
-        expect(screen.getAllByText("123 Main Street").length).toBeGreaterThan(0);
+        expect(screen.getByText("123 Main Street")).toBeInTheDocument();
       });
+
+      // Search is collapsible — click search icon button to expand
+      const searchToggle = screen.getByRole("button", { name: /search transactions/i });
+      await userEvent.click(searchToggle);
 
       // Type non-matching search
       const searchInput = screen.getByPlaceholderText(/search by address/i);
@@ -350,15 +376,15 @@ describe("Transactions", () => {
         />,
       );
 
-      // TASK-1440: Both mobile and desktop cards render in DOM (CSS controls visibility)
       await waitFor(() => {
-        expect(screen.getAllByText("123 Main Street").length).toBeGreaterThan(0);
+        expect(screen.getByText("123 Main Street")).toBeInTheDocument();
       });
 
+      // Mobile card shows transaction type (e.g. "Purchase")
       expect(screen.getAllByText("Purchase").length).toBeGreaterThan(0);
     });
 
-    it("should format sale price as currency", async () => {
+    it("should display email count on mobile card", async () => {
       renderWithProvider(
         <Transactions
           userId={mockUserId}
@@ -367,31 +393,12 @@ describe("Transactions", () => {
         />,
       );
 
-      // TASK-1440: Both mobile and desktop cards render in DOM (CSS controls visibility)
       await waitFor(() => {
-        expect(screen.getAllByText("123 Main Street").length).toBeGreaterThan(0);
+        expect(screen.getByText("123 Main Street")).toBeInTheDocument();
       });
 
-      // Check for formatted currency (may appear multiple times in list view)
-      expect(screen.getAllByText("$450,000").length).toBeGreaterThan(0);
-    });
-
-    it("should display email count", async () => {
-      renderWithProvider(
-        <Transactions
-          userId={mockUserId}
-          provider={mockProvider}
-          onClose={mockOnClose}
-        />,
-      );
-
-      // TASK-1440: Both mobile and desktop cards render in DOM (CSS controls visibility)
-      await waitFor(() => {
-        expect(screen.getAllByText("123 Main Street").length).toBeGreaterThan(0);
-      });
-
-      // Desktop card shows "25 Email threads" text
-      expect(screen.getAllByText(/25 email threads/i).length).toBeGreaterThan(0);
+      // Mobile card shows email count as a bare number (e.g. "25")
+      expect(screen.getByText("25")).toBeInTheDocument();
     });
   });
 
@@ -410,13 +417,13 @@ describe("Transactions", () => {
         />,
       );
 
-      // TASK-1440: Both mobile and desktop cards render in DOM (CSS controls visibility)
       await waitFor(() => {
-        expect(screen.getAllByText("123 Main Street").length).toBeGreaterThan(0);
+        expect(screen.getByText("123 Main Street")).toBeInTheDocument();
       });
 
+      // Toolbar button text is "New" (not "New Transaction")
       const newTransactionButton = screen.getByRole("button", {
-        name: /new transaction/i,
+        name: /^new$/i,
       });
       await userEvent.click(newTransactionButton);
 
@@ -443,19 +450,19 @@ describe("Transactions", () => {
         />,
       );
 
-      // TASK-1440: Both mobile and desktop cards render in DOM (CSS controls visibility)
       await waitFor(() => {
-        expect(screen.getAllByText("123 Main Street").length).toBeGreaterThan(0);
+        expect(screen.getByText("123 Main Street")).toBeInTheDocument();
       });
 
-      const scanButton = screen.getByRole("button", { name: /auto detect/i });
+      // Toolbar button text is "Scan" (not "Auto Detect")
+      const scanButton = screen.getByRole("button", { name: /^scan$/i });
       await userEvent.click(scanButton);
 
-      // Auto-detect now calls scan without provider (auto-detects connected providers)
+      // Scan calls scan without provider (auto-detects connected providers)
       expect(window.api.transactions.scan).toHaveBeenCalledWith(mockUserId, {});
     });
 
-    it("should disable scan button while scanning", async () => {
+    it("should show stop button while scanning", async () => {
       window.api.transactions.scan.mockImplementation(
         () => new Promise((resolve) => setTimeout(resolve, 1000)),
       );
@@ -468,17 +475,16 @@ describe("Transactions", () => {
         />,
       );
 
-      // TASK-1440: Both mobile and desktop cards render in DOM (CSS controls visibility)
       await waitFor(() => {
-        expect(screen.getAllByText("123 Main Street").length).toBeGreaterThan(0);
+        expect(screen.getByText("123 Main Street")).toBeInTheDocument();
       });
 
-      const scanButton = screen.getByRole("button", { name: /auto detect/i });
+      const scanButton = screen.getByRole("button", { name: /^scan$/i });
       await userEvent.click(scanButton);
 
-      // Button should show stop scan state (button changes to "Stop Scan" while scanning)
+      // Button changes to "Stop" while scanning
       await waitFor(() => {
-        expect(screen.getByText(/stop scan/i)).toBeInTheDocument();
+        expect(screen.getByRole("button", { name: /^stop$/i })).toBeInTheDocument();
       });
     });
 
@@ -497,12 +503,11 @@ describe("Transactions", () => {
         />,
       );
 
-      // TASK-1440: Both mobile and desktop cards render in DOM (CSS controls visibility)
       await waitFor(() => {
-        expect(screen.getAllByText("123 Main Street").length).toBeGreaterThan(0);
+        expect(screen.getByText("123 Main Street")).toBeInTheDocument();
       });
 
-      const scanButton = screen.getByRole("button", { name: /auto detect/i });
+      const scanButton = screen.getByRole("button", { name: /^scan$/i });
       await userEvent.click(scanButton);
 
       await waitFor(() => {
@@ -524,12 +529,11 @@ describe("Transactions", () => {
         />,
       );
 
-      // TASK-1440: Both mobile and desktop cards render in DOM (CSS controls visibility)
       await waitFor(() => {
-        expect(screen.getAllByText("123 Main Street").length).toBeGreaterThan(0);
+        expect(screen.getByText("123 Main Street")).toBeInTheDocument();
       });
 
-      const scanButton = screen.getByRole("button", { name: /auto detect/i });
+      const scanButton = screen.getByRole("button", { name: /^scan$/i });
       await userEvent.click(scanButton);
 
       await waitFor(() => {
@@ -540,8 +544,8 @@ describe("Transactions", () => {
     });
   });
 
-  describe("Quick Export", () => {
-    it("should show export button on each transaction", async () => {
+  describe("Bulk Actions", () => {
+    it("should show edit mode button for bulk selection", async () => {
       renderWithProvider(
         <Transactions
           userId={mockUserId}
@@ -550,14 +554,14 @@ describe("Transactions", () => {
         />,
       );
 
-      // TASK-1440: Both mobile and desktop cards render in DOM (CSS controls visibility)
       await waitFor(() => {
-        expect(screen.getAllByText("123 Main Street").length).toBeGreaterThan(0);
+        expect(screen.getByText("123 Main Street")).toBeInTheDocument();
       });
 
-      // Export buttons should be visible
-      const exportButtons = screen.getAllByRole("button", { name: /export/i });
-      expect(exportButtons.length).toBeGreaterThan(0);
+      // Mobile UI has an "Edit" button in the toolbar for entering selection mode
+      // (per-card export buttons are no longer displayed on mobile cards)
+      const editButton = screen.getByRole("button", { name: /^edit$/i });
+      expect(editButton).toBeInTheDocument();
     });
   });
 
@@ -571,17 +575,15 @@ describe("Transactions", () => {
         />,
       );
 
-      // TASK-1440: Both mobile and desktop cards render in DOM (CSS controls visibility)
       await waitFor(() => {
-        expect(screen.getAllByText("123 Main Street").length).toBeGreaterThan(0);
+        expect(screen.getByText("123 Main Street")).toBeInTheDocument();
       });
 
-      // TASK-1440: Mobile shows "Back", desktop shows "Back to Dashboard"
-      // Both buttons call onClose, so click the first one found
-      const backButtons = screen.getAllByRole("button", {
+      // Back button has both "Back to Dashboard" (desktop) and "Back" (mobile)
+      // rendered in the same <button>. Its accessible name includes both texts.
+      const backButton = screen.getByRole("button", {
         name: /back/i,
       });
-      const backButton = backButtons[0];
       await userEvent.click(backButton);
 
       expect(mockOnClose).toHaveBeenCalled();
@@ -605,15 +607,12 @@ describe("Transactions", () => {
         />,
       );
 
-      // TASK-1440: Both mobile and desktop cards render in DOM (CSS controls visibility)
       await waitFor(() => {
-        expect(screen.getAllByText("123 Main Street").length).toBeGreaterThan(0);
+        expect(screen.getByText("123 Main Street")).toBeInTheDocument();
       });
 
-      // Click on transaction (use desktop card - last match)
-      // TASK-1440: First match is mobile card, second is desktop card
-      const allCards = screen.getAllByText("123 Main Street");
-      const transactionCard = allCards[allCards.length - 1]
+      // Click on the transaction card (cursor-pointer div wrapping the card)
+      const transactionCard = screen.getByText("123 Main Street")
         .closest('div[class*="cursor-pointer"]');
       if (transactionCard) {
         await userEvent.click(transactionCard);
@@ -660,7 +659,7 @@ describe("Transactions", () => {
       });
     });
 
-    it("should display transaction price and closing date", async () => {
+    it("should open transaction details modal on card click", async () => {
       renderWithProvider(
         <Transactions
           userId={mockUserId}
@@ -669,22 +668,22 @@ describe("Transactions", () => {
         />,
       );
 
-      // TASK-1440: Both mobile and desktop cards render in DOM (CSS controls visibility)
       await waitFor(() => {
-        expect(screen.getAllByText("123 Main Street").length).toBeGreaterThan(0);
+        expect(screen.getByText("123 Main Street")).toBeInTheDocument();
       });
 
-      // Click on transaction (use desktop card - last match)
-      // TASK-1440: First match is mobile card, second is desktop card
-      const allCards = screen.getAllByText("123 Main Street");
-      const transactionCard = allCards[allCards.length - 1]
+      // Click on the transaction card to open details
+      const transactionCard = screen.getByText("123 Main Street")
         .closest('div[class*="cursor-pointer"]');
       if (transactionCard) {
         await userEvent.click(transactionCard);
       }
 
+      // Transaction details modal should open
       await waitFor(() => {
-        expect(screen.getAllByText(/\$450,000/).length).toBeGreaterThan(0);
+        expect(
+          screen.getAllByText(/transaction details/i).length,
+        ).toBeGreaterThan(0);
       });
     });
   });
@@ -709,15 +708,12 @@ describe("Transactions", () => {
         />,
       );
 
-      // TASK-1440: Both mobile and desktop cards render in DOM (CSS controls visibility)
       await waitFor(() => {
-        expect(screen.getAllByText("123 Main Street").length).toBeGreaterThan(0);
+        expect(screen.getByText("123 Main Street")).toBeInTheDocument();
       });
 
-      // Click on transaction (use desktop card - last match)
-      // TASK-1440: First match is mobile card, second is desktop card
-      const allCards = screen.getAllByText("123 Main Street");
-      const transactionCard = allCards[allCards.length - 1]
+      // Click on the transaction card
+      const transactionCard = screen.getByText("123 Main Street")
         .closest('div[class*="cursor-pointer"]');
       if (transactionCard) {
         await userEvent.click(transactionCard);
