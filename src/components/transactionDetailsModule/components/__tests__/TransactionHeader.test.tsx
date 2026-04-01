@@ -122,10 +122,10 @@ describe("TransactionHeader", () => {
 
       render(<TransactionHeader {...defaultProps} transaction={transaction} />);
 
-      // Team should see Submit button
-      expect(screen.getByRole("button", { name: /submit for review/i })).toBeInTheDocument();
+      // Team should see Submit button (appears in both mobile and desktop layouts)
+      expect(screen.getAllByRole("button", { name: /submit for review/i })[0]).toBeInTheDocument();
       // Team should also see Export button (BACKLOG-459)
-      expect(screen.getByRole("button", { name: /export/i })).toBeInTheDocument();
+      expect(screen.getAllByRole("button", { name: /export/i })[0]).toBeInTheDocument();
       // Note: Edit and Delete buttons are now in the Overview tab, not the header
     });
 
@@ -138,8 +138,8 @@ describe("TransactionHeader", () => {
 
       // Individual should NOT see Submit button
       expect(screen.queryByRole("button", { name: /submit for review/i })).not.toBeInTheDocument();
-      // Individual should see Export button
-      expect(screen.getByRole("button", { name: /export/i })).toBeInTheDocument();
+      // Individual should see Export button (appears in both mobile and desktop layouts)
+      expect(screen.getAllByRole("button", { name: /export/i })[0]).toBeInTheDocument();
       // Note: Edit and Delete buttons are now in the Overview tab, not the header
     });
 
@@ -152,9 +152,9 @@ describe("TransactionHeader", () => {
 
       // Team should see Submitted badge instead of Submit button
       expect(screen.queryByRole("button", { name: /submit for review/i })).not.toBeInTheDocument();
-      expect(screen.getByText(/submitted/i)).toBeInTheDocument();
+      expect(screen.getAllByText(/submitted/i)[0]).toBeInTheDocument();
       // Team should still see Export button (BACKLOG-459: available after submission)
-      expect(screen.getByRole("button", { name: /export/i })).toBeInTheDocument();
+      expect(screen.getAllByRole("button", { name: /export/i })[0]).toBeInTheDocument();
     });
 
     it("should show Resubmit button for team users when needs_changes", () => {
@@ -164,10 +164,10 @@ describe("TransactionHeader", () => {
 
       render(<TransactionHeader {...defaultProps} transaction={transaction} />);
 
-      // Team should see Resubmit button
-      expect(screen.getByRole("button", { name: /resubmit/i })).toBeInTheDocument();
+      // Team should see Resubmit button (appears in both mobile and desktop layouts)
+      expect(screen.getAllByRole("button", { name: /resubmit/i })[0]).toBeInTheDocument();
       // Team should also see Export button
-      expect(screen.getByRole("button", { name: /export/i })).toBeInTheDocument();
+      expect(screen.getAllByRole("button", { name: /export/i })[0]).toBeInTheDocument();
     });
 
     it("should show both Submit and Export for enterprise license users", () => {
@@ -177,10 +177,10 @@ describe("TransactionHeader", () => {
 
       render(<TransactionHeader {...defaultProps} transaction={transaction} />);
 
-      // Enterprise should see Submit button (same as team)
-      expect(screen.getByRole("button", { name: /submit for review/i })).toBeInTheDocument();
+      // Enterprise should see Submit button (same as team, appears in both mobile and desktop layouts)
+      expect(screen.getAllByRole("button", { name: /submit for review/i })[0]).toBeInTheDocument();
       // Enterprise should also see Export button
-      expect(screen.getByRole("button", { name: /export/i })).toBeInTheDocument();
+      expect(screen.getAllByRole("button", { name: /export/i })[0]).toBeInTheDocument();
     });
   });
 
@@ -198,10 +198,10 @@ describe("TransactionHeader", () => {
         />
       );
 
-      // Pending review should show Approve, Reject, Edit
-      expect(screen.getByRole("button", { name: /approve/i })).toBeInTheDocument();
-      expect(screen.getByRole("button", { name: /reject/i })).toBeInTheDocument();
-      expect(screen.getByRole("button", { name: /edit/i })).toBeInTheDocument();
+      // Pending review should show Approve, Reject, Edit (appear in both mobile and desktop layouts)
+      expect(screen.getAllByRole("button", { name: /approve/i })[0]).toBeInTheDocument();
+      expect(screen.getAllByRole("button", { name: /reject/i })[0]).toBeInTheDocument();
+      expect(screen.getAllByRole("button", { name: /edit/i })[0]).toBeInTheDocument();
       // Should NOT show Export/Submit/Delete in pending review mode
       expect(screen.queryByRole("button", { name: /export/i })).not.toBeInTheDocument();
       expect(screen.queryByRole("button", { name: /submit/i })).not.toBeInTheDocument();
@@ -223,9 +223,9 @@ describe("TransactionHeader", () => {
         />
       );
 
-      // Rejected should show Restore and Delete
-      expect(screen.getByRole("button", { name: /restore to active/i })).toBeInTheDocument();
-      expect(screen.getByRole("button", { name: /delete/i })).toBeInTheDocument();
+      // Rejected should show Restore and Delete (appear in both mobile and desktop layouts)
+      expect(screen.getAllByRole("button", { name: /restore/i })[0]).toBeInTheDocument();
+      expect(screen.getAllByRole("button", { name: /delete/i })[0]).toBeInTheDocument();
       // Should NOT show Export/Submit/Edit in rejected mode
       expect(screen.queryByRole("button", { name: /export/i })).not.toBeInTheDocument();
       expect(screen.queryByRole("button", { name: /submit/i })).not.toBeInTheDocument();
