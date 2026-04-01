@@ -47,7 +47,7 @@ function ExportModal({
 
   const [contentType, setContentType] = useState<"both" | "emails" | "texts">("both");
   const [attachmentType, setAttachmentType] = useState<"all" | "email" | "text" | "none">("all");
-  const [exportFormat, setExportFormat] = useState("folder"); // folder, pdf, combined-pdf, excel, csv, json, txt_eml
+  const [exportFormat, setExportFormat] = useState("pdf"); // folder, pdf, combined-pdf, excel, csv, json, txt_eml
   const [emailExportMode, setEmailExportMode] = useState<"thread" | "individual">("thread");
   const [exporting, setExporting] = useState(false);
   const [error, setError] = useState<string | null>(null);
