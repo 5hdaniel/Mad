@@ -50,29 +50,43 @@ export function useProjectDragDrop({ onRefresh }: UseProjectDragDropParams) {
       const { active, over } = event;
       setActiveDragItem(null);
 
-      if (!over) return;
+      console.log('[DnD] dragEnd:', { activeId: active.id, overId: over?.id });
+
+      if (!over) {
+        console.log('[DnD] No drop target');
+        return;
+      }
 
       const data = active.data.current;
-      if (!data?.item) return;
+      if (!data?.item) {
+        console.log('[DnD] No item data on active');
+        return;
+      }
 
       const item = data.item as PmBacklogItem;
       const sourceContainerId = data.containerId as string;
       const targetContainerId = over.id as string;
 
+      console.log('[DnD] Move:', { itemId: item.id, itemNumber: item.item_number, from: sourceContainerId, to: targetContainerId });
+
       // No-op: dropped on same container
-      if (sourceContainerId === targetContainerId) return;
+      if (sourceContainerId === targetContainerId) {
+        console.log('[DnD] Same container, no-op');
+        return;
+      }
 
       try {
         if (targetContainerId === 'backlog-panel') {
-          // Sprint → Backlog: unassign
+          console.log('[DnD] Unassigning from sprint');
           await removeFromSprint([item.id]);
         } else {
-          // Backlog → Sprint or Sprint → Sprint: assign to target sprint
+          console.log('[DnD] Assigning to sprint:', targetContainerId);
           await assignToSprint([item.id], targetContainerId);
         }
+        console.log('[DnD] Success, refreshing');
         onRefresh();
       } catch (err) {
-        console.error('Failed to move item:', err);
+        console.error('[DnD] Failed to move item:', err);
       }
     },
     [onRefresh]
