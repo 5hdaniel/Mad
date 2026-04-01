@@ -45,7 +45,7 @@ export default async function OrganizationsPage() {
   // Fetch all organizations with member counts
   const { data: orgs, error } = await supabase
     .from('organizations')
-    .select('id, name, slug, plan, created_at, organization_members(count)')
+    .select('id, name, slug, created_at, organization_members(count), organization_plans(plan_id, plans(id, name, tier))')
     .order('name');
 
   if (error) {
@@ -61,16 +61,20 @@ export default async function OrganizationsPage() {
     );
   }
 
-  // Transform data to extract member counts from the nested aggregate
+  // Transform data to extract member counts and plan from nested joins
   const organizations: OrganizationRow[] = (orgs ?? []).map((org) => {
     const memberAgg = org.organization_members as unknown as { count: number }[];
     const memberCount = memberAgg?.[0]?.count ?? 0;
+
+    const orgPlans = org.organization_plans as unknown as { plan_id: string; plans: { id: string; name: string; tier: string } | null }[] | null;
+    const activePlan = orgPlans?.[0]?.plans ?? null;
 
     return {
       id: org.id,
       name: org.name,
       slug: org.slug,
-      plan: org.plan,
+      plan_name: activePlan?.name ?? null,
+      plan_tier: activePlan?.tier ?? null,
       created_at: org.created_at,
       member_count: memberCount,
     };

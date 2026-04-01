@@ -18,7 +18,8 @@ export interface OrganizationRow {
   id: string;
   name: string;
   slug: string;
-  plan: string | null;
+  plan_name: string | null;
+  plan_tier: string | null;
   created_at: string | null;
   member_count: number;
 }
@@ -28,8 +29,9 @@ interface OrganizationsTableProps {
   canEdit: boolean;
 }
 
-function PlanBadge({ plan }: { plan: string | null }) {
-  const planText = plan || 'none';
+function PlanBadge({ name, tier }: { name: string | null; tier: string | null }) {
+  const displayText = name || 'none';
+  const tierKey = tier?.toLowerCase() || 'none';
   const colorMap: Record<string, string> = {
     enterprise: 'bg-purple-100 text-purple-800',
     professional: 'bg-primary-100 text-primary-800',
@@ -37,11 +39,11 @@ function PlanBadge({ plan }: { plan: string | null }) {
     trial: 'bg-yellow-100 text-yellow-800',
     none: 'bg-gray-100 text-gray-600',
   };
-  const color = colorMap[planText.toLowerCase()] || 'bg-gray-100 text-gray-600';
+  const color = colorMap[tierKey] || 'bg-gray-100 text-gray-600';
 
   return (
     <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${color}`}>
-      {planText}
+      {displayText}
     </span>
   );
 }
@@ -149,7 +151,7 @@ export function OrganizationsTable({ organizations, canEdit }: OrganizationsTabl
                     {org.slug}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">
-                    <PlanBadge plan={org.plan} />
+                    <PlanBadge name={org.plan_name} tier={org.plan_tier} />
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                     {org.member_count}
