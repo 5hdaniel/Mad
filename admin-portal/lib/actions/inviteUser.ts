@@ -26,6 +26,8 @@ interface InviteUserInput {
   lastName: string;
   role: 'agent' | 'broker' | 'admin';
   organizationId: string | null;
+  licenseStatus?: 'trial' | 'active';
+  planId?: string | null;
 }
 
 interface InviteUserResult {
@@ -50,6 +52,7 @@ const RPC_ERROR_MAP: Record<string, string> = {
   already_member: 'This user is already a member of the organization',
   organization_not_found: 'Organization not found',
   seat_limit_reached: 'Organization has reached maximum seats',
+  invalid_license_status: 'Invalid license status (must be trial or active)',
 };
 
 // ============================================================================
@@ -110,6 +113,8 @@ export async function inviteUser(input: InviteUserInput): Promise<InviteUserResu
     p_email: input.email,
     p_role: input.organizationId ? input.role : null,
     p_invited_by: user.id,
+    p_license_status: input.licenseStatus || 'trial',
+    p_plan_id: input.planId || null,
   });
 
   if (rpcError) {
