@@ -80,7 +80,7 @@ export function NavigationButtons({
           <button
             type="button"
             onClick={onBack}
-            className="flex-1 px-4 py-2.5 bg-gray-100 text-gray-700 rounded-lg font-medium hover:bg-gray-200 transition-colors"
+            className="flex-1 min-h-[44px] px-4 py-2.5 bg-gray-100 text-gray-700 rounded-lg font-medium hover:bg-gray-200 active:bg-gray-300 transition-colors"
           >
             {backLabel}
           </button>
@@ -90,7 +90,7 @@ export function NavigationButtons({
             type="button"
             onClick={onNext}
             disabled={isNextDisabled}
-            className="flex-1 px-4 py-2.5 bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700 text-white text-sm font-semibold rounded-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed shadow-md"
+            className="flex-1 min-h-[44px] px-4 py-2.5 bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700 active:from-blue-700 active:to-purple-800 text-white text-sm font-semibold rounded-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed shadow-md"
           >
             {nextLabel}
           </button>

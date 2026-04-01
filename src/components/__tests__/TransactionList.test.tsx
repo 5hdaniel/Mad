@@ -145,8 +145,10 @@ describe("TransactionList", () => {
       );
 
       // Wait for transactions to load
+      // TASK-1440: Both mobile and desktop cards render in DOM (CSS controls visibility),
+      // so use getAllByText to handle duplicate text elements
       await waitFor(() => {
-        expect(screen.getByText("123 Pending Street")).toBeInTheDocument();
+        expect(screen.getAllByText("123 Pending Street").length).toBeGreaterThan(0);
       });
 
       // Pending transaction should have "Review & Edit" button in wrapper
@@ -170,7 +172,7 @@ describe("TransactionList", () => {
 
       // Wait for transactions to load
       await waitFor(() => {
-        expect(screen.getByText("123 Pending Street")).toBeInTheDocument();
+        expect(screen.getAllByText("123 Pending Street").length).toBeGreaterThan(0);
       });
 
       // Click Review & Edit button
@@ -201,7 +203,7 @@ describe("TransactionList", () => {
 
       // Wait for transactions to load
       await waitFor(() => {
-        expect(screen.getByText("123 Pending Street")).toBeInTheDocument();
+        expect(screen.getAllByText("123 Pending Street").length).toBeGreaterThan(0);
       });
 
       // Should show confidence label
@@ -224,12 +226,14 @@ describe("TransactionList", () => {
 
       // Wait for transactions to load
       await waitFor(() => {
-        expect(screen.getByText("123 Pending Street")).toBeInTheDocument();
+        expect(screen.getAllByText("123 Pending Street").length).toBeGreaterThan(0);
       });
 
-      // Click on the pending transaction card itself (not the Review button)
-      const pendingCard = screen.getByText("123 Pending Street");
-      await user.click(pendingCard);
+      // Click on the pending transaction card in the desktop view (second match, inside TransactionCard)
+      // TASK-1440: First match is mobile card, second is desktop card wrapped in StatusWrapper
+      const pendingCards = screen.getAllByText("123 Pending Street");
+      const desktopCard = pendingCards[pendingCards.length - 1];
+      await user.click(desktopCard);
 
       // TransactionDetails modal should open
       await waitFor(() => {
@@ -252,7 +256,7 @@ describe("TransactionList", () => {
       );
 
       await waitFor(() => {
-        expect(screen.getByText("123 Pending Street")).toBeInTheDocument();
+        expect(screen.getAllByText("123 Pending Street").length).toBeGreaterThan(0);
       });
 
       // Pending transaction should have Pending Review label in wrapper
@@ -270,7 +274,7 @@ describe("TransactionList", () => {
       );
 
       await waitFor(() => {
-        expect(screen.getByText("789 Manual Road")).toBeInTheDocument();
+        expect(screen.getAllByText("789 Manual Road").length).toBeGreaterThan(0);
       });
 
       // Manual transaction should have Manual badge
@@ -288,16 +292,16 @@ describe("TransactionList", () => {
       );
 
       await waitFor(() => {
-        expect(screen.getByText("123 Pending Street")).toBeInTheDocument();
+        expect(screen.getAllByText("123 Pending Street").length).toBeGreaterThan(0);
       });
 
-      // Get the pending transaction card (auto-detected)
-      const pendingCard = screen
-        .getByText("123 Pending Street")
-        .closest(".bg-white");
+      // Get the pending transaction card from the desktop view (auto-detected)
+      // TASK-1440: Use the desktop card (inside StatusWrapper with .bg-white)
+      const pendingCards = screen.getAllByText("123 Pending Street");
+      const desktopCard = pendingCards[pendingCards.length - 1].closest(".bg-white");
 
       // Auto-detected transactions should NOT have Manual badge
-      expect(within(pendingCard!).queryByText("Manual")).not.toBeInTheDocument();
+      expect(within(desktopCard!).queryByText("Manual")).not.toBeInTheDocument();
     });
   });
 
@@ -312,7 +316,7 @@ describe("TransactionList", () => {
       );
 
       await waitFor(() => {
-        expect(screen.getByText("123 Pending Street")).toBeInTheDocument();
+        expect(screen.getAllByText("123 Pending Street").length).toBeGreaterThan(0);
       });
 
       // All filter tabs should be present
@@ -336,7 +340,7 @@ describe("TransactionList", () => {
 
       // Wait for transactions to load
       await waitFor(() => {
-        expect(screen.getByText("123 Pending Street")).toBeInTheDocument();
+        expect(screen.getAllByText("123 Pending Street").length).toBeGreaterThan(0);
       });
 
       // Click Active filter
@@ -345,8 +349,8 @@ describe("TransactionList", () => {
 
       // Should show active transactions (confirmed and manual are both "active" status)
       await waitFor(() => {
-        expect(screen.getByText("456 Confirmed Avenue")).toBeInTheDocument();
-        expect(screen.getByText("789 Manual Road")).toBeInTheDocument();
+        expect(screen.getAllByText("456 Confirmed Avenue").length).toBeGreaterThan(0);
+        expect(screen.getAllByText("789 Manual Road").length).toBeGreaterThan(0);
       });
 
       // Pending transaction should NOT be visible (it's filtered out)

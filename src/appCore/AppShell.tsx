@@ -2,7 +2,7 @@
  * AppShell Component
  *
  * Provides the main application layout structure including:
- * - Title bar with user menu
+ * - Title bar with user menu (Electron only - hidden on web/mobile)
  * - Offline banner
  * - Scrollable content area
  * - Version info button and popup
@@ -14,6 +14,7 @@ import { OfflineBanner } from "./shell";
 import SystemHealthMonitor from "../components/SystemHealthMonitor";
 import { isOnboardingStep } from "./routing";
 import { useSessionValidator } from "../hooks/useSessionValidator";
+import { isElectron } from "../utils/platform";
 // TASK-2282: SupportWidget moved to App.tsx (outside auth routes)
 
 // OAuthProvider type to match SystemHealthMonitor expectations
@@ -24,6 +25,7 @@ interface AppShellProps {
   app: AppStateMachine;
   children: React.ReactNode;
 }
+
 
 export function AppShell({ app, children }: AppShellProps) {
   const {
@@ -51,6 +53,9 @@ export function AppShell({ app, children }: AppShellProps) {
     onSessionInvalidated: handleLogout,
   });
 
+  // Detect Electron for title bar drag region
+  const runningInElectron = isElectron();
+
   // PRIMARY DATABASE INITIALIZATION GATE
   // Block all content for authenticated users until database is ready
   // This prevents "Database is not initialized" errors from modal bypass
@@ -58,9 +63,11 @@ export function AppShell({ app, children }: AppShellProps) {
   // and will be initialized during the secure-storage/keychain step in onboarding
   if (isAuthenticated && !isDatabaseInitialized && !isOnboardingStep(currentStep)) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50 flex items-center justify-center">
-        {/* Invisible drag region at top for window dragging during init */}
-        <div className="fixed top-0 left-0 right-0 h-12 drag-region" />
+      <div className="min-h-screen min-h-dvh bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50 flex items-center justify-center">
+        {/* Invisible drag region at top for window dragging during init (Electron only) */}
+        {runningInElectron && (
+          <div className="fixed top-0 left-0 right-0 h-12 drag-region" />
+        )}
         <div className="text-center">
           <div className="w-12 h-12 border-4 border-blue-600 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
           <p className="text-gray-600">Initializing secure storage...</p>
@@ -70,9 +77,10 @@ export function AppShell({ app, children }: AppShellProps) {
   }
 
   return (
-    <div className="h-screen flex flex-col bg-gray-50 overflow-hidden">
-      {/* Title Bar - Hide on login screen */}
-      {currentStep !== "login" && (
+    <div className="h-dvh h-screen flex flex-col bg-gray-50 overflow-hidden">
+      {/* Title Bar - Only show on Electron (desktop) and not on login screen.
+          On mobile/web platforms, there is no OS-level drag region needed. */}
+      {runningInElectron && currentStep !== "login" && (
         <div className="flex-shrink-0 bg-gradient-to-b from-gray-100 to-gray-50 border-b border-gray-200 px-4 py-3 flex items-center justify-between select-none drag-region">
           <div className="w-8" /> {/* Spacer for centering */}
           <h1 className="text-sm font-semibold text-gray-700">
@@ -99,6 +107,33 @@ export function AppShell({ app, children }: AppShellProps) {
               )}
             </button>
           )}
+        </div>
+      )}
+
+      {/* Mobile Header - Show page title and profile on non-Electron platforms */}
+      {!runningInElectron && currentStep !== "login" && isAuthenticated && currentUser && (
+        <div className="flex-shrink-0 bg-white border-b border-gray-200 px-4 py-3 flex items-center justify-between lg:hidden">
+          <h1 className="text-base font-semibold text-gray-900">
+            {getPageTitle()}
+          </h1>
+          <button
+            onClick={openProfile}
+            className="w-8 h-8 rounded-full bg-gradient-to-br from-blue-400 to-purple-500 hover:from-blue-500 hover:to-purple-600 flex items-center justify-center text-white text-sm font-bold shadow-md transition-all hover:shadow-lg"
+            title={`${currentUser.display_name || currentUser.email} - Click for account settings`}
+            data-tour="profile-button"
+          >
+            {currentUser.avatar_url ? (
+              <img
+                src={currentUser.avatar_url}
+                alt="Profile"
+                className="w-8 h-8 rounded-full"
+              />
+            ) : (
+              currentUser.display_name?.[0]?.toUpperCase() ||
+              currentUser.email?.[0]?.toUpperCase() ||
+              "?"
+            )}
+          </button>
         </div>
       )}
 

@@ -13,6 +13,7 @@
  */
 
 import React, { useMemo } from "react";
+import { ResponsiveModal } from "../common/ResponsiveModal";
 
 /**
  * Progress state from the import service
@@ -146,8 +147,7 @@ export function ImportProgressModal({
   const isPreparing = !progress;
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[60] p-4">
-      <div className="bg-white rounded-xl shadow-2xl max-w-md w-full">
+    <ResponsiveModal zIndex="z-[60]" overlayClassName="bg-black bg-opacity-50" panelClassName="max-w-md">
         {/* Header */}
         <div className="px-6 py-4 border-b border-gray-200 flex items-center justify-between">
           <h3 className="text-lg font-semibold text-gray-900">
@@ -234,8 +234,7 @@ export function ImportProgressModal({
             Cancel Import
           </button>
         </div>
-      </div>
-    </div>
+    </ResponsiveModal>
   );
 }
 

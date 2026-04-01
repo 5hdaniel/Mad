@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback } from "react";
+import { ResponsiveModal } from "../common/ResponsiveModal";
 import { llmService } from '../../services';
 import logger from '../../utils/logger';
 
@@ -62,8 +63,7 @@ function ConsentModal({
   const [acknowledged, setAcknowledged] = useState(false);
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[60] p-4">
-      <div className="bg-white rounded-xl shadow-2xl max-w-lg w-full p-6">
+    <ResponsiveModal onClose={onDecline} zIndex="z-[60]" overlayClassName="bg-black bg-opacity-50" panelClassName="max-w-lg p-6">
         <div className="flex items-center gap-3 mb-4">
           <div className="w-10 h-10 bg-purple-100 rounded-full flex items-center justify-center">
             <svg
@@ -111,7 +111,7 @@ function ConsentModal({
             type="checkbox"
             checked={acknowledged}
             onChange={(e) => setAcknowledged(e.target.checked)}
-            className="mt-1 h-4 w-4 text-purple-600 rounded border-gray-300 focus:ring-purple-500"
+            className="mt-1 h-5 w-5 text-purple-600 rounded border-gray-300 focus:ring-purple-500"
           />
           <span className="text-sm text-gray-700">
             I understand and consent to this data processing
@@ -133,8 +133,7 @@ function ConsentModal({
             Accept & Continue
           </button>
         </div>
-      </div>
-    </div>
+    </ResponsiveModal>
   );
 }
 
@@ -190,7 +189,7 @@ function ProviderSettings({
             value={apiKey}
             onChange={(e) => onKeyChange(e.target.value)}
             placeholder={`Enter your ${providerName} API key (${keyPrefix}...)`}
-            className="w-full px-3 py-2 pr-20 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500 text-sm"
+            className="w-full px-3 py-2.5 pr-20 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500 text-sm text-gray-900 bg-white min-h-[44px]"
           />
           <button
             type="button"
@@ -326,7 +325,7 @@ function ProviderSettings({
           value={selectedModel}
           onChange={(e) => onModelChange(e.target.value)}
           disabled={!hasKey}
-          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500 text-sm disabled:opacity-50 disabled:cursor-not-allowed"
+          className="w-full px-3 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500 text-sm text-gray-900 bg-white disabled:opacity-50 disabled:cursor-not-allowed min-h-[44px]"
         >
           {models.map((model) => (
             <option key={model.value} value={model.value}>

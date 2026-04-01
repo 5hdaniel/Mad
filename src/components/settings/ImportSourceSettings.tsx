@@ -306,7 +306,7 @@ export function ImportSourceSettings({ userId, onSourceChange }: ImportSourceSet
                 checked={source === "iphone-sync"}
                 onChange={() => handleSourceChange("iphone-sync")}
                 disabled={saving}
-                className="mt-0.5"
+                className="mt-0.5 w-5 h-5"
               />
               <div>
                 <div className="text-sm font-medium text-gray-900">
@@ -333,7 +333,7 @@ export function ImportSourceSettings({ userId, onSourceChange }: ImportSourceSet
                 checked={source === "android-companion"}
                 onChange={() => handleSourceChange("android-companion")}
                 disabled={saving}
-                className="mt-0.5"
+                className="mt-0.5 w-5 h-5"
               />
               <div>
                 <div className="text-sm font-medium text-gray-900 flex items-center gap-2">

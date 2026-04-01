@@ -4,7 +4,9 @@
 # Blocks push if affected tests fail; succeeds silently if no tests match
 
 # Get the remote tracking branch to compare against
-upstream=$(git rev-parse --abbrev-ref @{upstream} 2>/dev/null)
+# Note: `|| true` prevents set -e (husky 9) from aborting on exit code 128
+# when no upstream is configured for the branch
+upstream=$(git rev-parse --abbrev-ref @{upstream} 2>/dev/null || true)
 if [ -z "$upstream" ]; then
   # No upstream set — compare against the merge base with origin/develop
   upstream="origin/develop"

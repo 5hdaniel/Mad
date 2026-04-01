@@ -1,4 +1,5 @@
 import React, { useState, useCallback, useEffect } from "react";
+import { ResponsiveModal } from "../common/ResponsiveModal";
 import type { BackupPasswordModalProps } from "../../types/iphone";
 
 /**
@@ -47,11 +48,7 @@ export const BackupPasswordModal: React.FC<BackupPasswordModalProps> = ({
   if (!isOpen) return null;
 
   return (
-    <div
-      className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[70] p-4"
-      onKeyDown={handleKeyDown}
-    >
-      <div className="bg-white rounded-xl shadow-2xl w-full max-w-md">
+    <ResponsiveModal onClose={onCancel} zIndex="z-[70]" overlayClassName="bg-black bg-opacity-50" panelClassName="max-w-md">
         {/* Header */}
         <div className="bg-gradient-to-r from-amber-500 to-orange-600 px-6 py-4 flex items-center justify-between rounded-t-xl">
           <h2 className="text-xl font-bold text-white">
@@ -112,7 +109,7 @@ export const BackupPasswordModal: React.FC<BackupPasswordModalProps> = ({
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               placeholder="Backup password"
-              className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-amber-500 transition-colors"
+              className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-amber-500 transition-colors text-gray-900 bg-white min-h-[44px]"
               autoFocus
               disabled={isLoading}
             />
@@ -158,8 +155,7 @@ export const BackupPasswordModal: React.FC<BackupPasswordModalProps> = ({
             iPhone passcode.
           </p>
         </form>
-      </div>
-    </div>
+    </ResponsiveModal>
   );
 };
 

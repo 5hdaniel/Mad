@@ -1,4 +1,5 @@
 import React from "react";
+import { ResponsiveModal } from "../../common/ResponsiveModal";
 
 interface RemoveConfirmationModalProps {
   onClose: () => void;
@@ -14,8 +15,7 @@ function RemoveConfirmationModal({
   onConfirm,
 }: RemoveConfirmationModalProps) {
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 z-[70] flex items-center justify-center p-4">
-      <div className="bg-white rounded-xl shadow-2xl max-w-md w-full">
+    <ResponsiveModal onClose={onClose} zIndex="z-[70]" overlayClassName="bg-black bg-opacity-50" panelClassName="max-w-md">
         {/* Header */}
         <div className="px-6 py-4 border-b border-gray-200 flex items-center gap-3">
           <div className="w-10 h-10 bg-red-100 rounded-full flex items-center justify-center flex-shrink-0">
@@ -61,8 +61,7 @@ function RemoveConfirmationModal({
             Remove
           </button>
         </div>
-      </div>
-    </div>
+    </ResponsiveModal>
   );
 }
 

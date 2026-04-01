@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from "react";
+import { ResponsiveModal } from "./common/ResponsiveModal";
 import type { Transaction } from "../../electron/types/models";
 import { settingsService, transactionService } from '../services';
 import logger from '../utils/logger';
@@ -278,36 +279,37 @@ function ExportModal({
   // C6: When feature is gated, render ONLY UpgradePrompt with title and close button
   if (!featureGateLoading && !canExport) {
     return (
-      <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[70] p-4">
-        <div className="bg-white rounded-xl shadow-2xl w-full max-w-3xl">
+      <ResponsiveModal onClose={onClose} zIndex="z-[70]" overlayClassName="bg-black bg-opacity-50" panelClassName="max-w-3xl">
           {/* Header */}
-          <div className="bg-gradient-to-r from-purple-500 to-indigo-600 px-6 py-4 flex items-center justify-between rounded-t-xl">
-            <div>
-              <h3 className="text-xl font-bold text-white">
-                Export Transaction Audit
-              </h3>
-              <p className="text-purple-100 text-sm">
-                {transaction.property_address}
-              </p>
-            </div>
-            <button
-              onClick={onClose}
-              className="text-white hover:bg-white hover:bg-opacity-20 rounded-full p-1 transition-all"
-            >
-              <svg
-                className="w-6 h-6"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
+          <div className="bg-gradient-to-r from-purple-500 to-indigo-600 px-3 sm:px-6 pt-6 sm:pt-4 pb-3 sm:pb-4 sm:rounded-t-xl shadow-lg">
+            {/* Mobile */}
+            <div className="sm:hidden flex items-center justify-between">
+              <button
+                onClick={onClose}
+                className="text-white hover:bg-white hover:bg-opacity-20 rounded-lg px-2 py-2 transition-all flex items-center gap-1 font-medium text-sm"
               >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M6 18L18 6M6 6l12 12"
-                />
-              </svg>
-            </button>
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
+                </svg>
+                Back
+              </button>
+              <h3 className="text-lg font-bold text-white">Export</h3>
+            </div>
+            {/* Desktop */}
+            <div className="hidden sm:flex items-center justify-between">
+              <div>
+                <h3 className="text-xl font-bold text-white">Export Transaction Audit</h3>
+                <p className="text-purple-100 text-sm">{transaction.property_address}</p>
+              </div>
+              <button
+                onClick={onClose}
+                className="text-white hover:bg-white hover:bg-opacity-20 rounded-full p-1 transition-all"
+              >
+                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
           </div>
 
           {/* Gated content: only UpgradePrompt */}
@@ -318,43 +320,44 @@ function ExportModal({
               onDismiss={onClose}
             />
           </div>
-        </div>
-      </div>
+      </ResponsiveModal>
     );
   }
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[70] p-4">
-      <div className="bg-white rounded-xl shadow-2xl w-full max-w-3xl">
+    <ResponsiveModal onClose={onClose} zIndex="z-[70]" overlayClassName="bg-black bg-opacity-50" panelClassName="max-w-3xl">
         {/* Header */}
-        <div className="bg-gradient-to-r from-purple-500 to-indigo-600 px-6 py-4 flex items-center justify-between rounded-t-xl">
-          <div>
-            <h3 className="text-xl font-bold text-white">
-              Export Transaction Audit
-            </h3>
-            <p className="text-purple-100 text-sm">
-              {transaction.property_address}
-            </p>
-          </div>
-          <button
-            onClick={onClose}
-            disabled={exporting}
-            className="text-white hover:bg-white hover:bg-opacity-20 rounded-full p-1 transition-all disabled:opacity-50"
-          >
-            <svg
-              className="w-6 h-6"
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
+        <div className="bg-gradient-to-r from-purple-500 to-indigo-600 px-3 sm:px-6 pt-6 sm:pt-4 pb-3 sm:pb-4 sm:rounded-t-xl shadow-lg">
+          {/* Mobile */}
+          <div className="sm:hidden flex items-center justify-between">
+            <button
+              onClick={onClose}
+              disabled={exporting}
+              className="text-white hover:bg-white hover:bg-opacity-20 rounded-lg px-2 py-2 transition-all flex items-center gap-1 font-medium text-sm disabled:opacity-50"
             >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M6 18L18 6M6 6l12 12"
-              />
-            </svg>
-          </button>
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
+              </svg>
+              Back
+            </button>
+            <h3 className="text-lg font-bold text-white">Export</h3>
+          </div>
+          {/* Desktop */}
+          <div className="hidden sm:flex items-center justify-between">
+            <div>
+              <h3 className="text-xl font-bold text-white">Export Transaction Audit</h3>
+              <p className="text-purple-100 text-sm">{transaction.property_address}</p>
+            </div>
+            <button
+              onClick={onClose}
+              disabled={exporting}
+              className="text-white hover:bg-white hover:bg-opacity-20 rounded-full p-1 transition-all disabled:opacity-50"
+            >
+              <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
+          </div>
         </div>
 
         {/* Content */}
@@ -405,7 +408,7 @@ function ExportModal({
                     type="date"
                     value={startDate}
                     onChange={(e) => setStartDate(e.target.value)}
-                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500"
+                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500 text-gray-900 bg-white min-h-[44px]"
                   />
                   <p className="mt-1 text-xs text-gray-500">
                     When did you sign the representation agreement with the
@@ -437,7 +440,7 @@ function ExportModal({
                     type="date"
                     value={closingDate}
                     onChange={(e) => setClosingDate(e.target.value)}
-                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500"
+                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500 text-gray-900 bg-white min-h-[44px]"
                   />
                   <p className="mt-1 text-xs text-gray-500">
                     Scheduled closing date (optional)
@@ -455,7 +458,7 @@ function ExportModal({
                     type="date"
                     value={endDate}
                     onChange={(e) => setEndDate(e.target.value)}
-                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500"
+                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500 text-gray-900 bg-white min-h-[44px]"
                   />
                   <p className="mt-1 text-xs text-gray-500">
                     When did the transaction end? (Used to filter communications)
@@ -557,7 +560,7 @@ function ExportModal({
                 <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">
                   Content
                 </label>
-                <div className="flex flex-wrap gap-2">
+                <div className="flex flex-wrap gap-1.5 sm:gap-2">
                   {(["both", "emails", "texts"] as const).map((value) => {
                     const labels: Record<string, string> = { both: "Both", emails: "Emails Only", texts: "Texts Only" };
                     const isDisabled = (value === "emails" && !canExportEmail) || (value === "texts" && !canExportText);
@@ -599,7 +602,7 @@ function ExportModal({
                   <span>Attachments are exported as separate files in an /attachments folder, not embedded in the PDF.</span>
                 </p>
 
-                <div className="flex flex-wrap gap-2">
+                <div className="flex flex-wrap gap-1.5 sm:gap-2">
                   {/* All - requires both attachment licenses, and content must be "both" */}
                   <button
                     onClick={() => { if (canAttachEmail && canAttachText && contentType === "both") setAttachmentType("all"); }}
@@ -788,33 +791,44 @@ function ExportModal({
           )}
         </div>
 
-        {/* Footer */}
+        {/* Footer — desktop: sticky bar, mobile: floating button */}
         {step !== 3 && step !== 4 && step !== 5 && (
-          <div className="px-6 py-4 bg-gray-50 rounded-b-xl flex items-center justify-between">
-            <button
-              onClick={step === 1 ? onClose : () => setStep(1)}
-              className="px-4 py-2 text-gray-700 hover:bg-gray-200 rounded-lg font-medium transition-all"
-            >
-              {step === 1 ? "Cancel" : "Back"}
-            </button>
-
+          <>
+            {/* Desktop footer */}
+            <div className="hidden sm:flex px-6 py-4 bg-gray-50 rounded-b-xl items-center justify-between">
+              <button
+                onClick={step === 1 ? onClose : () => setStep(1)}
+                className="px-4 py-2 text-gray-700 hover:bg-gray-200 rounded-lg font-medium transition-all"
+              >
+                {step === 1 ? "Cancel" : "Back"}
+              </button>
+              <button
+                onClick={step === 1 ? handleDateVerification : handleExport}
+                disabled={step === 1 && (!startDate || !endDate)}
+                className={`px-6 py-2 rounded-lg font-semibold transition-all ${
+                  step === 1 && (!startDate || !endDate)
+                    ? "bg-gray-300 text-gray-500 cursor-not-allowed"
+                    : "bg-gradient-to-r from-purple-500 to-indigo-600 text-white hover:from-purple-600 hover:to-indigo-700 shadow-md hover:shadow-lg"
+                }`}
+              >
+                {step === 1 ? "Next" : "Export"}
+              </button>
+            </div>
+            {/* Mobile floating button */}
             <button
               onClick={step === 1 ? handleDateVerification : handleExport}
-              disabled={
-                (step === 1 && (!startDate || !endDate))
-              }
-              className={`px-6 py-2 rounded-lg font-semibold transition-all ${
+              disabled={step === 1 && (!startDate || !endDate)}
+              className={`sm:hidden fixed bottom-4 right-4 z-[71] px-6 py-3 rounded-full font-semibold text-sm shadow-lg transition-all ${
                 step === 1 && (!startDate || !endDate)
                   ? "bg-gray-300 text-gray-500 cursor-not-allowed"
-                  : "bg-gradient-to-r from-purple-500 to-indigo-600 text-white hover:from-purple-600 hover:to-indigo-700 shadow-md hover:shadow-lg"
+                  : "bg-gradient-to-r from-purple-500 to-indigo-600 text-white hover:from-purple-600 hover:to-indigo-700 hover:shadow-xl"
               }`}
             >
-              {step === 1 ? "Next" : "Export"}
+              {step === 1 ? "Next →" : "Export"}
             </button>
-          </div>
+          </>
         )}
-      </div>
-    </div>
+    </ResponsiveModal>
   );
 }
 

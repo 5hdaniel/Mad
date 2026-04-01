@@ -3,6 +3,7 @@
  * Prompts user to archive transaction after export
  */
 import React from "react";
+import { ResponsiveModal } from "../../../common/ResponsiveModal";
 
 interface ArchivePromptModalProps {
   onKeepActive: () => void;
@@ -14,8 +15,7 @@ export function ArchivePromptModal({
   onArchive,
 }: ArchivePromptModalProps): React.ReactElement {
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center z-[70] p-4">
-      <div className="bg-white rounded-xl shadow-2xl max-w-md w-full p-6">
+    <ResponsiveModal onClose={onKeepActive} zIndex="z-[70]" panelClassName="max-w-md p-6">
         <h3 className="text-lg font-bold text-gray-900 mb-3">
           Archive Transaction?
         </h3>
@@ -36,7 +36,6 @@ export function ArchivePromptModal({
             Mark as Closed
           </button>
         </div>
-      </div>
-    </div>
+    </ResponsiveModal>
   );
 }

@@ -431,7 +431,7 @@ export function ContactSearchList({
       data-testid="contact-search-list"
     >
       {/* Search Input and Add Manually Button */}
-      <div className="p-3 border-b border-gray-200">
+      <div className="p-2 sm:p-3 border-b border-gray-200">
         <div className="flex items-center gap-2">
           <div className="relative flex-1">
             <input
@@ -441,12 +441,12 @@ export function ContactSearchList({
               onChange={handleSearchChange}
               onKeyDown={handleKeyDown}
               placeholder={searchPlaceholder}
-              className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500 focus:outline-none"
+              className="w-full pl-10 pr-4 py-2.5 sm:py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500 focus:outline-none text-gray-900 bg-white text-sm sm:text-base min-h-[44px]"
               aria-label="Search contacts"
               data-testid="contact-search-input"
             />
             <svg
-              className="w-5 h-5 text-gray-400 absolute left-3 top-2.5"
+              className="w-5 h-5 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2"
               fill="none"
               stroke="currentColor"
               viewBox="0 0 24 24"
@@ -464,7 +464,7 @@ export function ContactSearchList({
             <button
               type="button"
               onClick={onAddManually}
-              className="flex-shrink-0 px-3 py-2 text-sm font-medium text-purple-600 hover:text-purple-700 hover:bg-purple-50 rounded-lg transition-colors flex items-center gap-1"
+              className="flex-shrink-0 px-2 py-2 sm:px-3 text-sm font-medium text-purple-600 hover:text-purple-700 hover:bg-purple-50 rounded-lg transition-colors flex items-center gap-1"
               data-testid="add-manually-button"
             >
               <svg
@@ -480,7 +480,8 @@ export function ContactSearchList({
                   d="M12 6v6m0 0v6m0-6h6m-6 0H6"
                 />
               </svg>
-              Add Manually
+              <span className="hidden sm:inline">Add Manually</span>
+              <span className="sm:hidden">Add</span>
             </button>
           )}
         </div>
@@ -488,8 +489,13 @@ export function ContactSearchList({
 
       {/* Category Filter - matches SourcePill display */}
       {showCategoryFilter && (
-        <div className="flex-shrink-0 px-3 py-2 border-b border-gray-100 flex items-center gap-2">
-          <span className="text-xs text-gray-400 mr-1">Show:</span>
+        <div className="flex-shrink-0 px-2 sm:px-3 py-2 border-b border-gray-100 flex items-center gap-1.5 sm:gap-2 overflow-x-auto scrollbar-hide">
+          <span className="text-xs text-gray-400 mr-0.5 sm:mr-1 flex-shrink-0">
+            <span className="hidden sm:inline">Filter:</span>
+            <svg className="w-3.5 h-3.5 sm:hidden" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z" />
+            </svg>
+          </span>
           <button
             type="button"
             onClick={(e) => {
@@ -497,7 +503,7 @@ export function ContactSearchList({
               e.stopPropagation();
               setCategoryFilter(prev => ({ ...prev, manual: !prev.manual }));
             }}
-            className={`px-2.5 py-1 text-xs font-medium rounded-full transition-colors ${
+            className={`flex-shrink-0 px-2.5 py-1 text-xs font-medium rounded-full transition-colors ${
               categoryFilter.manual
                 ? "bg-green-100 text-green-700"
                 : "bg-gray-100 text-gray-400"
@@ -513,7 +519,7 @@ export function ContactSearchList({
               e.stopPropagation();
               setCategoryFilter(prev => ({ ...prev, imported: !prev.imported }));
             }}
-            className={`px-2.5 py-1 text-xs font-medium rounded-full transition-colors ${
+            className={`flex-shrink-0 px-2.5 py-1 text-xs font-medium rounded-full transition-colors ${
               categoryFilter.imported
                 ? "bg-blue-100 text-blue-700"
                 : "bg-gray-100 text-gray-400"
@@ -529,7 +535,7 @@ export function ContactSearchList({
               e.stopPropagation();
               setCategoryFilter(prev => ({ ...prev, external: !prev.external }));
             }}
-            className={`px-2.5 py-1 text-xs font-medium rounded-full transition-colors ${
+            className={`flex-shrink-0 px-2.5 py-1 text-xs font-medium rounded-full transition-colors ${
               categoryFilter.external
                 ? "bg-violet-100 text-violet-700"
                 : "bg-gray-100 text-gray-400"
@@ -545,7 +551,7 @@ export function ContactSearchList({
               e.stopPropagation();
               setCategoryFilter(prev => ({ ...prev, messages: !prev.messages }));
             }}
-            className={`px-2.5 py-1 text-xs font-medium rounded-full transition-colors ${
+            className={`flex-shrink-0 px-2.5 py-1 text-xs font-medium rounded-full transition-colors ${
               categoryFilter.messages
                 ? "bg-amber-100 text-amber-700"
                 : "bg-gray-100 text-gray-400"
@@ -561,7 +567,7 @@ export function ContactSearchList({
               e.stopPropagation();
               setCategoryFilter(prev => ({ ...prev, outlook: !prev.outlook }));
             }}
-            className={`px-2.5 py-1 text-xs font-medium rounded-full transition-colors ${
+            className={`flex-shrink-0 px-2.5 py-1 text-xs font-medium rounded-full transition-colors ${
               categoryFilter.outlook
                 ? "bg-indigo-100 text-indigo-700"
                 : "bg-gray-100 text-gray-400"

@@ -45,7 +45,7 @@ function AddressVerificationStep({
               onAddressChange(e.target.value)
             }
             placeholder="Enter property address..."
-            className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+            className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 text-gray-900 bg-white min-h-[44px]"
             autoComplete="off"
           />
           {showAutocomplete && suggestions.length > 0 && (
@@ -127,10 +127,10 @@ function AddressVerificationStep({
             onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
               onStartDateChange(e.target.value)
             }
-            className={`w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 ${
+            className={`w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 text-gray-900 min-h-[44px] ${
               !addressData.started_at
                 ? "border-red-300 bg-red-50"
-                : "border-gray-300"
+                : "border-gray-300 bg-white"
             }`}
             required
           />
@@ -152,7 +152,7 @@ function AddressVerificationStep({
                 onClosingDateChange(e.target.value || undefined)
               }
               min={addressData.started_at}
-              className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+              className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 text-gray-900 bg-white min-h-[44px]"
             />
             <p className="text-xs text-gray-500 mt-1">
               Scheduled closing date
@@ -169,7 +169,7 @@ function AddressVerificationStep({
                 onEndDateChange(e.target.value || undefined)
               }
               min={addressData.started_at}
-              className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+              className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 text-gray-900 bg-white min-h-[44px]"
             />
             <p className="text-xs text-gray-500 mt-1">
               When transaction ended

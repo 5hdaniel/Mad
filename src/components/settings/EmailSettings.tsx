@@ -475,7 +475,7 @@ export function EmailSettings({
               onChange={(e) =>
                 handleEmailCacheDurationChange(Number(e.target.value))
               }
-              className="ml-4 text-sm border border-gray-300 rounded px-3 py-1.5 bg-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              className="ml-4 text-sm border border-gray-300 rounded px-3 py-2.5 bg-white text-gray-900 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 min-h-[44px]"
             >
               <option value={1}>1 month</option>
               <option value={3}>3 months</option>

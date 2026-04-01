@@ -2,12 +2,16 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
     <title>Keepr</title>
     <style>
       /* Electron window drag regions - must bypass PostCSS/autoprefixer */
       .drag-region { -webkit-app-region: drag; app-region: drag; }
       .no-drag-region { -webkit-app-region: no-drag; app-region: no-drag; }
+      /* Disable drag region on small screens so back buttons stay clickable */
+      @media (max-width: 639px) {
+        .drag-region { -webkit-app-region: no-drag; app-region: no-drag; }
+      }
     </style>
   </head>
   <body>
