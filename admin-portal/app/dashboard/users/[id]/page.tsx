@@ -50,7 +50,7 @@ export default async function UserDetailPage({
   }
 
   // Fetch target user profile and check permissions in parallel
-  const [profileResult, orgsResult, licensesResult, devicesResult, auditResult, impersonatePermResult] =
+  const [profileResult, orgsResult, licensesResult, devicesResult, auditResult, impersonatePermResult, devicesManagePermResult] =
     await Promise.all([
       supabase
         .from('users')
@@ -65,11 +65,9 @@ export default async function UserDetailPage({
         .from('licenses')
         .select('id, license_type, license_key, status, trial_status, trial_expires_at, transaction_count, transaction_limit, expires_at, created_at')
         .eq('user_id', id),
-      supabase
-        .from('devices')
-        .select('id, device_name, os, app_version, last_seen_at, created_at')
-        .eq('user_id', id)
-        .order('last_seen_at', { ascending: false }),
+      supabase.rpc('admin_list_user_devices', {
+        p_user_id: id,
+      }),
       supabase
         .from('audit_logs')
         .select('id, action, resource_type, resource_id, metadata, created_at')
@@ -79,6 +77,10 @@ export default async function UserDetailPage({
       supabase.rpc('has_permission', {
         check_user_id: adminUser.id,
         required_permission: 'users.impersonate',
+      }),
+      supabase.rpc('has_permission', {
+        check_user_id: adminUser.id,
+        required_permission: 'devices.manage',
       }),
     ]);
 
@@ -134,7 +136,11 @@ export default async function UserDetailPage({
       </div>
 
       {/* Devices */}
-      <DevicesTable devices={devicesResult.data ?? []} />
+      <DevicesTable
+        devices={(devicesResult.data ?? []) as import('@/lib/admin-queries').AdminDevice[]}
+        userId={id}
+        canManage={devicesManagePermResult.data === true}
+      />
 
       {/* Audit log */}
       <AuditLogTable entries={auditResult.data ?? []} />
