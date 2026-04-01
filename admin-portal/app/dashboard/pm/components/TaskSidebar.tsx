@@ -10,7 +10,7 @@
  */
 
 import { useState, useEffect, useCallback } from 'react';
-import { Calendar, AlertCircle, Tag } from 'lucide-react';
+import { Calendar, AlertCircle, Tag, GitBranch, ExternalLink } from 'lucide-react';
 import {
   updateItemStatus,
   updateItemField,
@@ -83,6 +83,8 @@ export function TaskSidebar({ item, onUpdate }: TaskSidebarProps) {
   const [updatingEstTokens, setUpdatingEstTokens] = useState(false);
   const [updatingStartDate, setUpdatingStartDate] = useState(false);
   const [updatingDueDate, setUpdatingDueDate] = useState(false);
+  const [updatingBranchName, setUpdatingBranchName] = useState(false);
+  const [updatingPrUrl, setUpdatingPrUrl] = useState(false);
 
   // Selected values for controlled fields
   const [selectedStatus, setSelectedStatus] = useState<ItemStatus | ''>('');
@@ -96,6 +98,8 @@ export function TaskSidebar({ item, onUpdate }: TaskSidebarProps) {
   const [dueDateValue, setDueDateValue] = useState(
     item.due_date ? item.due_date.split('T')[0] : '',
   );
+  const [branchNameValue, setBranchNameValue] = useState(item.branch_name || '');
+  const [prUrlValue, setPrUrlValue] = useState(item.pr_url || '');
 
   const [error, setError] = useState<string | null>(null);
 
@@ -112,6 +116,8 @@ export function TaskSidebar({ item, onUpdate }: TaskSidebarProps) {
     setEstTokensValue(item.est_tokens != null ? String(item.est_tokens) : '');
     setStartDateValue(item.start_date ? item.start_date.split('T')[0] : '');
     setDueDateValue(item.due_date ? item.due_date.split('T')[0] : '');
+    setBranchNameValue(item.branch_name || '');
+    setPrUrlValue(item.pr_url || '');
   }, [item]);
 
   const allowedTransitions = ALLOWED_TRANSITIONS[item.status] || [];
@@ -281,6 +287,36 @@ export function TaskSidebar({ item, onUpdate }: TaskSidebarProps) {
       setUpdatingDueDate(false);
     }
   }, [dueDateValue, item.id, item.due_date, onUpdate]);
+
+  const handleBranchNameSave = useCallback(async () => {
+    const trimmed = branchNameValue.trim();
+    if (trimmed === (item.branch_name || '')) return;
+    setUpdatingBranchName(true);
+    setError(null);
+    try {
+      await updateItemField(item.id, 'branch_name', trimmed || null);
+      onUpdate();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to update branch name');
+    } finally {
+      setUpdatingBranchName(false);
+    }
+  }, [branchNameValue, item.id, item.branch_name, onUpdate]);
+
+  const handlePrUrlSave = useCallback(async () => {
+    const trimmed = prUrlValue.trim();
+    if (trimmed === (item.pr_url || '')) return;
+    setUpdatingPrUrl(true);
+    setError(null);
+    try {
+      await updateItemField(item.id, 'pr_url', trimmed || null);
+      onUpdate();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to update PR URL');
+    } finally {
+      setUpdatingPrUrl(false);
+    }
+  }, [prUrlValue, item.id, item.pr_url, onUpdate]);
 
   const overdue = isOverdue(item.due_date, item.status);
 
@@ -541,6 +577,61 @@ export function TaskSidebar({ item, onUpdate }: TaskSidebarProps) {
             <AlertCircle className="h-3 w-3" />
             Overdue
           </div>
+        )}
+      </div>
+
+      {/* Branch Name */}
+      <div className="px-4 py-3">
+        <label className="text-xs font-medium text-gray-500 uppercase tracking-wider mb-2 block">
+          Branch
+        </label>
+        <div className="flex items-center gap-2">
+          <GitBranch className="h-4 w-4 text-gray-400 shrink-0" />
+          <input
+            type="text"
+            value={branchNameValue}
+            onChange={(e) => setBranchNameValue(e.target.value)}
+            onBlur={handleBranchNameSave}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') handleBranchNameSave();
+            }}
+            placeholder="e.g. feature/BACKLOG-123"
+            disabled={updatingBranchName}
+            className="flex-1 text-sm text-gray-900 border border-gray-300 rounded-md px-2 py-1.5 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50 font-mono"
+          />
+        </div>
+      </div>
+
+      {/* PR URL */}
+      <div className="px-4 py-3">
+        <label className="text-xs font-medium text-gray-500 uppercase tracking-wider mb-2 block">
+          Pull Request
+        </label>
+        <div className="flex items-center gap-2">
+          <ExternalLink className="h-4 w-4 text-gray-400 shrink-0" />
+          <input
+            type="url"
+            value={prUrlValue}
+            onChange={(e) => setPrUrlValue(e.target.value)}
+            onBlur={handlePrUrlSave}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') handlePrUrlSave();
+            }}
+            placeholder="https://github.com/..."
+            disabled={updatingPrUrl}
+            className="flex-1 text-sm text-gray-900 border border-gray-300 rounded-md px-2 py-1.5 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50"
+          />
+        </div>
+        {item.pr_url && (
+          <a
+            href={item.pr_url}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center gap-1 mt-1.5 text-xs text-blue-600 hover:text-blue-700 hover:underline"
+          >
+            <ExternalLink className="h-3 w-3" />
+            Open PR
+          </a>
         )}
       </div>
 
