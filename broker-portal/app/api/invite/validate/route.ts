@@ -3,6 +3,11 @@
  *
  * Validates an invitation token and returns invite details.
  * Does NOT require authentication — the token itself is the auth.
+ *
+ * Uses the public_validate_invitation_token RPC (SECURITY DEFINER)
+ * to bypass RLS on organization_members, since unauthenticated users
+ * clicking invite links have no auth.uid() and all SELECT policies
+ * require it. See BACKLOG-1536.
  */
 
 import { createClient } from '@/lib/supabase/server';
@@ -25,35 +30,32 @@ export async function GET(request: Request) {
 
   const supabase = await createClient();
 
-  const { data: invite, error } = await supabase
-    .from('organization_members')
-    .select('id, invited_email, role, organization_id, invitation_expires_at, user_id, organizations(name)')
-    .eq('invitation_token', token)
-    .maybeSingle();
+  const { data, error } = await supabase.rpc('public_validate_invitation_token', {
+    p_token: token,
+  });
 
-  if (error || !invite) {
+  if (error) {
+    console.error('[invite/validate] RPC error:', error.message);
     return NextResponse.json({ valid: false, error: 'Invitation not found' });
   }
 
-  // Already claimed
-  if (invite.user_id) {
-    return NextResponse.json({ valid: false, error: 'This invitation has already been accepted' });
-  }
+  // The RPC returns JSONB with { valid, error?, email?, org_name?, role? }
+  const result = data as {
+    valid: boolean;
+    error?: string;
+    email?: string;
+    org_name?: string;
+    role?: string;
+  };
 
-  // Check expiry
-  if (invite.invitation_expires_at) {
-    const expiresAt = new Date(invite.invitation_expires_at);
-    if (expiresAt < new Date()) {
-      return NextResponse.json({ valid: false, error: 'This invitation has expired' });
-    }
+  if (!result.valid) {
+    return NextResponse.json({ valid: false, error: result.error });
   }
-
-  const org = invite.organizations as unknown as { name: string } | null;
 
   return NextResponse.json({
     valid: true,
-    email: invite.invited_email,
-    orgName: org?.name || 'Unknown Organization',
-    role: ROLE_LABELS[invite.role] || invite.role,
+    email: result.email,
+    orgName: result.org_name,
+    role: ROLE_LABELS[result.role ?? ''] || result.role,
   });
 }
