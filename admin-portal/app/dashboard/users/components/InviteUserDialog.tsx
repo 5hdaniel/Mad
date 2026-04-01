@@ -1,12 +1,14 @@
 'use client';
 
 /**
- * InviteUserDialog - Modal dialog for inviting a user to an organization.
+ * InviteUserDialog - Modal dialog for inviting a user to Keepr.
  *
- * Collects email, first name, last name, organization (searchable), and role.
+ * Collects email, first name, last name, and optionally organization + role.
+ * When no organization is selected, invites as an individual user.
  * Shows invite link as fallback if email sending fails.
  *
  * BACKLOG-1492: Admin invite users
+ * BACKLOG-1533: Organization optional for individual users
  */
 
 import { useState, useEffect, useRef, useId, useMemo } from 'react';
@@ -92,8 +94,8 @@ export function InviteUserDialog({ onClose, onInvited }: InviteUserDialogProps) 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    if (!email.trim() || !firstName.trim() || !lastName.trim() || !organizationId) {
-      setError('All fields are required.');
+    if (!email.trim() || !firstName.trim() || !lastName.trim()) {
+      setError('Email, first name, and last name are required.');
       return;
     }
 
@@ -105,7 +107,7 @@ export function InviteUserDialog({ onClose, onInvited }: InviteUserDialogProps) 
       firstName: firstName.trim(),
       lastName: lastName.trim(),
       role,
-      organizationId,
+      organizationId: organizationId || null,
     });
 
     if (!result.success) {
@@ -217,7 +219,7 @@ export function InviteUserDialog({ onClose, onInvited }: InviteUserDialogProps) 
           Invite User
         </h3>
         <p className="mt-1 text-sm text-gray-500">
-          Send an invitation to join an organization on Keepr.
+          Send an invitation to join Keepr. Organization is optional for individual users.
         </p>
 
         <form onSubmit={handleSubmit} className="mt-4 space-y-4">
@@ -269,10 +271,10 @@ export function InviteUserDialog({ onClose, onInvited }: InviteUserDialogProps) 
             />
           </div>
 
-          {/* Organization (searchable) */}
+          {/* Organization (searchable, optional) */}
           <div>
             <label htmlFor="invite-org" className="block text-sm font-medium text-gray-700">
-              Organization
+              Organization <span className="font-normal text-gray-400">(optional)</span>
             </label>
             {orgsLoading ? (
               <p className="mt-1 text-sm text-gray-400">Loading organizations...</p>
@@ -289,7 +291,7 @@ export function InviteUserDialog({ onClose, onInvited }: InviteUserDialogProps) 
                   disabled={isLoading}
                   className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm text-gray-900 shadow-sm focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500 disabled:opacity-50"
                 />
-                {!organizationId && (orgSearch || !organizationId) && filteredOrgs.length > 0 && (
+                {!organizationId && orgSearch && filteredOrgs.length > 0 && (
                   <ul className="mt-1 max-h-40 overflow-y-auto rounded-md border border-gray-200 bg-white shadow-sm">
                     {filteredOrgs.slice(0, 20).map((org) => (
                       <li key={org.id}>
@@ -319,29 +321,36 @@ export function InviteUserDialog({ onClose, onInvited }: InviteUserDialogProps) 
                     Change organization
                   </button>
                 )}
+                {!organizationId && !orgSearch && (
+                  <p className="mt-1 text-xs text-gray-400">
+                    Leave empty for individual account (no organization)
+                  </p>
+                )}
               </>
             )}
           </div>
 
-          {/* Role */}
-          <div>
-            <label htmlFor="invite-role" className="block text-sm font-medium text-gray-700">
-              Role
-            </label>
-            <select
-              id="invite-role"
-              value={role}
-              onChange={(e) => setRole(e.target.value as 'agent' | 'broker' | 'admin')}
-              disabled={isLoading}
-              className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm text-gray-900 shadow-sm focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500 disabled:opacity-50"
-            >
-              {ROLE_OPTIONS.map((r) => (
-                <option key={r.value} value={r.value}>
-                  {r.label}
-                </option>
-              ))}
-            </select>
-          </div>
+          {/* Role (only shown when organization is selected) */}
+          {organizationId && (
+            <div>
+              <label htmlFor="invite-role" className="block text-sm font-medium text-gray-700">
+                Role
+              </label>
+              <select
+                id="invite-role"
+                value={role}
+                onChange={(e) => setRole(e.target.value as 'agent' | 'broker' | 'admin')}
+                disabled={isLoading}
+                className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm text-gray-900 shadow-sm focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500 disabled:opacity-50"
+              >
+                {ROLE_OPTIONS.map((r) => (
+                  <option key={r.value} value={r.value}>
+                    {r.label}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
 
           {/* Error */}
           {error && (
@@ -360,7 +369,7 @@ export function InviteUserDialog({ onClose, onInvited }: InviteUserDialogProps) 
             </button>
             <button
               type="submit"
-              disabled={isLoading || !email.trim() || !firstName.trim() || !lastName.trim() || !organizationId}
+              disabled={isLoading || !email.trim() || !firstName.trim() || !lastName.trim()}
               className="rounded-md bg-primary-600 px-4 py-2 text-sm font-medium text-white hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
             >
               {isLoading ? 'Sending...' : 'Send Invitation'}

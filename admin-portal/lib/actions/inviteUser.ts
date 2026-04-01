@@ -25,7 +25,7 @@ interface InviteUserInput {
   firstName: string;
   lastName: string;
   role: 'agent' | 'broker' | 'admin';
-  organizationId: string;
+  organizationId: string | null;
 }
 
 interface InviteUserResult {
@@ -46,7 +46,7 @@ const RPC_ERROR_MAP: Record<string, string> = {
   insufficient_permissions: 'Not authorized to invite users',
   invalid_email: 'Invalid email format',
   invalid_role: 'Invalid role',
-  duplicate_invitation: 'This email already has a pending invitation for this organization',
+  duplicate_invitation: 'This email already has a pending invitation',
   already_member: 'This user is already a member of the organization',
   organization_not_found: 'Organization not found',
   seat_limit_reached: 'Organization has reached maximum seats',
@@ -92,9 +92,6 @@ export async function inviteUser(input: InviteUserInput): Promise<InviteUserResu
   if (!input.lastName?.trim()) {
     return { success: false, error: 'Last name is required' };
   }
-  if (!input.organizationId) {
-    return { success: false, error: 'Organization is required' };
-  }
   if (!isValidEmail(input.email)) {
     return { success: false, error: 'Invalid email format' };
   }
@@ -109,9 +106,9 @@ export async function inviteUser(input: InviteUserInput): Promise<InviteUserResu
   }
 
   const { data: rpcResult, error: rpcError } = await supabase.rpc('admin_invite_user', {
-    p_organization_id: input.organizationId,
+    p_organization_id: input.organizationId || null,
     p_email: input.email,
-    p_role: input.role,
+    p_role: input.organizationId ? input.role : null,
     p_invited_by: user.id,
   });
 
@@ -128,7 +125,7 @@ export async function inviteUser(input: InviteUserInput): Promise<InviteUserResu
   }
 
   const invitationToken = rpcResult.invitation_token as string;
-  const orgName = rpcResult.org_name as string;
+  const orgName = (rpcResult.org_name as string) || null;
 
   // --- Generate invite link ---
   const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://app.keeprcompliance.com';
@@ -160,9 +157,9 @@ export async function inviteUser(input: InviteUserInput): Promise<InviteUserResu
         },
         body: JSON.stringify({
           recipientEmail: input.email.toLowerCase().trim(),
-          organizationName: orgName,
+          organizationName: orgName ?? 'Keepr',
           inviterName,
-          role: input.role,
+          role: input.organizationId ? input.role : null,
           inviteLink,
           expiresInDays: 7,
         }),
