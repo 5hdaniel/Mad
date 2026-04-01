@@ -44,6 +44,10 @@ describe("AuditTransactionModal", () => {
     return render(<PlatformProvider>{ui}</PlatformProvider>);
   };
 
+  // Helper: get the first button matching a name (desktop variant renders first in DOM).
+  // The responsive refactor renders both mobile and desktop buttons, so getByRole finds duplicates.
+  const getButton = (name: RegExp) => screen.getAllByRole("button", { name })[0];
+
   const mockContacts = [
     {
       id: "contact-1",
@@ -103,7 +107,8 @@ describe("AuditTransactionModal", () => {
         />,
       );
 
-      expect(screen.getByText(/audit new transaction/i)).toBeInTheDocument();
+      // Desktop shows "Audit New Transaction", mobile shows "New Transaction"
+      expect(screen.getAllByText(/new transaction/i).length).toBeGreaterThan(0);
     });
 
     it("should show step 1 - address verification by default", () => {
@@ -116,7 +121,8 @@ describe("AuditTransactionModal", () => {
         />,
       );
 
-      expect(screen.getByText(/step 1/i)).toBeInTheDocument();
+      // Both mobile and desktop headers show step 1 info
+      expect(screen.getAllByText(/step 1/i).length).toBeGreaterThan(0);
       expect(screen.getAllByText(/property address/i).length).toBeGreaterThan(
         0,
       );
@@ -168,7 +174,8 @@ describe("AuditTransactionModal", () => {
       );
 
       // Try to continue without entering address
-      const continueButton = screen.getByRole("button", { name: /continue/i });
+      // Both mobile and desktop footers render a Continue button
+      const continueButton = getButton(/continue/i);
       await userEvent.click(continueButton);
 
       // Should show error
@@ -193,13 +200,13 @@ describe("AuditTransactionModal", () => {
       );
       await userEvent.type(addressInput, "123 Main Street");
 
-      // Click continue
-      const continueButton = screen.getByRole("button", { name: /continue/i });
+      // Click continue (desktop + mobile both render this button)
+      const continueButton = getButton(/continue/i);
       await userEvent.click(continueButton);
 
-      // Should move to step 2
+      // Should move to step 2 (shown in both mobile and desktop headers)
       await waitFor(() => {
-        expect(screen.getByText(/step 2/i)).toBeInTheDocument();
+        expect(screen.getAllByText(/step 2/i).length).toBeGreaterThan(0);
       });
     });
 
@@ -214,7 +221,7 @@ describe("AuditTransactionModal", () => {
       );
 
       // Try to continue without address (trigger error)
-      const continueButton = screen.getByRole("button", { name: /continue/i });
+      const continueButton = getButton(/continue/i);
       await userEvent.click(continueButton);
 
       expect(
@@ -340,12 +347,12 @@ describe("AuditTransactionModal", () => {
       );
       await userEvent.type(addressInput, "123 Main Street");
 
-      const continueButton = screen.getByRole("button", { name: /continue/i });
+      const continueButton = getButton(/continue/i);
       await userEvent.click(continueButton);
 
-      // Should show step 2
+      // Should show step 2 (both mobile and desktop headers)
       await waitFor(() => {
-        expect(screen.getByText(/step 2/i)).toBeInTheDocument();
+        expect(screen.getAllByText(/step 2/i).length).toBeGreaterThan(0);
       });
     });
 
@@ -364,20 +371,20 @@ describe("AuditTransactionModal", () => {
         /enter property address/i,
       );
       await userEvent.type(addressInput, "123 Main Street");
-      const continueButton = screen.getByRole("button", { name: /continue/i });
+      const continueButton = getButton(/continue/i);
       await userEvent.click(continueButton);
 
       await waitFor(() => {
-        expect(screen.getByText(/step 2/i)).toBeInTheDocument();
+        expect(screen.getAllByText(/step 2/i).length).toBeGreaterThan(0);
       });
 
-      // Go back
-      const backButton = screen.getByRole("button", { name: /back/i });
+      // Go back - use the desktop footer "← Back" button (not the mobile header "Back" close button)
+      const backButton = getButton(/← back/i);
       await userEvent.click(backButton);
 
-      // Should show step 1
+      // Should show step 1 (both mobile and desktop headers)
       await waitFor(() => {
-        expect(screen.getByText(/step 1/i)).toBeInTheDocument();
+        expect(screen.getAllByText(/step 1/i).length).toBeGreaterThan(0);
       });
     });
 
@@ -392,7 +399,8 @@ describe("AuditTransactionModal", () => {
         />,
       );
 
-      // Step 1 - no back button
+      // Step 1 - desktop footer "← Back" button should not be present
+      // (mobile header "Back" is always present as a close button)
       expect(
         screen.queryByRole("button", { name: /← back/i }),
       ).not.toBeInTheDocument();
@@ -402,14 +410,14 @@ describe("AuditTransactionModal", () => {
         /enter property address/i,
       );
       await userEvent.type(addressInput, "123 Main Street");
-      const continueButton = screen.getByRole("button", { name: /continue/i });
+      const continueButton = getButton(/continue/i);
       await userEvent.click(continueButton);
 
-      // Step 2 - back button should be visible
+      // Step 2 - back button should be visible (mobile + desktop both render one)
       await waitFor(() => {
         expect(
-          screen.getByRole("button", { name: /back/i }),
-        ).toBeInTheDocument();
+          screen.getAllByRole("button", { name: /back/i }).length,
+        ).toBeGreaterThan(0);
       });
     });
   });
@@ -475,11 +483,11 @@ describe("AuditTransactionModal", () => {
         /enter property address/i,
       );
       await userEvent.type(addressInput, "123 Main Street");
-      await userEvent.click(screen.getByRole("button", { name: /continue/i }));
+      await userEvent.click(getButton(/continue/i));
 
       // Step 2: Should require client
       await waitFor(() => {
-        expect(screen.getByText(/step 2/i)).toBeInTheDocument();
+        expect(screen.getAllByText(/step 2/i).length).toBeGreaterThan(0);
       });
     });
 
@@ -506,10 +514,10 @@ describe("AuditTransactionModal", () => {
         /enter property address/i,
       );
       await userEvent.type(addressInput, "123 Main Street");
-      await userEvent.click(screen.getByRole("button", { name: /continue/i }));
+      await userEvent.click(getButton(/continue/i));
 
       await waitFor(() => {
-        expect(screen.getByText(/step 2/i)).toBeInTheDocument();
+        expect(screen.getAllByText(/step 2/i).length).toBeGreaterThan(0);
       });
     });
 
@@ -533,10 +541,10 @@ describe("AuditTransactionModal", () => {
         /enter property address/i,
       );
       await userEvent.type(addressInput, "123 Main Street");
-      await userEvent.click(screen.getByRole("button", { name: /continue/i }));
+      await userEvent.click(getButton(/continue/i));
 
       await waitFor(() => {
-        expect(screen.getByText(/step 2/i)).toBeInTheDocument();
+        expect(screen.getAllByText(/step 2/i).length).toBeGreaterThan(0);
       });
     });
   });
@@ -575,11 +583,11 @@ describe("AuditTransactionModal", () => {
       );
       await userEvent.type(addressInput, "   123 Main Street   ");
 
-      await userEvent.click(screen.getByRole("button", { name: /continue/i }));
+      await userEvent.click(getButton(/continue/i));
 
       // Should proceed (whitespace trimmed)
       await waitFor(() => {
-        expect(screen.getByText(/step 2/i)).toBeInTheDocument();
+        expect(screen.getAllByText(/step 2/i).length).toBeGreaterThan(0);
       });
     });
   });
@@ -640,12 +648,15 @@ describe("AuditTransactionModal", () => {
         />,
       );
 
+      // Continue button exists in both mobile and desktop footers
       expect(
-        screen.getByRole("button", { name: /continue/i }),
-      ).toBeInTheDocument();
+        screen.getAllByRole("button", { name: /continue/i }).length,
+      ).toBeGreaterThan(0);
+      // Cancel only in desktop footer
       expect(
         screen.getByRole("button", { name: /cancel/i }),
       ).toBeInTheDocument();
+      // Purchase and Sale are in AddressVerificationStep (single instance)
       expect(
         screen.getByRole("button", { name: /purchase/i }),
       ).toBeInTheDocument();
@@ -839,11 +850,12 @@ describe("AuditTransactionModal", () => {
       );
 
       // Click Save Changes directly (edit mode is single-step)
-      await userEvent.click(screen.getByRole("button", { name: /save changes/i }));
+      // Desktop shows "Save Changes", mobile shows "Save" — both render
+      await userEvent.click(getButton(/save/i));
 
-      // Should show "Saving..." loading text
+      // Should show "Saving..." loading text (both mobile and desktop)
       await waitFor(() => {
-        expect(screen.getByText(/saving/i)).toBeInTheDocument();
+        expect(screen.getAllByText(/saving/i).length).toBeGreaterThan(0);
       });
     });
 
