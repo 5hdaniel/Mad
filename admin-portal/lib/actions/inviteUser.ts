@@ -15,7 +15,6 @@
  */
 
 import { createClient } from '@/lib/supabase/server';
-import { sendInviteEmail } from '@/lib/email';
 
 // ============================================================================
 // Types
@@ -135,23 +134,46 @@ export async function inviteUser(input: InviteUserInput): Promise<InviteUserResu
   const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://app.keeprcompliance.com';
   const inviteLink = `${baseUrl}/invite/${invitationToken}`;
 
-  // --- Send invite email (non-blocking -- invite is created regardless) ---
+  // --- Send invite email via broker portal proxy (non-blocking) ---
+  // The broker portal owns the Azure Graph email service; we proxy through it
+  // using the shared INTERNAL_API_SECRET, same pattern as support ticket emails.
+  // BACKLOG-1535: Proxy invite email through broker portal
   let emailSent = false;
   try {
-    const inviterName = `${input.firstName} ${input.lastName}`.trim() || 'Keepr Support';
+    const brokerPortalUrl = process.env.BROKER_PORTAL_URL;
+    const apiSecret = process.env.INTERNAL_API_SECRET;
 
-    const emailResult = await sendInviteEmail({
-      recipientEmail: input.email.toLowerCase().trim(),
-      organizationName: orgName,
-      inviterName,
-      role: input.role,
-      inviteLink,
-      expiresInDays: 7,
-    });
+    if (!brokerPortalUrl || !apiSecret) {
+      console.warn(
+        '[inviteUser] Email skipped: missing env vars --',
+        `BROKER_PORTAL_URL=${brokerPortalUrl ? 'set' : 'MISSING'}`,
+        `INTERNAL_API_SECRET=${apiSecret ? 'set' : 'MISSING'}`
+      );
+    } else {
+      const inviterName = `${input.firstName} ${input.lastName}`.trim() || 'Keepr Support';
 
-    emailSent = emailResult.success;
-    if (!emailResult.success) {
-      console.error('Failed to send invite email:', emailResult.error);
+      const response = await fetch(`${brokerPortalUrl}/api/email/send-invite`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-api-secret': apiSecret,
+        },
+        body: JSON.stringify({
+          recipientEmail: input.email.toLowerCase().trim(),
+          organizationName: orgName,
+          inviterName,
+          role: input.role,
+          inviteLink,
+          expiresInDays: 7,
+        }),
+      });
+
+      const result = await response.json();
+      emailSent = result.success === true;
+
+      if (!emailSent) {
+        console.error('Failed to send invite email via broker portal:', result.error);
+      }
     }
   } catch (emailError) {
     console.error('Error sending invite email:', emailError);
