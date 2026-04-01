@@ -36,6 +36,12 @@ export default async function OrganizationsPage() {
     redirect('/dashboard?error=insufficient_permissions');
   }
 
+  // Check if admin has organizations.edit permission
+  const { data: canEdit } = await supabase.rpc('has_permission', {
+    check_user_id: adminUser.id,
+    required_permission: 'organizations.edit',
+  });
+
   // Fetch all organizations with member counts
   const { data: orgs, error } = await supabase
     .from('organizations')
@@ -79,7 +85,7 @@ export default async function OrganizationsPage() {
         </p>
       </div>
 
-      <OrganizationsTable organizations={organizations} />
+      <OrganizationsTable organizations={organizations} canEdit={!!canEdit} />
     </div>
   );
 }

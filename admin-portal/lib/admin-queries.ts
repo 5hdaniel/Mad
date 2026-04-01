@@ -482,6 +482,40 @@ export async function updatePlanTier(
 }
 
 // ---------------------------------------------------------------------------
+// Organization Management
+// ---------------------------------------------------------------------------
+
+/**
+ * Create a new organization via admin_create_organization RPC.
+ *
+ * @param name - Organization name
+ * @param maxSeats - Maximum seats (default 5)
+ */
+export async function createOrganization(
+  name: string,
+  maxSeats: number = 5
+): Promise<RpcResult<{ success: boolean; id: string; slug: string }>> {
+  const supabase = createClient();
+
+  const { data, error } = await supabase.rpc('admin_create_organization', {
+    p_name: name,
+    p_max_seats: maxSeats,
+  });
+
+  if (error) {
+    return { data: null, error: new Error(error.message) };
+  }
+
+  // RPC returns JSONB with success/error fields
+  const result = data as Record<string, unknown>;
+  if (result?.success === false) {
+    return { data: null, error: new Error(String(result.message || result.error || 'Unknown error')) };
+  }
+
+  return { data: data as { success: boolean; id: string; slug: string }, error: null };
+}
+
+// ---------------------------------------------------------------------------
 // Impersonation
 // ---------------------------------------------------------------------------
 
