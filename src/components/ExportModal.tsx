@@ -47,7 +47,7 @@ function ExportModal({
 
   const [contentType, setContentType] = useState<"both" | "emails" | "texts">("both");
   const [attachmentType, setAttachmentType] = useState<"all" | "email" | "text" | "none">("all");
-  const [exportFormat, setExportFormat] = useState("pdf"); // folder, pdf, combined-pdf, excel, csv, json, txt_eml
+  const [exportFormat, setExportFormat] = useState("combined-pdf"); // combined-pdf, folder, pdf, excel, csv, json, txt_eml
   const [emailExportMode, setEmailExportMode] = useState<"thread" | "individual">("thread");
   const [exporting, setExporting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -506,6 +506,21 @@ function ExportModal({
                   Format
                 </label>
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                  {/* One PDF - Combined export (default) */}
+                  <button
+                    onClick={() => setExportFormat("combined-pdf")}
+                    disabled={!canExportEmail && !canExportText}
+                    className={`px-4 py-3 rounded-lg font-medium transition-all text-left ${
+                      !canExportEmail && !canExportText
+                        ? "bg-gray-50 text-gray-400 cursor-not-allowed border border-gray-200"
+                        : exportFormat === "combined-pdf"
+                          ? "bg-purple-500 text-white shadow-md"
+                          : "bg-gray-100 text-gray-700 hover:bg-gray-200"
+                    }`}
+                  >
+                    <div className="font-semibold text-sm">One PDF</div>
+                    <div className="text-xs opacity-80 mt-0.5">Combined PDF with all content</div>
+                  </button>
                   <button
                     onClick={() => setExportFormat("folder")}
                     className={`px-4 py-3 rounded-lg font-medium transition-all text-left ${
@@ -533,21 +548,6 @@ function ExportModal({
                     <div className="text-xs opacity-80 mt-0.5">
                       Transaction report only
                     </div>
-                  </button>
-                  {/* One PDF - Combined export */}
-                  <button
-                    onClick={() => setExportFormat("combined-pdf")}
-                    disabled={!canExportEmail && !canExportText}
-                    className={`px-4 py-3 rounded-lg font-medium transition-all text-left ${
-                      !canExportEmail && !canExportText
-                        ? "bg-gray-50 text-gray-400 cursor-not-allowed border border-gray-200"
-                        : exportFormat === "combined-pdf"
-                          ? "bg-purple-500 text-white shadow-md"
-                          : "bg-gray-100 text-gray-700 hover:bg-gray-200"
-                    }`}
-                  >
-                    <div className="font-semibold text-sm">One PDF</div>
-                    <div className="text-xs opacity-80 mt-0.5">Combined PDF with all content</div>
                   </button>
                 </div>
               </div>
