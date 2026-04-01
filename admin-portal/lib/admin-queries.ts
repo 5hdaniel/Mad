@@ -408,6 +408,26 @@ export async function getActivePlansForOrgs(): Promise<{ data: Plan[] | null; er
 }
 
 /**
+ * Fetch all active plans (all tiers, including Individual).
+ * Used for individual user invite where any plan can be selected.
+ */
+export async function getActivePlans(): Promise<{ data: Plan[] | null; error: Error | null }> {
+  const supabase = createClient();
+
+  const { data, error } = await supabase
+    .from('plans')
+    .select('*')
+    .eq('is_active', true)
+    .order('sort_order');
+
+  if (error) {
+    return { data: null, error: new Error(error.message) };
+  }
+
+  return { data: data as Plan[], error: null };
+}
+
+/**
  * Delete a plan. Blocked if any organizations are assigned to it.
  */
 export async function deletePlan(planId: string): Promise<RpcResult> {
@@ -479,6 +499,104 @@ export async function updatePlanTier(
   }
 
   return { data: data as Record<string, unknown>, error: null };
+}
+
+// ---------------------------------------------------------------------------
+// Organization Management
+// ---------------------------------------------------------------------------
+
+/**
+ * Create a new organization via admin_create_organization RPC.
+ *
+ * @param name - Organization name
+ * @param maxSeats - Maximum seats (default 5)
+ */
+export async function createOrganization(
+  name: string,
+  maxSeats: number = 5
+): Promise<RpcResult<{ success: boolean; id: string; slug: string }>> {
+  const supabase = createClient();
+
+  const { data, error } = await supabase.rpc('admin_create_organization', {
+    p_name: name,
+    p_max_seats: maxSeats,
+  });
+
+  if (error) {
+    return { data: null, error: new Error(error.message) };
+  }
+
+  // RPC returns JSONB with success/error fields
+  const result = data as Record<string, unknown>;
+  if (result?.success === false) {
+    return { data: null, error: new Error(String(result.message || result.error || 'Unknown error')) };
+  }
+
+  return { data: data as { success: boolean; id: string; slug: string }, error: null };
+}
+
+// ---------------------------------------------------------------------------
+// Device Management
+// ---------------------------------------------------------------------------
+
+export interface AdminDevice {
+  id: string;
+  device_name: string | null;
+  device_id: string;
+  os: string | null;
+  app_version: string | null;
+  platform: string | null;
+  is_active: boolean;
+  last_seen_at: string | null;
+  activated_at: string | null;
+}
+
+/**
+ * List all devices for a user via admin_list_user_devices RPC.
+ *
+ * @param userId - The target user's UUID
+ */
+export async function listUserDevices(
+  userId: string
+): Promise<{ data: AdminDevice[] | null; error: Error | null }> {
+  const supabase = createClient();
+
+  const { data, error } = await supabase.rpc('admin_list_user_devices', {
+    p_user_id: userId,
+  });
+
+  if (error) {
+    return { data: null, error: new Error(error.message) };
+  }
+
+  return { data: data as AdminDevice[], error: null };
+}
+
+/**
+ * Deactivate a device via admin_deactivate_device RPC.
+ *
+ * @param deviceId - The device UUID to deactivate
+ * @param userId - The owning user's UUID (for verification)
+ */
+export async function deactivateDevice(
+  deviceId: string,
+  userId: string
+): Promise<RpcResult<{ success: boolean; device_id: string; device_name: string | null }>> {
+  const supabase = createClient();
+
+  const { data, error } = await supabase.rpc('admin_deactivate_device', {
+    p_device_id: deviceId,
+    p_user_id: userId,
+  });
+
+  if (error) {
+    return { data: null, error: new Error(error.message) };
+  }
+
+  return {
+    data: data as { success: boolean; device_id: string; device_name: string | null },
+    error: null,
+  };
 }
 
 // ---------------------------------------------------------------------------

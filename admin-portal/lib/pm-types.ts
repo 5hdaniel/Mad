@@ -80,6 +80,8 @@ export interface PmBacklogItem {
   start_date: string | null;
   due_date: string | null;
   file: string | null;
+  branch_name: string | null;
+  pr_url: string | null;
   created_at: string;
   updated_at: string;
   completed_at: string | null;
@@ -593,7 +595,9 @@ export type ItemField =
   | 'est_tokens'
   | 'start_date'
   | 'due_date'
-  | 'sprint_id';
+  | 'sprint_id'
+  | 'branch_name'
+  | 'pr_url';
 
 /** Whitelisted fields that can be passed to pm_update_sprint_field. */
 export type SprintField = 'name' | 'goal' | 'start_date' | 'end_date';

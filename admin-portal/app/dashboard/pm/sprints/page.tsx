@@ -10,7 +10,7 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import Link from 'next/link';
-import { ArrowLeft, List, LayoutGrid, Plus } from 'lucide-react';
+import { ArrowLeft, List, LayoutGrid, Plus, Search, X } from 'lucide-react';
 import { listSprints, getSprintVelocity } from '@/lib/pm-queries';
 import type { PmSprint, SprintVelocityEntry } from '@/lib/pm-types';
 import { usePermissions } from '@/components/providers/PermissionsProvider';
@@ -30,6 +30,7 @@ export default function SprintsPage() {
   const [viewMode, setViewMode] = useState<ViewMode>('list');
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('active');
   const [showCreateDialog, setShowCreateDialog] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
   const { hasPermission } = usePermissions();
 
   const loadData = useCallback(async () => {
@@ -61,10 +62,17 @@ export default function SprintsPage() {
     loadData();
   }, [loadData]);
 
-  // Filter sprints by status
-  const filteredSprints = statusFilter === 'all'
-    ? sprints
-    : sprints.filter((s) => s.status === statusFilter);
+  // Filter sprints by status and search query
+  const filteredSprints = sprints.filter((s) => {
+    if (statusFilter !== 'all' && s.status !== statusFilter) return false;
+    if (!searchQuery) return true;
+    const q = searchQuery.toLowerCase();
+    return (
+      s.name.toLowerCase().includes(q) ||
+      (s.goal && s.goal.toLowerCase().includes(q)) ||
+      (s.legacy_id && s.legacy_id.toLowerCase().includes(q))
+    );
+  });
 
   const filterTabs: { key: StatusFilter; label: string }[] = [
     { key: 'all', label: 'All' },
@@ -150,6 +158,26 @@ export default function SprintsPage() {
             </button>
           );
         })}
+      </div>
+
+      {/* Search Bar */}
+      <div className="relative mb-4">
+        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+        <input
+          type="text"
+          placeholder="Search sprints by name, goal, or ID..."
+          value={searchQuery}
+          onChange={(e) => setSearchQuery(e.target.value)}
+          className="w-full pl-10 pr-10 py-2 border border-gray-300 rounded-lg text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+        />
+        {searchQuery && (
+          <button
+            onClick={() => setSearchQuery('')}
+            className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+          >
+            <X className="h-4 w-4" />
+          </button>
+        )}
       </div>
 
       {/* Velocity Chart */}

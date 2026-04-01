@@ -36,8 +36,8 @@ import type {
   SortableColumn,
   SortDirection,
 } from '@/lib/pm-types';
-import { SPRINT_STATUS_LABELS, SPRINT_STATUS_COLORS } from '@/lib/pm-types';
 import { TaskTable } from '../../components/TaskTable';
+import { InlineSprintStatusPicker } from '../../components/InlineSprintStatusPicker';
 import { DualProgressBar } from '../../components/DualProgressBar';
 import { InlineEditText } from '../../components/InlineEditText';
 import { formatTokens } from '@/lib/pm-utils';
@@ -269,11 +269,12 @@ export default function SprintDetailPage() {
                   displayClassName="text-2xl font-bold text-gray-900"
                 />
               </h1>
-              <span
-                className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium ${SPRINT_STATUS_COLORS[sprint.status]}`}
-              >
-                {SPRINT_STATUS_LABELS[sprint.status]}
-              </span>
+              <InlineSprintStatusPicker
+                sprintId={sprintId}
+                status={sprint.status}
+                canEdit={hasPermission(PERMISSIONS.PM_MANAGE)}
+                onUpdated={() => loadDetail(false)}
+              />
             </div>
             <div className="mt-2 flex items-start gap-1">
               <Target className="h-4 w-4 flex-shrink-0 text-gray-500 mt-0.5" />
