@@ -5,6 +5,57 @@
  * TASK-C / BACKLOG-266: Consolidated formatDate and formatCurrency.
  */
 
+// ============================================
+// ERROR MESSAGE SAFETY
+// ============================================
+
+/**
+ * Safely convert any value to a display-safe error string.
+ * Prevents React error #310 ("Objects are not valid as a React child")
+ * when IPC calls return error objects instead of strings.
+ *
+ * Common case: Supabase API returns { code: 500, error_code: "...", msg: "..." }
+ * which, if rendered directly as JSX, crashes the component tree.
+ *
+ * @param value - Any value that might be an error string, object, or undefined
+ * @param fallback - Fallback message when value is falsy. Defaults to "An error occurred".
+ * @returns A plain string safe for JSX rendering
+ */
+export function safeErrorMessage(
+  value: unknown,
+  fallback = "An error occurred",
+): string {
+  if (!value) return fallback;
+  if (typeof value === "string") return value;
+  if (value instanceof Error) return value.message || fallback;
+  if (typeof value === "object" && value !== null) {
+    const obj = value as Record<string, unknown>;
+    // Try common error object shapes (Supabase, IPC, etc.)
+    if (typeof obj.message === "string") return obj.message;
+    if (typeof obj.msg === "string") return obj.msg;
+    if (typeof obj.error === "string") return obj.error;
+    if (typeof obj.error_message === "string") return obj.error_message;
+    // Last resort: JSON stringify
+    try {
+      return JSON.stringify(value);
+    } catch {
+      return fallback;
+    }
+  }
+  return String(value);
+}
+
+/**
+ * Remove trailing ", USA" or ", US" from an address for cleaner display.
+ */
+export function formatAddress(address: string | null | undefined): string {
+  if (!address) return "";
+  return address.replace(/,\s*(USA|US)$/i, "");
+}
+
+/*
+ */
+
 /**
  * Format file size in human-readable format.
  * Handles null input for cases where file size is unknown.

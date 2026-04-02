@@ -43,7 +43,7 @@ export function OnboardingShell({
         {/* Card with responsive gap from progress bar */}
         <div className="mt-4 sm:mt-6">
           {/* Main card container */}
-          <div className="bg-white rounded-2xl shadow-xl p-6">
+          <div className="bg-white rounded-2xl shadow-xl p-4 sm:p-6">
             {children}
           </div>
 

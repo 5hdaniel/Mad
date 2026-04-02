@@ -108,7 +108,8 @@ describe("AttachMessagesModal", () => {
     it("should render Select Contact title in contacts view", async () => {
       render(<AttachMessagesModal {...defaultProps} />);
       await waitFor(() => {
-        expect(screen.getByText("Select Contact")).toBeInTheDocument();
+        // Mobile + desktop both render this heading
+        expect(screen.getAllByText("Select Contact")[0]).toBeInTheDocument();
       });
     });
 
@@ -122,7 +123,8 @@ describe("AttachMessagesModal", () => {
     it("should render close button", async () => {
       render(<AttachMessagesModal {...defaultProps} />);
       await waitFor(() => {
-        expect(screen.getByTestId("close-modal-button")).toBeInTheDocument();
+        // Mobile + desktop both render close buttons
+        expect(screen.getAllByTestId("close-modal-button")[0]).toBeInTheDocument();
       });
     });
 
@@ -288,7 +290,8 @@ describe("AttachMessagesModal", () => {
       fireEvent.click(screen.getByText("John Doe"));
 
       await waitFor(() => {
-        expect(screen.getByTestId("back-button")).toBeInTheDocument();
+        // Mobile + desktop both render back buttons
+        expect(screen.getAllByTestId("back-button")[0]).toBeInTheDocument();
       });
     });
 
@@ -312,15 +315,16 @@ describe("AttachMessagesModal", () => {
       fireEvent.click(screen.getByText("John Doe"));
 
       await waitFor(() => {
-        expect(screen.getByTestId("back-button")).toBeInTheDocument();
+        // Mobile + desktop both render back buttons
+        expect(screen.getAllByTestId("back-button")[0]).toBeInTheDocument();
       });
 
-      // Click back
-      fireEvent.click(screen.getByTestId("back-button"));
+      // Click back (use first instance - mobile)
+      fireEvent.click(screen.getAllByTestId("back-button")[0]);
 
-      // Should be back to contacts view
+      // Should be back to contacts view (mobile + desktop both show title)
       await waitFor(() => {
-        expect(screen.getByText("Select Contact")).toBeInTheDocument();
+        expect(screen.getAllByText("Select Contact")[0]).toBeInTheDocument();
       });
     });
   });
@@ -351,8 +355,8 @@ describe("AttachMessagesModal", () => {
       // Click to select thread
       fireEvent.click(screen.getByTestId("thread-thread-1"));
 
-      // Should show selection count
-      expect(screen.getByText(/1 chat selected/i)).toBeInTheDocument();
+      // Should show selection count (footer shows "N selected")
+      expect(screen.getByText(/1 selected/i)).toBeInTheDocument();
     });
 
     it("should show attach button in threads view", async () => {
@@ -456,10 +460,11 @@ describe("AttachMessagesModal", () => {
       render(<AttachMessagesModal {...defaultProps} />);
 
       await waitFor(() => {
-        expect(screen.getByTestId("close-modal-button")).toBeInTheDocument();
+        // Mobile + desktop both render close buttons
+        expect(screen.getAllByTestId("close-modal-button")[0]).toBeInTheDocument();
       });
 
-      fireEvent.click(screen.getByTestId("close-modal-button"));
+      fireEvent.click(screen.getAllByTestId("close-modal-button")[0]);
       expect(mockOnClose).toHaveBeenCalled();
     });
 

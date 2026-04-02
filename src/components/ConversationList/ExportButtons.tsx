@@ -29,7 +29,7 @@ export function ExportButtons({
       data-tour="export-section"
     >
       <h3 className="text-sm font-semibold text-gray-700 mb-3">Export</h3>
-      <div className="flex gap-3">
+      <div className="flex flex-col sm:flex-row gap-2 sm:gap-3">
         {/* All (Messages + Emails) */}
         {outlookConnected ? (
           <button

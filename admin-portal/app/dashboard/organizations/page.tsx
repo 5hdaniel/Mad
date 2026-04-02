@@ -36,39 +36,37 @@ export default async function OrganizationsPage() {
     redirect('/dashboard?error=insufficient_permissions');
   }
 
-  // Fetch all organizations with member counts
-  const { data: orgs, error } = await supabase
-    .from('organizations')
-    .select('id, name, slug, plan, created_at, organization_members(count)')
-    .order('name');
+  // Check if admin has organizations.edit permission
+  const { data: canEdit } = await supabase.rpc('has_permission', {
+    check_user_id: adminUser.id,
+    required_permission: 'organizations.edit',
+  });
 
-  if (error) {
+  // Fetch all organizations via SECURITY DEFINER RPC (bypasses RLS join issues)
+  const { data: rpcResult, error } = await supabase.rpc('admin_list_organizations');
+
+  if (error || !rpcResult?.success) {
     return (
       <div className="max-w-7xl mx-auto">
         <div className="mb-6">
           <h1 className="text-2xl font-bold text-gray-900">Organizations</h1>
         </div>
         <div className="bg-white rounded-lg shadow-sm border border-danger-500/20 p-8 text-center">
-          <p className="text-danger-600 text-sm">Failed to load organizations: {error.message}</p>
+          <p className="text-danger-600 text-sm">Failed to load organizations: {error?.message || rpcResult?.error}</p>
         </div>
       </div>
     );
   }
 
-  // Transform data to extract member counts from the nested aggregate
-  const organizations: OrganizationRow[] = (orgs ?? []).map((org) => {
-    const memberAgg = org.organization_members as unknown as { count: number }[];
-    const memberCount = memberAgg?.[0]?.count ?? 0;
-
-    return {
-      id: org.id,
-      name: org.name,
-      slug: org.slug,
-      plan: org.plan,
-      created_at: org.created_at,
-      member_count: memberCount,
-    };
-  });
+  const organizations: OrganizationRow[] = ((rpcResult.organizations as Array<Record<string, unknown>>) ?? []).map((org) => ({
+    id: org.id as string,
+    name: org.name as string,
+    slug: org.slug as string,
+    plan_name: (org.plan_name as string) ?? null,
+    plan_tier: (org.plan_tier as string) ?? null,
+    created_at: org.created_at as string,
+    member_count: (org.member_count as number) ?? 0,
+  }));
 
   return (
     <div className="max-w-7xl mx-auto">
@@ -79,7 +77,7 @@ export default async function OrganizationsPage() {
         </p>
       </div>
 
-      <OrganizationsTable organizations={organizations} />
+      <OrganizationsTable organizations={organizations} canEdit={!!canEdit} />
     </div>
   );
 }

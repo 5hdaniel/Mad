@@ -16,7 +16,15 @@ export async function createClient() {
     {
       cookies: {
         get(name: string) {
-          return cookieStore.get(name)?.value;
+          try {
+            return cookieStore.get(name)?.value;
+          } catch {
+            // BACKLOG-1486: Handle corrupted cookie values (invalid UTF-8
+            // sequences) that crash during parsing. Return undefined so
+            // Supabase treats this as a missing cookie (unauthenticated)
+            // rather than crashing the entire request.
+            return undefined;
+          }
         },
         set(name: string, value: string, options: CookieOptions) {
           try {

@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback } from "react";
 import { useNotification } from "@/hooks/useNotification";
 import { useSyncOrchestrator } from '../../hooks/useSyncOrchestrator';
-import { formatFileSize } from '../../utils/formatUtils';
+import { formatFileSize, safeErrorMessage } from '../../utils/formatUtils';
 import logger from '../../utils/logger';
 import { OPERATION_LABELS } from './types';
 
@@ -99,7 +99,7 @@ export function DataPrivacySettings({ userId }: DataPrivacySettingsProps) {
       setReindexResult({ success: true, message: 'Database optimized successfully' });
       setReindexing(false);
     } else if (reindexItem?.status === 'error') {
-      setReindexResult({ success: false, message: reindexItem.error || 'Failed to optimize database' });
+      setReindexResult({ success: false, message: safeErrorMessage(reindexItem.error, 'Failed to optimize database') });
       setReindexing(false);
     }
   }, [reindexItem?.status, reindexItem?.error]);
@@ -112,8 +112,8 @@ export function DataPrivacySettings({ userId }: DataPrivacySettingsProps) {
         notify.success('Database backup created successfully');
       }
     } else if (backupItem?.status === 'error') {
-      setBackupResult({ success: false, message: backupItem.error || 'Failed to create backup' });
-      notify.error(backupItem.error || 'Failed to create backup');
+      setBackupResult({ success: false, message: safeErrorMessage(backupItem.error, 'Failed to create backup') });
+      notify.error(safeErrorMessage(backupItem.error, 'Failed to create backup'));
       setBackingUp(false);
     }
   }, [backupItem?.status, backupItem?.error]);
@@ -133,8 +133,8 @@ export function DataPrivacySettings({ userId }: DataPrivacySettingsProps) {
         }
       }).catch(() => { /* Non-critical */ });
     } else if (restoreItem?.status === 'error') {
-      setBackupResult({ success: false, message: restoreItem.error || 'Failed to restore database' });
-      notify.error(restoreItem.error || 'Failed to restore database');
+      setBackupResult({ success: false, message: safeErrorMessage(restoreItem.error, 'Failed to restore database') });
+      notify.error(safeErrorMessage(restoreItem.error, 'Failed to restore database'));
       setRestoring(false);
     }
   }, [restoreItem?.status, restoreItem?.error]);
@@ -147,8 +147,8 @@ export function DataPrivacySettings({ userId }: DataPrivacySettingsProps) {
         notify.success('Your data has been exported successfully.');
       }
     } else if (ccpaItem?.status === 'error') {
-      setExportResult({ success: false, message: ccpaItem.error || 'Export failed' });
-      notify.error('Failed to export data: ' + (ccpaItem.error || 'Unknown error'));
+      setExportResult({ success: false, message: safeErrorMessage(ccpaItem.error, 'Export failed') });
+      notify.error('Failed to export data: ' + safeErrorMessage(ccpaItem.error, 'Unknown error'));
       setExporting(false);
     }
   }, [ccpaItem?.status, ccpaItem?.error]);
@@ -219,7 +219,7 @@ export function DataPrivacySettings({ userId }: DataPrivacySettingsProps) {
                     reindexResult.success ? "text-green-600" : "text-red-600"
                   }`}
                 >
-                  {reindexResult.message}
+                  {typeof reindexResult.message === 'string' ? reindexResult.message : String(reindexResult.message)}
                 </p>
               )}
             </div>
@@ -285,7 +285,7 @@ export function DataPrivacySettings({ userId }: DataPrivacySettingsProps) {
                 backupResult.success ? "text-green-600" : "text-red-600"
               }`}
             >
-              {backupResult.message}
+              {typeof backupResult.message === 'string' ? backupResult.message : String(backupResult.message)}
             </p>
           )}
           <p className="text-xs text-gray-400 mt-2">
@@ -334,7 +334,7 @@ export function DataPrivacySettings({ userId }: DataPrivacySettingsProps) {
                     </span>
                   </div>
                   <p className="text-gray-600 break-words">
-                    {entry.error_message}
+                    {typeof entry.error_message === 'string' ? entry.error_message : String(entry.error_message)}
                   </p>
                 </div>
               ))}
@@ -378,7 +378,7 @@ export function DataPrivacySettings({ userId }: DataPrivacySettingsProps) {
                 exportResult.success ? "text-green-600" : "text-red-600"
               }`}
             >
-              {exportResult.message}
+              {typeof exportResult.message === 'string' ? exportResult.message : String(exportResult.message)}
             </p>
           )}
           <button

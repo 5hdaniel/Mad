@@ -1,4 +1,5 @@
 import React from "react";
+import { ResponsiveModal } from "./common/ResponsiveModal";
 import AddressVerificationStep from "./audit/AddressVerificationStep";
 import ContactAssignmentStep from "./audit/ContactAssignmentStep";
 import type { Transaction } from "../../electron/types/models";
@@ -72,14 +73,12 @@ function AuditTransactionModal({
   // Should never trigger if AppShell gate works, but prevents errors if bypassed
   if (!isDatabaseInitialized) {
     return (
-      <div className="fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center z-50 p-4">
-        <div className="bg-white rounded-xl shadow-2xl p-8">
+      <ResponsiveModal panelClassName="max-w-md p-8">
           <div className="text-center">
             <div className="w-8 h-8 border-4 border-indigo-600 border-t-transparent rounded-full animate-spin mx-auto mb-2"></div>
             <p className="text-gray-500 text-sm">Waiting for database...</p>
           </div>
-        </div>
-      </div>
+      </ResponsiveModal>
     );
   }
 
@@ -90,44 +89,58 @@ function AuditTransactionModal({
   const displayStep = isEditing ? 1 : Math.min(step, 3);
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-xl shadow-2xl w-full max-w-4xl max-h-[90vh] flex flex-col">
+    <ResponsiveModal onClose={onClose} panelClassName="max-w-4xl sm:max-h-[90vh]">
         {/* Header */}
-        <div className="flex-shrink-0 bg-gradient-to-r from-indigo-500 to-purple-600 px-6 py-4 flex items-center justify-between rounded-t-xl">
-          <div>
-            <h2 className="text-xl font-bold text-white">
-              {isEditing ? "Edit Transaction Details" : "Audit New Transaction"}
-            </h2>
-            <p className="text-indigo-100 text-sm">
-              {isEditing ? (
-                "Update property address and transaction dates"
-              ) : (
-                <>
-                  {step === 1 && "Step 1: Transaction Details"}
-                  {step === 2 && "Step 2: Select Contacts"}
-                  {step === 3 && "Step 3: Assign Roles"}
-                </>
-              )}
-            </p>
-          </div>
-          <button
-            onClick={onClose}
-            className="text-white hover:bg-white hover:bg-opacity-20 rounded-full p-1 transition-all"
-          >
-            <svg
-              className="w-6 h-6"
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
+        <div className="flex-shrink-0 bg-gradient-to-r from-indigo-500 to-purple-600 px-3 sm:px-6 pt-6 sm:pt-4 pb-3 sm:pb-4 sm:rounded-t-xl shadow-lg">
+          {/* Mobile layout */}
+          <div className="sm:hidden flex items-center justify-between">
+            <button
+              onClick={onClose}
+              className="text-white hover:bg-white hover:bg-opacity-20 rounded-lg px-2 py-2 transition-all flex items-center gap-1 font-medium text-sm"
             >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M6 18L18 6M6 6l12 12"
-              />
-            </svg>
-          </button>
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
+              </svg>
+              Back
+            </button>
+            <div className="text-right">
+              <h2 className="text-lg font-bold text-white">
+                {isEditing ? "Edit Details" : "New Transaction"}
+              </h2>
+              {!isEditing && (
+                <p className="text-indigo-100 text-xs">
+                  Step {displayStep} of {totalSteps}
+                </p>
+              )}
+            </div>
+          </div>
+          {/* Desktop layout */}
+          <div className="hidden sm:flex items-center justify-between">
+            <div>
+              <h2 className="text-xl font-bold text-white">
+                {isEditing ? "Edit Transaction Details" : "Audit New Transaction"}
+              </h2>
+              <p className="text-indigo-100 text-sm">
+                {isEditing ? (
+                  "Update property address and transaction dates"
+                ) : (
+                  <>
+                    {step === 1 && "Step 1: Transaction Details"}
+                    {step === 2 && "Step 2: Select Contacts"}
+                    {step === 3 && "Step 3: Assign Roles"}
+                  </>
+                )}
+              </p>
+            </div>
+            <button
+              onClick={onClose}
+              className="text-white hover:bg-white hover:bg-opacity-20 rounded-full p-1 transition-all"
+            >
+              <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
+          </div>
         </div>
 
         {/* Progress Bar - Only show for new transactions */}
@@ -217,8 +230,9 @@ function AuditTransactionModal({
           )}
         </div>
 
-        {/* Footer */}
-        <div className="flex-shrink-0 px-6 py-4 bg-gray-50 rounded-b-xl flex items-center gap-3 justify-between">
+        {/* Footer — desktop: sticky bar, mobile: floating button */}
+        {/* Desktop footer */}
+        <div className="hidden sm:flex flex-shrink-0 px-6 py-4 bg-gray-50 rounded-b-xl items-center gap-3 justify-between">
           <button
             onClick={onClose}
             className="px-4 py-2 text-gray-700 hover:bg-gray-200 rounded-lg font-medium transition-all"
@@ -259,8 +273,41 @@ function AuditTransactionModal({
             </button>
           </div>
         </div>
-      </div>
-    </div>
+        {/* Mobile floating button */}
+        <div className="sm:hidden fixed bottom-4 right-4 z-[71] flex items-center gap-2">
+          {step > 1 && (
+            <button
+              onClick={handlePreviousStep}
+              disabled={loading}
+              className="px-4 py-3 rounded-full font-medium text-sm bg-white text-gray-700 shadow-lg hover:shadow-xl transition-all"
+            >
+              &larr;
+            </button>
+          )}
+          <button
+            onClick={handleNextStep}
+            disabled={loading}
+            className={`px-6 py-3 rounded-full font-semibold text-sm shadow-lg transition-all ${
+              loading
+                ? "bg-gray-300 text-gray-500 cursor-not-allowed"
+                : "bg-gradient-to-r from-indigo-500 to-purple-600 text-white hover:from-indigo-600 hover:to-purple-700 hover:shadow-xl"
+            }`}
+          >
+            {loading ? (
+              <span className="flex items-center gap-2">
+                <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                {isEditing ? "Saving..." : "Creating..."}
+              </span>
+            ) : isEditing ? (
+              "Save"
+            ) : step === 3 ? (
+              "Create"
+            ) : (
+              "Continue →"
+            )}
+          </button>
+        </div>
+    </ResponsiveModal>
   );
 }
 

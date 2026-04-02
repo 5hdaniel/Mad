@@ -412,7 +412,7 @@ export function TransactionMessagesTab({
                     d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
                   />
                 </svg>
-                {syncingMessages ? "Syncing..." : "Sync Messages"}
+                {syncingMessages ? "Syncing..." : <>Sync<span className="hidden sm:inline"> Messages</span></>}
               </button>
             )}
             {userId && transactionId && (
@@ -434,7 +434,7 @@ export function TransactionMessagesTab({
                     d="M12 4v16m8-8H4"
                   />
                 </svg>
-                Attach Messages
+                Attach<span className="hidden sm:inline"> Messages</span>
               </button>
             )}
           </div>
@@ -460,10 +460,10 @@ export function TransactionMessagesTab({
       <div className="flex items-center justify-between mb-4">
         <div>
           <h3 className="text-lg font-medium text-gray-900">
-            {filteredConversationCount} conversation{filteredConversationCount !== 1 ? "s" : ""} ({filteredMessageCount} text message{filteredMessageCount !== 1 ? "s" : ""})
+            {filteredConversationCount} conversation{filteredConversationCount !== 1 ? "s" : ""}<span className="hidden sm:inline"> ({filteredMessageCount} text message{filteredMessageCount !== 1 ? "s" : ""})</span>
           </h3>
           {showAuditPeriodOnly && hasAuditDates && (filteredMessageCount !== totalMessageCount || filteredConversationCount !== totalConversationCount) && (
-            <p className="text-sm text-gray-500">
+            <p className="text-sm text-gray-500 hidden sm:block">
               of {totalConversationCount} conversation{totalConversationCount !== 1 ? "s" : ""} ({totalMessageCount} messages)
             </p>
           )}
@@ -492,7 +492,7 @@ export function TransactionMessagesTab({
                   d="M12 4v16m8-8H4"
                 />
               </svg>
-              Attach Messages
+              Attach<span className="hidden sm:inline"> Messages</span>
             </button>
           )}
           {/* Sync button */}
@@ -542,7 +542,7 @@ export function TransactionMessagesTab({
                       d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
                     />
                   </svg>
-                  Sync Messages
+                  Sync<span className="hidden sm:inline"> Messages</span>
                 </>
               )}
             </button>
@@ -553,13 +553,27 @@ export function TransactionMessagesTab({
       {/* Audit period filter + info line */}
       {hasAuditDates && (
         <div className="flex items-center justify-between bg-gray-50 rounded-lg px-4 py-2.5 mb-4" data-testid="audit-period-filter">
-          <p className="text-sm text-gray-500" data-testid="audit-period-info">
-            {showAuditPeriodOnly
-              ? `Showing ${filteredMessageCount} of ${totalMessageCount} messages within ${formatDateRangeLabel(parsedStartDate, parsedEndDate)}`
-              : `${totalMessageCount} messages total`}
-          </p>
+          <span className="text-sm text-gray-700 flex items-center gap-1.5" data-testid="audit-period-info">
+            <span className="hidden sm:inline text-gray-500">
+              {showAuditPeriodOnly
+                ? `Showing ${filteredMessageCount} of ${totalMessageCount} messages within ${formatDateRangeLabel(parsedStartDate, parsedEndDate)}`
+                : `${totalMessageCount} messages total`}
+            </span>
+            <span className="sm:hidden flex items-center gap-1.5">
+              <button
+                type="button"
+                className="w-5 h-5 rounded-full bg-blue-100 text-blue-600 text-xs font-bold flex items-center justify-center hover:bg-blue-200 transition-colors"
+                title={showAuditPeriodOnly
+                  ? `Showing ${filteredMessageCount} of ${totalMessageCount} messages within ${formatDateRangeLabel(parsedStartDate, parsedEndDate)}`
+                  : `${totalMessageCount} messages total`}
+              >
+                i
+              </button>
+              Audit period
+            </span>
+          </span>
           <div className="flex items-center gap-2">
-            <span className="text-sm text-gray-700">Audit period</span>
+            <span className="text-sm text-gray-700 hidden sm:inline">Audit period</span>
             <button
               type="button"
               role="switch"

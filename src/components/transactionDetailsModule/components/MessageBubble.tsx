@@ -189,7 +189,7 @@ export function MessageBubble({ message, senderName, showSender = true, attachme
       data-message-type={messageType}
     >
       <div
-        className={`max-w-[75%] rounded-2xl px-4 py-2 ${
+        className={`max-w-[85%] sm:max-w-[75%] rounded-2xl px-3 py-2 sm:px-4 ${
           isOutbound
             ? "bg-blue-500 text-white rounded-br-sm"
             : "bg-gray-200 text-gray-900 rounded-bl-sm"

@@ -133,11 +133,11 @@ const Content: React.FC<OnboardingStepContentProps> = ({
   return (
     <>
       {/* Header */}
-      <div className="text-center mb-8">
+      <div className="text-center mb-6 sm:mb-8">
         <div className="w-14 h-14 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-3">
           <PhoneIcon />
         </div>
-        <h1 className="text-xl font-bold text-gray-900 mb-2">
+        <h1 className="text-lg sm:text-xl font-bold text-gray-900 mb-2">
           What phone do you use?
         </h1>
         <p className="text-sm text-gray-600">
@@ -146,15 +146,15 @@ const Content: React.FC<OnboardingStepContentProps> = ({
         </p>
       </div>
 
-      {/* Phone Selection Cards */}
-      <div className="grid grid-cols-2 gap-3 mb-8">
+      {/* Phone Selection Cards - stack on mobile, side by side on sm+ */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-6 sm:mb-8">
         {/* iPhone Option */}
         <button
           onClick={handleSelectIPhone}
-          className={`relative p-4 rounded-xl border-2 transition-all duration-200 text-left ${
+          className={`relative p-4 rounded-xl border-2 transition-all duration-200 text-left min-h-[44px] ${
             selectedType === "iphone"
               ? "border-blue-500 bg-blue-50 ring-2 ring-blue-200"
-              : "border-gray-200 hover:border-blue-400 hover:bg-blue-50"
+              : "border-gray-200 hover:border-blue-400 hover:bg-blue-50 active:bg-blue-50"
           }`}
         >
           {/* Checkmark for selected */}
@@ -166,24 +166,28 @@ const Content: React.FC<OnboardingStepContentProps> = ({
             </div>
           )}
 
-          {/* Apple Logo */}
-          <div className="w-12 h-12 bg-gray-900 rounded-xl flex items-center justify-center mb-4">
-            <AppleLogo />
-          </div>
+          <div className="flex sm:block items-center gap-3">
+            {/* Apple Logo */}
+            <div className="w-12 h-12 bg-gray-900 rounded-xl flex items-center justify-center flex-shrink-0 sm:mb-4">
+              <AppleLogo />
+            </div>
 
-          <h3 className="font-semibold text-gray-900 mb-1">iPhone</h3>
-          <p className="text-sm text-gray-500">
-            Sync messages and contacts from your iPhone
-          </p>
+            <div>
+              <h3 className="font-semibold text-gray-900 mb-0.5 sm:mb-1">iPhone</h3>
+              <p className="text-sm text-gray-500">
+                Sync messages and contacts from your iPhone
+              </p>
+            </div>
+          </div>
         </button>
 
         {/* Android Option */}
         <button
           onClick={handleSelectAndroid}
-          className={`relative p-4 rounded-xl border-2 transition-all duration-200 text-left ${
+          className={`relative p-4 rounded-xl border-2 transition-all duration-200 text-left min-h-[44px] ${
             selectedType === "android"
               ? "border-green-500 bg-green-50 ring-2 ring-green-200"
-              : "border-gray-200 hover:border-green-400 hover:bg-green-50"
+              : "border-gray-200 hover:border-green-400 hover:bg-green-50 active:bg-green-50"
           }`}
         >
           {/* Checkmark for selected */}
@@ -195,20 +199,24 @@ const Content: React.FC<OnboardingStepContentProps> = ({
             </div>
           )}
 
-          {/* Android Logo */}
-          <div className="w-12 h-12 bg-green-500 rounded-xl flex items-center justify-center mb-4">
-            <AndroidLogo />
-          </div>
+          <div className="flex sm:block items-center gap-3">
+            {/* Android Logo */}
+            <div className="w-12 h-12 bg-green-500 rounded-xl flex items-center justify-center flex-shrink-0 sm:mb-4">
+              <AndroidLogo />
+            </div>
 
-          <h3 className="font-semibold text-gray-900 mb-1">Android</h3>
-          <p className="text-sm text-gray-500">
-            Samsung, Google Pixel, and other Android phones
-          </p>
+            <div>
+              <h3 className="font-semibold text-gray-900 mb-0.5 sm:mb-1">Android</h3>
+              <p className="text-sm text-gray-500">
+                Samsung, Google Pixel, and other Android phones
+              </p>
+            </div>
+          </div>
         </button>
       </div>
 
       {/* Info Box */}
-      <div className="bg-gray-50 rounded-lg p-4">
+      <div className="bg-gray-50 rounded-lg p-3 sm:p-4">
         <div className="flex items-start gap-3">
           <InfoIcon />
           <p className="text-sm text-gray-600">

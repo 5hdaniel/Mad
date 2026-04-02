@@ -12,6 +12,7 @@ import {
   performSync,
 } from '../../services/backgroundSync';
 import type { SyncOperationResult } from '../../services/backgroundSync';
+import type { SyncErrorType } from '../../types/sync';
 import { colors } from '../../theme/colors';
 import { textStyles } from '../../theme/typography';
 import { borderRadius, spacing } from '../../theme/spacing';
@@ -24,6 +25,7 @@ export default function FirstSyncScreen(): React.JSX.Element {
   const [syncing, setSyncing] = useState(false);
   const [syncResult, setSyncResult] = useState<SyncOperationResult | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [errorType, setErrorType] = useState<SyncErrorType | undefined>(undefined);
   const [autoSyncStarted, setAutoSyncStarted] = useState(false);
 
   // Auto-start sync when screen mounts
@@ -38,6 +40,7 @@ export default function FirstSyncScreen(): React.JSX.Element {
   const runFirstSync = async (): Promise<void> => {
     setSyncing(true);
     setError(null);
+    setErrorType(undefined);
     setSyncResult(null);
 
     try {
@@ -54,10 +57,12 @@ export default function FirstSyncScreen(): React.JSX.Element {
 
       if (result.error) {
         setError(result.error);
+        setErrorType(result.errorType);
       }
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Sync failed';
       setError(message);
+      setErrorType('unknown');
       console.error('[Onboarding] First sync error:', err);
     } finally {
       setSyncing(false);
@@ -114,8 +119,11 @@ export default function FirstSyncScreen(): React.JSX.Element {
             <Text style={styles.title}>Sync Issue</Text>
             <Text style={styles.description}>{error}</Text>
             <Text style={styles.subdescription}>
-              This might happen if the desktop app is not running. You can retry
-              or continue and sync later.
+              {errorType === 'timeout'
+                ? 'Large data transfers may be blocked on this network. Try your phone\'s mobile hotspot.'
+                : errorType === 'network_after_connect'
+                  ? 'The connection was interrupted during transfer. A different network or hotspot may help.'
+                  : 'Make sure Keepr is open on your computer and both devices are on the same WiFi network.'}
             </Text>
           </>
         ) : (

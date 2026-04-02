@@ -124,10 +124,33 @@ export async function middleware(request: NextRequest) {
       const redirectTo = /^\/[a-zA-Z0-9\-_\/\?\&\=\#\.]+$/.test(rawRedirect) ? rawRedirect : '/dashboard';
       return NextResponse.redirect(new URL(redirectTo, request.url));
     }
-  } catch {
-    // If Supabase calls fail (timeout, network), let the request through
-    // rather than showing a 500 error. The page-level auth checks will
-    // handle protection as a fallback.
+  } catch (error) {
+    // BACKLOG-1486: Corrupted cookies (invalid UTF-8 sequences) can crash
+    // Supabase SSR during cookie chunk reassembly or session parsing.
+    // Clear all Supabase-related cookies and redirect to login so the
+    // user gets a fresh session instead of a 500 error.
+    const isCorruptedCookie =
+      error instanceof Error &&
+      (error.message.includes('UTF-8') ||
+        error.message.includes('malformed') ||
+        error.message.includes('Invalid string'));
+
+    if (isCorruptedCookie || isProtectedRoute) {
+      const redirectUrl = new URL('/login', request.url);
+      const redirectResponse = NextResponse.redirect(redirectUrl);
+
+      // Delete all Supabase auth cookies (sb-* and supabase-*)
+      request.cookies.getAll().forEach((cookie) => {
+        if (cookie.name.includes('supabase') || cookie.name.startsWith('sb-')) {
+          redirectResponse.cookies.delete(cookie.name);
+        }
+      });
+
+      return redirectResponse;
+    }
+
+    // For non-protected routes with non-cookie errors (timeout, network),
+    // let the request through. Page-level auth checks handle protection.
   }
 
   return response;

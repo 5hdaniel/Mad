@@ -93,6 +93,47 @@ export function getUnlinkedEmails(userId: string, limit = 500): Communication[] 
 }
 
 /**
+ * Search locally cached emails by text query (subject, sender, body).
+ * Used as fallback when provider $search fails (e.g., pure numeric queries).
+ */
+export function searchLocalEmailCache(userId: string, query: string, limit = 500): Array<{
+  id: string;
+  subject: string | null;
+  sender: string | null;
+  sent_at: string | null;
+  body_preview: string | null;
+  email_thread_id: string | null;
+  has_attachments: boolean;
+}> {
+  const db = ensureDb();
+  const pattern = `%${query}%`;
+  const sql = `
+    SELECT
+      e.id,
+      e.subject,
+      e.sender,
+      e.sent_at,
+      SUBSTR(e.body_plain, 1, 200) as body_preview,
+      e.thread_id as email_thread_id,
+      e.has_attachments
+    FROM emails e
+    WHERE e.user_id = ?
+      AND (LOWER(e.subject) LIKE LOWER(?) OR LOWER(e.sender) LIKE LOWER(?) OR LOWER(e.body_plain) LIKE LOWER(?))
+    ORDER BY e.sent_at DESC
+    LIMIT ?
+  `;
+  return db.prepare(sql).all(userId, pattern, pattern, pattern, limit) as Array<{
+    id: string;
+    subject: string | null;
+    sender: string | null;
+    sent_at: string | null;
+    body_preview: string | null;
+    email_thread_id: string | null;
+    has_attachments: boolean;
+  }>;
+}
+
+/**
  * Get distinct contacts (phone numbers) with unlinked message counts
  * Used for contact-first message browsing
  */
@@ -322,11 +363,18 @@ export async function backfillPhoneLastMessageTable(userId: string): Promise<num
   const phoneLastDates = new Map<string, string>();
 
   for (const msg of messages) {
-    const phones = msg.participants_flat.split(',').filter(p => p.trim().length >= 7);
+    // BACKLOG-1493: Include short codes (< 7 digits) and alphanumeric senders
+    // in the phone last message lookup. Previously filtered out by >= 7 requirement.
+    const phones = msg.participants_flat.split(',').filter(p => p.trim().length > 0);
 
     for (const phone of phones) {
-      const normalized = phone.trim().slice(-10);
-      if (normalized.length < 7) continue;
+      const trimmed = phone.trim();
+      const digits = trimmed.replace(/\D/g, "");
+      // For numeric phones, use last 10 digits; for alphanumeric, use full string
+      const normalized = digits.length > 0
+        ? (digits.length >= 10 ? digits.slice(-10) : digits)
+        : trimmed;
+      if (normalized.length === 0) continue;
 
       const existing = phoneLastDates.get(normalized);
       if (!existing || msg.last_date > existing) {
@@ -467,16 +515,35 @@ export function getConversationsFromMessages(userId: string): MessagesConversati
   const conversations: MessagesConversation[] = [];
 
   for (const row of rows) {
-    // Resolve the phone number from participants_flat
+    // Resolve the phone number from participants_flat.
+    // BACKLOG-1493: participants_flat may contain:
+    //   - Standard digits (e.g., "5551234567") — for normal phone numbers
+    //   - Short code digits (e.g., "72645") — for carrier/marketing SMS
+    //   - Alphanumeric string (e.g., "T-Mobile") — for carrier alerts
     const phoneRaw = (row.participants_flat || "").split(",")[0].trim();
     const phoneDigits = phoneRaw.replace(/\D/g, "");
-    const normalizedPhone = phoneDigits.length >= 10 ? phoneDigits.slice(-10) : phoneDigits;
 
-    // Look up contact name
-    const contactInfo = normalizedPhone.length >= 7
+    // BACKLOG-1493: Determine if this is a numeric sender or alphanumeric.
+    // Alphanumeric senders have no digits (or fewer digits than non-digit chars).
+    const isAlphanumericSender = phoneDigits.length === 0;
+
+    // For numeric senders, normalize to last 10 digits for contact lookup.
+    // For short codes (< 7 digits), still attempt lookup but don't require >= 7.
+    const normalizedPhone = isAlphanumericSender
+      ? ""
+      : (phoneDigits.length >= 10 ? phoneDigits.slice(-10) : phoneDigits);
+
+    // BACKLOG-1493: Look up contact name. Removed the >= 7 digit requirement
+    // so short codes (5-6 digits) can also match contacts if the user has saved them.
+    // For alphanumeric senders, skip phone lookup — use the sender string as display name.
+    const contactInfo = normalizedPhone.length > 0
       ? phoneToContact.get(normalizedPhone)
       : undefined;
 
+    // BACKLOG-1493: Build display name.
+    // Priority: contact name > formatted phone number > alphanumeric sender > thread_id
+    // For conversations with no contact match, show the phone number or sender string
+    // so the conversation is always visible (never hidden due to missing name).
     const displayName = contactInfo?.display_name || phoneRaw || row.thread_id;
 
     // Get last message body

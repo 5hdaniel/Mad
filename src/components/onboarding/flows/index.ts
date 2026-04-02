@@ -23,6 +23,8 @@ export const FLOWS: Record<Platform, { platform: Platform; steps: readonly Onboa
   macos: MACOS_FLOW,
   windows: WINDOWS_FLOW,
   linux: MACOS_FLOW, // Linux uses same flow as macOS for now
+  android: { platform: "android", steps: MACOS_FLOW.steps }, // Mobile uses same step list; shouldShow predicates handle platform filtering
+  ios: { platform: "ios", steps: MACOS_FLOW.steps }, // Mobile uses same step list; shouldShow predicates handle platform filtering
 };
 
 // =============================================================================

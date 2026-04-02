@@ -426,7 +426,7 @@ class OutlookFetchService {
 
       if (hasTextQuery) {
         // Use $search for text — cannot combine with $filter at all
-        const sanitized = query.replace(/"/g, "");
+        const sanitized = query.replace(/"/g, "").trim();
         searchParam = `$search="${sanitized}"`;
         // No $filter allowed — dates will be filtered client-side
       } else if (hasContactFilter) {
@@ -452,9 +452,13 @@ class OutlookFetchService {
         "$select=id,subject,from,toRecipients,ccRecipients,bccRecipients,receivedDateTime,sentDateTime,hasAttachments,body,bodyPreview,conversationId,inferenceClassification,parentFolderId,internetMessageId,internetMessageHeaders";
 
       logService.info("Searching emails", "OutlookFetch", {
+        originalQuery: query,
+        searchParam: searchParam || '(none)',
+        filterString: filterString || '(none)',
         contactCount: contactEmails?.length || 0,
         hasQuery: !!query,
         hasDateFilter: filters.length > 0,
+        needsClientSort,
       });
 
       // First, get the total count of matching emails
@@ -491,11 +495,19 @@ class OutlookFetchService {
       let pageCount = 0;
       const pageSize = 100; // Fetch 100 per page
 
+      logService.info("Outlook search starting", "OutlookFetch", {
+        initialSkip,
+        maxResults: maxResults || "unlimited",
+        hasSearch: !!searchParam,
+        hasFilter: !!filterString,
+      });
+
       // Paginate through all results (bounded by date filters, not count)
       do {
         pageCount++;
         const top = `$top=${pageSize}`;
-        // $skip is not supported with $search
+        // $skip causes 400 when combined with $search on /me/messages (Graph API)
+        // Use @odata.nextLink for pagination when $search is active
         const skipParam = (!searchParam && skip > 0) ? `$skip=${skip}` : "";
 
         const queryParams = [selectFields, orderBy, top, skipParam, filterString, searchParam]

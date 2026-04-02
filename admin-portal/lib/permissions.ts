@@ -35,6 +35,7 @@ export const PERMISSIONS = {
   PM_ASSIGN: 'pm.assign',
   PM_MANAGE: 'pm.manage',
   PM_ADMIN: 'pm.admin',
+  DEVICES_MANAGE: 'devices.manage',
 } as const;
 
 export type PermissionKey = (typeof PERMISSIONS)[keyof typeof PERMISSIONS];

@@ -164,11 +164,11 @@ describe("TransactionToolbar", () => {
     it("should always show All tab regardless of ai_detection", () => {
       mockIsAllowed.mockImplementation((key: string) => key !== "ai_detection");
       const { rerender } = render(<TransactionToolbar {...createDefaultProps()} />);
-      expect(screen.getByRole("button", { name: /^all/i })).toBeInTheDocument();
+      expect(screen.getAllByRole("button", { name: /^all/i }).length).toBeGreaterThan(0);
 
       mockIsAllowed.mockReturnValue(true);
       rerender(<TransactionToolbar {...createDefaultProps()} />);
-      expect(screen.getByRole("button", { name: /^all/i })).toBeInTheDocument();
+      expect(screen.getAllByRole("button", { name: /^all/i }).length).toBeGreaterThan(0);
     });
 
     it("should always show Active tab regardless of ai_detection", () => {

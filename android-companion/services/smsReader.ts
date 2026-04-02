@@ -167,6 +167,15 @@ function readBox(filter: SmsFilter): Promise<SyncMessage[]> {
  *
  * BACKLOG-1459: raw.type was undefined/null for some sent-box queries, causing
  * the `?? SMS_TYPE_INBOX` fallback to mark all messages as inbound.
+ *
+ * BACKLOG-1493: Ensure sender is always populated. Android SMS content provider
+ * may return empty or null address for some message types (carrier alerts,
+ * voicemail notifications). We fall back to "unknown" so messages are never
+ * silently dropped.
+ *
+ * Direction mapping (BACKLOG-1495 Data Parsing Spec):
+ *   inbox box = inbound (received by user)
+ *   sent box  = outbound (sent by user)
  */
 function rawToSyncMessage(raw: RawSmsRecord, box?: "inbox" | "sent"): SyncMessage {
   // Primary: use the box we explicitly queried
@@ -180,8 +189,15 @@ function rawToSyncMessage(raw: RawSmsRecord, box?: "inbox" | "sent"): SyncMessag
   const date = parseInt(raw.date, 10);
   const timestamp = dateSent > 0 ? dateSent : date;
 
+  // BACKLOG-1493: Ensure sender always has a value.
+  // normalizePhoneNumber handles alphanumeric senders (returns trimmed original)
+  // and short codes (returns digits only). If address is still empty/null,
+  // fall back to "unknown" so the message is not silently dropped.
+  const rawAddress = (raw.address || "").trim();
+  const sender = rawAddress.length > 0 ? normalizePhoneNumber(rawAddress) : "unknown";
+
   return {
-    sender: normalizePhoneNumber(raw.address),
+    sender,
     body: raw.body,
     timestamp: isNaN(timestamp) ? Date.now() : timestamp,
     threadId: raw.thread_id ?? "",

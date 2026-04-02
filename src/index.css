@@ -65,3 +65,8 @@ code {
 .animate-indeterminate {
   animation: indeterminate 1.5s ease-in-out infinite;
 }
+
+/* Mobile viewport safe area for bottom nav (notch devices / home indicator) */
+.safe-area-bottom {
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+}

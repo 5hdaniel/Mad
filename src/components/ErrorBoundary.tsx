@@ -12,6 +12,7 @@
  */
 
 import React, { Component, ErrorInfo, ReactNode } from "react";
+import { ResponsiveModal } from "./common/ResponsiveModal";
 import * as Sentry from "@sentry/electron/renderer";
 import logger from '../utils/logger';
 
@@ -28,6 +29,9 @@ interface State {
   diagnostics: string | null;
   copiedToClipboard: boolean;
   showFullReport: boolean;
+  supportSending: boolean;
+  supportSent: boolean;
+  supportError: boolean;
 }
 
 const SUPPORT_EMAIL = "support@keeprcompliance.com";
@@ -42,6 +46,9 @@ class ErrorBoundary extends Component<Props, State> {
       diagnostics: null,
       copiedToClipboard: false,
       showFullReport: false,
+      supportSending: false,
+      supportSent: false,
+      supportError: false,
     };
   }
 
@@ -90,6 +97,9 @@ class ErrorBoundary extends Component<Props, State> {
       diagnostics: null,
       copiedToClipboard: false,
       showFullReport: false,
+      supportSending: false,
+      supportSent: false,
+      supportError: false,
     });
   };
 
@@ -115,12 +125,49 @@ class ErrorBoundary extends Component<Props, State> {
     return report;
   };
 
+  /**
+   * Copy text to clipboard with fallback for Electron/Windows environments
+   * where navigator.clipboard may not be available without HTTPS context.
+   */
+  copyToClipboard = async (text: string): Promise<boolean> => {
+    // Try navigator.clipboard first (works in secure contexts)
+    if (navigator.clipboard?.writeText) {
+      try {
+        await navigator.clipboard.writeText(text);
+        return true;
+      } catch {
+        // Fall through to fallback
+      }
+    }
+
+    // Fallback: use a temporary textarea and execCommand('copy')
+    try {
+      const textarea = document.createElement("textarea");
+      textarea.value = text;
+      textarea.style.position = "fixed";
+      textarea.style.left = "-9999px";
+      textarea.style.top = "-9999px";
+      textarea.style.opacity = "0";
+      document.body.appendChild(textarea);
+      textarea.select();
+      const success = document.execCommand("copy");
+      document.body.removeChild(textarea);
+      return success;
+    } catch {
+      return false;
+    }
+  };
+
   handleCopyErrorReport = async (): Promise<void> => {
     try {
       const report = this.getErrorReport();
-      await navigator.clipboard.writeText(report);
-      this.setState({ copiedToClipboard: true });
-      setTimeout(() => this.setState({ copiedToClipboard: false }), 3000);
+      const success = await this.copyToClipboard(report);
+      if (success) {
+        this.setState({ copiedToClipboard: true });
+        setTimeout(() => this.setState({ copiedToClipboard: false }), 3000);
+      } else {
+        logger.error("[ErrorBoundary] All clipboard methods failed");
+      }
     } catch (err) {
       logger.error("[ErrorBoundary] Failed to copy error report:", err);
     }
@@ -130,18 +177,50 @@ class ErrorBoundary extends Component<Props, State> {
     this.setState((prev) => ({ showFullReport: !prev.showFullReport }));
   };
 
+  handleSendToSupport = async (): Promise<void> => {
+    this.setState({ supportSending: true, supportError: false });
+    try {
+      const report = this.getErrorReport();
+      // Copy the report to clipboard first so user has it
+      await this.copyToClipboard(report);
+
+      const { error } = this.state;
+      const subject = error?.message
+        ? `Error: ${error.message}`
+        : "App Crash Report";
+      const mailtoSubject = encodeURIComponent(subject);
+      const mailtoBody = encodeURIComponent(
+        "Please describe what you were doing when the error occurred:\n\n\n" +
+        "--- Error Report (also copied to your clipboard) ---\n" +
+        report
+      );
+      window.location.href = `mailto:${SUPPORT_EMAIL}?subject=${mailtoSubject}&body=${mailtoBody}`;
+
+      this.setState({ supportSending: false, supportSent: true });
+      setTimeout(() => this.setState({ supportSent: false }), 4000);
+    } catch (err) {
+      logger.error("[ErrorBoundary] Failed to send to support:", err);
+      this.setState({ supportSending: false, supportError: true });
+      setTimeout(() => this.setState({ supportError: false }), 4000);
+    }
+  };
+
   handleContactSupport = (): void => {
-    // TASK-2319: Open in-app support widget instead of mailto
     const { error } = this.state;
     const subject = error?.message
       ? `Error: ${error.message}`
       : "App Crash Report";
 
-    window.dispatchEvent(
-      new CustomEvent("open-support-widget", {
-        detail: { subject },
-      })
+    // When ErrorBoundary renders its fallback UI, the SupportWidget (which is a
+    // child of App) is unmounted and cannot receive the custom event. Fall back
+    // to a mailto link so the user can always reach support.
+    const mailtoSubject = encodeURIComponent(subject);
+    const mailtoBody = encodeURIComponent(
+      "Please describe what you were doing when the error occurred:\n\n\n" +
+      "--- Error Details (auto-generated) ---\n" +
+      (error?.message || "Unknown error")
     );
+    window.location.href = `mailto:${SUPPORT_EMAIL}?subject=${mailtoSubject}&body=${mailtoBody}`;
   };
 
   renderFullReportModal(): ReactNode {
@@ -152,8 +231,7 @@ class ErrorBoundary extends Component<Props, State> {
     const report = this.getErrorReport();
 
     return (
-      <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-        <div className="bg-white rounded-xl shadow-2xl max-w-2xl w-full max-h-[80vh] flex flex-col">
+      <ResponsiveModal onClose={() => this.setState({ showFullReport: false })} overlayClassName="bg-black bg-opacity-50" panelClassName="max-w-2xl sm:max-h-[80vh]">
           {/* Header */}
           <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200">
             <h2 className="text-lg font-semibold text-gray-900">
@@ -229,27 +307,76 @@ class ErrorBoundary extends Component<Props, State> {
               )}
             </button>
             <button
-              onClick={this.handleContactSupport}
-              className="px-4 py-2 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-lg transition-colors flex items-center gap-2"
+              onClick={this.handleSendToSupport}
+              disabled={this.state.supportSending}
+              className={`px-4 py-2 text-sm font-medium text-white rounded-lg transition-colors flex items-center gap-2 ${
+                this.state.supportSent
+                  ? "bg-green-600"
+                  : this.state.supportError
+                    ? "bg-red-600"
+                    : "bg-blue-600 hover:bg-blue-700"
+              } disabled:opacity-70 disabled:cursor-not-allowed`}
             >
-              <svg
-                className="w-4 h-4"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"
-                />
-              </svg>
-              Send to Support
+              {this.state.supportSending ? (
+                <>
+                  <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                  Sending...
+                </>
+              ) : this.state.supportSent ? (
+                <>
+                  <svg
+                    className="w-4 h-4"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M5 13l4 4L19 7"
+                    />
+                  </svg>
+                  Email Client Opened
+                </>
+              ) : this.state.supportError ? (
+                <>
+                  <svg
+                    className="w-4 h-4"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M6 18L18 6M6 6l12 12"
+                    />
+                  </svg>
+                  Failed - Try Again
+                </>
+              ) : (
+                <>
+                  <svg
+                    className="w-4 h-4"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"
+                    />
+                  </svg>
+                  Send to Support
+                </>
+              )}
             </button>
           </div>
-        </div>
-      </div>
+      </ResponsiveModal>
     );
   }
 

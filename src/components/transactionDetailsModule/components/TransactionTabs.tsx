@@ -24,11 +24,11 @@ export function TransactionTabs({
   onTabChange,
 }: TransactionTabsProps): React.ReactElement {
   return (
-    <div className="flex-shrink-0 border-b border-gray-200 px-6">
-      <div className="flex gap-4">
+    <div className="flex-shrink-0 border-b border-gray-200 px-3 sm:px-6 overflow-x-auto scrollbar-hide">
+      <div className="flex gap-1 sm:gap-4">
         <button
           onClick={() => onTabChange("overview")}
-          className={`px-4 py-3 font-medium text-sm transition-all ${
+          className={`px-2 sm:px-4 py-2.5 sm:py-3 font-medium text-sm transition-all whitespace-nowrap ${
             activeTab === "overview"
               ? "border-b-2 border-green-500 text-green-600"
               : "text-gray-600 hover:text-gray-900"
@@ -38,7 +38,7 @@ export function TransactionTabs({
         </button>
         <button
           onClick={() => onTabChange("messages")}
-          className={`px-4 py-3 font-medium text-sm transition-all flex items-center gap-1.5 ${
+          className={`px-2 sm:px-4 py-2.5 sm:py-3 font-medium text-sm transition-all flex items-center gap-1 sm:gap-1.5 whitespace-nowrap ${
             activeTab === "messages"
               ? "border-b-2 border-green-500 text-green-600"
               : "text-gray-600 hover:text-gray-900"
@@ -61,7 +61,7 @@ export function TransactionTabs({
         </button>
         <button
           onClick={() => onTabChange("emails")}
-          className={`px-4 py-3 font-medium text-sm transition-all flex items-center gap-1.5 ${
+          className={`px-2 sm:px-4 py-2.5 sm:py-3 font-medium text-sm transition-all flex items-center gap-1 sm:gap-1.5 whitespace-nowrap ${
             activeTab === "emails"
               ? "border-b-2 border-green-500 text-green-600"
               : "text-gray-600 hover:text-gray-900"

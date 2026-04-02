@@ -155,36 +155,29 @@ export function TransactionEmailsTab({
       <div>
         {/* BACKLOG-1364: Address filter toggle — above empty state */}
         {onToggleAddressFilter && hasContacts && (
-          <div className="flex flex-col items-center mb-4 pb-4 border-b border-gray-200">
-            <div className="flex items-center gap-3">
-              <span className="text-sm text-gray-600 flex items-center gap-1.5 relative">
-                <button type="button" onClick={() => setShowFilterInfo(!showFilterInfo)} className="w-5 h-5 rounded-full bg-blue-100 text-blue-600 text-xs font-bold flex items-center justify-center hover:bg-blue-200 transition-colors">i</button>
-                {showFilterInfo && (
-                  <div className="absolute left-0 top-7 z-50 w-72 p-3 text-xs text-gray-600 bg-white border border-gray-200 rounded-lg shadow-lg">
-                    When ON, only emails mentioning the property address are linked. When OFF, all emails from assigned contacts are included. Existing linked emails are never removed.
-                    <button type="button" onClick={() => setShowFilterInfo(false)} className="block mt-2 text-blue-500 hover:text-blue-700 text-xs font-medium">Got it</button>
-                  </div>
-                )}
-                Filter by property address
-              </span>
-              <button
-                type="button"
-                role="switch"
-                aria-checked={!skipAddressFilter}
-                onClick={handleToggleAddressFilter}
-                disabled={togglingFilter}
-                className={`relative inline-flex h-5 w-9 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed ${
-                  !skipAddressFilter ? "bg-blue-600" : "bg-gray-300"
+          <div className="flex items-center justify-between bg-gray-50 rounded-lg px-4 py-2.5 mb-4">
+            <span className="text-sm text-gray-700 flex items-center gap-1.5">
+              <button type="button" onClick={() => setShowFilterInfo(!showFilterInfo)} className="w-5 h-5 rounded-full bg-blue-100 text-blue-600 text-xs font-bold flex items-center justify-center hover:bg-blue-200 transition-colors" title="When ON, only emails mentioning the property address are linked. When OFF, all emails from assigned contacts are included.">i</button>
+              <span className="hidden sm:inline">Filter by property address</span>
+              <span className="sm:hidden">Address filter</span>
+            </span>
+            <button
+              type="button"
+              role="switch"
+              aria-checked={!skipAddressFilter}
+              onClick={handleToggleAddressFilter}
+              disabled={togglingFilter}
+              className={`relative inline-flex h-5 w-9 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed ${
+                !skipAddressFilter ? "bg-blue-600" : "bg-gray-300"
+              }`}
+              data-testid="address-filter-toggle"
+            >
+              <span
+                className={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${
+                  !skipAddressFilter ? "translate-x-4" : "translate-x-0"
                 }`}
-                data-testid="address-filter-toggle"
-              >
-                <span
-                  className={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${
-                    !skipAddressFilter ? "translate-x-4" : "translate-x-0"
-                  }`}
-                />
-              </button>
-            </div>
+              />
+            </button>
           </div>
         )}
 
@@ -254,7 +247,7 @@ export function TransactionEmailsTab({
                     d="M12 4v16m8-8H4"
                   />
                 </svg>
-                Attach Emails
+                Attach<span className="hidden sm:inline"> Emails</span>
               </button>
             )}
           </div>
@@ -288,7 +281,7 @@ export function TransactionEmailsTab({
       {/* Action buttons and summary */}
       <div className="flex justify-between items-center mb-4">
         <h3 className="text-lg font-medium text-gray-900">
-          {emailThreads.length} conversation{emailThreads.length !== 1 ? "s" : ""} ({totalEmailCount} email{totalEmailCount !== 1 ? "s" : ""})
+          {emailThreads.length} conversation{emailThreads.length !== 1 ? "s" : ""}<span className="hidden sm:inline"> ({totalEmailCount} email{totalEmailCount !== 1 ? "s" : ""})</span>
         </h3>
 
         <div className="flex gap-2">
@@ -312,7 +305,7 @@ export function TransactionEmailsTab({
                   d="M12 4v16m8-8H4"
                 />
               </svg>
-              Attach Emails
+              Attach<span className="hidden sm:inline"> Emails</span>
             </button>
           )}
           {/* Sync button */}
@@ -361,7 +354,7 @@ export function TransactionEmailsTab({
                       d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
                     />
                   </svg>
-                  Sync Emails
+                  Sync<span className="hidden sm:inline"> Emails</span>
                 </>
               )}
             </button>
@@ -372,17 +365,11 @@ export function TransactionEmailsTab({
       {/* BACKLOG-1364: Address filter toggle */}
       {onToggleAddressFilter && hasContacts && (
         <div className="flex items-center justify-between bg-gray-50 rounded-lg px-4 py-2.5 mb-4">
-          <div className="flex items-center gap-2">
-            <span className="text-sm text-gray-700 flex items-center gap-1.5">
-                <button type="button" onClick={() => setShowFilterInfo(!showFilterInfo)} className="w-5 h-5 rounded-full bg-blue-100 text-blue-600 text-xs font-bold flex items-center justify-center hover:bg-blue-200 transition-colors">i</button>
-                Filter by property address
-              </span>
-              {showFilterInfo && (
-                <p className="text-xs text-gray-500 bg-blue-50 border border-blue-200 rounded px-3 py-2 mt-1">
-                  When ON, only emails mentioning the property address are linked. When OFF, all emails from assigned contacts are included. Existing linked emails are never removed.
-                </p>
-              )}
-          </div>
+          <span className="text-sm text-gray-700 flex items-center gap-1.5">
+            <button type="button" onClick={() => setShowFilterInfo(!showFilterInfo)} className="w-5 h-5 rounded-full bg-blue-100 text-blue-600 text-xs font-bold flex items-center justify-center hover:bg-blue-200 transition-colors" title="When ON, only emails mentioning the property address are linked. When OFF, all emails from assigned contacts are included.">i</button>
+            <span className="hidden sm:inline">Filter by property address</span>
+            <span className="sm:hidden">Address filter</span>
+          </span>
           <button
             type="button"
             role="switch"

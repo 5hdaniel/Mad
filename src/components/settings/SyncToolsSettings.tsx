@@ -9,6 +9,7 @@
 
 import React, { useState, useEffect, useCallback } from "react";
 import logger from "../../utils/logger";
+import { safeErrorMessage } from "../../utils/formatUtils";
 
 // ---------------------------------------------------------------------------
 // Types — mirrors WindowApiDrivers return shapes (no duplicate of AppleDriverStatus)
@@ -92,7 +93,7 @@ export function SyncToolsSettings() {
       } else {
         setInstallProgress({
           phase: "error",
-          message: result?.error ?? "Installation failed. Try installing iTunes from the Microsoft Store.",
+          message: safeErrorMessage(result?.error, "Installation failed. Try installing iTunes from the Microsoft Store."),
         });
       }
     } catch (err) {
@@ -126,7 +127,7 @@ export function SyncToolsSettings() {
             {loading ? (
               <span className="text-sm text-gray-500">Checking...</span>
             ) : driverStatus?.error && !driverStatus.isInstalled ? (
-              <span className="text-sm text-red-600">Error: {driverStatus.error}</span>
+              <span className="text-sm text-red-600">Error: {safeErrorMessage(driverStatus.error)}</span>
             ) : driverStatus?.isInstalled ? (
               <span className="text-sm text-green-600">
                 Installed{driverStatus.version ? ` (v${driverStatus.version})` : ""}
@@ -175,7 +176,7 @@ export function SyncToolsSettings() {
             <div className="space-y-2">
               <div className="flex items-center gap-2">
                 <div className="w-4 h-4 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
-                <span className="text-sm text-gray-700">{installProgress.message}</span>
+                <span className="text-sm text-gray-700">{typeof installProgress.message === 'string' ? installProgress.message : String(installProgress.message)}</span>
               </div>
               <div className="w-full bg-gray-200 rounded-full h-2">
                 <div
@@ -190,14 +191,14 @@ export function SyncToolsSettings() {
           {/* Success display */}
           {installProgress.phase === "complete" && (
             <div className="text-sm text-green-700 bg-green-50 p-3 rounded border border-green-200">
-              {installProgress.message}
+              {typeof installProgress.message === 'string' ? installProgress.message : String(installProgress.message)}
             </div>
           )}
 
           {/* Error display */}
           {installProgress.phase === "error" && (
             <div className="text-sm text-red-700 bg-red-50 p-3 rounded border border-red-200">
-              {installProgress.message}
+              {typeof installProgress.message === 'string' ? installProgress.message : String(installProgress.message)}
             </div>
           )}
         </div>

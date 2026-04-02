@@ -3,6 +3,8 @@ import { useNotification } from "@/hooks/useNotification";
 import { useNetwork } from '../../contexts/NetworkContext';
 import { settingsService } from '../../services';
 import logger from '../../utils/logger';
+import { safeErrorMessage } from '../../utils/formatUtils';
+import { InfoTooltip } from '../common/InfoTooltip';
 import type { PreferencesResult } from './types';
 
 interface GeneralSettingsProps {
@@ -28,11 +30,19 @@ export function GeneralSettings({ userId, initialPreferences }: GeneralSettingsP
     return typeof val === "boolean" ? val : true;
   });
   const [exportFormat, setExportFormat] = useState<string>(() => {
-    return initialPreferences?.export?.defaultFormat || "pdf";
+    return initialPreferences?.export?.defaultFormat || "combined-pdf";
   });
   const [emailExportMode, setEmailExportMode] = useState<"thread" | "individual">(() => {
     const val = (initialPreferences?.export as { emailExportMode?: string } | undefined)?.emailExportMode;
     return (val === "thread" || val === "individual") ? val : "thread";
+  });
+  const [contentType, setContentType] = useState<"both" | "emails" | "texts">(() => {
+    const val = (initialPreferences?.export as { contentType?: string } | undefined)?.contentType;
+    return (val === "both" || val === "emails" || val === "texts") ? val : "both";
+  });
+  const [attachmentType, setAttachmentType] = useState<"all" | "email" | "text" | "none">(() => {
+    const val = (initialPreferences?.export as { attachmentType?: string } | undefined)?.attachmentType;
+    return (val === "all" || val === "email" || val === "text" || val === "none") ? val : "all";
   });
   const [autoRoleEnabled, setAutoRoleEnabled] = useState<boolean>(() => {
     const val = initialPreferences?.contactAutoRole?.enabled;
@@ -81,6 +91,24 @@ export function GeneralSettings({ userId, initialPreferences }: GeneralSettingsP
     }
   };
 
+  const handleContentTypeChange = async (value: "both" | "emails" | "texts"): Promise<void> => {
+    setContentType(value);
+    try {
+      await settingsService.updatePreferences(userId, { export: { contentType: value } });
+    } catch {
+      // Silently handle
+    }
+  };
+
+  const handleAttachmentTypeChange = async (value: "all" | "email" | "text" | "none"): Promise<void> => {
+    setAttachmentType(value);
+    try {
+      await settingsService.updatePreferences(userId, { export: { attachmentType: value } });
+    } catch {
+      // Silently handle
+    }
+  };
+
   const handleEmailExportModeChange = async (mode: "thread" | "individual"): Promise<void> => {
     setEmailExportMode(mode);
     try {
@@ -96,7 +124,7 @@ export function GeneralSettings({ userId, initialPreferences }: GeneralSettingsP
       const result = await window.api.update.checkForUpdates();
       if (result?.updateAvailable) {
         setUpdateStatus('available');
-        setUpdateVersion(result.version ?? '');
+        setUpdateVersion(typeof result.version === 'string' ? result.version : String(result.version ?? ''));
       } else {
         setUpdateStatus('up-to-date');
       }
@@ -116,7 +144,7 @@ export function GeneralSettings({ userId, initialPreferences }: GeneralSettingsP
       if (result?.success) {
         notify.success("Desktop notification sent! Check your notification center if you don't see a banner.");
       } else {
-        notify.warning(result?.error || "Notifications may not be supported on this system.");
+        notify.warning(safeErrorMessage(result?.error, "Notifications may not be supported on this system."));
       }
     } catch {
       notify.error("Failed to send test notification.");
@@ -271,45 +299,118 @@ export function GeneralSettings({ userId, initialPreferences }: GeneralSettingsP
           </button>
         </div>
 
-        {/* Export Settings */}
-        <div className="space-y-3 bg-gray-50 rounded-lg p-4 border border-gray-200">
-          <div className="flex justify-between items-center">
-            <span className="text-sm text-gray-700">Default Format</span>
-            <select
-              value={exportFormat}
-              onChange={(e) => handleExportFormatChange(e.target.value)}
-              className="text-sm border border-gray-300 rounded px-3 py-1.5 bg-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-            >
-              <option value="pdf">PDF</option>
-              <option value="excel">Excel (.xlsx)</option>
-              <option value="csv">CSV</option>
-              <option value="json">JSON</option>
-              <option value="txt_eml">TXT + EML Files</option>
-            </select>
-          </div>
-          <div className="flex justify-between items-center">
-            <div>
-              <span className="text-sm text-gray-700">Email Export Mode</span>
-              <p className="text-xs text-gray-500 mt-0.5">How emails are grouped in exported PDFs</p>
+        {/* Export Settings — matching ExportModal UI */}
+        <div className="space-y-4 bg-gray-50 rounded-lg p-4 border border-gray-200">
+          {/* Format — card layout */}
+          <div>
+            <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">Format</label>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+              {([
+                { value: "combined-pdf", label: "One PDF", desc: "Combined PDF with all content", tooltip: "Summary report + all email threads + all text conversations merged into a single PDF file" },
+                { value: "folder", label: "Audit Package", desc: "Folder with individual PDFs", tooltip: "Export as individual files organized in folders" },
+                { value: "pdf", label: "Summary PDF", desc: "Transaction report only", tooltip: "Generate a summary report PDF without full message content" },
+              ] as const).map(({ value, label, desc, tooltip }) => (
+                <button
+                  key={value}
+                  onClick={() => handleExportFormatChange(value)}
+                  className={`px-4 py-3 rounded-lg font-medium transition-all text-left ${
+                    exportFormat === value
+                      ? "bg-purple-500 text-white shadow-md"
+                      : "bg-gray-100 text-gray-700 hover:bg-gray-200"
+                  }`}
+                >
+                  <div className="flex items-center">
+                    <span className="font-semibold text-sm">{label}</span>
+                    <InfoTooltip text={tooltip} />
+                  </div>
+                  <div className="text-xs opacity-80 mt-0.5">{desc}</div>
+                </button>
+              ))}
             </div>
-            <select
-              value={emailExportMode}
-              onChange={(e) => handleEmailExportModeChange(e.target.value as "thread" | "individual")}
-              className="text-sm border border-gray-300 rounded px-3 py-1.5 bg-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-            >
-              <option value="thread">Thread (one PDF per conversation)</option>
-              <option value="individual">Individual (one PDF per email, quotes stripped)</option>
-            </select>
           </div>
-          {/* TODO: Implement export location chooser with native folder picker */}
-          <div className="flex justify-between items-center opacity-50">
-            <span className="text-sm text-gray-700">Export Location</span>
-            <button
-              disabled
-              className="text-sm text-gray-400 font-medium cursor-not-allowed"
-            >
-              Choose Folder
-            </button>
+
+          {/* Content — pill buttons with per-button tooltips */}
+          <div>
+            <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">Content</label>
+            <div className="flex flex-wrap gap-1.5 sm:gap-2">
+              {([
+                { value: "both", label: "Both", tooltip: "Export both email threads and text message conversations" },
+                { value: "emails", label: "Emails Only", tooltip: "Export only email threads" },
+                { value: "texts", label: "Texts Only", tooltip: "Export only text message conversations" },
+              ] as const).map(({ value, label, tooltip }) => (
+                <button
+                  key={value}
+                  onClick={() => handleContentTypeChange(value)}
+                  className={`px-4 py-2 rounded-full text-sm font-medium transition-all ${
+                    contentType === value
+                      ? "bg-purple-500 text-white shadow-sm"
+                      : "bg-gray-100 text-gray-700 hover:bg-gray-200"
+                  }`}
+                >
+                  <span className="flex items-center gap-1.5">
+                    {label}
+                    <InfoTooltip text={tooltip} />
+                  </span>
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Attachments — grayed out for Summary PDF */}
+          <div className={exportFormat === "pdf" ? "opacity-40 pointer-events-none" : ""}>
+            <label className="flex items-center text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">
+              Attachments
+              <InfoTooltip text="Attachments are exported as separate files in an /attachments folder, not embedded in the PDF." />
+            </label>
+            <div className="flex flex-wrap gap-1.5 sm:gap-2">
+              {([
+                { value: "all", label: "All", tooltip: "Include both email and text message attachments" },
+                { value: "email", label: "Email Only", tooltip: "Include only email attachments (images, documents)" },
+                { value: "text", label: "Text Only", tooltip: "Include only text message attachments (photos, videos)" },
+                { value: "none", label: "None", tooltip: "Export without any attachments" },
+              ] as const).map(({ value, label, tooltip }) => (
+                <button
+                  key={value}
+                  onClick={() => handleAttachmentTypeChange(value)}
+                  className={`px-4 py-2 rounded-full text-sm font-medium transition-all ${
+                    attachmentType === value
+                      ? "bg-purple-500 text-white shadow-sm"
+                      : "bg-gray-100 text-gray-700 hover:bg-gray-200"
+                  }`}
+                >
+                  <span className="flex items-center gap-1.5">
+                    {label}
+                    <InfoTooltip text={tooltip} />
+                  </span>
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Email Mode — grayed out when content is texts only */}
+          <div className={contentType === "texts" ? "opacity-40 pointer-events-none" : ""}>
+            <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">Email Mode</label>
+            <div className="flex flex-wrap gap-1.5 sm:gap-2">
+              {([
+                { value: "thread", label: "Thread View", tooltip: "Group emails by conversation thread" },
+                { value: "individual", label: "Individual", tooltip: "List each email as a separate entry" },
+              ] as const).map(({ value, label, tooltip }) => (
+                <button
+                  key={value}
+                  onClick={() => handleEmailExportModeChange(value)}
+                  className={`px-4 py-2 rounded-full text-sm font-medium transition-all ${
+                    emailExportMode === value
+                      ? "bg-purple-500 text-white shadow-sm"
+                      : "bg-gray-100 text-gray-700 hover:bg-gray-200"
+                  }`}
+                >
+                  <span className="flex items-center gap-1.5">
+                    {label}
+                    <InfoTooltip text={tooltip} />
+                  </span>
+                </button>
+              ))}
+            </div>
           </div>
         </div>
       </div>

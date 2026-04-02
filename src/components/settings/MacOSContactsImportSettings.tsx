@@ -19,6 +19,7 @@ import { usePlatform } from "../../contexts/PlatformContext";
 import { useSyncOrchestrator } from "../../hooks/useSyncOrchestrator";
 import { useNetwork } from "../../contexts/NetworkContext";
 import logger from '../../utils/logger';
+import { safeErrorMessage } from '../../utils/formatUtils';
 
 interface ContactsImportSettingsProps {
   userId: string;
@@ -118,7 +119,7 @@ export function ContactsImportSettings({
       loadSyncStatus();
       loadSourceStats();
     } else if (contactsItem?.status === 'error') {
-      setLastResult({ success: false, error: contactsItem.error });
+      setLastResult({ success: false, error: safeErrorMessage(contactsItem.error) });
     }
   }, [contactsItem?.status, contactsItem?.error]);
 
@@ -176,7 +177,7 @@ export function ContactsImportSettings({
         setOutlookReconnectRequired(true);
         setOutlookLastResult(null);
       } else {
-        setOutlookLastResult({ success: false, error: result.error });
+        setOutlookLastResult({ success: false, error: safeErrorMessage(result.error) });
       }
     } catch (error) {
       setOutlookLastResult({
@@ -206,7 +207,7 @@ export function ContactsImportSettings({
         setGoogleReconnectRequired(true);
         setGoogleLastResult(null);
       } else {
-        setGoogleLastResult({ success: false, error: result.error });
+        setGoogleLastResult({ success: false, error: safeErrorMessage(result.error) });
       }
     } catch (error) {
       setGoogleLastResult({
@@ -241,6 +242,43 @@ export function ContactsImportSettings({
   const hasGoogle = isGoogleConnected;
   const hasAnySources = hasMacOS || hasOutlook || hasGoogle;
 
+  const anySyncing = isSyncing || outlookSyncing || googleSyncing;
+
+  // All hooks must be declared before any early return to satisfy Rules of Hooks.
+  const [forceReimporting, setForceReimporting] = useState(false);
+  const [showInfoTooltip, setShowInfoTooltip] = useState(false);
+
+  // Unified import: triggers only user-selected sources
+  // Fire-and-forget by design — each sync has its own loading/error state
+  const handleImportAll = useCallback(async () => {
+    if (anySyncing || isOtherSyncRunning) return;
+    // macOS: call syncExternal directly to populate external_contacts from macOS Contacts
+    if (hasMacOS && macosContactsEnabled) {
+      handleSync(false);
+      window.api.contacts.syncExternal(userId).then(() => loadSourceStats());
+    }
+    if (hasOutlook && outlookContactsEnabled) handleOutlookSync();
+    if (hasGoogle && googleContactsEnabled) handleGoogleSync();
+  }, [anySyncing, isOtherSyncRunning, hasMacOS, hasOutlook, hasGoogle, macosContactsEnabled, outlookContactsEnabled, googleContactsEnabled, handleSync, handleOutlookSync, handleGoogleSync, userId]);
+
+  // Force re-import: TASK-2150 -- route through orchestrator with forceReimport option.
+  // The contacts sync function handles the wipe + re-sync flow internally.
+  const handleForceReimport = useCallback(async () => {
+    if (anySyncing || isOtherSyncRunning || forceReimporting) return;
+    setForceReimporting(true);
+    setLastResult(null);
+
+    // Route through orchestrator -- the contacts sync function handles
+    // forceReimport (wipe + re-import) when the option is set.
+    requestSync(['contacts'], userId, { forceReimport: true });
+
+    // forceReimporting is for immediate UI feedback. The orchestrator
+    // manages the actual running state. Clear after kick-off.
+    setForceReimporting(false);
+  }, [anySyncing, isOtherSyncRunning, forceReimporting, userId, requestSync]);
+
+  const noSourcesSelected = (!hasMacOS || !macosContactsEnabled) && (!hasOutlook || !outlookContactsEnabled) && (!hasGoogle || !googleContactsEnabled);
+
   // Render nothing useful if no sources are available
   if (!hasAnySources) {
     return (
@@ -267,42 +305,6 @@ export function ContactsImportSettings({
       </div>
     );
   }
-
-  const anySyncing = isSyncing || outlookSyncing || googleSyncing;
-
-  // Unified import: triggers only user-selected sources
-  // Fire-and-forget by design — each sync has its own loading/error state
-  const handleImportAll = useCallback(async () => {
-    if (anySyncing || isOtherSyncRunning) return;
-    // macOS: call syncExternal directly to populate external_contacts from macOS Contacts
-    if (hasMacOS && macosContactsEnabled) {
-      handleSync(false);
-      window.api.contacts.syncExternal(userId).then(() => loadSourceStats());
-    }
-    if (hasOutlook && outlookContactsEnabled) handleOutlookSync();
-    if (hasGoogle && googleContactsEnabled) handleGoogleSync();
-  }, [anySyncing, isOtherSyncRunning, hasMacOS, hasOutlook, hasGoogle, macosContactsEnabled, outlookContactsEnabled, googleContactsEnabled, handleSync, handleOutlookSync, handleGoogleSync, userId]);
-
-  // Force re-import: TASK-2150 -- route through orchestrator with forceReimport option.
-  // The contacts sync function handles the wipe + re-sync flow internally.
-  const [forceReimporting, setForceReimporting] = useState(false);
-  const handleForceReimport = useCallback(async () => {
-    if (anySyncing || isOtherSyncRunning || forceReimporting) return;
-    setForceReimporting(true);
-    setLastResult(null);
-
-    // Route through orchestrator -- the contacts sync function handles
-    // forceReimport (wipe + re-import) when the option is set.
-    requestSync(['contacts'], userId, { forceReimport: true });
-
-    // forceReimporting is for immediate UI feedback. The orchestrator
-    // manages the actual running state. Clear after kick-off.
-    setForceReimporting(false);
-  }, [anySyncing, isOtherSyncRunning, forceReimporting, userId, requestSync]);
-
-  const [showInfoTooltip, setShowInfoTooltip] = useState(false);
-
-  const noSourcesSelected = (!hasMacOS || !macosContactsEnabled) && (!hasOutlook || !outlookContactsEnabled) && (!hasGoogle || !googleContactsEnabled);
 
   return (
     <div className="p-4 bg-gray-50 rounded-lg border border-gray-200">
@@ -627,7 +629,7 @@ export function ContactsImportSettings({
               )}
             </>
           ) : (
-            <>Sync failed: {lastResult.error}</>
+            <>Sync failed: {safeErrorMessage(lastResult.error)}</>
           )}
         </div>
       )}
@@ -650,7 +652,7 @@ export function ContactsImportSettings({
               contacts imported.
             </>
           ) : (
-            <>Outlook sync failed: {outlookLastResult.error}</>
+            <>Outlook sync failed: {safeErrorMessage(outlookLastResult.error)}</>
           )}
         </div>
       )}
@@ -673,7 +675,7 @@ export function ContactsImportSettings({
               contacts imported.
             </>
           ) : (
-            <>Google sync failed: {googleLastResult.error}</>
+            <>Google sync failed: {safeErrorMessage(googleLastResult.error)}</>
           )}
         </div>
       )}

@@ -14,7 +14,7 @@
  * Supported platform identifiers for the application.
  * Used to determine which onboarding steps are relevant for the current platform.
  */
-export type Platform = "macos" | "windows" | "linux";
+export type Platform = "macos" | "windows" | "linux" | "android" | "ios";
 
 /**
  * Unique identifiers for each onboarding step.

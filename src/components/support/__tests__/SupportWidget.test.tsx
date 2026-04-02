@@ -13,6 +13,11 @@ import React from "react";
 import { render, screen, fireEvent, waitFor, act } from "@testing-library/react";
 import { SupportWidget } from "../SupportWidget";
 
+// Mock platform context - default to macOS (non-Windows)
+jest.mock("../../../contexts/PlatformContext", () => ({
+  usePlatform: jest.fn(() => ({ isMacOS: true, isWindows: false, isLinux: false, platform: "macos" })),
+}));
+
 // Mock SupportTicketDialog to avoid complex setup
 jest.mock("../SupportTicketDialog", () => ({
   SupportTicketDialog: ({
@@ -66,47 +71,53 @@ describe("SupportWidget", () => {
     expect(button).toBeInTheDocument();
   });
 
-  it("opens the dialog when clicked", () => {
+  it("opens the dialog when clicked", async () => {
     render(<SupportWidget />);
 
     const button = screen.getByLabelText("Open support dialog");
-    fireEvent.click(button);
+    await act(async () => { fireEvent.click(button); });
 
-    expect(screen.getByTestId("support-dialog")).toBeInTheDocument();
+    await waitFor(() => {
+      expect(screen.getByTestId("support-dialog")).toBeInTheDocument();
+    });
   });
 
-  it("closes the dialog when close is clicked", () => {
+  it("closes the dialog when close is clicked", async () => {
     render(<SupportWidget />);
 
     // Open dialog
-    fireEvent.click(screen.getByLabelText("Open support dialog"));
-    expect(screen.getByTestId("support-dialog")).toBeInTheDocument();
+    await act(async () => { fireEvent.click(screen.getByLabelText("Open support dialog")); });
+    await waitFor(() => {
+      expect(screen.getByTestId("support-dialog")).toBeInTheDocument();
+    });
 
     // Close dialog
     fireEvent.click(screen.getByTestId("close-dialog"));
     expect(screen.queryByTestId("support-dialog")).not.toBeInTheDocument();
   });
 
-  it("passes empty strings when no user detected (unauthenticated)", () => {
+  it("passes empty strings when no user detected (unauthenticated)", async () => {
     // Default mock returns success: false for getCurrentUser
     render(<SupportWidget />);
 
-    fireEvent.click(screen.getByLabelText("Open support dialog"));
+    await act(async () => { fireEvent.click(screen.getByLabelText("Open support dialog")); });
 
     expect(screen.getByTestId("dialog-email")).toHaveTextContent("");
     expect(screen.getByTestId("dialog-name")).toHaveTextContent("");
   });
 
-  it("passes user info when props are provided (authenticated)", () => {
+  it("passes user info when props are provided (authenticated)", async () => {
     render(
       <SupportWidget userEmail="user@example.com" userName="Jane Doe" />
     );
 
-    fireEvent.click(screen.getByLabelText("Open support dialog"));
+    await act(async () => { fireEvent.click(screen.getByLabelText("Open support dialog")); });
 
-    expect(screen.getByTestId("dialog-email")).toHaveTextContent(
-      "user@example.com"
-    );
+    await waitFor(() => {
+      expect(screen.getByTestId("dialog-email")).toHaveTextContent(
+        "user@example.com"
+      );
+    });
     expect(screen.getByTestId("dialog-name")).toHaveTextContent("Jane Doe");
   });
 
@@ -165,5 +176,37 @@ describe("SupportWidget", () => {
     });
 
     expect(screen.getByTestId("support-dialog")).toBeInTheDocument();
+  });
+
+  // BACKLOG-1554: Platform-specific positioning tests
+  it("uses bottom-4 left-4 positioning on macOS", () => {
+    render(<SupportWidget />);
+    const button = screen.getByLabelText("Open support dialog");
+    expect(button.className).toContain("bottom-4");
+    expect(button.className).toContain("left-4");
+  });
+
+  it("uses bottom-8 left-8 positioning on Windows to avoid resize zone", () => {
+    // Override the mock to return Windows
+    const { usePlatform } = require("../../../contexts/PlatformContext");
+    (usePlatform as jest.Mock).mockReturnValue({
+      isMacOS: false,
+      isWindows: true,
+      isLinux: false,
+      platform: "windows",
+    });
+
+    render(<SupportWidget />);
+    const button = screen.getByLabelText("Open support dialog");
+    expect(button.className).toContain("bottom-8");
+    expect(button.className).toContain("left-8");
+
+    // Restore default mock
+    (usePlatform as jest.Mock).mockReturnValue({
+      isMacOS: true,
+      isWindows: false,
+      isLinux: false,
+      platform: "macos",
+    });
   });
 });

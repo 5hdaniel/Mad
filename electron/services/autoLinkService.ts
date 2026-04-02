@@ -821,6 +821,188 @@ export async function autoLinkCommunicationsForContact(
   }
 }
 
+// ============================================
+// AUTO-LINK AFTER MESSAGE SYNC (BACKLOG-1546)
+// ============================================
+
+/**
+ * Result of running auto-link for all contact-transaction pairs for a user
+ */
+export interface AutoLinkNewMessagesResult {
+  /** Total number of contact-transaction pairs processed */
+  pairsProcessed: number;
+  /** Total emails linked across all pairs */
+  totalEmailsLinked: number;
+  /** Total message threads linked across all pairs */
+  totalMessagesLinked: number;
+  /** Total already-linked items skipped */
+  totalAlreadyLinked: number;
+  /** Total errors across all pairs */
+  totalErrors: number;
+  /** Duration in milliseconds */
+  durationMs: number;
+}
+
+/**
+ * Debounce timer for autoLinkNewMessagesForUser.
+ * Android sends messages in small batches (e.g., 100 messages in rapid succession).
+ * We debounce to avoid running auto-link 100 times.
+ */
+let autoLinkDebounceTimer: ReturnType<typeof setTimeout> | null = null;
+const AUTO_LINK_DEBOUNCE_MS = 2000; // 2 seconds
+
+/**
+ * Auto-link new messages to transactions for all contact-transaction pairs
+ * belonging to a user. Intended to be called after message import/sync completes.
+ *
+ * Queries all active transactions with assigned contacts for the user,
+ * dedupes contact-transaction pairs, and runs autoLinkCommunicationsForContact
+ * for each pair.
+ *
+ * BACKLOG-1546: Messages were inserted with transaction_id = NULL and never
+ * auto-linked because the auto-link function was only called on contact
+ * assignment, manual resync, or email sync — never after message import.
+ *
+ * @param userId - The user ID to auto-link messages for
+ * @returns Result with counts of linked communications
+ */
+export async function autoLinkNewMessagesForUser(
+  userId: string
+): Promise<AutoLinkNewMessagesResult> {
+  const startTime = Date.now();
+  const result: AutoLinkNewMessagesResult = {
+    pairsProcessed: 0,
+    totalEmailsLinked: 0,
+    totalMessagesLinked: 0,
+    totalAlreadyLinked: 0,
+    totalErrors: 0,
+    durationMs: 0,
+  };
+
+  try {
+    // Query all active transactions with assigned contacts for this user.
+    // JOIN transaction_contacts to get contact-transaction pairs in one query.
+    // Only include non-archived transactions (status != 'archived').
+    const sql = `
+      SELECT DISTINCT
+        tc.contact_id,
+        tc.transaction_id
+      FROM transaction_contacts tc
+      JOIN transactions t ON t.id = tc.transaction_id
+      WHERE t.user_id = ?
+        AND t.status != 'archived'
+      ORDER BY tc.transaction_id
+    `;
+
+    const pairs = dbAll<{ contact_id: string; transaction_id: string }>(sql, [userId]);
+
+    if (pairs.length === 0) {
+      await logService.debug(
+        "No contact-transaction pairs found for auto-link after sync",
+        "AutoLinkService",
+        { userId }
+      );
+      result.durationMs = Date.now() - startTime;
+      return result;
+    }
+
+    await logService.info(
+      `Auto-linking new messages for ${pairs.length} contact-transaction pairs`,
+      "AutoLinkService",
+      { userId, pairCount: pairs.length }
+    );
+
+    // Process each contact-transaction pair
+    for (const pair of pairs) {
+      try {
+        const linkResult = await autoLinkCommunicationsForContact({
+          contactId: pair.contact_id,
+          transactionId: pair.transaction_id,
+        });
+
+        result.pairsProcessed++;
+        result.totalEmailsLinked += linkResult.emailsLinked;
+        result.totalMessagesLinked += linkResult.messagesLinked;
+        result.totalAlreadyLinked += linkResult.alreadyLinked;
+        result.totalErrors += linkResult.errors;
+      } catch (error) {
+        result.totalErrors++;
+        await logService.warn(
+          `Auto-link failed for contact ${pair.contact_id} -> transaction ${pair.transaction_id}`,
+          "AutoLinkService",
+          { error: error instanceof Error ? error.message : "Unknown" }
+        );
+      }
+    }
+
+    result.durationMs = Date.now() - startTime;
+
+    await logService.info(
+      `Auto-link after sync complete: ${result.totalEmailsLinked} emails, ${result.totalMessagesLinked} threads linked across ${result.pairsProcessed} pairs`,
+      "AutoLinkService",
+      {
+        userId,
+        ...result,
+      }
+    );
+
+    Sentry.addBreadcrumb({
+      category: "auto_link.post_sync",
+      message: `Post-sync auto-link: ${result.totalEmailsLinked} emails, ${result.totalMessagesLinked} threads linked`,
+      level: "info",
+      data: {
+        userId,
+        pairsProcessed: result.pairsProcessed,
+        totalEmailsLinked: result.totalEmailsLinked,
+        totalMessagesLinked: result.totalMessagesLinked,
+        totalAlreadyLinked: result.totalAlreadyLinked,
+        totalErrors: result.totalErrors,
+        durationMs: result.durationMs,
+      },
+    });
+
+    return result;
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : "Unknown error";
+    await logService.error(
+      `Auto-link after sync failed: ${errorMessage}`,
+      "AutoLinkService"
+    );
+    result.durationMs = Date.now() - startTime;
+    return result;
+  }
+}
+
+/**
+ * Debounced version of autoLinkNewMessagesForUser.
+ * Use this when messages arrive in rapid succession (e.g., Android WiFi sync)
+ * to avoid running auto-link for every batch.
+ *
+ * The function waits AUTO_LINK_DEBOUNCE_MS (2s) after the last call before
+ * actually running the auto-link. Subsequent calls within the window reset the timer.
+ *
+ * Fire-and-forget: errors are logged but not thrown.
+ *
+ * @param userId - The user ID to auto-link messages for
+ */
+export function autoLinkNewMessagesForUserDebounced(userId: string): void {
+  if (autoLinkDebounceTimer) {
+    clearTimeout(autoLinkDebounceTimer);
+  }
+
+  autoLinkDebounceTimer = setTimeout(() => {
+    autoLinkDebounceTimer = null;
+    autoLinkNewMessagesForUser(userId).catch((error) => {
+      logService.error(
+        `Debounced auto-link failed: ${error instanceof Error ? error.message : "Unknown"}`,
+        "AutoLinkService"
+      ).catch(() => { /* ignore logging errors */ });
+    });
+  }, AUTO_LINK_DEBOUNCE_MS);
+}
+
 export default {
   autoLinkCommunicationsForContact,
+  autoLinkNewMessagesForUser,
+  autoLinkNewMessagesForUserDebounced,
 };

@@ -33,7 +33,7 @@ import {
   getBackgroundSyncEnabled,
 } from "./smsQueueService";
 import type { SyncIntervalValue } from "./smsQueueService";
-import type { PairingInfo } from "../types/sync";
+import type { PairingInfo, SyncErrorType } from "../types/sync";
 
 // ============================================
 // CONSTANTS
@@ -95,6 +95,8 @@ export interface SyncOperationResult {
   queueSize: number;
   /** Error message if sync failed */
   error?: string;
+  /** Categorized error type for UI guidance (BACKLOG-1496) */
+  errorType?: SyncErrorType;
 }
 
 /**
@@ -161,13 +163,15 @@ export async function performSync(): Promise<SyncOperationResult> {
       contactsSynced: 0,
       desktopReachable: false,
       queueSize,
-      error: "Desktop not reachable",
+      error: "Desktop app is not running. Open Keepr on your computer and try again.",
+      errorType: "connection_refused",
     };
   }
 
   // Step 3: Send queued messages in batches
   let totalSent = 0;
   let sendError: string | undefined;
+  let sendErrorType: SyncErrorType | undefined;
 
   // Keep sending batches until queue is empty or we hit an error
   let hasMore = true;
@@ -187,6 +191,7 @@ export async function performSync(): Promise<SyncOperationResult> {
         // Send failed — re-enqueue the batch for retry
         await requeueMessages(batch);
         sendError = result.error;
+        sendErrorType = result.errorType;
         hasMore = false;
       }
     } catch (error) {
@@ -194,6 +199,7 @@ export async function performSync(): Promise<SyncOperationResult> {
       await requeueMessages(batch);
       sendError =
         error instanceof Error ? error.message : "Unknown send error";
+      sendErrorType = "unknown";
       hasMore = false;
     }
   }
@@ -243,6 +249,7 @@ export async function performSync(): Promise<SyncOperationResult> {
     desktopReachable: true,
     queueSize,
     error: sendError,
+    errorType: sendErrorType,
   };
 }
 

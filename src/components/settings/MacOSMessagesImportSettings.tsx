@@ -17,6 +17,7 @@ import { usePlatform } from "../../contexts/PlatformContext";
 import { useSyncOrchestrator } from "../../hooks/useSyncOrchestrator";
 import { settingsService } from '../../services';
 import logger from '../../utils/logger';
+import { safeErrorMessage } from '../../utils/formatUtils';
 
 /** Import progress state for inline display */
 interface ImportProgressState {
@@ -253,7 +254,7 @@ export function MacOSMessagesImportSettings({
       setLastResult({
         success: false,
         messagesImported: 0,
-        error: messagesItem.error || 'Import failed',
+        error: safeErrorMessage(messagesItem.error, 'Import failed'),
       });
     }
   }, [messagesItem?.status, messagesItem?.error, messagesItem?.warning]);
@@ -312,7 +313,7 @@ export function MacOSMessagesImportSettings({
             value={lookbackMonths ?? "all"}
             onChange={(e) => handleLookbackChange(e.target.value)}
             disabled={isImporting}
-            className="text-xs border border-gray-300 rounded px-2 py-1 bg-white disabled:opacity-50"
+            className="text-xs border border-gray-300 rounded px-3 py-2.5 bg-white text-gray-900 disabled:opacity-50 min-h-[44px]"
           >
             <option value="3">Last 3 months</option>
             <option value="6">Last 6 months</option>
@@ -331,7 +332,7 @@ export function MacOSMessagesImportSettings({
             value={maxMessages ?? "unlimited"}
             onChange={(e) => handleMaxMessagesChange(e.target.value)}
             disabled={isImporting}
-            className="text-xs border border-gray-300 rounded px-2 py-1 bg-white disabled:opacity-50"
+            className="text-xs border border-gray-300 rounded px-3 py-2.5 bg-white text-gray-900 disabled:opacity-50 min-h-[44px]"
           >
             <option value="10000">10,000</option>
             <option value="50000">50,000</option>
@@ -392,7 +393,7 @@ export function MacOSMessagesImportSettings({
               new messages.
             </>
           ) : (
-            <>Import failed: {lastResult.error}</>
+            <>Import failed: {safeErrorMessage(lastResult.error)}</>
           )}
         </div>
       )}

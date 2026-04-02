@@ -181,7 +181,7 @@ function Dashboard({
   }, [runTour, onTourStateChange]);
 
   return (
-    <div className="min-h-full bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50 flex items-center justify-center p-8">
+    <div className="min-h-full bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50 flex items-center justify-center p-4 sm:p-8">
       {/* Onboarding Tour */}
       <Joyride
         steps={tourSteps}
@@ -238,17 +238,17 @@ function Dashboard({
         </div>
 
         {/* Header */}
-        <div className="text-center mb-12">
-          <h1 className="text-4xl font-bold text-gray-900 mb-3">
+        <div className="text-center mb-8 sm:mb-12">
+          <h1 className="text-2xl sm:text-4xl font-bold text-gray-900 mb-2 sm:mb-3">
             {greeting}
           </h1>
-          <p className="text-lg text-gray-600">
+          <p className="text-base sm:text-lg text-gray-600">
             Transaction compliance made simple
           </p>
         </div>
 
         {/* Action Cards */}
-        <div className="grid md:grid-cols-2 gap-8">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-8">
           {/* Start New Audit Card */}
           <button
             onClick={handleStartNewAuditClick}
@@ -359,7 +359,7 @@ function Dashboard({
         </div>
 
         {/* Secondary Actions Row */}
-        <div className={`mt-8 grid gap-4 ${onSyncPhone ? 'md:grid-cols-2' : 'grid-cols-1'}`}>
+        <div className={`mt-4 sm:mt-8 grid gap-4 ${onSyncPhone ? 'sm:grid-cols-2' : 'grid-cols-1'}`}>
           {/* Manage Contacts Card */}
           <button
             onClick={onManageContacts}

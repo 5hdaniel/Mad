@@ -153,9 +153,10 @@ function PermissionsStepContent({ context, onAction }: OnboardingStepContentProp
 
     // BACKLOG-1458: Android users should not trigger macOS Messages import.
     // Only sync contacts (from macOS Contacts app) for Android users.
-    const syncTypes: Array<'contacts' | 'messages'> = context.phoneType === 'android'
-      ? ['contacts']
-      : ['contacts', 'messages'];
+    // TASK-2084/BACKLOG-1362: Always include 'emails' to pre-cache from connected providers.
+    const syncTypes: Array<'contacts' | 'messages' | 'emails'> = context.phoneType === 'android'
+      ? ['contacts', 'emails']
+      : ['contacts', 'emails', 'messages'];
 
     // Request sync from orchestrator - runs contacts then messages sequentially
     // Progress is tracked centrally by SyncOrchestratorService

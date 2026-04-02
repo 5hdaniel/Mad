@@ -4,20 +4,19 @@
  * Sprint List Page - /dashboard/pm/sprints
  *
  * Displays all sprints with toggle between list and card views.
- * Includes a velocity chart showing estimated vs actual tokens
- * across recent sprints.
+ * Includes search and status filter tabs.
  */
 
 import { useState, useEffect, useCallback } from 'react';
 import Link from 'next/link';
-import { ArrowLeft, List, LayoutGrid, Plus } from 'lucide-react';
-import { listSprints, getSprintVelocity } from '@/lib/pm-queries';
-import type { PmSprint, SprintVelocityEntry } from '@/lib/pm-types';
+import { ArrowLeft, List, LayoutGrid, Plus, Search, X } from 'lucide-react';
+import { useRouter } from 'next/navigation';
+import { listSprints } from '@/lib/pm-queries';
+import type { PmSprint } from '@/lib/pm-types';
 import { usePermissions } from '@/components/providers/PermissionsProvider';
 import { PERMISSIONS } from '@/lib/permissions';
 import { SprintList } from '../components/SprintList';
 import { SprintCard } from '../components/SprintCard';
-import { VelocityChart } from '../components/VelocityChart';
 import { CreateSprintDialog } from '../components/CreateSprintDialog';
 
 type ViewMode = 'list' | 'card';
@@ -25,31 +24,19 @@ type StatusFilter = 'all' | 'active' | 'planned' | 'completed';
 
 export default function SprintsPage() {
   const [sprints, setSprints] = useState<PmSprint[]>([]);
-  const [velocityData, setVelocityData] = useState<SprintVelocityEntry[]>([]);
   const [loading, setLoading] = useState(true);
   const [viewMode, setViewMode] = useState<ViewMode>('list');
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('active');
   const [showCreateDialog, setShowCreateDialog] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
+  const router = useRouter();
   const { hasPermission } = usePermissions();
 
   const loadData = useCallback(async () => {
     setLoading(true);
     try {
-      const [sprintData, velocity] = await Promise.allSettled([
-        listSprints(),
-        getSprintVelocity(10),
-      ]);
-
-      if (sprintData.status === 'fulfilled') {
-        setSprints(sprintData.value);
-      } else {
-        console.error('Failed to load sprints:', sprintData.reason);
-      }
-
-      if (velocity.status === 'fulfilled') {
-        setVelocityData(velocity.value);
-      }
-      // Velocity chart is optional -- silently skip if RPC not available
+      const data = await listSprints();
+      setSprints(data);
     } catch (err) {
       console.error('Failed to load sprint data:', err);
     } finally {
@@ -61,10 +48,17 @@ export default function SprintsPage() {
     loadData();
   }, [loadData]);
 
-  // Filter sprints by status
-  const filteredSprints = statusFilter === 'all'
-    ? sprints
-    : sprints.filter((s) => s.status === statusFilter);
+  // Filter sprints by status and search query
+  const filteredSprints = sprints.filter((s) => {
+    if (statusFilter !== 'all' && s.status !== statusFilter) return false;
+    if (!searchQuery) return true;
+    const q = searchQuery.toLowerCase();
+    return (
+      s.name.toLowerCase().includes(q) ||
+      (s.goal && s.goal.toLowerCase().includes(q)) ||
+      (s.legacy_id && s.legacy_id.toLowerCase().includes(q))
+    );
+  });
 
   const filterTabs: { key: StatusFilter; label: string }[] = [
     { key: 'all', label: 'All' },
@@ -77,13 +71,13 @@ export default function SprintsPage() {
     <div className="max-w-7xl mx-auto">
       {/* Navigation */}
       <div className="mb-6">
-        <Link
-          href="/dashboard/pm"
+        <button
+          onClick={() => router.back()}
           className="inline-flex items-center gap-1 text-sm text-gray-500 hover:text-gray-700 mb-4"
         >
           <ArrowLeft className="h-4 w-4" />
-          Back to Dashboard
-        </Link>
+          Back
+        </button>
 
         {/* Header */}
         <div className="flex items-center justify-between">
@@ -152,12 +146,25 @@ export default function SprintsPage() {
         })}
       </div>
 
-      {/* Velocity Chart */}
-      {velocityData.length > 0 && (
-        <div className="mb-6">
-          <VelocityChart data={velocityData} />
-        </div>
-      )}
+      {/* Search Bar */}
+      <div className="relative mb-4">
+        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+        <input
+          type="text"
+          placeholder="Search sprints by name, goal, or ID..."
+          value={searchQuery}
+          onChange={(e) => setSearchQuery(e.target.value)}
+          className="w-full pl-10 pr-10 py-2 border border-gray-300 rounded-lg text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+        />
+        {searchQuery && (
+          <button
+            onClick={() => setSearchQuery('')}
+            className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+          >
+            <X className="h-4 w-4" />
+          </button>
+        )}
+      </div>
 
       {/* Sprint List or Cards */}
       {viewMode === 'list' ? (

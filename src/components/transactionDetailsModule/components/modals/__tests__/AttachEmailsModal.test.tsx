@@ -97,7 +97,7 @@ describe("AttachEmailsModal", () => {
 
     // Wait for the fetch to complete
     await waitFor(() => {
-      expect(mockGetUnlinkedEmails).toHaveBeenCalledWith("user-123", { maxResults: 100, transactionId: "txn-456" });
+      expect(mockGetUnlinkedEmails).toHaveBeenCalledWith("user-123", { maxResults: 500, transactionId: "txn-456" });
     });
 
     // Should show conversations after loading
@@ -110,7 +110,7 @@ describe("AttachEmailsModal", () => {
     render(<AttachEmailsModal {...defaultProps} />);
 
     await waitFor(() => {
-      expect(mockGetUnlinkedEmails).toHaveBeenCalledWith("user-123", { maxResults: 100, transactionId: "txn-456" });
+      expect(mockGetUnlinkedEmails).toHaveBeenCalledWith("user-123", { maxResults: 500, transactionId: "txn-456" });
     });
 
     // Verify the call does NOT include query, after, or before
@@ -151,7 +151,7 @@ describe("AttachEmailsModal", () => {
     await waitFor(() => {
       expect(mockGetUnlinkedEmails).toHaveBeenCalledWith("user-123", {
         query: "closing",
-        maxResults: 100,
+        maxResults: 500,
         transactionId: "txn-456",
       });
     });
@@ -179,7 +179,7 @@ describe("AttachEmailsModal", () => {
     await waitFor(() => {
       expect(mockGetUnlinkedEmails).toHaveBeenCalledWith("user-123", expect.objectContaining({
         after: expect.stringContaining("2024-05-01"),
-        maxResults: 100,
+        maxResults: 500,
       }));
     });
   });

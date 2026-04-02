@@ -6,6 +6,7 @@ import {
 } from "@/utils/emailConnectionEvents";
 import { settingsService, authService } from '../../services';
 import logger from '../../utils/logger';
+import { safeErrorMessage } from '../../utils/formatUtils';
 import type { Connections, ConnectionResult, PreferencesResult } from './types';
 
 // Refresh interval for connection status (60 seconds)
@@ -223,7 +224,7 @@ export function EmailSettings({
       } else {
         setRecacheResult({
           success: false,
-          message: result.error || "Failed to re-cache emails.",
+          message: safeErrorMessage(result.error, "Failed to re-cache emails."),
         });
       }
     } catch (error) {
@@ -309,17 +310,17 @@ export function EmailSettings({
           </div>
           {connections.google?.email && (
             <p className="text-xs text-gray-600 mb-2">
-              {connections.google.email}
+              {typeof connections.google.email === 'string' ? connections.google.email : String(connections.google.email)}
             </p>
           )}
           {connections.google?.error && !connections.google?.connected && connections.google.error.type !== "NOT_CONNECTED" && (
             <div className="mb-3 p-2 bg-yellow-100 rounded text-xs">
               <p className="text-yellow-800 font-medium">
-                {connections.google.error.userMessage}
+                {typeof connections.google.error.userMessage === 'string' ? connections.google.error.userMessage : String(connections.google.error.userMessage)}
               </p>
               {connections.google.error.action && (
                 <p className="text-yellow-700 mt-1">
-                  {connections.google.error.action}
+                  {typeof connections.google.error.action === 'string' ? connections.google.error.action : String(connections.google.error.action)}
                 </p>
               )}
             </div>
@@ -408,17 +409,17 @@ export function EmailSettings({
           </div>
           {connections.microsoft?.email && (
             <p className="text-xs text-gray-600 mb-2">
-              {connections.microsoft.email}
+              {typeof connections.microsoft.email === 'string' ? connections.microsoft.email : String(connections.microsoft.email)}
             </p>
           )}
           {connections.microsoft?.error && !connections.microsoft?.connected && connections.microsoft.error.type !== "NOT_CONNECTED" && (
             <div className="mb-3 p-2 bg-yellow-100 rounded text-xs">
               <p className="text-yellow-800 font-medium">
-                {connections.microsoft.error.userMessage}
+                {typeof connections.microsoft.error.userMessage === 'string' ? connections.microsoft.error.userMessage : String(connections.microsoft.error.userMessage)}
               </p>
               {connections.microsoft.error.action && (
                 <p className="text-yellow-700 mt-1">
-                  {connections.microsoft.error.action}
+                  {typeof connections.microsoft.error.action === 'string' ? connections.microsoft.error.action : String(connections.microsoft.error.action)}
                 </p>
               )}
             </div>
@@ -475,7 +476,7 @@ export function EmailSettings({
               onChange={(e) =>
                 handleEmailCacheDurationChange(Number(e.target.value))
               }
-              className="ml-4 text-sm border border-gray-300 rounded px-3 py-1.5 bg-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              className="ml-4 text-sm border border-gray-300 rounded px-3 py-2.5 bg-white text-gray-900 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 min-h-[44px]"
             >
               <option value={1}>1 month</option>
               <option value={3}>3 months</option>
@@ -518,7 +519,7 @@ export function EmailSettings({
                 recacheResult.success ? "text-green-600" : "text-red-600"
               }`}
             >
-              {recacheResult.message}
+              {typeof recacheResult.message === 'string' ? recacheResult.message : String(recacheResult.message)}
             </p>
           )}
         </div>

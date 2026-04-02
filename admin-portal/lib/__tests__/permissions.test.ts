@@ -3,7 +3,6 @@
  * TASK-2254: Tests for admin-portal RBAC permission constants
  */
 
-import { describe, it, expect } from 'vitest';
 import { PERMISSIONS, PERMISSION_CATEGORIES } from '../permissions';
 import type { PermissionKey } from '../permissions';
 

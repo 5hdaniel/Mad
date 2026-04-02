@@ -1,4 +1,6 @@
 import React, { useState, useEffect } from "react";
+import { ResponsiveModal } from "./common/ResponsiveModal";
+import { InfoTooltip } from "./common/InfoTooltip";
 import type { Transaction } from "../../electron/types/models";
 import { settingsService, transactionService } from '../services';
 import logger from '../utils/logger';
@@ -47,7 +49,7 @@ function ExportModal({
 
   const [contentType, setContentType] = useState<"both" | "emails" | "texts">("both");
   const [attachmentType, setAttachmentType] = useState<"all" | "email" | "text" | "none">("all");
-  const [exportFormat, setExportFormat] = useState("folder"); // folder, pdf, combined-pdf, excel, csv, json, txt_eml
+  const [exportFormat, setExportFormat] = useState("combined-pdf"); // combined-pdf, folder, pdf, excel, csv, json, txt_eml
   const [emailExportMode, setEmailExportMode] = useState<"thread" | "individual">("thread");
   const [exporting, setExporting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -58,6 +60,7 @@ function ExportModal({
     message: string;
   } | null>(null);
   const [exportedPath, setExportedPath] = useState<string | null>(null);
+  const [saveAsDefault, setSaveAsDefault] = useState(false);
 
   // Feature gate check
   const { isAllowed, loading: featureGateLoading } = useFeatureGate();
@@ -84,15 +87,20 @@ function ExportModal({
   // Formats that are currently implemented
   const implementedFormats = ["pdf", "folder", "combined-pdf"];
 
-  // Load user preferences to set default export format
+  // Load user preferences to set default export options
   useEffect(() => {
-    const loadDefaultFormat = async () => {
+    const loadDefaults = async () => {
       if (userId) {
         try {
           const result = await settingsService.getPreferences(userId);
           if (result.success && result.data) {
             const prefs = result.data as {
-              export?: { defaultFormat?: string; emailExportMode?: string };
+              export?: {
+                defaultFormat?: string;
+                emailExportMode?: string;
+                contentType?: string;
+                attachmentType?: string;
+              };
             };
             // Only use saved preference if it's an implemented format
             if (prefs.export?.defaultFormat && implementedFormats.includes(prefs.export.defaultFormat)) {
@@ -102,15 +110,23 @@ function ExportModal({
             if (prefs.export?.emailExportMode === "thread" || prefs.export?.emailExportMode === "individual") {
               setEmailExportMode(prefs.export.emailExportMode);
             }
+            // Load content type preference (BACKLOG-1551)
+            if (prefs.export?.contentType === "both" || prefs.export?.contentType === "emails" || prefs.export?.contentType === "texts") {
+              setContentType(prefs.export.contentType);
+            }
+            // Load attachment type preference (BACKLOG-1551)
+            if (prefs.export?.attachmentType === "all" || prefs.export?.attachmentType === "email" || prefs.export?.attachmentType === "text" || prefs.export?.attachmentType === "none") {
+              setAttachmentType(prefs.export.attachmentType);
+            }
           }
         } catch (error) {
-          logger.error("Failed to load export format preference:", error);
-          // If loading fails, keep the default 'folder' format
+          logger.error("Failed to load export preferences:", error);
+          // If loading fails, keep the defaults
         }
       }
     };
 
-    loadDefaultFormat();
+    loadDefaults();
   }, [userId]);
 
   // Adjust attachmentType default when feature gates finish loading
@@ -175,6 +191,23 @@ function ExportModal({
         setStep(1);
         setExporting(false);
         return;
+      }
+
+      // Save export options as defaults if checkbox is checked (BACKLOG-1551)
+      if (saveAsDefault && userId) {
+        try {
+          await settingsService.updatePreferences(userId, {
+            export: {
+              defaultFormat: exportFormat,
+              emailExportMode,
+              contentType,
+              attachmentType,
+            },
+          });
+        } catch (err) {
+          logger.error("Failed to save export defaults:", err);
+          // Non-blocking — continue with export even if saving defaults fails
+        }
       }
 
       let result;
@@ -278,36 +311,37 @@ function ExportModal({
   // C6: When feature is gated, render ONLY UpgradePrompt with title and close button
   if (!featureGateLoading && !canExport) {
     return (
-      <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[70] p-4">
-        <div className="bg-white rounded-xl shadow-2xl w-full max-w-3xl">
+      <ResponsiveModal onClose={onClose} zIndex="z-[70]" overlayClassName="bg-black bg-opacity-50" panelClassName="max-w-3xl">
           {/* Header */}
-          <div className="bg-gradient-to-r from-purple-500 to-indigo-600 px-6 py-4 flex items-center justify-between rounded-t-xl">
-            <div>
-              <h3 className="text-xl font-bold text-white">
-                Export Transaction Audit
-              </h3>
-              <p className="text-purple-100 text-sm">
-                {transaction.property_address}
-              </p>
-            </div>
-            <button
-              onClick={onClose}
-              className="text-white hover:bg-white hover:bg-opacity-20 rounded-full p-1 transition-all"
-            >
-              <svg
-                className="w-6 h-6"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
+          <div className="bg-gradient-to-r from-purple-500 to-indigo-600 px-3 sm:px-6 pt-6 sm:pt-4 pb-3 sm:pb-4 sm:rounded-t-xl shadow-lg">
+            {/* Mobile */}
+            <div className="sm:hidden flex items-center justify-between">
+              <button
+                onClick={onClose}
+                className="text-white hover:bg-white hover:bg-opacity-20 rounded-lg px-2 py-2 transition-all flex items-center gap-1 font-medium text-sm"
               >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M6 18L18 6M6 6l12 12"
-                />
-              </svg>
-            </button>
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
+                </svg>
+                Back
+              </button>
+              <h3 className="text-lg font-bold text-white">Export</h3>
+            </div>
+            {/* Desktop */}
+            <div className="hidden sm:flex items-center justify-between">
+              <div>
+                <h3 className="text-xl font-bold text-white">Export Transaction Audit</h3>
+                <p className="text-purple-100 text-sm">{transaction.property_address}</p>
+              </div>
+              <button
+                onClick={onClose}
+                className="text-white hover:bg-white hover:bg-opacity-20 rounded-full p-1 transition-all"
+              >
+                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
           </div>
 
           {/* Gated content: only UpgradePrompt */}
@@ -318,43 +352,44 @@ function ExportModal({
               onDismiss={onClose}
             />
           </div>
-        </div>
-      </div>
+      </ResponsiveModal>
     );
   }
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[70] p-4">
-      <div className="bg-white rounded-xl shadow-2xl w-full max-w-3xl">
+    <ResponsiveModal onClose={onClose} zIndex="z-[70]" overlayClassName="bg-black bg-opacity-50" panelClassName="max-w-3xl">
         {/* Header */}
-        <div className="bg-gradient-to-r from-purple-500 to-indigo-600 px-6 py-4 flex items-center justify-between rounded-t-xl">
-          <div>
-            <h3 className="text-xl font-bold text-white">
-              Export Transaction Audit
-            </h3>
-            <p className="text-purple-100 text-sm">
-              {transaction.property_address}
-            </p>
-          </div>
-          <button
-            onClick={onClose}
-            disabled={exporting}
-            className="text-white hover:bg-white hover:bg-opacity-20 rounded-full p-1 transition-all disabled:opacity-50"
-          >
-            <svg
-              className="w-6 h-6"
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
+        <div className="bg-gradient-to-r from-purple-500 to-indigo-600 px-3 sm:px-6 pt-6 sm:pt-4 pb-3 sm:pb-4 sm:rounded-t-xl shadow-lg">
+          {/* Mobile */}
+          <div className="sm:hidden flex items-center justify-between">
+            <button
+              onClick={onClose}
+              disabled={exporting}
+              className="text-white hover:bg-white hover:bg-opacity-20 rounded-lg px-2 py-2 transition-all flex items-center gap-1 font-medium text-sm disabled:opacity-50"
             >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M6 18L18 6M6 6l12 12"
-              />
-            </svg>
-          </button>
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
+              </svg>
+              Back
+            </button>
+            <h3 className="text-lg font-bold text-white">Export</h3>
+          </div>
+          {/* Desktop */}
+          <div className="hidden sm:flex items-center justify-between">
+            <div>
+              <h3 className="text-xl font-bold text-white">Export Transaction Audit</h3>
+              <p className="text-purple-100 text-sm">{transaction.property_address}</p>
+            </div>
+            <button
+              onClick={onClose}
+              disabled={exporting}
+              className="text-white hover:bg-white hover:bg-opacity-20 rounded-full p-1 transition-all disabled:opacity-50"
+            >
+              <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
+          </div>
         </div>
 
         {/* Content */}
@@ -405,7 +440,7 @@ function ExportModal({
                     type="date"
                     value={startDate}
                     onChange={(e) => setStartDate(e.target.value)}
-                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500"
+                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500 text-gray-900 bg-white min-h-[44px]"
                   />
                   <p className="mt-1 text-xs text-gray-500">
                     When did you sign the representation agreement with the
@@ -437,7 +472,7 @@ function ExportModal({
                     type="date"
                     value={closingDate}
                     onChange={(e) => setClosingDate(e.target.value)}
-                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500"
+                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500 text-gray-900 bg-white min-h-[44px]"
                   />
                   <p className="mt-1 text-xs text-gray-500">
                     Scheduled closing date (optional)
@@ -455,7 +490,7 @@ function ExportModal({
                     type="date"
                     value={endDate}
                     onChange={(e) => setEndDate(e.target.value)}
-                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500"
+                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500 text-gray-900 bg-white min-h-[44px]"
                   />
                   <p className="mt-1 text-xs text-gray-500">
                     When did the transaction end? (Used to filter communications)
@@ -506,6 +541,24 @@ function ExportModal({
                   Format
                 </label>
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                  {/* One PDF - Combined export (default) */}
+                  <button
+                    onClick={() => setExportFormat("combined-pdf")}
+                    disabled={!canExportEmail && !canExportText}
+                    className={`px-4 py-3 rounded-lg font-medium transition-all text-left ${
+                      !canExportEmail && !canExportText
+                        ? "bg-gray-50 text-gray-400 cursor-not-allowed border border-gray-200"
+                        : exportFormat === "combined-pdf"
+                          ? "bg-purple-500 text-white shadow-md"
+                          : "bg-gray-100 text-gray-700 hover:bg-gray-200"
+                    }`}
+                  >
+                    <div className="flex items-center">
+                      <span className="font-semibold text-sm">One PDF</span>
+                      <InfoTooltip text="Summary report + all email threads + all text conversations merged into a single PDF file" />
+                    </div>
+                    <div className="text-xs opacity-80 mt-0.5">Combined PDF with all content</div>
+                  </button>
                   <button
                     onClick={() => setExportFormat("folder")}
                     className={`px-4 py-3 rounded-lg font-medium transition-all text-left ${
@@ -514,8 +567,9 @@ function ExportModal({
                         : "bg-gray-100 text-gray-700 hover:bg-gray-200"
                     }`}
                   >
-                    <div>
+                    <div className="flex items-center">
                       <span className="font-semibold text-sm">Audit Package</span>
+                      <InfoTooltip text="Export as individual files organized in folders" />
                     </div>
                     <div className="text-xs opacity-80 mt-0.5">
                       Folder with individual PDFs
@@ -529,25 +583,13 @@ function ExportModal({
                         : "bg-gray-100 text-gray-700 hover:bg-gray-200"
                     }`}
                   >
-                    <div className="font-semibold text-sm">Summary PDF</div>
+                    <div className="flex items-center">
+                      <span className="font-semibold text-sm">Summary PDF</span>
+                      <InfoTooltip text="Generate a summary report PDF without full message content" />
+                    </div>
                     <div className="text-xs opacity-80 mt-0.5">
                       Transaction report only
                     </div>
-                  </button>
-                  {/* One PDF - Combined export */}
-                  <button
-                    onClick={() => setExportFormat("combined-pdf")}
-                    disabled={!canExportEmail && !canExportText}
-                    className={`px-4 py-3 rounded-lg font-medium transition-all text-left ${
-                      !canExportEmail && !canExportText
-                        ? "bg-gray-50 text-gray-400 cursor-not-allowed border border-gray-200"
-                        : exportFormat === "combined-pdf"
-                          ? "bg-purple-500 text-white shadow-md"
-                          : "bg-gray-100 text-gray-700 hover:bg-gray-200"
-                    }`}
-                  >
-                    <div className="font-semibold text-sm">One PDF</div>
-                    <div className="text-xs opacity-80 mt-0.5">Combined PDF with all content</div>
                   </button>
                 </div>
               </div>
@@ -557,9 +599,14 @@ function ExportModal({
                 <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">
                   Content
                 </label>
-                <div className="flex flex-wrap gap-2">
+                <div className="flex flex-wrap gap-1.5 sm:gap-2">
                   {(["both", "emails", "texts"] as const).map((value) => {
                     const labels: Record<string, string> = { both: "Both", emails: "Emails Only", texts: "Texts Only" };
+                    const tooltips: Record<string, string> = {
+                      both: "Export both email threads and text message conversations",
+                      emails: "Export only email threads",
+                      texts: "Export only text message conversations",
+                    };
                     const isDisabled = (value === "emails" && !canExportEmail) || (value === "texts" && !canExportText);
                     return (
                       <button
@@ -576,6 +623,7 @@ function ExportModal({
                       >
                         <span className="flex items-center gap-1.5">
                           {labels[value]}
+                          <InfoTooltip text={tooltips[value]} />
                           {isDisabled && (
                             <span className="text-xs bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded">Upgrade</span>
                           )}
@@ -586,20 +634,14 @@ function ExportModal({
                 </div>
               </div>
 
-              {/* ATTACHMENTS section - for Audit Package and One PDF (not Summary PDF) */}
-              {(exportFormat === "folder" || exportFormat === "combined-pdf") && (
-              <div>
-                <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">
+              {/* ATTACHMENTS section - grayed out for Summary PDF */}
+              <div className={exportFormat === "pdf" ? "opacity-40 pointer-events-none" : ""}>
+                <label className="flex items-center text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">
                   Attachments
+                  <InfoTooltip text="Attachments are exported as separate files in an /attachments folder, not embedded in the PDF." />
                 </label>
 
-                {/* Info note - right under the section header, before the buttons */}
-                <p className="text-xs text-gray-500 flex items-start gap-1.5 mb-2">
-                  <span className="shrink-0 mt-px">i</span>
-                  <span>Attachments are exported as separate files in an /attachments folder, not embedded in the PDF.</span>
-                </p>
-
-                <div className="flex flex-wrap gap-2">
+                <div className="flex flex-wrap gap-1.5 sm:gap-2">
                   {/* All - requires both attachment licenses, and content must be "both" */}
                   <button
                     onClick={() => { if (canAttachEmail && canAttachText && contentType === "both") setAttachmentType("all"); }}
@@ -614,6 +656,7 @@ function ExportModal({
                   >
                     <span className="flex items-center gap-1.5">
                       All
+                      <InfoTooltip text="Include both email and text message attachments" />
                       {(!canAttachEmail || !canAttachText) && (
                         <span className="text-xs bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded">Upgrade</span>
                       )}
@@ -633,6 +676,7 @@ function ExportModal({
                   >
                     <span className="flex items-center gap-1.5">
                       Email only
+                      <InfoTooltip text="Include only email attachments (images, documents)" />
                       {!canAttachEmail && (
                         <span className="text-xs bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded">Upgrade</span>
                       )}
@@ -652,6 +696,7 @@ function ExportModal({
                   >
                     <span className="flex items-center gap-1.5">
                       Text only
+                      <InfoTooltip text="Include only text message attachments (photos, videos)" />
                       {!canAttachText && (
                         <span className="text-xs bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded">Upgrade</span>
                       )}
@@ -666,7 +711,10 @@ function ExportModal({
                         : "bg-gray-100 text-gray-700 hover:bg-gray-200"
                     }`}
                   >
-                    None
+                    <span className="flex items-center gap-1.5">
+                      None
+                      <InfoTooltip text="Export without any attachments" />
+                    </span>
                   </button>
                 </div>
 
@@ -686,20 +734,21 @@ function ExportModal({
                 )}
 
               </div>
-              )}
 
-              {/* Format info boxes */}
-              {exportFormat === "combined-pdf" && (
-                <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg">
-                  <p className="text-sm text-blue-800 font-medium">One PDF includes:</p>
-                  <ul className="mt-2 text-xs text-blue-700 space-y-1">
-                    <li>Summary report with transaction overview</li>
-                    {canExportEmail && <li>All email threads as formatted pages</li>}
-                    {canExportText && <li>All text conversations as formatted pages</li>}
-                    <li>Everything merged into a single PDF file</li>
-                  </ul>
-                </div>
-              )}
+              {/* Save as default checkbox (BACKLOG-1551) */}
+              <div className="pt-2 border-t border-gray-200">
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={saveAsDefault}
+                    onChange={(e) => setSaveAsDefault(e.target.checked)}
+                    className="w-4 h-4 rounded border-gray-300 text-purple-600 focus:ring-purple-500"
+                  />
+                  <span className="text-sm text-gray-600">Save these options as my default</span>
+                </label>
+              </div>
+
+              {/* Format info moved to InfoTooltip on One PDF button */}
             </div>
           )}
 
@@ -788,33 +837,44 @@ function ExportModal({
           )}
         </div>
 
-        {/* Footer */}
+        {/* Footer — desktop: sticky bar, mobile: floating button */}
         {step !== 3 && step !== 4 && step !== 5 && (
-          <div className="px-6 py-4 bg-gray-50 rounded-b-xl flex items-center justify-between">
-            <button
-              onClick={step === 1 ? onClose : () => setStep(1)}
-              className="px-4 py-2 text-gray-700 hover:bg-gray-200 rounded-lg font-medium transition-all"
-            >
-              {step === 1 ? "Cancel" : "Back"}
-            </button>
-
+          <>
+            {/* Desktop footer */}
+            <div className="hidden sm:flex px-6 py-4 bg-gray-50 rounded-b-xl items-center justify-between">
+              <button
+                onClick={step === 1 ? onClose : () => setStep(1)}
+                className="px-4 py-2 text-gray-700 hover:bg-gray-200 rounded-lg font-medium transition-all"
+              >
+                {step === 1 ? "Cancel" : "Back"}
+              </button>
+              <button
+                onClick={step === 1 ? handleDateVerification : handleExport}
+                disabled={step === 1 && (!startDate || !endDate)}
+                className={`px-6 py-2 rounded-lg font-semibold transition-all ${
+                  step === 1 && (!startDate || !endDate)
+                    ? "bg-gray-300 text-gray-500 cursor-not-allowed"
+                    : "bg-gradient-to-r from-purple-500 to-indigo-600 text-white hover:from-purple-600 hover:to-indigo-700 shadow-md hover:shadow-lg"
+                }`}
+              >
+                {step === 1 ? "Next" : "Export"}
+              </button>
+            </div>
+            {/* Mobile floating button */}
             <button
               onClick={step === 1 ? handleDateVerification : handleExport}
-              disabled={
-                (step === 1 && (!startDate || !endDate))
-              }
-              className={`px-6 py-2 rounded-lg font-semibold transition-all ${
+              disabled={step === 1 && (!startDate || !endDate)}
+              className={`sm:hidden fixed bottom-4 right-4 z-[71] px-6 py-3 rounded-full font-semibold text-sm shadow-lg transition-all ${
                 step === 1 && (!startDate || !endDate)
                   ? "bg-gray-300 text-gray-500 cursor-not-allowed"
-                  : "bg-gradient-to-r from-purple-500 to-indigo-600 text-white hover:from-purple-600 hover:to-indigo-700 shadow-md hover:shadow-lg"
+                  : "bg-gradient-to-r from-purple-500 to-indigo-600 text-white hover:from-purple-600 hover:to-indigo-700 hover:shadow-xl"
               }`}
             >
-              {step === 1 ? "Next" : "Export"}
+              {step === 1 ? "Next →" : "Export"}
             </button>
-          </div>
+          </>
         )}
-      </div>
-    </div>
+    </ResponsiveModal>
   );
 }
 

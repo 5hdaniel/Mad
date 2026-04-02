@@ -38,6 +38,8 @@ export async function readContacts(): Promise<SyncContact[]> {
 
   const { data } = await Contacts.getContactsAsync({
     fields: [
+      Contacts.Fields.FirstName,
+      Contacts.Fields.LastName,
       Contacts.Fields.PhoneNumbers,
       Contacts.Fields.Emails,
       Contacts.Fields.Company,
@@ -50,15 +52,49 @@ export async function readContacts(): Promise<SyncContact[]> {
     return [];
   }
 
-  const contacts = data
-    .filter((c) => c.name && c.name.trim().length > 0)
-    .map((c) => mapToSyncContact(c));
+  const contacts = data.map((c) => mapToSyncContact(c));
 
   console.log(
-    `[ContactReader] Read ${data.length} raw contacts -> ${contacts.length} with names`
+    `[ContactReader] Read ${data.length} raw contacts -> ${contacts.length} mapped`
   );
 
   return contacts;
+}
+
+/**
+ * Build a display name from available contact fields.
+ *
+ * Fallback chain:
+ *   1. Composite name (from the contacts provider)
+ *   2. firstName + lastName (requested explicitly)
+ *   3. Company / organization name
+ *   4. First phone number on the contact
+ *   5. "Unknown Contact" as last resort
+ */
+function buildDisplayName(contact: Contacts.Contact): string {
+  if (contact.name && contact.name.trim().length > 0) {
+    return contact.name.trim();
+  }
+
+  const first = contact.firstName?.trim() ?? "";
+  const last = contact.lastName?.trim() ?? "";
+  const fullName = `${first} ${last}`.trim();
+  if (fullName.length > 0) {
+    return fullName;
+  }
+
+  if (contact.company && contact.company.trim().length > 0) {
+    return contact.company.trim();
+  }
+
+  const firstPhone = (contact.phoneNumbers ?? []).find(
+    (p) => p.number != null && p.number.trim().length > 0
+  );
+  if (firstPhone?.number) {
+    return firstPhone.number.trim();
+  }
+
+  return "Unknown Contact";
 }
 
 /**
@@ -81,7 +117,7 @@ function mapToSyncContact(contact: Contacts.Contact): SyncContact {
 
   return {
     id: contact.id,
-    displayName: contact.name ?? "",
+    displayName: buildDisplayName(contact),
     phones,
     emails,
     company: contact.company ?? undefined,

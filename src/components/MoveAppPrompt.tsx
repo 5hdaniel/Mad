@@ -1,4 +1,5 @@
 import React, { useState } from "react";
+import { ResponsiveModal } from "./common/ResponsiveModal";
 import logger from '../utils/logger';
 
 interface MoveAppPromptProps {
@@ -36,8 +37,7 @@ export default function MoveAppPrompt({
   };
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-xl shadow-2xl max-w-md w-full p-6">
+    <ResponsiveModal overlayClassName="bg-black bg-opacity-50" panelClassName="max-w-md p-6">
         {/* Warning Icon */}
         <div className="flex items-center justify-center w-14 h-14 bg-yellow-100 rounded-full mb-4 mx-auto">
           <svg
@@ -89,7 +89,7 @@ export default function MoveAppPrompt({
             id="dontShowAgain"
             checked={dontShowAgain}
             onChange={(e) => setDontShowAgain(e.target.checked)}
-            className="w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500"
+            className="w-5 h-5 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500"
           />
           <label
             htmlFor="dontShowAgain"
@@ -120,7 +120,6 @@ export default function MoveAppPrompt({
           Clicking "Move and Restart" will open the Applications folder. Please
           drag the app there and restart it.
         </p>
-      </div>
-    </div>
+    </ResponsiveModal>
   );
 }

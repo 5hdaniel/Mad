@@ -135,7 +135,7 @@ describe("TransactionList", () => {
   });
 
   describe("Pending Review UI", () => {
-    it("should show Review & Edit button only for pending transactions", async () => {
+    it("should show pending status badge on pending transactions", async () => {
       render(
         <TransactionList
           userId={mockUserId}
@@ -149,15 +149,11 @@ describe("TransactionList", () => {
         expect(screen.getByText("123 Pending Street")).toBeInTheDocument();
       });
 
-      // Pending transaction should have "Review & Edit" button in wrapper
-      const reviewButtons = screen.getAllByRole("button", { name: /review & edit/i });
-      expect(reviewButtons.length).toBeGreaterThan(0);
-
-      // Confirmed and manual transactions should have Export button (not Review)
-      expect(screen.getAllByRole("button", { name: /export/i }).length).toBeGreaterThan(0);
+      // Mobile card view shows "Pending" status badge for pending transactions
+      expect(screen.getByText("Pending")).toBeInTheDocument();
     });
 
-    it("should open TransactionDetails in pending review mode when Review & Edit is clicked", async () => {
+    it("should open TransactionDetails in pending review mode when clicking pending transaction card", async () => {
       const user = userEvent.setup();
 
       render(
@@ -170,45 +166,23 @@ describe("TransactionList", () => {
 
       // Wait for transactions to load
       await waitFor(() => {
-        expect(screen.getByText("123 Pending Street")).toBeInTheDocument();
+        expect(screen.getAllByText("123 Pending Street").length).toBeGreaterThan(0);
       });
 
-      // Click Review & Edit button
-      const reviewButton = screen.getByRole("button", { name: /review & edit/i });
-      await user.click(reviewButton);
+      // Click the pending transaction card to open in review mode
+      const pendingCards = screen.getAllByText("123 Pending Street");
+      await user.click(pendingCards[0]);
 
       // TransactionDetails modal should open with approve/reject buttons
       await waitFor(() => {
-        expect(screen.getByText("Review Transaction")).toBeInTheDocument();
+        expect(screen.getAllByText("Review Transaction").length).toBeGreaterThan(0);
       });
 
       // Should show Approve and Reject buttons in the modal header
-      // Using getAllByRole since there may be multiple buttons with similar names
       const approveButtons = screen.getAllByRole("button", { name: /approve/i });
       const rejectButtons = screen.getAllByRole("button", { name: /reject/i });
       expect(approveButtons.length).toBeGreaterThan(0);
       expect(rejectButtons.length).toBeGreaterThan(0);
-    });
-
-    it("should show pending review wrapper with confidence bar", async () => {
-      render(
-        <TransactionList
-          userId={mockUserId}
-          provider={mockProvider}
-          onClose={mockOnClose}
-        />,
-      );
-
-      // Wait for transactions to load
-      await waitFor(() => {
-        expect(screen.getByText("123 Pending Street")).toBeInTheDocument();
-      });
-
-      // Should show confidence label
-      expect(screen.getByText("Confidence")).toBeInTheDocument();
-
-      // Should show confidence percentage (85% from mock data)
-      expect(screen.getByText("85%")).toBeInTheDocument();
     });
 
     it("should open TransactionDetails modal when clicking on pending transaction", async () => {
@@ -224,16 +198,16 @@ describe("TransactionList", () => {
 
       // Wait for transactions to load
       await waitFor(() => {
-        expect(screen.getByText("123 Pending Street")).toBeInTheDocument();
+        expect(screen.getAllByText("123 Pending Street").length).toBeGreaterThan(0);
       });
 
-      // Click on the pending transaction card itself (not the Review button)
-      const pendingCard = screen.getByText("123 Pending Street");
-      await user.click(pendingCard);
+      // Click on the pending transaction card
+      const pendingCards = screen.getAllByText("123 Pending Street");
+      await user.click(pendingCards[0]);
 
       // TransactionDetails modal should open
       await waitFor(() => {
-        expect(screen.getByText("Review Transaction")).toBeInTheDocument();
+        expect(screen.getAllByText("Review Transaction").length).toBeGreaterThan(0);
       });
 
       // Verify getDetails was called
@@ -252,12 +226,12 @@ describe("TransactionList", () => {
       );
 
       await waitFor(() => {
-        expect(screen.getByText("123 Pending Street")).toBeInTheDocument();
+        expect(screen.getAllByText("123 Pending Street").length).toBeGreaterThan(0);
       });
 
-      // Pending transaction should have Pending Review label in wrapper
-      const pendingReviewElements = screen.getAllByText("Pending Review");
-      expect(pendingReviewElements.length).toBeGreaterThan(0);
+      // Pending transaction should have Pending status badge
+      const pendingElements = screen.getAllByText("Pending");
+      expect(pendingElements.length).toBeGreaterThan(0);
     });
 
     it("should show Manual badge for manually entered transactions", async () => {
@@ -270,7 +244,7 @@ describe("TransactionList", () => {
       );
 
       await waitFor(() => {
-        expect(screen.getByText("789 Manual Road")).toBeInTheDocument();
+        expect(screen.getAllByText("789 Manual Road").length).toBeGreaterThan(0);
       });
 
       // Manual transaction should have Manual badge
@@ -288,16 +262,16 @@ describe("TransactionList", () => {
       );
 
       await waitFor(() => {
-        expect(screen.getByText("123 Pending Street")).toBeInTheDocument();
+        expect(screen.getAllByText("123 Pending Street").length).toBeGreaterThan(0);
       });
 
-      // Get the pending transaction card (auto-detected)
-      const pendingCard = screen
-        .getByText("123 Pending Street")
-        .closest(".bg-white");
+      // Get the pending transaction card from the desktop view (auto-detected)
+      // TASK-1440: Use the desktop card (inside StatusWrapper with .bg-white)
+      const pendingCards = screen.getAllByText("123 Pending Street");
+      const desktopCard = pendingCards[pendingCards.length - 1].closest(".bg-white");
 
       // Auto-detected transactions should NOT have Manual badge
-      expect(within(pendingCard!).queryByText("Manual")).not.toBeInTheDocument();
+      expect(within(desktopCard!).queryByText("Manual")).not.toBeInTheDocument();
     });
   });
 
@@ -312,15 +286,15 @@ describe("TransactionList", () => {
       );
 
       await waitFor(() => {
-        expect(screen.getByText("123 Pending Street")).toBeInTheDocument();
+        expect(screen.getAllByText("123 Pending Street").length).toBeGreaterThan(0);
       });
 
-      // All filter tabs should be present
-      expect(screen.getByRole("button", { name: /^all/i })).toBeInTheDocument();
-      expect(screen.getByRole("button", { name: /pending review/i })).toBeInTheDocument();
-      expect(screen.getByRole("button", { name: /^active/i })).toBeInTheDocument();
-      expect(screen.getByRole("button", { name: /closed/i })).toBeInTheDocument();
-      expect(screen.getByRole("button", { name: /rejected/i })).toBeInTheDocument();
+      // All filter tabs should be present (responsive UI renders both mobile + desktop variants)
+      expect(screen.getAllByRole("button", { name: /^all/i }).length).toBeGreaterThan(0);
+      expect(screen.getAllByRole("button", { name: /pending/i }).length).toBeGreaterThan(0);
+      expect(screen.getAllByRole("button", { name: /^active/i }).length).toBeGreaterThan(0);
+      expect(screen.getAllByRole("button", { name: /closed/i }).length).toBeGreaterThan(0);
+      expect(screen.getAllByRole("button", { name: /rejected/i }).length).toBeGreaterThan(0);
     });
 
     it("should filter transactions when filter tab is clicked", async () => {
@@ -336,17 +310,17 @@ describe("TransactionList", () => {
 
       // Wait for transactions to load
       await waitFor(() => {
-        expect(screen.getByText("123 Pending Street")).toBeInTheDocument();
+        expect(screen.getAllByText("123 Pending Street").length).toBeGreaterThan(0);
       });
 
-      // Click Active filter
-      const activeFilter = screen.getByRole("button", { name: /^active/i });
-      await user.click(activeFilter);
+      // Click Active filter (use last match — desktop tab)
+      const activeFilters = screen.getAllByRole("button", { name: /^active/i });
+      await user.click(activeFilters[activeFilters.length - 1]);
 
       // Should show active transactions (confirmed and manual are both "active" status)
       await waitFor(() => {
-        expect(screen.getByText("456 Confirmed Avenue")).toBeInTheDocument();
-        expect(screen.getByText("789 Manual Road")).toBeInTheDocument();
+        expect(screen.getAllByText("456 Confirmed Avenue").length).toBeGreaterThan(0);
+        expect(screen.getAllByText("789 Manual Road").length).toBeGreaterThan(0);
       });
 
       // Pending transaction should NOT be visible (it's filtered out)

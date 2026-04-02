@@ -13,6 +13,7 @@
 
 import React, { useState, useCallback, useEffect } from "react";
 import { SupportTicketDialog } from "./SupportTicketDialog";
+import { usePlatform } from "../../contexts";
 
 /** Detail payload for the 'open-support-widget' custom event (TASK-2319) */
 export interface OpenSupportWidgetDetail {
@@ -42,7 +43,9 @@ export function SupportWidget({
   userEmail: propEmail,
   userName: propName,
 }: SupportWidgetProps = {}): React.ReactElement {
+  const { isWindows } = usePlatform();
   const [isOpen, setIsOpen] = useState(false);
+  const [preCapturedScreenshot, setPreCapturedScreenshot] = useState<string | null>(null);
   const [detectedEmail, setDetectedEmail] = useState<string>("");
   const [detectedName, setDetectedName] = useState<string>("");
 
@@ -73,12 +76,22 @@ export function SupportWidget({
   const userEmail = propEmail || detectedEmail;
   const userName = propName || detectedName;
 
-  const handleOpen = useCallback(() => {
+  const handleOpen = useCallback(async () => {
+    // Capture screenshot BEFORE opening the dialog so we get the actual page
+    try {
+      const result = await window.api.support.captureScreenshot();
+      if (result.success && result.screenshot) {
+        setPreCapturedScreenshot(result.screenshot);
+      }
+    } catch {
+      // Screenshot capture failed — dialog will still open without it
+    }
     setIsOpen(true);
   }, []);
 
   const handleClose = useCallback(() => {
     setIsOpen(false);
+    setPreCapturedScreenshot(null);
     setPrefilledSubject("");
   }, []);
 
@@ -112,10 +125,15 @@ export function SupportWidget({
       {/* Floating "?" button - bottom-left, blue circle
            BACKLOG-1341: z-[70] ensures visibility above all modal overlays
            (Settings/Profile/WelcomeTerms use z-50, Transactions/Contacts/Details use z-[60]) */}
+      {/* BACKLOG-1554: Windows frameless windows have 20px resize zones at corners
+           that intercept clicks. Use bottom-8 left-8 (32px) on Windows to clear the
+           resize zone; keep bottom-4 left-4 (16px) on macOS/Linux. */}
       <button
         onClick={handleOpen}
         data-support-widget
-        className="fixed bottom-4 left-4 z-[70] w-10 h-10 rounded-full bg-blue-500 hover:bg-blue-600 text-white font-bold text-lg shadow-lg hover:shadow-xl transition-all flex items-center justify-center no-drag-region"
+        className={`fixed z-[70] w-10 h-10 rounded-full bg-blue-500 hover:bg-blue-600 text-white font-bold text-lg shadow-lg hover:shadow-xl transition-all flex items-center justify-center no-drag-region ${
+          isWindows ? "bottom-8 left-8" : "bottom-4 left-4"
+        }`}
         title="Contact Support"
         aria-label="Open support dialog"
       >
@@ -128,7 +146,8 @@ export function SupportWidget({
           onClose={handleClose}
           userEmail={userEmail}
           userName={userName}
-          autoCaptureScreenshot
+          autoCaptureScreenshot={false}
+          initialScreenshot={preCapturedScreenshot}
           prefilledSubject={prefilledSubject}
         />
       )}
