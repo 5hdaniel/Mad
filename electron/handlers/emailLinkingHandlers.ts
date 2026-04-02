@@ -74,6 +74,7 @@ export function registerEmailLinkingHandlers(): void {
         after: options?.after || null,
         before: options?.before || null,
         maxResults: effectiveMaxResults,
+        skip: options?.skip || 0,
         transactionId: options?.transactionId || null,
       });
 

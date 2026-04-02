@@ -29,6 +29,7 @@ import {
   resolveContactEmailsByQuery,
 } from "./db/contactDbService";
 import { getEmailsByContactId } from "./db/contactDbService";
+import { searchLocalEmailCache } from "./db/messageDbService";
 import type { TransactionResponse } from "../types/handlerTypes";
 import type { TransactionContactResult } from "./db/transactionContactDbService";
 import type { TransactionWithDetails } from "./transactionService/types";
@@ -638,12 +639,14 @@ class EmailSyncService {
     const effectiveSearchParams = { ...searchParams };
     if (searchParams.query?.trim()) {
       const resolvedEmails = resolveContactEmailsByQuery(userId, searchParams.query);
+      logService.info(`Search query "${searchParams.query}": resolved to ${resolvedEmails.length} contact emails`, "EmailSyncService", {
+        resolvedEmails: resolvedEmails.slice(0, 5),
+        willUseContactFilter: resolvedEmails.length > 0,
+        willPassthrough: resolvedEmails.length === 0,
+      });
       if (resolvedEmails.length > 0) {
         effectiveSearchParams.contactEmails = resolvedEmails;
         effectiveSearchParams.query = "";
-        logService.info(`Resolved query "${searchParams.query}" to ${resolvedEmails.length} contact emails`, "EmailSyncService", {
-          resolvedEmails,
-        });
       }
     }
 
@@ -802,6 +805,32 @@ class EmailSyncService {
             responseStatus: (outlookError as any)?.response?.status,
           },
         });
+      }
+    }
+
+    // If provider search returned 0 results and we had a text query,
+    // fall back to searching locally cached emails (handles Graph API
+    // $search limitations like pure numeric queries returning 400)
+    if (emails.length === 0 && searchParams.query?.trim()) {
+      const queryLower = searchParams.query.toLowerCase().trim();
+      logService.info('Provider search returned 0, falling back to local cache', 'EmailSyncService', { query: searchParams.query });
+      try {
+        const localEmails = searchLocalEmailCache(userId, queryLower, searchParams.maxResults || 500);
+        if (localEmails.length > 0) {
+          logService.info('Local cache fallback found results', 'EmailSyncService', { count: localEmails.length, query: searchParams.query });
+          emails = localEmails.map(e => ({
+            id: e.id,
+            subject: e.subject || null,
+            sender: e.sender || null,
+            sent_at: e.sent_at || null,
+            body_preview: e.body_preview || null,
+            email_thread_id: e.email_thread_id || null,
+            has_attachments: e.has_attachments || false,
+            provider: "outlook" as const, // sourced from local cache of provider emails
+          }));
+        }
+      } catch (localErr) {
+        logService.warn('Local cache fallback failed', 'EmailSyncService', { error: localErr instanceof Error ? localErr.message : String(localErr) });
       }
     }
 

@@ -65,9 +65,9 @@ function emailInfoToCommunication(email: EmailInfo): Communication & { body_prev
 
 // Pagination constants to prevent UI freeze from rendering too many items
 const THREADS_PER_PAGE = 25;
-const MAX_THREADS = 500;
-const DEFAULT_MAX_RESULTS = 250;
-const LOAD_MORE_INCREMENT = 100;
+const MAX_THREADS = 1000;
+const DEFAULT_MAX_RESULTS = 500;
+const LOAD_MORE_INCREMENT = 200;
 
 export function AttachEmailsModal({
   userId,
@@ -166,7 +166,9 @@ export function AttachEmailsModal({
       if (result.success && result.emails) {
         if (isLoadMore) {
           // BACKLOG-711: Append new emails to existing list
-          setEmails(prev => [...prev, ...result.emails!]);
+          setEmails(prev => {
+            return [...prev, ...result.emails!];
+          });
           // Show more threads to make newly appended emails visible
           setDisplayCount(prev => prev + THREADS_PER_PAGE);
         } else {
@@ -240,7 +242,7 @@ export function AttachEmailsModal({
       // BACKLOG-711: Use skip-based pagination — only fetch the NEXT batch, not everything again
       fetchEmails(debouncedQuery, afterDate, beforeDate, LOAD_MORE_INCREMENT, true, emails.length);
     }
-  }, [hasMoreLocal, hasMoreFromProvider, emails.length, debouncedQuery, afterDate, beforeDate, fetchEmails]);
+  }, [hasMoreLocal, hasMoreFromProvider, displayCount, emailThreads.length, emails.length, debouncedQuery, afterDate, beforeDate, fetchEmails]);
 
   // Infinite scroll: trigger handleLoadMore when sentinel enters viewport
   useEffect(() => {
@@ -359,10 +361,16 @@ export function AttachEmailsModal({
             />
             {/* Search icon or loading spinner */}
             {searching ? (
-              <div
-                className="w-5 h-5 absolute left-3 top-1/2 -translate-y-1/2 border-2 border-blue-600 border-t-transparent rounded-full animate-spin"
-                data-testid="search-spinner"
-              />
+              <div className="absolute left-3 top-0 bottom-0 flex items-center" data-testid="search-spinner">
+                <svg
+                  className="w-5 h-5 animate-spin text-blue-600"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                >
+                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                </svg>
+              </div>
             ) : (
               <svg
                 className="w-5 h-5 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2"
