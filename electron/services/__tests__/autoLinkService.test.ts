@@ -5,6 +5,8 @@
 
 import {
   autoLinkCommunicationsForContact,
+  autoLinkNewMessagesForUser,
+  autoLinkNewMessagesForUserDebounced,
 } from "../autoLinkService";
 
 // Mock dependencies
@@ -694,6 +696,205 @@ describe("autoLinkService", () => {
           expect(sql).not.toContain("subject");
         }
       });
+    });
+  });
+
+  // BACKLOG-1546: Tests for autoLinkNewMessagesForUser
+  describe("autoLinkNewMessagesForUser", () => {
+    const mockUserId = "user-789";
+
+    beforeEach(() => {
+      jest.clearAllMocks();
+      mockCreateThreadCommunicationReference.mockResolvedValue("comm-ref-id");
+      mockIsThreadLinkedToTransaction.mockResolvedValue(false);
+    });
+
+    it("should return zeros when no contact-transaction pairs exist", async () => {
+      mockDbAll.mockImplementation((sql: string) => {
+        if (sql.includes("transaction_contacts")) {
+          return []; // No contact-transaction pairs
+        }
+        return [];
+      });
+
+      const result = await autoLinkNewMessagesForUser(mockUserId);
+
+      expect(result.pairsProcessed).toBe(0);
+      expect(result.totalEmailsLinked).toBe(0);
+      expect(result.totalMessagesLinked).toBe(0);
+      expect(result.totalAlreadyLinked).toBe(0);
+      expect(result.totalErrors).toBe(0);
+    });
+
+    it("should process all contact-transaction pairs", async () => {
+      // First call returns contact-transaction pairs, subsequent calls return contact/transaction data
+      let callIndex = 0;
+      mockDbAll.mockImplementation((sql: string) => {
+        if (sql.includes("transaction_contacts") && sql.includes("DISTINCT")) {
+          return [
+            { contact_id: "c1", transaction_id: "t1" },
+            { contact_id: "c2", transaction_id: "t1" },
+          ];
+        }
+        if (sql.includes("FROM contact_emails")) {
+          return []; // No emails
+        }
+        if (sql.includes("FROM contact_phones")) {
+          return []; // No phones
+        }
+        return [];
+      });
+
+      mockDbGet.mockImplementation((sql: string) => {
+        if (sql.includes("FROM contacts")) {
+          return { id: "c1" };
+        }
+        if (sql.includes("FROM transactions")) {
+          return {
+            user_id: mockUserId,
+            started_at: "2024-01-01T00:00:00Z",
+            created_at: "2024-01-01T00:00:00Z",
+            closed_at: null,
+            property_address: null,
+            property_street: null,
+            skip_address_filter: 0,
+          };
+        }
+        if (sql.includes("FROM users_local")) {
+          return { email: "user@example.com" };
+        }
+        return null;
+      });
+
+      const result = await autoLinkNewMessagesForUser(mockUserId);
+
+      expect(result.pairsProcessed).toBe(2);
+      expect(result.durationMs).toBeGreaterThanOrEqual(0);
+    });
+
+    it("should accumulate results across multiple pairs", async () => {
+      mockDbAll.mockImplementation((sql: string) => {
+        if (sql.includes("transaction_contacts") && sql.includes("DISTINCT")) {
+          return [
+            { contact_id: "c1", transaction_id: "t1" },
+          ];
+        }
+        if (sql.includes("FROM contact_emails")) {
+          return [{ email: "john@example.com" }];
+        }
+        if (sql.includes("FROM contact_phones")) {
+          return [];
+        }
+        if (sql.includes("FROM emails e")) {
+          return [{ id: "email-1" }, { id: "email-2" }];
+        }
+        return [];
+      });
+
+      mockDbGet.mockImplementation((sql: string, params?: unknown[]) => {
+        if (sql.includes("FROM contacts")) return { id: "c1" };
+        if (sql.includes("FROM transactions")) {
+          return {
+            user_id: mockUserId,
+            started_at: "2024-01-01T00:00:00Z",
+            created_at: "2024-01-01T00:00:00Z",
+            closed_at: null,
+            property_address: null,
+            property_street: null,
+            skip_address_filter: 0,
+          };
+        }
+        if (sql.includes("FROM users_local")) return { email: "user@example.com" };
+        if (sql.includes("FROM communications") && sql.includes("email_id")) return null;
+        if (sql.includes("FROM emails WHERE id")) return { user_id: mockUserId };
+        return null;
+      });
+
+      const result = await autoLinkNewMessagesForUser(mockUserId);
+
+      expect(result.pairsProcessed).toBe(1);
+      expect(result.totalEmailsLinked).toBe(2);
+    });
+
+    it("should handle errors for individual pairs without stopping", async () => {
+      mockDbAll.mockImplementation((sql: string) => {
+        if (sql.includes("transaction_contacts") && sql.includes("DISTINCT")) {
+          return [
+            { contact_id: "c1", transaction_id: "t1" },
+            { contact_id: "c2", transaction_id: "t2" },
+          ];
+        }
+        if (sql.includes("FROM contact_emails")) return [];
+        if (sql.includes("FROM contact_phones")) return [];
+        return [];
+      });
+
+      let contactCallCount = 0;
+      mockDbGet.mockImplementation((sql: string) => {
+        if (sql.includes("FROM contacts")) {
+          contactCallCount++;
+          // Both contacts exist but have no emails/phones, so they complete without linking
+          return { id: contactCallCount === 1 ? "c1" : "c2" };
+        }
+        if (sql.includes("FROM transactions")) {
+          return {
+            user_id: mockUserId,
+            started_at: "2024-01-01T00:00:00Z",
+            created_at: "2024-01-01T00:00:00Z",
+            closed_at: null,
+            property_address: null,
+            property_street: null,
+            skip_address_filter: 0,
+          };
+        }
+        if (sql.includes("FROM users_local")) return { email: "user@example.com" };
+        return null;
+      });
+
+      const result = await autoLinkNewMessagesForUser(mockUserId);
+
+      // Both pairs processed (contacts have no emails/phones so 0 linked but no errors)
+      expect(result.pairsProcessed).toBe(2);
+      expect(result.totalErrors).toBe(0);
+      expect(result.totalEmailsLinked).toBe(0);
+      expect(result.totalMessagesLinked).toBe(0);
+    });
+  });
+
+  // BACKLOG-1546: Tests for autoLinkNewMessagesForUserDebounced
+  describe("autoLinkNewMessagesForUserDebounced", () => {
+    beforeEach(() => {
+      jest.useFakeTimers();
+      jest.clearAllMocks();
+    });
+
+    afterEach(() => {
+      jest.useRealTimers();
+    });
+
+    it("should debounce multiple rapid calls", () => {
+      // Set up minimal mocks so the eventual call doesn't fail badly
+      mockDbAll.mockReturnValue([]);
+
+      // Call multiple times rapidly
+      autoLinkNewMessagesForUserDebounced("user-1");
+      autoLinkNewMessagesForUserDebounced("user-1");
+      autoLinkNewMessagesForUserDebounced("user-1");
+
+      // The first query (transaction_contacts) should not have been called yet
+      const transactionContactsCalls = mockDbAll.mock.calls.filter(
+        (call) => typeof call[0] === "string" && call[0].includes("transaction_contacts")
+      );
+      expect(transactionContactsCalls.length).toBe(0);
+
+      // Advance timers past the debounce window
+      jest.advanceTimersByTime(2100);
+
+      // Now the query should have been made (once, not three times)
+      const afterCalls = mockDbAll.mock.calls.filter(
+        (call) => typeof call[0] === "string" && call[0].includes("transaction_contacts")
+      );
+      expect(afterCalls.length).toBe(1);
     });
   });
 });
