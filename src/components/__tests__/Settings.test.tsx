@@ -89,7 +89,7 @@ describe("Settings", () => {
     window.api.preferences.get.mockResolvedValue({
       success: true,
       preferences: {
-        export: { defaultFormat: "pdf" },
+        export: { defaultFormat: "combined-pdf" },
       },
     });
     window.api.preferences.update.mockResolvedValue({ success: true });
@@ -151,16 +151,6 @@ describe("Settings", () => {
     // Preferences save mock (used by settingsService.savePreferences)
     window.api.preferences.save = jest.fn().mockResolvedValue({ success: true });
   });
-
-  // Helper to get the export format combobox (has PDF option)
-  const getExportFormatSelect = () => {
-    const selects = screen.getAllByRole("combobox");
-    return selects.find((select) =>
-      Array.from(select.querySelectorAll("option")).some(
-        (opt) => opt.value === "pdf",
-      ),
-    ) as HTMLSelectElement;
-  };
 
   describe("Rendering", () => {
     it("should render settings modal with title", async () => {
@@ -359,46 +349,46 @@ describe("Settings", () => {
   });
 
   describe("Export Settings", () => {
-    it("should show export format dropdown", async () => {
+    it("should show export format section with card buttons", async () => {
       await renderSettings({ userId: mockUserId, onClose: mockOnClose });
 
       await waitFor(() => {
-        expect(screen.getByText("Default Format")).toBeInTheDocument();
+        expect(screen.getByText("Format")).toBeInTheDocument();
       });
 
-      const select = getExportFormatSelect();
-      expect(select).toBeInTheDocument();
+      // Card buttons should be present
+      expect(screen.getByText("One PDF")).toBeInTheDocument();
+      expect(screen.getByText("Audit Package")).toBeInTheDocument();
+      expect(screen.getByText("Summary PDF")).toBeInTheDocument();
     });
 
     it("should show all export format options", async () => {
       await renderSettings({ userId: mockUserId, onClose: mockOnClose });
 
       await waitFor(() => {
-        const select = getExportFormatSelect();
-        expect(select).toBeInTheDocument();
+        expect(screen.getByText("Format")).toBeInTheDocument();
       });
 
-      // Check all options are available
-      expect(screen.getByText("PDF")).toBeInTheDocument();
-      expect(screen.getByText("Excel (.xlsx)")).toBeInTheDocument();
-      expect(screen.getByText("CSV")).toBeInTheDocument();
-      expect(screen.getByText("JSON")).toBeInTheDocument();
-      expect(screen.getByText("TXT + EML Files")).toBeInTheDocument();
+      // Check all format card buttons are available
+      expect(screen.getByText("One PDF")).toBeInTheDocument();
+      expect(screen.getByText("Audit Package")).toBeInTheDocument();
+      expect(screen.getByText("Summary PDF")).toBeInTheDocument();
     });
 
     it("should load saved export format preference", async () => {
       window.api.preferences.get.mockResolvedValue({
         success: true,
         preferences: {
-          export: { defaultFormat: "excel" },
+          export: { defaultFormat: "folder" },
         },
       });
 
       await renderSettings({ userId: mockUserId, onClose: mockOnClose });
 
+      // The "Audit Package" button (value "folder") should be the active one (purple bg)
       await waitFor(() => {
-        const select = getExportFormatSelect();
-        expect(select).toHaveValue("excel");
+        const auditBtn = screen.getByText("Audit Package").closest("button");
+        expect(auditBtn).toHaveClass("bg-purple-500");
       });
     });
 
@@ -406,14 +396,15 @@ describe("Settings", () => {
       await renderSettings({ userId: mockUserId, onClose: mockOnClose });
 
       await waitFor(() => {
-        expect(getExportFormatSelect()).toBeInTheDocument();
+        expect(screen.getByText("Format")).toBeInTheDocument();
       });
 
-      const select = getExportFormatSelect();
-      await userEvent.selectOptions(select, "csv");
+      // Click the "Summary PDF" button (value "pdf")
+      const summaryBtn = screen.getByText("Summary PDF").closest("button")!;
+      await userEvent.click(summaryBtn);
 
       expect(window.api.preferences.update).toHaveBeenCalledWith(mockUserId, {
-        export: { defaultFormat: "csv" },
+        export: { defaultFormat: "pdf" },
       });
     });
 
@@ -466,7 +457,7 @@ describe("Settings", () => {
       window.api.preferences.get.mockResolvedValue({
         success: true,
         preferences: {
-          export: { defaultFormat: "pdf" },
+          export: { defaultFormat: "combined-pdf" },
           notifications: { enabled: false },
         },
       });
@@ -485,7 +476,7 @@ describe("Settings", () => {
       window.api.preferences.get.mockResolvedValue({
         success: true,
         preferences: {
-          export: { defaultFormat: "pdf" },
+          export: { defaultFormat: "combined-pdf" },
           notifications: { enabled: true },
         },
       });
@@ -549,7 +540,7 @@ describe("Settings", () => {
       window.api.preferences.get.mockResolvedValue({
         success: true,
         preferences: {
-          export: { defaultFormat: "pdf" },
+          export: { defaultFormat: "combined-pdf" },
           notifications: { enabled: false },
         },
       });
@@ -594,7 +585,7 @@ describe("Settings", () => {
       window.api.preferences.get.mockResolvedValue({
         success: true,
         preferences: {
-          export: { defaultFormat: "pdf" },
+          export: { defaultFormat: "combined-pdf" },
           updates: { autoDownload: true },
         },
       });
@@ -827,10 +818,10 @@ describe("Settings", () => {
 
       await renderSettings({ userId: mockUserId, onClose: mockOnClose });
 
-      // Should still render with default values
+      // Should still render with default values — "One PDF" (combined-pdf) should be active
       await waitFor(() => {
-        const select = getExportFormatSelect();
-        expect(select).toHaveValue("pdf"); // Default value
+        const onePdfBtn = screen.getByText("One PDF").closest("button");
+        expect(onePdfBtn).toHaveClass("bg-purple-500");
       });
     });
 
@@ -843,11 +834,12 @@ describe("Settings", () => {
       await renderSettings({ userId: mockUserId, onClose: mockOnClose });
 
       await waitFor(() => {
-        expect(getExportFormatSelect()).toBeInTheDocument();
+        expect(screen.getByText("Format")).toBeInTheDocument();
       });
 
-      const select = getExportFormatSelect();
-      await userEvent.selectOptions(select, "json");
+      // Click a different format button
+      const summaryBtn = screen.getByText("Summary PDF").closest("button")!;
+      await userEvent.click(summaryBtn);
 
       // Should not crash, preference update fails silently
       expect(window.api.preferences.update).toHaveBeenCalled();
@@ -859,12 +851,16 @@ describe("Settings", () => {
       await renderSettings({ userId: mockUserId, onClose: mockOnClose });
 
       await waitFor(() => {
-        expect(getExportFormatSelect()).toBeInTheDocument();
+        expect(screen.getByText("Format")).toBeInTheDocument();
       });
 
-      // Export format select should be accessible
-      const select = getExportFormatSelect();
-      expect(select).toBeInTheDocument();
+      // Export format buttons should be accessible
+      const onePdfBtn = screen.getByText("One PDF").closest("button");
+      const auditBtn = screen.getByText("Audit Package").closest("button");
+      const summaryBtn = screen.getByText("Summary PDF").closest("button");
+      expect(onePdfBtn).toBeInTheDocument();
+      expect(auditBtn).toBeInTheDocument();
+      expect(summaryBtn).toBeInTheDocument();
     });
 
     it("should have accessible buttons", async () => {

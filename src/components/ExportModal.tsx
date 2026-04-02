@@ -7,11 +7,6 @@ import logger from '../utils/logger';
 import { useFeatureGate } from "../hooks/useFeatureGate";
 import { UpgradePrompt } from "./common/UpgradePrompt";
 
-/**
- * InfoTooltip — small circled "i" icon with hover tooltip.
- * Uses Tailwind group/group-hover for CSS-only tooltip (no library).
- */
-
 interface ExportModalProps {
   transaction: Transaction;
   userId: string;
