@@ -628,7 +628,15 @@ export function LLMSettings({ userId }: LLMSettingsProps) {
   if (error) {
     return (
       <div className="text-center py-8">
-        <p className="text-red-600">{error}</p>
+        <p className="text-red-600">
+          {typeof error === 'string'
+            ? error
+            : String(
+                (error as Record<string, unknown>)?.message ??
+                (error as Record<string, unknown>)?.msg ??
+                'An unexpected error occurred'
+              )}
+        </p>
         <button
           onClick={loadConfig}
           className="mt-2 text-purple-600 hover:text-purple-700 text-sm font-medium"
