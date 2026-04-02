@@ -242,6 +242,43 @@ export function ContactsImportSettings({
   const hasGoogle = isGoogleConnected;
   const hasAnySources = hasMacOS || hasOutlook || hasGoogle;
 
+  const anySyncing = isSyncing || outlookSyncing || googleSyncing;
+
+  // All hooks must be declared before any early return to satisfy Rules of Hooks.
+  const [forceReimporting, setForceReimporting] = useState(false);
+  const [showInfoTooltip, setShowInfoTooltip] = useState(false);
+
+  // Unified import: triggers only user-selected sources
+  // Fire-and-forget by design — each sync has its own loading/error state
+  const handleImportAll = useCallback(async () => {
+    if (anySyncing || isOtherSyncRunning) return;
+    // macOS: call syncExternal directly to populate external_contacts from macOS Contacts
+    if (hasMacOS && macosContactsEnabled) {
+      handleSync(false);
+      window.api.contacts.syncExternal(userId).then(() => loadSourceStats());
+    }
+    if (hasOutlook && outlookContactsEnabled) handleOutlookSync();
+    if (hasGoogle && googleContactsEnabled) handleGoogleSync();
+  }, [anySyncing, isOtherSyncRunning, hasMacOS, hasOutlook, hasGoogle, macosContactsEnabled, outlookContactsEnabled, googleContactsEnabled, handleSync, handleOutlookSync, handleGoogleSync, userId]);
+
+  // Force re-import: TASK-2150 -- route through orchestrator with forceReimport option.
+  // The contacts sync function handles the wipe + re-sync flow internally.
+  const handleForceReimport = useCallback(async () => {
+    if (anySyncing || isOtherSyncRunning || forceReimporting) return;
+    setForceReimporting(true);
+    setLastResult(null);
+
+    // Route through orchestrator -- the contacts sync function handles
+    // forceReimport (wipe + re-import) when the option is set.
+    requestSync(['contacts'], userId, { forceReimport: true });
+
+    // forceReimporting is for immediate UI feedback. The orchestrator
+    // manages the actual running state. Clear after kick-off.
+    setForceReimporting(false);
+  }, [anySyncing, isOtherSyncRunning, forceReimporting, userId, requestSync]);
+
+  const noSourcesSelected = (!hasMacOS || !macosContactsEnabled) && (!hasOutlook || !outlookContactsEnabled) && (!hasGoogle || !googleContactsEnabled);
+
   // Render nothing useful if no sources are available
   if (!hasAnySources) {
     return (
@@ -268,42 +305,6 @@ export function ContactsImportSettings({
       </div>
     );
   }
-
-  const anySyncing = isSyncing || outlookSyncing || googleSyncing;
-
-  // Unified import: triggers only user-selected sources
-  // Fire-and-forget by design — each sync has its own loading/error state
-  const handleImportAll = useCallback(async () => {
-    if (anySyncing || isOtherSyncRunning) return;
-    // macOS: call syncExternal directly to populate external_contacts from macOS Contacts
-    if (hasMacOS && macosContactsEnabled) {
-      handleSync(false);
-      window.api.contacts.syncExternal(userId).then(() => loadSourceStats());
-    }
-    if (hasOutlook && outlookContactsEnabled) handleOutlookSync();
-    if (hasGoogle && googleContactsEnabled) handleGoogleSync();
-  }, [anySyncing, isOtherSyncRunning, hasMacOS, hasOutlook, hasGoogle, macosContactsEnabled, outlookContactsEnabled, googleContactsEnabled, handleSync, handleOutlookSync, handleGoogleSync, userId]);
-
-  // Force re-import: TASK-2150 -- route through orchestrator with forceReimport option.
-  // The contacts sync function handles the wipe + re-sync flow internally.
-  const [forceReimporting, setForceReimporting] = useState(false);
-  const handleForceReimport = useCallback(async () => {
-    if (anySyncing || isOtherSyncRunning || forceReimporting) return;
-    setForceReimporting(true);
-    setLastResult(null);
-
-    // Route through orchestrator -- the contacts sync function handles
-    // forceReimport (wipe + re-import) when the option is set.
-    requestSync(['contacts'], userId, { forceReimport: true });
-
-    // forceReimporting is for immediate UI feedback. The orchestrator
-    // manages the actual running state. Clear after kick-off.
-    setForceReimporting(false);
-  }, [anySyncing, isOtherSyncRunning, forceReimporting, userId, requestSync]);
-
-  const [showInfoTooltip, setShowInfoTooltip] = useState(false);
-
-  const noSourcesSelected = (!hasMacOS || !macosContactsEnabled) && (!hasOutlook || !outlookContactsEnabled) && (!hasGoogle || !googleContactsEnabled);
 
   return (
     <div className="p-4 bg-gray-50 rounded-lg border border-gray-200">
