@@ -80,8 +80,12 @@ export function NotificationToast({
         />
       </svg>
 
-      {/* Message */}
-      <p className="flex-1 text-sm font-medium">{notification.message}</p>
+      {/* Message — defensive: ensure non-string values don't crash React (#310) */}
+      <p className="flex-1 text-sm font-medium">
+        {typeof notification.message === 'string'
+          ? notification.message
+          : String(notification.message ?? 'An error occurred')}
+      </p>
 
       {/* Action Button (optional) */}
       {notification.action && (

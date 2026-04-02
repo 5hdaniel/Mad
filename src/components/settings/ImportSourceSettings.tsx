@@ -191,7 +191,7 @@ export function ImportSourceSettings({ userId, onSourceChange }: ImportSourceSet
       const qrResult = await window.api.pairing.generateQR();
 
       if (!qrResult.success || !qrResult.result) {
-        setAndroidError(qrResult.error ?? "Failed to generate QR code");
+        setAndroidError(typeof qrResult.error === 'string' ? qrResult.error : String(qrResult.error ?? "Failed to generate QR code"));
         setGenerating(false);
         return;
       }
@@ -435,7 +435,7 @@ export function ImportSourceSettings({ userId, onSourceChange }: ImportSourceSet
               {/* Error display */}
               {androidError && (
                 <div className="text-xs text-red-700 bg-red-50 p-2 rounded border border-red-200">
-                  {androidError}
+                  {typeof androidError === 'string' ? androidError : String(androidError)}
                 </div>
               )}
             </div>

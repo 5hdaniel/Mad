@@ -19,6 +19,7 @@ import { usePlatform } from "../../contexts/PlatformContext";
 import { useSyncOrchestrator } from "../../hooks/useSyncOrchestrator";
 import { useNetwork } from "../../contexts/NetworkContext";
 import logger from '../../utils/logger';
+import { safeErrorMessage } from '../../utils/formatUtils';
 
 interface ContactsImportSettingsProps {
   userId: string;
@@ -118,7 +119,7 @@ export function ContactsImportSettings({
       loadSyncStatus();
       loadSourceStats();
     } else if (contactsItem?.status === 'error') {
-      setLastResult({ success: false, error: contactsItem.error });
+      setLastResult({ success: false, error: safeErrorMessage(contactsItem.error) });
     }
   }, [contactsItem?.status, contactsItem?.error]);
 
@@ -176,7 +177,7 @@ export function ContactsImportSettings({
         setOutlookReconnectRequired(true);
         setOutlookLastResult(null);
       } else {
-        setOutlookLastResult({ success: false, error: result.error });
+        setOutlookLastResult({ success: false, error: safeErrorMessage(result.error) });
       }
     } catch (error) {
       setOutlookLastResult({
@@ -206,7 +207,7 @@ export function ContactsImportSettings({
         setGoogleReconnectRequired(true);
         setGoogleLastResult(null);
       } else {
-        setGoogleLastResult({ success: false, error: result.error });
+        setGoogleLastResult({ success: false, error: safeErrorMessage(result.error) });
       }
     } catch (error) {
       setGoogleLastResult({
@@ -627,7 +628,7 @@ export function ContactsImportSettings({
               )}
             </>
           ) : (
-            <>Sync failed: {lastResult.error}</>
+            <>Sync failed: {safeErrorMessage(lastResult.error)}</>
           )}
         </div>
       )}
@@ -650,7 +651,7 @@ export function ContactsImportSettings({
               contacts imported.
             </>
           ) : (
-            <>Outlook sync failed: {outlookLastResult.error}</>
+            <>Outlook sync failed: {safeErrorMessage(outlookLastResult.error)}</>
           )}
         </div>
       )}
@@ -673,7 +674,7 @@ export function ContactsImportSettings({
               contacts imported.
             </>
           ) : (
-            <>Google sync failed: {googleLastResult.error}</>
+            <>Google sync failed: {safeErrorMessage(googleLastResult.error)}</>
           )}
         </div>
       )}

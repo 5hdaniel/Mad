@@ -362,7 +362,7 @@ export function SupportTicketDialog({
           {/* Error */}
           {error && (
             <div className="bg-red-50 border border-red-200 rounded-lg p-3">
-              <p className="text-sm text-red-700">{error}</p>
+              <p className="text-sm text-red-700">{typeof error === 'string' ? error : String(error)}</p>
             </div>
           )}
         </form>
