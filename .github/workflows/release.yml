@@ -148,11 +148,10 @@ jobs:
           fi
           echo ".env.production verified: $(wc -l < .env.production) lines"
 
-          # Package with electron-builder (skip rebuild)
-          PUBLISH_VALUE="always"
+          # Package with electron-builder (publish handled by Mirror step)
           if [ -n "$CSC_LINK" ]; then
             echo "Packaging signed macOS app..."
-            npx electron-builder --publish "$PUBLISH_VALUE"
+            npx electron-builder --publish never
           else
             echo "Packaging unsigned macOS app..."
             CSC_IDENTITY_AUTO_DISCOVERY=false npx electron-builder --config.mac.identity=null
@@ -308,7 +307,7 @@ jobs:
           # Package with electron-builder (skip rebuild)
           if ($env:WIN_CSC_LINK) {
             echo "Packaging signed Windows app..."
-            npx electron-builder --publish always
+            npx electron-builder --publish never
           } else {
             echo "Packaging unsigned Windows app..."
             npx electron-builder
