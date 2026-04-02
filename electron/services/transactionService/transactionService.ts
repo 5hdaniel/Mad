@@ -1530,8 +1530,27 @@ class TransactionService {
       contactNameMap = this._getContactNameMapFromExternalContacts(userId);
     }
 
+    // BACKLOG-1547: Also merge names from app's own contacts + contact_phones table
+    const appContactNames = await this._getContactNameMapFromAppContacts(userId);
+    for (const [key, value] of Object.entries(appContactNames)) {
+      if (!contactNameMap[key]) {
+        contactNameMap[key] = value;
+      }
+    }
+
     const enrichedContacts = contacts.map((c) => {
-      const name = contactNameMap[c.contact] || contactNameMap[c.contact.replace(/\D/g, '')] || null;
+      // BACKLOG-1547: Try 4 normalization variants for phone-to-name resolution
+      const raw = c.contact;
+      const digitsOnly = raw.replace(/\D/g, '');
+      const last10 = digitsOnly.length >= 10 ? digitsOnly.slice(-10) : '';
+      const e164 = digitsOnly.length === 10 ? `+1${digitsOnly}` : digitsOnly.length > 10 ? `+${digitsOnly}` : '';
+
+      const name =
+        contactNameMap[raw] ||
+        contactNameMap[digitsOnly] ||
+        (last10 && contactNameMap[last10]) ||
+        (e164 && contactNameMap[e164]) ||
+        null;
       return {
         ...c,
         contactName: name,
@@ -1575,6 +1594,64 @@ class TransactionService {
     }
 
     return map;
+  }
+
+  /**
+   * BACKLOG-1547: Build a phone number to name map from app's contacts + contact_phones tables
+   * This catches contacts that were imported/synced into the app but might not be
+   * in macOS Contacts or external_contacts.
+   */
+  private async _getContactNameMapFromAppContacts(userId: string): Promise<Record<string, string>> {
+    try {
+      const contacts = await databaseService.getImportedContactsByUserId(userId);
+      const map: Record<string, string> = {};
+
+      for (const contact of contacts) {
+        const name = contact.display_name || contact.name;
+        if (!name) continue;
+
+        // Map primary phone
+        if (contact.phone) {
+          map[contact.phone] = name;
+          const digitsOnly = contact.phone.replace(/\D/g, '');
+          if (digitsOnly.length >= 10) {
+            map[digitsOnly] = name;
+            map[digitsOnly.slice(-10)] = name;
+            if (digitsOnly.length === 10) {
+              map[`+1${digitsOnly}`] = name;
+            } else if (digitsOnly.length > 10) {
+              map[`+${digitsOnly}`] = name;
+            }
+          }
+        }
+
+        // Map all phones from contact_phones table
+        if (contact.allPhones) {
+          for (const phone of contact.allPhones) {
+            map[phone] = name;
+            const digitsOnly = phone.replace(/\D/g, '');
+            if (digitsOnly.length >= 10) {
+              map[digitsOnly] = name;
+              map[digitsOnly.slice(-10)] = name;
+              if (digitsOnly.length === 10) {
+                map[`+1${digitsOnly}`] = name;
+              } else if (digitsOnly.length > 10) {
+                map[`+${digitsOnly}`] = name;
+              }
+            }
+          }
+        }
+      }
+
+      return map;
+    } catch (err) {
+      logService.warn(
+        "Failed to load contact names from app contacts table",
+        "TransactionService._getContactNameMapFromAppContacts",
+        { error: err instanceof Error ? err.message : String(err) },
+      );
+      return {};
+    }
   }
 
   /**

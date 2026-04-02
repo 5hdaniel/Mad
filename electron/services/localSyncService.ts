@@ -21,6 +21,7 @@ import databaseService from "./databaseService";
 import { normalizePhone } from "./messageMatchingService";
 import { pairingService } from "./pairingService";
 import * as externalContactDb from "./db/externalContactDbService";
+import { autoLinkNewMessagesForUserDebounced } from "./autoLinkService";
 import type {
   EncryptedPayload,
   SyncPayload,
@@ -590,6 +591,13 @@ class LocalSyncService {
             `[LocalSync] Stored ${storedCount} messages (${syncPayload.messages.length - storedCount} duplicates skipped)`,
             LOG_TAG
           );
+
+          // BACKLOG-1546: Auto-link newly synced messages to transactions.
+          // Debounced because Android sends messages in small batches — we wait
+          // until the stream settles (2s) before running auto-link once.
+          if (storedCount > 0) {
+            autoLinkNewMessagesForUserDebounced(this.userId);
+          }
         } catch (err) {
           const storeError = err instanceof Error ? err.message : "Storage failed";
           logService.error(`[LocalSync] Message storage error: ${storeError}`, LOG_TAG);

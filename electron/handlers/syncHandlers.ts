@@ -15,6 +15,7 @@ import {
   SyncResult,
 } from "../services/deviceSyncOrchestrator";
 import { iPhoneSyncStorageService } from "../services/iPhoneSyncStorageService";
+import { autoLinkNewMessagesForUser } from "../services/autoLinkService";
 import sessionService from "../services/sessionService";
 import type { iOSDevice } from "../types/device";
 import { rateLimiters } from "../utils/rateLimit";
@@ -446,6 +447,16 @@ function setupEventForwarding(): void {
           duration: persistResult.duration,
         });
         log.info("[SyncHandlers] sync:storage-complete sent successfully");
+
+        // BACKLOG-1546: Auto-link newly synced messages to transactions.
+        // Fire-and-forget — don't block the sync completion response.
+        if (persistResult.messagesStored > 0 && userIdForPersistence) {
+          autoLinkNewMessagesForUser(userIdForPersistence).catch((autoLinkError) => {
+            log.warn("[SyncHandlers] Post-sync auto-link failed", {
+              error: autoLinkError instanceof Error ? autoLinkError.message : "Unknown",
+            });
+          });
+        }
 
         // TASK-2121: Fire-and-forget upsert of lastSyncTime to Supabase
         const deviceUdid = syncSessionDeviceUdid;

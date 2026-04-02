@@ -11,6 +11,7 @@ import databaseService from "../services/databaseService";
 import supabaseService from "../services/supabaseService";
 import macOSMessagesImportService from "../services/macOSMessagesImportService";
 import * as externalContactDb from "../services/db/externalContactDbService";
+import { autoLinkNewMessagesForUser } from "../services/autoLinkService";
 import { wrapHandler } from "../utils/wrapHandler";
 import type {
   MacOSImportResult,
@@ -265,6 +266,17 @@ export function registerMessageImportHandlers(mainWindow: BrowserWindow): void {
                 operation: "update-external-contacts-dates",
                 error_message: externalUpdateError instanceof Error ? externalUpdateError.message : String(externalUpdateError),
               },
+            });
+          }
+
+          // BACKLOG-1546: Auto-link newly imported messages to transactions
+          // Fire-and-forget — don't block the import response
+          if (result.messagesImported > 0) {
+            autoLinkNewMessagesForUser(validUserId).catch((autoLinkError) => {
+              logService.warn(
+                `Post-import auto-link failed: ${autoLinkError instanceof Error ? autoLinkError.message : "Unknown"}`,
+                "MessageImportHandlers"
+              );
             });
           }
         } else {
