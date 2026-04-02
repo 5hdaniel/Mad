@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { ResponsiveModal } from "./common/ResponsiveModal";
+import { InfoTooltip } from "./common/InfoTooltip";
 import type { Transaction } from "../../electron/types/models";
 import { settingsService, transactionService } from '../services';
 import logger from '../utils/logger';
@@ -10,25 +11,6 @@ import { UpgradePrompt } from "./common/UpgradePrompt";
  * InfoTooltip — small circled "i" icon with hover tooltip.
  * Uses Tailwind group/group-hover for CSS-only tooltip (no library).
  */
-function InfoTooltip({ text }: { text: string }) {
-  return (
-    <span className="relative group inline-flex items-center ml-1.5">
-      <svg
-        className="w-4 h-4 text-gray-400 group-hover:text-purple-500 transition-colors cursor-help"
-        fill="none"
-        stroke="currentColor"
-        viewBox="0 0 24 24"
-      >
-        <circle cx="12" cy="12" r="10" strokeWidth="2" />
-        <path strokeLinecap="round" strokeWidth="2" d="M12 16v-4m0-4h.01" />
-      </svg>
-      <span className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-3 py-1.5 rounded-lg bg-gray-900 text-white text-xs whitespace-nowrap opacity-0 pointer-events-none group-hover:opacity-100 group-hover:pointer-events-auto transition-opacity z-10 shadow-lg max-w-xs text-center">
-        {text}
-        <span className="absolute top-full left-1/2 -translate-x-1/2 border-4 border-transparent border-t-gray-900" />
-      </span>
-    </span>
-  );
-}
 
 interface ExportModalProps {
   transaction: Transaction;
@@ -578,7 +560,7 @@ function ExportModal({
                   >
                     <div className="flex items-center">
                       <span className="font-semibold text-sm">One PDF</span>
-                      <InfoTooltip text="Combine all communications into a single PDF document" />
+                      <InfoTooltip text="Summary report + all email threads + all text conversations merged into a single PDF file" />
                     </div>
                     <div className="text-xs opacity-80 mt-0.5">Combined PDF with all content</div>
                   </button>
@@ -657,18 +639,12 @@ function ExportModal({
                 </div>
               </div>
 
-              {/* ATTACHMENTS section - for Audit Package and One PDF (not Summary PDF) */}
-              {(exportFormat === "folder" || exportFormat === "combined-pdf") && (
-              <div>
-                <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">
+              {/* ATTACHMENTS section - grayed out for Summary PDF */}
+              <div className={exportFormat === "pdf" ? "opacity-40 pointer-events-none" : ""}>
+                <label className="flex items-center text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">
                   Attachments
+                  <InfoTooltip text="Attachments are exported as separate files in an /attachments folder, not embedded in the PDF." />
                 </label>
-
-                {/* Info note - right under the section header, before the buttons */}
-                <p className="text-xs text-gray-500 flex items-start gap-1.5 mb-2">
-                  <span className="shrink-0 mt-px">i</span>
-                  <span>Attachments are exported as separate files in an /attachments folder, not embedded in the PDF.</span>
-                </p>
 
                 <div className="flex flex-wrap gap-1.5 sm:gap-2">
                   {/* All - requires both attachment licenses, and content must be "both" */}
@@ -763,7 +739,6 @@ function ExportModal({
                 )}
 
               </div>
-              )}
 
               {/* Save as default checkbox (BACKLOG-1551) */}
               <div className="pt-2 border-t border-gray-200">
@@ -778,18 +753,7 @@ function ExportModal({
                 </label>
               </div>
 
-              {/* Format info boxes */}
-              {exportFormat === "combined-pdf" && (
-                <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg">
-                  <p className="text-sm text-blue-800 font-medium">One PDF includes:</p>
-                  <ul className="mt-2 text-xs text-blue-700 space-y-1">
-                    <li>Summary report with transaction overview</li>
-                    {canExportEmail && <li>All email threads as formatted pages</li>}
-                    {canExportText && <li>All text conversations as formatted pages</li>}
-                    <li>Everything merged into a single PDF file</li>
-                  </ul>
-                </div>
-              )}
+              {/* Format info moved to InfoTooltip on One PDF button */}
             </div>
           )}
 
