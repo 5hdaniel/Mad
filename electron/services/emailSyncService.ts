@@ -226,6 +226,11 @@ async function fetchStoreAndDedup(params: {
   let stored = 0;
   let errors = 0;
 
+  // BACKLOG-1549: Look up the user's connected email address to compute direction
+  const oauthProvider = provider === "outlook" ? "microsoft" : "google";
+  const oauthToken = await databaseService.getOAuthToken(userId, oauthProvider as "microsoft" | "google", "mailbox");
+  const userEmail = oauthToken?.connected_email_address?.toLowerCase() ?? null;
+
   const emails = await fetchFn();
 
   // Dedup against previously seen IDs
@@ -285,13 +290,23 @@ async function fetchStoreAndDedup(params: {
         for (const email of emailsToInsert) {
           try {
             const id = crypto.randomUUID();
+
+            // BACKLOG-1549: Compute email direction from sender vs user's email
+            let direction: "inbound" | "outbound" | null = null;
+            if (userEmail && email.from) {
+              // Extract email address from "Name <email>" or plain "email" format
+              const fromMatch = email.from.match(/<([^>]+)>/);
+              const fromAddress = (fromMatch ? fromMatch[1] : email.from).toLowerCase().trim();
+              direction = fromAddress === userEmail ? "outbound" : "inbound";
+            }
+
             insertStmt.run(
               id,
               userId,
               email.id,
               provider,
               null, // account_id
-              null, // direction
+              direction, // BACKLOG-1549: computed from sender vs user email
               email.subject ?? null,
               email.bodyPlain ?? null,
               email.body ?? null,
