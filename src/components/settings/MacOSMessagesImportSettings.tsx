@@ -17,6 +17,7 @@ import { usePlatform } from "../../contexts/PlatformContext";
 import { useSyncOrchestrator } from "../../hooks/useSyncOrchestrator";
 import { settingsService } from '../../services';
 import logger from '../../utils/logger';
+import { safeErrorMessage } from '../../utils/formatUtils';
 
 /** Import progress state for inline display */
 interface ImportProgressState {
@@ -253,7 +254,7 @@ export function MacOSMessagesImportSettings({
       setLastResult({
         success: false,
         messagesImported: 0,
-        error: messagesItem.error || 'Import failed',
+        error: safeErrorMessage(messagesItem.error, 'Import failed'),
       });
     }
   }, [messagesItem?.status, messagesItem?.error, messagesItem?.warning]);
@@ -392,7 +393,7 @@ export function MacOSMessagesImportSettings({
               new messages.
             </>
           ) : (
-            <>Import failed: {lastResult.error}</>
+            <>Import failed: {safeErrorMessage(lastResult.error)}</>
           )}
         </div>
       )}

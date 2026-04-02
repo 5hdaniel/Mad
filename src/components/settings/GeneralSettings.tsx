@@ -3,6 +3,7 @@ import { useNotification } from "@/hooks/useNotification";
 import { useNetwork } from '../../contexts/NetworkContext';
 import { settingsService } from '../../services';
 import logger from '../../utils/logger';
+import { safeErrorMessage } from '../../utils/formatUtils';
 import type { PreferencesResult } from './types';
 
 interface GeneralSettingsProps {
@@ -96,7 +97,7 @@ export function GeneralSettings({ userId, initialPreferences }: GeneralSettingsP
       const result = await window.api.update.checkForUpdates();
       if (result?.updateAvailable) {
         setUpdateStatus('available');
-        setUpdateVersion(result.version ?? '');
+        setUpdateVersion(typeof result.version === 'string' ? result.version : String(result.version ?? ''));
       } else {
         setUpdateStatus('up-to-date');
       }
@@ -116,7 +117,7 @@ export function GeneralSettings({ userId, initialPreferences }: GeneralSettingsP
       if (result?.success) {
         notify.success("Desktop notification sent! Check your notification center if you don't see a banner.");
       } else {
-        notify.warning(result?.error || "Notifications may not be supported on this system.");
+        notify.warning(safeErrorMessage(result?.error, "Notifications may not be supported on this system."));
       }
     } catch {
       notify.error("Failed to send test notification.");

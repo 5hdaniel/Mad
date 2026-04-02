@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback } from "react";
 import { ResponsiveModal } from "../common/ResponsiveModal";
 import { llmService } from '../../services';
 import logger from '../../utils/logger';
+import { safeErrorMessage } from '../../utils/formatUtils';
 
 /**
  * LLM Configuration types - matches electron/types/ipc.ts
@@ -629,13 +630,7 @@ export function LLMSettings({ userId }: LLMSettingsProps) {
     return (
       <div className="text-center py-8">
         <p className="text-red-600">
-          {typeof error === 'string'
-            ? error
-            : String(
-                (error as Record<string, unknown>)?.message ??
-                (error as Record<string, unknown>)?.msg ??
-                'An unexpected error occurred'
-              )}
+          {safeErrorMessage(error)}
         </p>
         <button
           onClick={loadConfig}

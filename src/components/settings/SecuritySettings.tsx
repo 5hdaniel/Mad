@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback } from "react";
 import { useNotification } from "@/hooks/useNotification";
 import { useNetwork } from '../../contexts/NetworkContext';
 import logger from '../../utils/logger';
+import { safeErrorMessage } from '../../utils/formatUtils';
 import { formatRelativeTime } from './types';
 
 interface ActiveDevice {
@@ -60,7 +61,7 @@ export function SecuritySettings({ userId, onLogout }: SecuritySettingsProps) {
           await onLogout();
         }
       } else {
-        notify.error("Failed to sign out of all devices: " + (result.error || "Unknown error"));
+        notify.error("Failed to sign out of all devices: " + safeErrorMessage(result.error, "Unknown error"));
       }
     } catch (error) {
       logger.error("Failed to sign out of all devices:", error);
@@ -151,7 +152,7 @@ export function SecuritySettings({ userId, onLogout }: SecuritySettingsProps) {
                         />
                       </svg>
                       <span className="font-medium text-gray-800">
-                        {device.device_name || "Unknown device"}
+                        {typeof device.device_name === 'string' ? (device.device_name || "Unknown device") : "Unknown device"}
                       </span>
                       {device.isCurrentDevice && (
                         <span className="px-1.5 py-0.5 rounded text-[10px] font-medium bg-blue-100 text-blue-700">
@@ -161,7 +162,7 @@ export function SecuritySettings({ userId, onLogout }: SecuritySettingsProps) {
                     </div>
                   </div>
                   <div className="mt-1 flex items-center gap-3 text-gray-500 ml-6">
-                    <span>{device.os || device.platform}</span>
+                    <span>{String(device.os || device.platform || "Unknown")}</span>
                     <span className="text-gray-300">|</span>
                     <span>
                       {formatRelativeTime(device.last_seen_at)}
