@@ -93,6 +93,47 @@ export function getUnlinkedEmails(userId: string, limit = 500): Communication[] 
 }
 
 /**
+ * Search locally cached emails by text query (subject, sender, body).
+ * Used as fallback when provider $search fails (e.g., pure numeric queries).
+ */
+export function searchLocalEmailCache(userId: string, query: string, limit = 500): Array<{
+  id: string;
+  subject: string | null;
+  sender: string | null;
+  sent_at: string | null;
+  body_preview: string | null;
+  email_thread_id: string | null;
+  has_attachments: boolean;
+}> {
+  const db = ensureDb();
+  const pattern = `%${query}%`;
+  const sql = `
+    SELECT
+      e.id,
+      e.subject,
+      e.sender,
+      e.sent_at,
+      SUBSTR(e.body_plain, 1, 200) as body_preview,
+      e.thread_id as email_thread_id,
+      e.has_attachments
+    FROM emails e
+    WHERE e.user_id = ?
+      AND (LOWER(e.subject) LIKE LOWER(?) OR LOWER(e.sender) LIKE LOWER(?) OR LOWER(e.body_plain) LIKE LOWER(?))
+    ORDER BY e.sent_at DESC
+    LIMIT ?
+  `;
+  return db.prepare(sql).all(userId, pattern, pattern, pattern, limit) as Array<{
+    id: string;
+    subject: string | null;
+    sender: string | null;
+    sent_at: string | null;
+    body_preview: string | null;
+    email_thread_id: string | null;
+    has_attachments: boolean;
+  }>;
+}
+
+/**
  * Get distinct contacts (phone numbers) with unlinked message counts
  * Used for contact-first message browsing
  */
