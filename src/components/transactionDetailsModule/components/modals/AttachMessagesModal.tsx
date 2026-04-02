@@ -237,11 +237,23 @@ export function AttachMessagesModal({
           }
 
           // Build phone-to-name lookup from all contacts
+          // BACKLOG-1547: Include allPhones (not just primary phone) for complete resolution
           if (allContactsResult.success && allContactsResult.contacts) {
             const phoneLookup: Array<{ phone: string; name: string }> = [];
             for (const c of allContactsResult.contacts) {
-              if (c.name && c.phone) {
+              if (!c.name) continue;
+              // Add primary phone
+              if (c.phone) {
                 phoneLookup.push({ phone: c.phone, name: c.name });
+              }
+              // Add all additional phones from contact_phones table
+              const allPhones = (c as { allPhones?: string[] }).allPhones;
+              if (allPhones && Array.isArray(allPhones)) {
+                for (const phone of allPhones) {
+                  if (phone && phone !== c.phone) {
+                    phoneLookup.push({ phone, name: c.name });
+                  }
+                }
               }
             }
             setAllContacts(phoneLookup);
