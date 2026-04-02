@@ -58,6 +58,16 @@ export interface ContactAutoRolePreferences {
 }
 
 /**
+ * Export preferences (BACKLOG-1551)
+ */
+export interface ExportPreferences {
+  defaultFormat?: string;
+  emailExportMode?: "thread" | "individual";
+  contentType?: "both" | "emails" | "texts";
+  attachmentType?: "all" | "email" | "text" | "none";
+}
+
+/**
  * User preferences object
  */
 export interface UserPreferences {
@@ -65,6 +75,7 @@ export interface UserPreferences {
   audit?: AuditPreferences;
   contactSources?: ContactSourcePreferences;
   contactAutoRole?: ContactAutoRolePreferences;
+  export?: ExportPreferences;
   [key: string]: unknown;
 }
 
