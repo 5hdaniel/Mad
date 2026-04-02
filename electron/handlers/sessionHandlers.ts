@@ -1256,10 +1256,40 @@ async function handleValidateRemoteSession(): Promise<{ valid: boolean }> {
     const client = supabaseService.getClient();
     const { data, error } = await client.auth.getUser();
     if (error || !data.user) {
+      // Server-side errors (5xx) are not auth failures — assume valid
+      // This prevents logout when Supabase has transient issues (e.g., "site url is improperly formatted")
+      const statusCode = (error as unknown as { status?: number })?.status;
+      const errorMsg = error?.message || "";
+      if (statusCode && statusCode >= 500) {
+        await logService.warn(
+          "[SessionValidator] Supabase server error during validation, assuming valid",
+          "SessionHandlers",
+          { error: errorMsg, status: statusCode }
+        );
+        Sentry.captureMessage("Session validation: Supabase server error (assumed valid)", {
+          level: "warning",
+          tags: { service: "session-validator", supabase_status: String(statusCode) },
+          extra: { error: errorMsg, status: statusCode },
+        });
+        return { valid: true };
+      }
+      if (errorMsg.includes("unexpected_failure") || errorMsg.includes("site url")) {
+        await logService.warn(
+          "[SessionValidator] Supabase config error during validation, assuming valid",
+          "SessionHandlers",
+          { error: errorMsg }
+        );
+        Sentry.captureMessage("Session validation: Supabase config error (assumed valid)", {
+          level: "warning",
+          tags: { service: "session-validator", error_type: "config" },
+          extra: { error: errorMsg },
+        });
+        return { valid: true };
+      }
       await logService.info(
         "[SessionValidator] Remote session invalid",
         "SessionHandlers",
-        { error: error?.message }
+        { error: errorMsg }
       );
       return { valid: false };
     }
