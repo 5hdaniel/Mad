@@ -6,6 +6,30 @@ import logger from '../utils/logger';
 import { useFeatureGate } from "../hooks/useFeatureGate";
 import { UpgradePrompt } from "./common/UpgradePrompt";
 
+/**
+ * InfoTooltip — small circled "i" icon with hover tooltip.
+ * Uses Tailwind group/group-hover for CSS-only tooltip (no library).
+ */
+function InfoTooltip({ text }: { text: string }) {
+  return (
+    <span className="relative group inline-flex items-center ml-1.5">
+      <svg
+        className="w-4 h-4 text-gray-400 group-hover:text-purple-500 transition-colors cursor-help"
+        fill="none"
+        stroke="currentColor"
+        viewBox="0 0 24 24"
+      >
+        <circle cx="12" cy="12" r="10" strokeWidth="2" />
+        <path strokeLinecap="round" strokeWidth="2" d="M12 16v-4m0-4h.01" />
+      </svg>
+      <span className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-3 py-1.5 rounded-lg bg-gray-900 text-white text-xs whitespace-nowrap opacity-0 pointer-events-none group-hover:opacity-100 group-hover:pointer-events-auto transition-opacity z-10 shadow-lg max-w-xs text-center">
+        {text}
+        <span className="absolute top-full left-1/2 -translate-x-1/2 border-4 border-transparent border-t-gray-900" />
+      </span>
+    </span>
+  );
+}
+
 interface ExportModalProps {
   transaction: Transaction;
   userId: string;
@@ -59,6 +83,7 @@ function ExportModal({
     message: string;
   } | null>(null);
   const [exportedPath, setExportedPath] = useState<string | null>(null);
+  const [saveAsDefault, setSaveAsDefault] = useState(false);
 
   // Feature gate check
   const { isAllowed, loading: featureGateLoading } = useFeatureGate();
@@ -85,15 +110,20 @@ function ExportModal({
   // Formats that are currently implemented
   const implementedFormats = ["pdf", "folder", "combined-pdf"];
 
-  // Load user preferences to set default export format
+  // Load user preferences to set default export options
   useEffect(() => {
-    const loadDefaultFormat = async () => {
+    const loadDefaults = async () => {
       if (userId) {
         try {
           const result = await settingsService.getPreferences(userId);
           if (result.success && result.data) {
             const prefs = result.data as {
-              export?: { defaultFormat?: string; emailExportMode?: string };
+              export?: {
+                defaultFormat?: string;
+                emailExportMode?: string;
+                contentType?: string;
+                attachmentType?: string;
+              };
             };
             // Only use saved preference if it's an implemented format
             if (prefs.export?.defaultFormat && implementedFormats.includes(prefs.export.defaultFormat)) {
@@ -103,15 +133,23 @@ function ExportModal({
             if (prefs.export?.emailExportMode === "thread" || prefs.export?.emailExportMode === "individual") {
               setEmailExportMode(prefs.export.emailExportMode);
             }
+            // Load content type preference (BACKLOG-1551)
+            if (prefs.export?.contentType === "both" || prefs.export?.contentType === "emails" || prefs.export?.contentType === "texts") {
+              setContentType(prefs.export.contentType);
+            }
+            // Load attachment type preference (BACKLOG-1551)
+            if (prefs.export?.attachmentType === "all" || prefs.export?.attachmentType === "email" || prefs.export?.attachmentType === "text" || prefs.export?.attachmentType === "none") {
+              setAttachmentType(prefs.export.attachmentType);
+            }
           }
         } catch (error) {
-          logger.error("Failed to load export format preference:", error);
-          // If loading fails, keep the default 'folder' format
+          logger.error("Failed to load export preferences:", error);
+          // If loading fails, keep the defaults
         }
       }
     };
 
-    loadDefaultFormat();
+    loadDefaults();
   }, [userId]);
 
   // Adjust attachmentType default when feature gates finish loading
@@ -176,6 +214,23 @@ function ExportModal({
         setStep(1);
         setExporting(false);
         return;
+      }
+
+      // Save export options as defaults if checkbox is checked (BACKLOG-1551)
+      if (saveAsDefault && userId) {
+        try {
+          await settingsService.updatePreferences(userId, {
+            export: {
+              defaultFormat: exportFormat,
+              emailExportMode,
+              contentType,
+              attachmentType,
+            },
+          });
+        } catch (err) {
+          logger.error("Failed to save export defaults:", err);
+          // Non-blocking — continue with export even if saving defaults fails
+        }
       }
 
       let result;
@@ -521,7 +576,10 @@ function ExportModal({
                           : "bg-gray-100 text-gray-700 hover:bg-gray-200"
                     }`}
                   >
-                    <div className="font-semibold text-sm">One PDF</div>
+                    <div className="flex items-center">
+                      <span className="font-semibold text-sm">One PDF</span>
+                      <InfoTooltip text="Combine all communications into a single PDF document" />
+                    </div>
                     <div className="text-xs opacity-80 mt-0.5">Combined PDF with all content</div>
                   </button>
                   <button
@@ -532,8 +590,9 @@ function ExportModal({
                         : "bg-gray-100 text-gray-700 hover:bg-gray-200"
                     }`}
                   >
-                    <div>
+                    <div className="flex items-center">
                       <span className="font-semibold text-sm">Audit Package</span>
+                      <InfoTooltip text="Export as individual files organized in folders" />
                     </div>
                     <div className="text-xs opacity-80 mt-0.5">
                       Folder with individual PDFs
@@ -547,7 +606,10 @@ function ExportModal({
                         : "bg-gray-100 text-gray-700 hover:bg-gray-200"
                     }`}
                   >
-                    <div className="font-semibold text-sm">Summary PDF</div>
+                    <div className="flex items-center">
+                      <span className="font-semibold text-sm">Summary PDF</span>
+                      <InfoTooltip text="Generate a summary report PDF without full message content" />
+                    </div>
                     <div className="text-xs opacity-80 mt-0.5">
                       Transaction report only
                     </div>
@@ -563,6 +625,11 @@ function ExportModal({
                 <div className="flex flex-wrap gap-1.5 sm:gap-2">
                   {(["both", "emails", "texts"] as const).map((value) => {
                     const labels: Record<string, string> = { both: "Both", emails: "Emails Only", texts: "Texts Only" };
+                    const tooltips: Record<string, string> = {
+                      both: "Export both email threads and text message conversations",
+                      emails: "Export only email threads",
+                      texts: "Export only text message conversations",
+                    };
                     const isDisabled = (value === "emails" && !canExportEmail) || (value === "texts" && !canExportText);
                     return (
                       <button
@@ -579,6 +646,7 @@ function ExportModal({
                       >
                         <span className="flex items-center gap-1.5">
                           {labels[value]}
+                          <InfoTooltip text={tooltips[value]} />
                           {isDisabled && (
                             <span className="text-xs bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded">Upgrade</span>
                           )}
@@ -617,6 +685,7 @@ function ExportModal({
                   >
                     <span className="flex items-center gap-1.5">
                       All
+                      <InfoTooltip text="Include both email and text message attachments" />
                       {(!canAttachEmail || !canAttachText) && (
                         <span className="text-xs bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded">Upgrade</span>
                       )}
@@ -636,6 +705,7 @@ function ExportModal({
                   >
                     <span className="flex items-center gap-1.5">
                       Email only
+                      <InfoTooltip text="Include only email attachments (images, documents)" />
                       {!canAttachEmail && (
                         <span className="text-xs bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded">Upgrade</span>
                       )}
@@ -655,6 +725,7 @@ function ExportModal({
                   >
                     <span className="flex items-center gap-1.5">
                       Text only
+                      <InfoTooltip text="Include only text message attachments (photos, videos)" />
                       {!canAttachText && (
                         <span className="text-xs bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded">Upgrade</span>
                       )}
@@ -669,7 +740,10 @@ function ExportModal({
                         : "bg-gray-100 text-gray-700 hover:bg-gray-200"
                     }`}
                   >
-                    None
+                    <span className="flex items-center gap-1.5">
+                      None
+                      <InfoTooltip text="Export without any attachments" />
+                    </span>
                   </button>
                 </div>
 
@@ -690,6 +764,19 @@ function ExportModal({
 
               </div>
               )}
+
+              {/* Save as default checkbox (BACKLOG-1551) */}
+              <div className="pt-2 border-t border-gray-200">
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={saveAsDefault}
+                    onChange={(e) => setSaveAsDefault(e.target.checked)}
+                    className="w-4 h-4 rounded border-gray-300 text-purple-600 focus:ring-purple-500"
+                  />
+                  <span className="text-sm text-gray-600">Save these options as my default</span>
+                </label>
+              </div>
 
               {/* Format info boxes */}
               {exportFormat === "combined-pdf" && (
