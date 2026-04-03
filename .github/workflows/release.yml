@@ -260,11 +260,8 @@ jobs:
           echo ".env.production created with $($content.Split("`n").Count) lines"
         shell: pwsh
 
-      - name: Package and Sign Windows App
+      - name: Package Windows App (unsigned)
         env:
-          # Code signing (EV or OV certificate)
-          WIN_CSC_LINK: ${{ secrets.WIN_CSC_LINK }}
-          WIN_CSC_KEY_PASSWORD: ${{ secrets.WIN_CSC_KEY_PASSWORD }}
           # GitHub token for publishing
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           # Sentry source map upload (TASK-1967)
@@ -304,15 +301,24 @@ jobs:
           }
           echo ".env.production verified with real secrets"
 
-          # Package with electron-builder (skip rebuild)
-          if ($env:WIN_CSC_LINK) {
-            echo "Packaging signed Windows app..."
-            npx electron-builder --publish never
-          } else {
-            echo "Packaging unsigned Windows app..."
-            npx electron-builder
-          }
+          # Package unsigned — Azure Trusted Signing signs in the next step
+          npx electron-builder --publish never
         shell: pwsh
+
+      - name: Sign Windows App with Azure Trusted Signing
+        uses: azure/trusted-signing-action@v0.5.0
+        with:
+          azure-tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          azure-client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          azure-client-secret: ${{ secrets.AZURE_CLIENT_SECRET }}
+          endpoint: ${{ secrets.AZURE_ENDPOINT }}
+          trusted-signing-account-name: ${{ secrets.AZURE_CODE_SIGNING_ACCOUNT }}
+          certificate-profile-name: ${{ secrets.AZURE_CERT_PROFILE }}
+          files-folder: ${{ github.workspace }}/dist
+          files-folder-filter: exe
+          file-digest: SHA256
+          timestamp-rfc3161: http://timestamp.acs.microsoft.com
+          timestamp-digest: SHA256
 
       - name: Upload Windows Artifacts
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
@@ -382,7 +388,7 @@ jobs:
 
             **macOS**: Download the `.dmg` file, open it, and drag Keepr to your Applications folder.
 
-            **Windows**: Download the `.exe` installer and run it. Windows SmartScreen may show a warning for unsigned builds.
+            **Windows**: Download the `.exe` installer and run it. The installer is signed by Blue Spaces LLC.
 
             ---
 
