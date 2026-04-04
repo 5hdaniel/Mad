@@ -92,3 +92,4 @@ export const EMAIL_CACHE_DURATION_MONTHS_DEFAULT: number = 3;
 export const DEV_SERVER_URL: string = "http://localhost:5173";
 export const UPDATE_CHECK_DELAY: number = 5000; // 5 seconds after window loads
 export const UPDATE_CHECK_INTERVAL: number = 4 * 60 * 60 * 1000; // 4 hours in ms (TASK-1970)
+export const DOWNLOAD_STALL_TIMEOUT_MS: number = 60_000; // 60s — if no download-progress event fires within this window, report stall to Sentry (TASK-2330)
