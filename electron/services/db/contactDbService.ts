@@ -1746,14 +1746,40 @@ export function getEmailsByContactId(contactId: string): string[] {
  */
 export function resolveContactEmailsByQuery(userId: string, query: string): string[] {
   const queryLower = query.toLowerCase().trim();
+  const words = queryLower.split(/\s+/).filter((w) => w.length > 0);
+
+  if (words.length <= 1) {
+    // Single-word query: original behavior
+    const rows = dbAll<{ email: string }>(
+      `SELECT DISTINCT LOWER(ce.email) as email
+       FROM contacts c
+       JOIN contact_emails ce ON c.id = ce.contact_id
+       WHERE c.user_id = ?
+         AND (LOWER(c.display_name) LIKE ? OR LOWER(ce.email) LIKE ?
+              OR LOWER(c.company) LIKE ? OR LOWER(c.title) LIKE ?)`,
+      [userId, `%${queryLower}%`, `%${queryLower}%`, `%${queryLower}%`, `%${queryLower}%`],
+    );
+    return rows.map((r) => r.email);
+  }
+
+  // Multi-word query: each word must match at least one field (AND logic across words)
+  const wordClauses = words.map(
+    () =>
+      `(LOWER(c.display_name) LIKE ? OR LOWER(ce.email) LIKE ?
+        OR LOWER(c.company) LIKE ? OR LOWER(c.title) LIKE ?)`,
+  );
+  const params: string[] = [userId];
+  for (const word of words) {
+    params.push(`%${word}%`, `%${word}%`, `%${word}%`, `%${word}%`);
+  }
+
   const rows = dbAll<{ email: string }>(
     `SELECT DISTINCT LOWER(ce.email) as email
      FROM contacts c
      JOIN contact_emails ce ON c.id = ce.contact_id
      WHERE c.user_id = ?
-       AND (LOWER(c.display_name) LIKE ? OR LOWER(ce.email) LIKE ?
-            OR LOWER(c.company) LIKE ? OR LOWER(c.title) LIKE ?)`,
-    [userId, `%${queryLower}%`, `%${queryLower}%`, `%${queryLower}%`, `%${queryLower}%`],
+       AND ${wordClauses.join("\n       AND ")}`,
+    params,
   );
   return rows.map((r) => r.email);
 }
