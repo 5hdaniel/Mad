@@ -28,6 +28,7 @@ const STATUS_ORDER: ItemStatus[] = [
   'pending',
   'in_progress',
   'testing',
+  'waiting_for_user',
   'completed',
   'blocked',
   'deferred',
