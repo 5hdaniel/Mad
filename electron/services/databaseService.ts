@@ -833,6 +833,85 @@ class DatabaseService implements IDatabaseService {
         `);
       },
     },
+    {
+      version: 37,
+      description: "Add local AI support: local_model column, transaction_timelines table, update preferred_provider CHECK",
+      migrate: (d) => {
+        // 1. Add local_model column to llm_settings
+        d.exec("ALTER TABLE llm_settings ADD COLUMN local_model TEXT DEFAULT 'gemma-4-e4b-it-q4';");
+        d.exec("ALTER TABLE llm_settings ADD COLUMN local_ai_setup_complete INTEGER DEFAULT 0;");
+
+        // 2. Recreate llm_settings with updated preferred_provider CHECK to include 'local'
+        // SQLite doesn't support ALTER CHECK, so we must recreate.
+        d.exec(`
+          CREATE TABLE IF NOT EXISTS llm_settings_new (
+            id TEXT PRIMARY KEY,
+            user_id TEXT NOT NULL UNIQUE,
+            openai_api_key_encrypted TEXT,
+            anthropic_api_key_encrypted TEXT,
+            preferred_provider TEXT DEFAULT 'openai' CHECK (preferred_provider IN ('openai', 'anthropic', 'local')),
+            openai_model TEXT DEFAULT 'gpt-4o-mini',
+            anthropic_model TEXT DEFAULT 'claude-3-haiku-20240307',
+            tokens_used_this_month INTEGER DEFAULT 0,
+            budget_limit_tokens INTEGER,
+            budget_reset_date DATE,
+            platform_allowance_tokens INTEGER DEFAULT 0,
+            platform_allowance_used INTEGER DEFAULT 0,
+            use_platform_allowance INTEGER DEFAULT 0,
+            enable_auto_detect INTEGER DEFAULT 1,
+            enable_role_extraction INTEGER DEFAULT 1,
+            llm_data_consent INTEGER DEFAULT 0,
+            llm_data_consent_at DATETIME,
+            local_model TEXT DEFAULT 'gemma-4-e4b-it-q4',
+            local_ai_setup_complete INTEGER DEFAULT 0,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (user_id) REFERENCES users_local(id) ON DELETE CASCADE
+          );
+        `);
+
+        // Copy existing data (excluding the columns we just added via ALTER)
+        d.exec(`
+          INSERT OR IGNORE INTO llm_settings_new (
+            id, user_id, openai_api_key_encrypted, anthropic_api_key_encrypted,
+            preferred_provider, openai_model, anthropic_model,
+            tokens_used_this_month, budget_limit_tokens, budget_reset_date,
+            platform_allowance_tokens, platform_allowance_used, use_platform_allowance,
+            enable_auto_detect, enable_role_extraction,
+            llm_data_consent, llm_data_consent_at,
+            local_model, local_ai_setup_complete,
+            created_at, updated_at
+          )
+          SELECT
+            id, user_id, openai_api_key_encrypted, anthropic_api_key_encrypted,
+            preferred_provider, openai_model, anthropic_model,
+            tokens_used_this_month, budget_limit_tokens, budget_reset_date,
+            platform_allowance_tokens, platform_allowance_used, use_platform_allowance,
+            enable_auto_detect, enable_role_extraction,
+            llm_data_consent, llm_data_consent_at,
+            local_model, local_ai_setup_complete,
+            created_at, updated_at
+          FROM llm_settings;
+        `);
+
+        d.exec("DROP TABLE IF EXISTS llm_settings;");
+        d.exec("ALTER TABLE llm_settings_new RENAME TO llm_settings;");
+        d.exec("CREATE UNIQUE INDEX IF NOT EXISTS idx_llm_settings_user ON llm_settings(user_id);");
+
+        // 3. Create transaction_timelines table for cached AI timelines
+        d.exec(`
+          CREATE TABLE IF NOT EXISTS transaction_timelines (
+            id TEXT PRIMARY KEY,
+            transaction_id TEXT NOT NULL,
+            generated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            model_used TEXT,
+            events_json TEXT NOT NULL,
+            FOREIGN KEY (transaction_id) REFERENCES transactions(id) ON DELETE CASCADE
+          );
+          CREATE INDEX IF NOT EXISTS idx_timelines_txn ON transaction_timelines(transaction_id);
+        `);
+      },
+    },
   ];
 
   static validateNoDuplicateVersions(migrations: MigrationEntry[]): void {

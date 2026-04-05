@@ -18,7 +18,8 @@ import {
   type LLMUsageStats,
   type LLMAvailability,
 } from '../services/llm/llmConfigService';
-import { LLMError, type LLMProvider } from '../services/llm/types';
+import { LLMError, type LLMProvider, type GemmaModel } from '../services/llm/types';
+import type { BrowserWindow } from 'electron';
 
 /**
  * Response wrapper for consistent error handling across all LLM handlers.
@@ -79,7 +80,7 @@ function wrapError(error: unknown): LLMHandlerResponse<never> {
  * Registers all LLM-related IPC handlers.
  * @param configService - Instance of LLMConfigService to delegate operations to.
  */
-export function registerLLMHandlers(configService: LLMConfigService): void {
+export function registerLLMHandlers(configService: LLMConfigService, mainWindow?: BrowserWindow): void {
   /**
    * Get user's LLM configuration summary.
    * Channel: llm:get-config
@@ -249,6 +250,190 @@ export function registerLLMHandlers(configService: LLMConfigService): void {
         return wrapResponse(result);
       } catch (error) {
         logService.error('[LLM Handler] Can use check failed:', 'LLMHandlers', { error });
+        return wrapError(error);
+      }
+    }
+  );
+
+  // ============================================
+  // LOCAL AI HANDLERS (Gemma 4 model management)
+  // ============================================
+
+  const modelManager = configService.getModelManager();
+  const localService = configService.getLocalService();
+
+  /**
+   * Get local AI status — system capabilities, downloaded models, recommendation.
+   * Channel: llm:local-status
+   */
+  ipcMain.handle(
+    'llm:local-status',
+    async (): Promise<LLMHandlerResponse<{
+      systemCapabilities: ReturnType<typeof modelManager.getSystemCapabilities>;
+      recommendedModel: GemmaModel;
+      downloadedModels: ReturnType<typeof modelManager.getDownloadedModels>;
+      modelLoaded: boolean;
+      currentModel: string | null;
+    }>> => {
+      try {
+        return wrapResponse({
+          systemCapabilities: modelManager.getSystemCapabilities(),
+          recommendedModel: modelManager.getRecommendedModel(),
+          downloadedModels: modelManager.getDownloadedModels(),
+          modelLoaded: localService.isLoaded(),
+          currentModel: localService.getStatus().currentModel,
+        });
+      } catch (error) {
+        logService.error('[LLM Handler] Local status check failed:', 'LLMHandlers', { error });
+        return wrapError(error);
+      }
+    }
+  );
+
+  /**
+   * Download a Gemma model. Progress events sent via webContents.
+   * Channel: llm:download-model
+   */
+  ipcMain.handle(
+    'llm:download-model',
+    async (
+      _event: IpcMainInvokeEvent,
+      modelId: GemmaModel
+    ): Promise<LLMHandlerResponse<string>> => {
+      try {
+        const modelPath = await modelManager.downloadModel(modelId, (progress) => {
+          // Send progress to renderer
+          if (mainWindow && !mainWindow.isDestroyed()) {
+            mainWindow.webContents.send('llm:download-progress', progress);
+          }
+        });
+        return wrapResponse(modelPath);
+      } catch (error) {
+        logService.error('[LLM Handler] Model download failed:', 'LLMHandlers', { error });
+        return wrapError(error);
+      }
+    }
+  );
+
+  /**
+   * Cancel an in-progress model download.
+   * Channel: llm:cancel-download
+   */
+  ipcMain.handle(
+    'llm:cancel-download',
+    async (): Promise<LLMHandlerResponse<void>> => {
+      try {
+        modelManager.cancelDownload();
+        return wrapResponse(undefined);
+      } catch (error) {
+        logService.error('[LLM Handler] Cancel download failed:', 'LLMHandlers', { error });
+        return wrapError(error);
+      }
+    }
+  );
+
+  /**
+   * Delete a downloaded model to free disk space.
+   * Channel: llm:delete-local-model
+   */
+  ipcMain.handle(
+    'llm:delete-local-model',
+    async (
+      _event: IpcMainInvokeEvent,
+      modelId: GemmaModel
+    ): Promise<LLMHandlerResponse<void>> => {
+      try {
+        // Unload if this model is currently active
+        const status = localService.getStatus();
+        if (status.currentModel === modelId) {
+          await localService.unload();
+        }
+        modelManager.deleteModel(modelId);
+        logService.info(`[LLM Handler] Local model deleted: ${modelId}`, 'LLMHandlers');
+        return wrapResponse(undefined);
+      } catch (error) {
+        logService.error('[LLM Handler] Delete model failed:', 'LLMHandlers', { error });
+        return wrapError(error);
+      }
+    }
+  );
+
+  /**
+   * Get system capabilities for model recommendation.
+   * Channel: llm:get-system-capabilities
+   */
+  ipcMain.handle(
+    'llm:get-system-capabilities',
+    async (): Promise<LLMHandlerResponse<ReturnType<typeof modelManager.getSystemCapabilities>>> => {
+      try {
+        return wrapResponse(modelManager.getSystemCapabilities());
+      } catch (error) {
+        logService.error('[LLM Handler] System capabilities check failed:', 'LLMHandlers', { error });
+        return wrapError(error);
+      }
+    }
+  );
+
+  // ============================================
+  // TIMELINE HANDLERS (AI Transaction Timeline)
+  // ============================================
+
+  /**
+   * Get cached timeline for a transaction.
+   * Channel: timeline:get
+   */
+  ipcMain.handle(
+    'timeline:get',
+    async (
+      _event: IpcMainInvokeEvent,
+      transactionId: string
+    ): Promise<LLMHandlerResponse<unknown>> => {
+      try {
+        // Import db functions inline to avoid circular deps
+        const { dbGet } = await import('../services/db/core/dbConnection');
+        const row = dbGet<{ events_json: string; generated_at: string; model_used: string }>(
+          'SELECT events_json, generated_at, model_used FROM transaction_timelines WHERE transaction_id = ? ORDER BY generated_at DESC LIMIT 1',
+          [transactionId]
+        );
+        if (!row) {
+          return wrapResponse(null);
+        }
+        return wrapResponse({
+          events: JSON.parse(row.events_json),
+          generatedAt: row.generated_at,
+          modelUsed: row.model_used,
+        });
+      } catch (error) {
+        logService.error('[LLM Handler] Get timeline failed:', 'LLMHandlers', { error });
+        return wrapError(error);
+      }
+    }
+  );
+
+  /**
+   * Generate timeline for a transaction using LLM.
+   * Channel: timeline:generate
+   */
+  ipcMain.handle(
+    'timeline:generate',
+    async (
+      _event: IpcMainInvokeEvent,
+      transactionId: string,
+      userId: string
+    ): Promise<LLMHandlerResponse<unknown>> => {
+      try {
+        logService.info(`[LLM Handler] Generating timeline for transaction ${transactionId}`, 'LLMHandlers');
+
+        // Get service and config via public method (handles consent + provider selection)
+        const { service, config: llmConfig } = configService.getServiceAndConfig(userId);
+
+        // Import and use timeline service
+        const { timelineService } = await import('../services/timeline/timelineService');
+        const timeline = await timelineService.generateTimeline(transactionId, service, llmConfig);
+
+        return wrapResponse(timeline);
+      } catch (error) {
+        logService.error('[LLM Handler] Generate timeline failed:', 'LLMHandlers', { error });
         return wrapError(error);
       }
     }

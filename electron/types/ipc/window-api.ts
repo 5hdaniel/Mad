@@ -14,6 +14,7 @@ import type { WindowApiDevice, WindowApiBackup, WindowApiDrivers, WindowApiSync 
 import type {
   WindowApiPreferences,
   WindowApiLlm,
+  WindowApiChat,
   WindowApiFeedback,
   WindowApiUser,
   WindowApiAddress,
@@ -84,6 +85,7 @@ export interface WindowApi extends WindowApiEvents {
   support: WindowApiSupport;
   pairing: WindowApiPairing;
   localSync: WindowApiLocalSync;
+  chat: WindowApiChat;
 }
 
 // Note: The global Window augmentation (declare global) lives in src/window.d.ts

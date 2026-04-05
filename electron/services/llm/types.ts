@@ -4,7 +4,7 @@
  */
 
 // Provider configuration
-export type LLMProvider = 'openai' | 'anthropic';
+export type LLMProvider = 'openai' | 'anthropic' | 'local';
 
 export interface LLMConfig {
   provider: LLMProvider;
@@ -111,3 +111,42 @@ export const ANTHROPIC_MODELS = {
 
 export type OpenAIModel = keyof typeof OPENAI_MODELS;
 export type AnthropicModel = keyof typeof ANTHROPIC_MODELS;
+
+// Local Gemma 4 models (free, on-device via node-llama-cpp)
+export const GEMMA_MODELS = {
+  'gemma-4-e2b-it-q4': {
+    contextWindow: 32000,
+    costPer1kInput: 0,
+    costPer1kOutput: 0,
+    ramRequired: 1536, // MB
+    label: 'Gemma 4 E2B (Lightweight, ~1.5 GB)',
+    description: 'Ultra-light model for basic tasks. Runs on any machine.',
+    ggufFile: 'gemma-4-e2b-it-Q4_K_M.gguf',
+    huggingFaceRepo: 'google/gemma-4-e2b-it-GGUF',
+    downloadSizeMB: 1400,
+  },
+  'gemma-4-e4b-it-q4': {
+    contextWindow: 32000,
+    costPer1kInput: 0,
+    costPer1kOutput: 0,
+    ramRequired: 5120, // MB
+    label: 'Gemma 4 E4B (Recommended, ~5 GB)',
+    description: 'Best balance of quality and speed for most users.',
+    ggufFile: 'gemma-4-e4b-it-Q4_K_M.gguf',
+    huggingFaceRepo: 'google/gemma-4-e4b-it-GGUF',
+    downloadSizeMB: 4800,
+  },
+  'gemma-4-26b-a4b-it-q4': {
+    contextWindow: 32000,
+    costPer1kInput: 0,
+    costPer1kOutput: 0,
+    ramRequired: 18432, // MB
+    label: 'Gemma 4 26B MoE (Power, ~18 GB)',
+    description: 'High-quality MoE model for power users with 18GB+ RAM.',
+    ggufFile: 'gemma-4-26b-a4b-it-Q4_K_M.gguf',
+    huggingFaceRepo: 'google/gemma-4-26b-a4b-it-GGUF',
+    downloadSizeMB: 17000,
+  },
+} as const;
+
+export type GemmaModel = keyof typeof GEMMA_MODELS;

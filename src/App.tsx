@@ -29,6 +29,7 @@ import { IPhoneSyncProvider } from "./contexts/IPhoneSyncContext";
 import { LicenseGate, TrialStatusBanner } from "./components/license";
 import UpdateNotification from "./components/UpdateNotification";
 import { SupportWidget } from "./components/support/SupportWidget";
+import { ChatWidget } from "./components/chat/ChatWidget";
 
 function App() {
   const app = useAppStateMachine();
@@ -51,6 +52,7 @@ function App() {
           including login, onboarding, error states, and license-blocked states.
           Widget detects auth state internally via IPC. */}
       <SupportWidget />
+      <ChatWidget />
     </NotificationProvider>
   );
 }

@@ -26,6 +26,18 @@ export interface WindowApiPreferences {
 /**
  * LLM methods on window.api
  */
+/**
+ * Chat methods on window.api
+ */
+export interface WindowApiChat {
+  sendMessage: (
+    userId: string,
+    message: string,
+    history: Array<{ role: "user" | "assistant"; content: string }>,
+  ) => Promise<{ success: boolean; data?: { content: string }; error?: { message: string } }>;
+  clearHistory: () => Promise<{ success: boolean }>;
+}
+
 export interface WindowApiLlm {
   getConfig: (userId: string) => Promise<LLMHandlerResponse<LLMUserConfig>>;
   setApiKey: (
@@ -51,6 +63,19 @@ export interface WindowApiLlm {
   ) => Promise<LLMHandlerResponse<void>>;
   getUsage: (userId: string) => Promise<LLMHandlerResponse<LLMUsageStats>>;
   canUse: (userId: string) => Promise<LLMHandlerResponse<LLMAvailability>>;
+
+  // Local AI model management
+  getLocalStatus: () => Promise<LLMHandlerResponse<unknown>>;
+  downloadModel: (modelId: string) => Promise<LLMHandlerResponse<void>>;
+  cancelDownload: () => Promise<LLMHandlerResponse<void>>;
+  deleteLocalModel: (modelId: string) => Promise<LLMHandlerResponse<void>>;
+  getSystemCapabilities: () => Promise<LLMHandlerResponse<unknown>>;
+  onDownloadProgress: (callback: (event: unknown, progress: { modelId: string; percent: number; bytesDownloaded: number; totalBytes: number; speed: number }) => void) => void;
+  offDownloadProgress: (callback: (...args: unknown[]) => void) => void;
+
+  // Timeline
+  getTimeline: (transactionId: string) => Promise<LLMHandlerResponse<unknown>>;
+  generateTimeline: (transactionId: string, userId: string) => Promise<LLMHandlerResponse<unknown>>;
 }
 
 /**

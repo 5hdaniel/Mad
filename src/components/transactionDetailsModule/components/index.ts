@@ -8,6 +8,7 @@ export { TransactionEmailsTab } from "./TransactionEmailsTab";
 export { TransactionContactsTab } from "./TransactionContactsTab";
 export { TransactionMessagesTab } from "./TransactionMessagesTab";
 export { TransactionAttachmentsTab } from "./TransactionAttachmentsTab";
+export { TransactionTimelineTab } from "./TransactionTimelineTab";
 export { AttachmentCard } from "./AttachmentCard";
 export { ExportSuccessMessage } from "./ExportSuccessMessage";
 export { MessageBubble } from "./MessageBubble";

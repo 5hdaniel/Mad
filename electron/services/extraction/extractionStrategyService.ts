@@ -125,11 +125,11 @@ export class ExtractionStrategyService {
         };
       }
 
-      // Check API key availability
-      if (!config.hasOpenAI && !config.hasAnthropic) {
+      // Check API key availability (local provider doesn't need API keys)
+      if (!config.hasOpenAI && !config.hasAnthropic && !config.hasLocal) {
         return {
           method: 'pattern',
-          reason: 'No LLM API keys configured',
+          reason: 'No LLM API keys configured and no local model available',
           fallbackMethod: 'pattern',
         };
       }
@@ -228,8 +228,20 @@ export class ExtractionStrategyService {
     reason: string;
   } {
     const preferred = config.preferredProvider;
+
+    // Local provider — no API key needed, just model downloaded
+    if (preferred === 'local' && config.hasLocal) {
+      return {
+        available: true,
+        provider: 'local',
+        reason: 'Using local AI model (free)',
+      };
+    }
+
     const hasPreferredKey =
-      preferred === 'openai' ? config.hasOpenAI : config.hasAnthropic;
+      preferred === 'openai' ? config.hasOpenAI :
+      preferred === 'anthropic' ? config.hasAnthropic :
+      false; // local handled above
 
     // Preferred provider is available
     if (hasPreferredKey) {
@@ -240,22 +252,27 @@ export class ExtractionStrategyService {
       };
     }
 
-    // Try alternate provider
-    const altProvider: LLMProvider = preferred === 'openai' ? 'anthropic' : 'openai';
-    const hasAltKey = altProvider === 'openai' ? config.hasOpenAI : config.hasAnthropic;
+    // Try alternate providers
+    const cloudProviders: Array<{ provider: LLMProvider; hasKey: boolean }> = [
+      { provider: 'openai', hasKey: config.hasOpenAI },
+      { provider: 'anthropic', hasKey: config.hasAnthropic },
+      { provider: 'local', hasKey: config.hasLocal ?? false },
+    ];
 
-    if (hasAltKey) {
-      return {
-        available: true,
-        provider: altProvider,
-        reason: `Preferred provider ${preferred} not available, using ${altProvider}`,
-      };
+    for (const alt of cloudProviders) {
+      if (alt.provider !== preferred && alt.hasKey) {
+        return {
+          available: true,
+          provider: alt.provider,
+          reason: `Preferred provider ${preferred} not available, using ${alt.provider}`,
+        };
+      }
     }
 
     // No providers available
     return {
       available: false,
-      reason: `No API key available for ${preferred} or ${altProvider}`,
+      reason: `No LLM provider available`,
     };
   }
 

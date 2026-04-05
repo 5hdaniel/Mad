@@ -21,14 +21,18 @@ import {
 import tokenEncryptionService from '../tokenEncryptionService';
 import { OpenAIService } from './openAIService';
 import { AnthropicService } from './anthropicService';
+import { LocalLLMService } from './localLLMService';
+import { ModelManagerService } from './modelManagerService';
 import {
   LLMConfig,
   LLMResponse,
   LLMMessage,
   LLMProvider,
   LLMError,
+  GemmaModel,
 } from './types';
 import type { LLMDbCallbacks } from './baseLLMService';
+import { BaseLLMService } from './baseLLMService';
 
 /**
  * User-facing LLM configuration summary.
@@ -37,9 +41,12 @@ import type { LLMDbCallbacks } from './baseLLMService';
 export interface LLMUserConfig {
   hasOpenAI: boolean;
   hasAnthropic: boolean;
+  hasLocal: boolean;
   preferredProvider: LLMProvider;
   openAIModel: string;
   anthropicModel: string;
+  localModel: string;
+  localModelLoaded: boolean;
   tokensUsed: number;
   budgetLimit?: number;
   platformAllowanceRemaining: number;
@@ -56,6 +63,7 @@ export interface LLMPreferences {
   preferredProvider?: LLMProvider;
   openAIModel?: string;
   anthropicModel?: string;
+  localModel?: string;
   enableAutoDetect?: boolean;
   enableRoleExtraction?: boolean;
   usePlatformAllowance?: boolean;
@@ -94,10 +102,14 @@ export interface LLMAvailability {
 export class LLMConfigService {
   private openAIService: OpenAIService;
   private anthropicService: AnthropicService;
+  private localService: LocalLLMService;
+  private modelManager: ModelManagerService;
 
   constructor() {
     this.openAIService = new OpenAIService();
     this.anthropicService = new AnthropicService();
+    this.localService = new LocalLLMService();
+    this.modelManager = new ModelManagerService();
 
     // Set up database callbacks for usage tracking
     const dbCallbacks: LLMDbCallbacks = {
@@ -111,6 +123,21 @@ export class LLMConfigService {
 
     this.openAIService.setDbCallbacks(dbCallbacks);
     this.anthropicService.setDbCallbacks(dbCallbacks);
+    this.localService.setDbCallbacks(dbCallbacks);
+  }
+
+  /**
+   * Get the model manager service (for IPC handlers).
+   */
+  getModelManager(): ModelManagerService {
+    return this.modelManager;
+  }
+
+  /**
+   * Get the local LLM service (for IPC handlers).
+   */
+  getLocalService(): LocalLLMService {
+    return this.localService;
   }
 
   /**
@@ -120,12 +147,17 @@ export class LLMConfigService {
   async getUserConfig(userId: string): Promise<LLMUserConfig> {
     const settings = getOrCreateLLMSettings(userId);
 
+    const localModelId = (settings.local_model || 'gemma-4-e4b-it-q4') as GemmaModel;
+
     return {
       hasOpenAI: !!settings.openai_api_key_encrypted,
       hasAnthropic: !!settings.anthropic_api_key_encrypted,
+      hasLocal: this.modelManager.isModelDownloaded(localModelId),
       preferredProvider: settings.preferred_provider,
       openAIModel: settings.openai_model,
       anthropicModel: settings.anthropic_model,
+      localModel: settings.local_model,
+      localModelLoaded: this.localService.isLoaded(),
       tokensUsed: settings.tokens_used_this_month,
       budgetLimit: settings.budget_limit_tokens ?? undefined,
       platformAllowanceRemaining:
@@ -200,6 +232,9 @@ export class LLMConfigService {
     if (preferences.anthropicModel !== undefined) {
       updates.anthropic_model = preferences.anthropicModel;
     }
+    if (preferences.localModel !== undefined) {
+      updates.local_model = preferences.localModel;
+    }
     if (preferences.enableAutoDetect !== undefined) {
       updates.enable_auto_detect = preferences.enableAutoDetect;
     }
@@ -267,16 +302,26 @@ export class LLMConfigService {
     const service = this.getServiceForProvider(provider, settings);
 
     // Build config
+    const model = provider === 'openai'
+      ? settings.openai_model
+      : provider === 'anthropic'
+        ? settings.anthropic_model
+        : settings.local_model;
+
     const config: LLMConfig = {
       provider,
-      apiKey: '', // Set by service initialization
-      model:
-        provider === 'openai' ? settings.openai_model : settings.anthropic_model,
+      apiKey: '', // Set by service initialization (not needed for local)
+      model,
       maxTokens: options?.maxTokens ?? 1000,
       temperature: options?.temperature ?? 0.7,
     };
 
-    // Complete with tracking
+    // Local provider: skip budget tracking (free)
+    if (provider === 'local') {
+      return await service.completeWithRetry(messages, config);
+    }
+
+    // Cloud providers: complete with tracking
     const response = await service.completeWithTracking(userId, messages, config);
 
     // Track platform allowance usage if enabled
@@ -322,8 +367,13 @@ export class LLMConfigService {
       return { canUse: false, reason: 'LLM data consent required' };
     }
 
-    if (!config.hasOpenAI && !config.hasAnthropic && !config.usePlatformAllowance) {
-      return { canUse: false, reason: 'No API key configured' };
+    // Local provider only needs consent + model downloaded
+    if (config.preferredProvider === 'local' && config.hasLocal) {
+      return { canUse: true };
+    }
+
+    if (!config.hasOpenAI && !config.hasAnthropic && !config.hasLocal && !config.usePlatformAllowance) {
+      return { canUse: false, reason: 'No API key configured and no local model available' };
     }
 
     if (config.budgetLimit && config.tokensUsed >= config.budgetLimit) {
@@ -338,14 +388,61 @@ export class LLMConfigService {
   }
 
   /**
+   * Get the initialized service and config for a user's preferred provider.
+   * Used by tools that need direct access to the service (e.g., timeline generation).
+   */
+  getServiceAndConfig(
+    userId: string,
+    options?: { provider?: LLMProvider }
+  ): { service: BaseLLMService; config: LLMConfig } {
+    const settings = getLLMSettingsByUserId(userId);
+    if (!settings) {
+      throw new LLMError('LLM not configured', 'invalid_api_key', 'openai', 401, false);
+    }
+    const provider = options?.provider ?? settings.preferred_provider;
+    const service = this.getServiceForProvider(provider, settings);
+    const model = provider === 'openai'
+      ? settings.openai_model
+      : provider === 'anthropic'
+        ? settings.anthropic_model
+        : settings.local_model;
+    return {
+      service,
+      config: { provider, apiKey: '', model, maxTokens: 2000, temperature: 0.3 },
+    };
+  }
+
+  /**
    * Get the appropriate service for a provider and initialize it.
    * @private
    */
   private getServiceForProvider(
     provider: LLMProvider,
     settings: LLMSettings
-  ): OpenAIService | AnthropicService {
-    if (provider === 'openai') {
+  ): OpenAIService | AnthropicService | LocalLLMService {
+    if (provider === 'local') {
+      const modelId = (settings.local_model || 'gemma-4-e4b-it-q4') as GemmaModel;
+      if (!this.modelManager.isModelDownloaded(modelId)) {
+        throw new LLMError(
+          'Local model not downloaded. Please download a model in Settings > AI.',
+          'invalid_api_key',
+          'local',
+          404,
+          false
+        );
+      }
+      // Initialize if not already loaded with this model
+      const modelPath = this.modelManager.getModelPath(modelId);
+      // Note: initialize is async but getServiceForProvider is sync.
+      // The localService.complete() will handle lazy init.
+      if (!this.localService.isLoaded()) {
+        // Fire-and-forget initialization; complete() will wait
+        this.localService.initialize(modelPath, modelId).catch(() => {
+          // Error will surface in complete()
+        });
+      }
+      return this.localService;
+    } else if (provider === 'openai') {
       if (!settings.openai_api_key_encrypted) {
         throw new LLMError(
           'OpenAI API key not configured',

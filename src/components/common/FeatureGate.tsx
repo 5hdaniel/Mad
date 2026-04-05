@@ -41,7 +41,8 @@ export type FeatureRequirement =
   | "individual"
   | "team"
   | "enterprise"
-  | "ai_addon";
+  | "ai_addon"
+  | "local_ai";
 
 /** @deprecated Use FeatureRequirement instead */
 export type LicenseRequirement = FeatureRequirement;
@@ -93,6 +94,9 @@ export function FeatureGate({
       case "ai_addon":
         // Plans with AI detection feature
         return isAllowed("ai_detection");
+      case "local_ai":
+        // Plans with local AI (Gemma 4) feature
+        return isAllowed("local_ai");
       default:
         return false;
     }

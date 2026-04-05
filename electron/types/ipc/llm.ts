@@ -9,7 +9,7 @@
 /**
  * LLM provider type
  */
-export type LLMProvider = "openai" | "anthropic";
+export type LLMProvider = "openai" | "anthropic" | "local";
 
 /**
  * Response wrapper for consistent error handling across all LLM handlers.
@@ -31,9 +31,12 @@ export interface LLMHandlerResponse<T> {
 export interface LLMUserConfig {
   hasOpenAI: boolean;
   hasAnthropic: boolean;
+  hasLocal: boolean;
   preferredProvider: LLMProvider;
   openAIModel: string;
   anthropicModel: string;
+  localModel: string;
+  localModelLoaded: boolean;
   tokensUsed: number;
   budgetLimit?: number;
   platformAllowanceRemaining: number;
@@ -50,6 +53,7 @@ export interface LLMPreferences {
   preferredProvider?: LLMProvider;
   openAIModel?: string;
   anthropicModel?: string;
+  localModel?: string;
   enableAutoDetect?: boolean;
   enableRoleExtraction?: boolean;
   usePlatformAllowance?: boolean;

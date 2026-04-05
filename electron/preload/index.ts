@@ -25,3 +25,4 @@ export { featureGateBridge } from "./featureGateBridge";
 export { supportBridge } from "./supportBridge";
 export { pairingBridge } from "./pairingBridge";
 export { localSyncBridge } from "./localSyncBridge";
+export { chatBridge } from "./chatBridge";

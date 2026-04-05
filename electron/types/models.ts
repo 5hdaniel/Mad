@@ -867,7 +867,7 @@ export interface LLMSettings {
   /** Encrypted Anthropic API key */
   anthropic_api_key_encrypted?: string;
   /** Preferred LLM provider */
-  preferred_provider: 'openai' | 'anthropic';
+  preferred_provider: 'openai' | 'anthropic' | 'local';
   /** OpenAI model to use */
   openai_model: string;
   /** Anthropic model to use */
@@ -900,6 +900,12 @@ export interface LLMSettings {
   llm_data_consent: boolean;
   /** When user gave consent */
   llm_data_consent_at?: string;
+
+  // Local AI
+  /** Selected local Gemma model */
+  local_model: string;
+  /** Whether local AI setup has been completed */
+  local_ai_setup_complete: boolean;
 
   // Timestamps
   created_at: string;

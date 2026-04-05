@@ -74,6 +74,8 @@ export function updateLLMSettings(
     'enable_role_extraction',
     'llm_data_consent',
     'llm_data_consent_at',
+    'local_model',
+    'local_ai_setup_complete',
   ];
 
   // Filter to only allowed fields that are present in updates
@@ -90,7 +92,7 @@ export function updateLLMSettings(
   }
 
   // Convert boolean fields to integers for SQLite
-  const booleanFields = ['use_platform_allowance', 'enable_auto_detect', 'enable_role_extraction', 'llm_data_consent'];
+  const booleanFields = ['use_platform_allowance', 'enable_auto_detect', 'enable_role_extraction', 'llm_data_consent', 'local_ai_setup_complete'];
   const values = fieldsToUpdate.map((field) => {
     const value = updates[field as keyof typeof updates];
     if (booleanFields.includes(field) && typeof value === 'boolean') {
@@ -194,7 +196,7 @@ function mapRowToLLMSettings(row: Record<string, unknown>): LLMSettings {
     user_id: row.user_id as string,
     openai_api_key_encrypted: row.openai_api_key_encrypted as string | undefined,
     anthropic_api_key_encrypted: row.anthropic_api_key_encrypted as string | undefined,
-    preferred_provider: row.preferred_provider as 'openai' | 'anthropic',
+    preferred_provider: row.preferred_provider as 'openai' | 'anthropic' | 'local',
     openai_model: row.openai_model as string,
     anthropic_model: row.anthropic_model as string,
     tokens_used_this_month: row.tokens_used_this_month as number,
@@ -207,6 +209,8 @@ function mapRowToLLMSettings(row: Record<string, unknown>): LLMSettings {
     enable_role_extraction: Boolean(row.enable_role_extraction),
     llm_data_consent: Boolean(row.llm_data_consent),
     llm_data_consent_at: row.llm_data_consent_at as string | undefined,
+    local_model: (row.local_model as string) ?? 'gemma-4-e4b-it-q4',
+    local_ai_setup_complete: Boolean(row.local_ai_setup_complete),
     created_at: row.created_at as string,
     updated_at: row.updated_at as string,
   };

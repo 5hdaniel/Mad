@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback } from "react";
 import { ResponsiveModal } from "../common/ResponsiveModal";
 import { llmService } from '../../services';
+import { GemmaModelSelector } from '../llm/GemmaModelSelector';
 import logger from '../../utils/logger';
 import { safeErrorMessage } from '../../utils/formatUtils';
 
@@ -10,9 +11,12 @@ import { safeErrorMessage } from '../../utils/formatUtils';
 interface LLMUserConfig {
   hasOpenAI: boolean;
   hasAnthropic: boolean;
-  preferredProvider: "openai" | "anthropic" | null;
+  hasLocal: boolean;
+  preferredProvider: "openai" | "anthropic" | "local" | null;
   openAIModel: string;
   anthropicModel: string;
+  localModel: string;
+  localModelLoaded: boolean;
   tokensUsed: number;
   budgetLimit?: number;
   platformAllowanceRemaining: number;
@@ -35,7 +39,7 @@ interface LLMSettingsProps {
   userId: string;
 }
 
-type ProviderType = "openai" | "anthropic";
+type ProviderType = "openai" | "anthropic" | "local";
 type ValidationStatus = "idle" | "validating" | "valid" | "invalid";
 
 const OPENAI_MODELS = [
@@ -675,6 +679,19 @@ export function LLMSettings({ userId }: LLMSettingsProps) {
             >
               Anthropic
             </button>
+            <button
+              onClick={() => setActiveTab("local")}
+              className={`px-4 py-3 font-medium text-sm transition-all flex items-center gap-1.5 ${
+                activeTab === "local"
+                  ? "border-b-2 border-green-500 text-green-600"
+                  : "text-gray-600 hover:text-gray-900"
+              }`}
+            >
+              Local AI
+              <span className="text-[10px] px-1.5 py-0.5 bg-green-100 text-green-700 rounded-full font-medium">
+                Free
+              </span>
+            </button>
           </div>
         </div>
 
@@ -719,6 +736,15 @@ export function LLMSettings({ userId }: LLMSettingsProps) {
             }
             models={ANTHROPIC_MODELS}
           />
+        )}
+
+        {activeTab === "local" && (
+          <div className="space-y-4">
+            <div className="text-sm text-gray-600">
+              Run AI locally on your device using Google Gemma 4. No API key needed, no cloud costs.
+            </div>
+            <GemmaModelSelector userId={userId} compact />
+          </div>
         )}
 
         {/* Usage Display */}

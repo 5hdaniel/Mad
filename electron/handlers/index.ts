@@ -80,6 +80,9 @@ export { registerPreferenceHandlers } from "./preferenceHandlers";
 // LLM handlers (TASK-2263: migrated from electron/ root)
 export { registerLLMHandlers } from "./llmHandlers";
 
+// Chat handlers (AI chatbot)
+export { registerChatHandlers } from "./chatHandlers";
+
 // Device handlers (TASK-2263: migrated from electron/ root)
 export { registerDeviceHandlers, cleanupDeviceHandlers } from "./deviceHandlers";
 

@@ -34,6 +34,7 @@ export type OnboardingStepId =
   | "contact-source"
   | "data-sync"
   | "permissions"
+  | "local-ai-setup"
   | "complete";
 
 /**

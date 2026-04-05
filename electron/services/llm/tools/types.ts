@@ -174,3 +174,52 @@ export interface ClusterTransactionsOutput {
   clusters: TransactionCluster[];
   unclustered: string[]; // Message IDs that couldn't be clustered
 }
+
+// ============================================================================
+// Timeline Types (AI Transaction Timeline)
+// ============================================================================
+
+/**
+ * A single event in an AI-generated transaction timeline.
+ */
+export interface TimelineEvent {
+  id: string;
+  date: string; // ISO date
+  title: string;
+  description?: string;
+  category: TimelineCategory;
+  confidence: number; // 0-1
+  sources: TimelineSource[];
+}
+
+/**
+ * Categories for timeline events.
+ */
+export type TimelineCategory =
+  | 'agreement'
+  | 'offer'
+  | 'inspection'
+  | 'appraisal'
+  | 'financing'
+  | 'title'
+  | 'escrow'
+  | 'closing'
+  | 'communication'
+  | 'other';
+
+/**
+ * Source reference linking a timeline event to an email or attachment.
+ */
+export interface TimelineSource {
+  type: 'email' | 'attachment';
+  id: string; // message ID or attachment ID
+  label: string; // Display text
+  date?: string;
+}
+
+/**
+ * Output from timeline generation.
+ */
+export interface GenerateTimelineOutput {
+  events: TimelineEvent[];
+}

@@ -40,6 +40,7 @@ export const WINDOWS_FLOW_STEPS: readonly OnboardingStepId[] = [
   "contact-source",
   "email-connect",
   "data-sync",
+  "local-ai-setup",
 ] as const;
 
 /**

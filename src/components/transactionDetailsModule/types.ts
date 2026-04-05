@@ -68,7 +68,7 @@ export interface TransactionDetailsProps {
  * - emails: Email threads
  * - attachments: File attachments (hidden)
  */
-export type TransactionTab = "overview" | "messages" | "emails" | "attachments";
+export type TransactionTab = "overview" | "messages" | "emails" | "attachments" | "timeline";
 
 /**
  * Communication type for local use

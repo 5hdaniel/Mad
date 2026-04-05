@@ -107,7 +107,7 @@ export interface HybridExtractionOptions {
   /** Enable LLM-based extraction (default: true if configured) */
   useLLM: boolean;
   /** Preferred LLM provider */
-  llmProvider?: 'openai' | 'anthropic';
+  llmProvider?: 'openai' | 'anthropic' | 'local';
   /** User ID for budget checking and config lookup */
   userId?: string;
 }

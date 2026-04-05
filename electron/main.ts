@@ -106,6 +106,7 @@ import { registerBackupHandlers } from "./handlers/backupHandlers";
 import { registerSyncHandlers, cleanupSyncHandlers } from "./handlers/syncHandlers";
 import { registerDriverHandlers } from "./handlers/driverHandlers";
 import { registerLLMHandlers } from "./handlers/llmHandlers";
+import { registerChatHandlers } from "./handlers/chatHandlers";
 import { registerLicenseHandlers } from "./handlers/licenseHandlers";
 import { registerFeatureGateHandlers } from "./handlers/featureGateHandlers";
 import { registerPreAuthValidationHandler } from "./handlers/preAuthValidationHandler";
@@ -1104,6 +1105,7 @@ app.whenReady().then(async () => {
   // Initialize LLM services and register handlers
   const llmConfigService = new LLMConfigService();
   registerLLMHandlers(llmConfigService);
+  registerChatHandlers(llmConfigService);
 
   // Register license handlers
   registerLicenseHandlers();

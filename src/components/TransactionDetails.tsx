@@ -36,6 +36,7 @@ import {
   TransactionEmailsTab,
   TransactionMessagesTab,
   TransactionAttachmentsTab,
+  TransactionTimelineTab,
   DeleteConfirmModal,
   UnlinkEmailModal,
   EmailViewModal,
@@ -649,6 +650,17 @@ function TransactionDetails({
               attachments={attachments}
               loading={attachmentsLoading}
               error={attachmentsError}
+            />
+          )}
+
+          {activeTab === "timeline" && userId && (
+            <TransactionTimelineTab
+              transactionId={transaction.id}
+              userId={userId}
+              onOpenEmail={(emailId) => {
+                const email = emailCommunications.find(e => e.id === emailId);
+                if (email) setViewingEmail(email);
+              }}
             />
           )}
         </div>

@@ -82,6 +82,29 @@ export function TransactionTabs({
           </svg>
           Emails
         </button>
+        <button
+          onClick={() => onTabChange("timeline")}
+          className={`px-2 sm:px-4 py-2.5 sm:py-3 font-medium text-sm transition-all flex items-center gap-1 sm:gap-1.5 whitespace-nowrap ${
+            activeTab === "timeline"
+              ? "border-b-2 border-green-500 text-green-600"
+              : "text-gray-600 hover:text-gray-900"
+          }`}
+        >
+          <svg
+            className="w-4 h-4"
+            fill="none"
+            stroke="currentColor"
+            viewBox="0 0 24 24"
+          >
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              strokeWidth={2}
+              d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"
+            />
+          </svg>
+          Timeline
+        </button>
 {/* Contacts tab removed - contacts now shown in Overview tab
         <button
           onClick={() => onTabChange("contacts")}

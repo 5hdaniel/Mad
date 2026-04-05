@@ -61,6 +61,7 @@ import {
   pairingBridge,
   localSyncBridge,
   logBridge,
+  chatBridge,
 } from "./preload/index";
 
 // Expose protected methods that allow the renderer process to use
@@ -155,4 +156,7 @@ contextBridge.exposeInMainWorld("api", {
 
   // Renderer log relay — pipes to main process log file
   log: logBridge,
+
+  // AI Chat (Gemma 4 local chatbot)
+  chat: chatBridge,
 });

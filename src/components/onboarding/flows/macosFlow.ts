@@ -38,6 +38,7 @@ export const MACOS_FLOW_STEPS: readonly OnboardingStepId[] = [
   "email-connect",
   "data-sync",
   "permissions",
+  "local-ai-setup",
 ] as const;
 
 /**
