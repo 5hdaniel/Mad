@@ -28,6 +28,7 @@ import { TaskSidebar } from '../../components/TaskSidebar';
 import { DependencyPanel } from '../../components/DependencyPanel';
 import { LinkedItemsPanel } from '../../components/LinkedItemsPanel';
 import { LabelPicker } from '../../components/LabelPicker';
+import { SupportTicketLinksPanel } from '../../components/SupportTicketLinksPanel';
 import { InlineEditText } from '../../components/InlineEditText';
 
 // -- Loading Skeleton --------------------------------------------------------
@@ -295,6 +296,11 @@ function TaskDetailContent() {
             <LinkedItemsPanel
               itemId={item.id}
               links={links}
+              onUpdate={loadDetail}
+            />
+
+            <SupportTicketLinksPanel
+              itemId={item.id}
               onUpdate={loadDetail}
             />
           </div>

@@ -1,30 +1,28 @@
 'use client';
 
 /**
- * BacklogLinksPanel - Support Ticket Detail Sidebar
+ * SupportTicketLinksPanel - PM Item Detail Sidebar
  *
- * Collapsible section showing backlog items linked to the current ticket.
- * Queries support_ticket_backlog_links joined with pm_backlog_items.
- * Displays item number, title, status, priority, and link type badge.
+ * Collapsible section showing support tickets linked to the current backlog item.
+ * Queries support_ticket_backlog_links in reverse (given backlog_item_id, show tickets).
+ * Includes inline search to link/unlink tickets with link type selection.
  *
- * Now includes:
- * - Inline search to link new backlog items
- * - Unlink existing links
+ * Pattern: Adapted from support/BacklogLinksPanel.tsx + pm/LinkedItemsPanel.tsx
  */
 
 import { useState, useEffect, useCallback, useRef } from 'react';
 import Link from 'next/link';
-import { X, Plus, Loader2, Search } from 'lucide-react';
+import { Ticket, X, Plus, Loader2, Search } from 'lucide-react';
 import {
-  getBacklogLinks,
-  searchBacklogItemsForTicketLink,
+  getTicketLinksForBacklogItem,
+  searchTicketsForBacklogLink,
   createBacklogLink,
   removeBacklogLink,
 } from '@/lib/support-queries';
-import type { BacklogLinkRow } from '@/lib/support-queries';
+import type { TicketLinkRow } from '@/lib/support-queries';
 
-interface BacklogLinksPanelProps {
-  ticketId: string;
+interface SupportTicketLinksPanelProps {
+  itemId: string;
   onUpdate?: () => void;
 }
 
@@ -34,27 +32,31 @@ const LINK_TYPE_STYLES: Record<string, string> = {
   duplicate: 'bg-yellow-100 text-yellow-700',
 };
 
-const STATUS_STYLES: Record<string, string> = {
+const TICKET_STATUS_STYLES: Record<string, string> = {
+  new: 'bg-blue-100 text-blue-700',
+  open: 'bg-green-100 text-green-700',
   pending: 'bg-yellow-100 text-yellow-700',
-  in_progress: 'bg-blue-100 text-blue-700',
-  completed: 'bg-green-100 text-green-700',
-  deferred: 'bg-gray-100 text-gray-500',
-  testing: 'bg-purple-100 text-purple-700',
-  waiting_for_user: 'bg-amber-100 text-amber-700',
+  on_hold: 'bg-orange-100 text-orange-700',
+  solved: 'bg-gray-100 text-gray-700',
+  closed: 'bg-gray-100 text-gray-500',
 };
 
 type BacklogLinkType = 'fix' | 'related' | 'duplicate';
 
-export function BacklogLinksPanel({ ticketId, onUpdate }: BacklogLinksPanelProps) {
+function formatTicketNumber(num: number): string {
+  return `TKT-${String(num).padStart(4, '0')}`;
+}
+
+export function SupportTicketLinksPanel({ itemId, onUpdate }: SupportTicketLinksPanelProps) {
   const [expanded, setExpanded] = useState(true);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [links, setLinks] = useState<BacklogLinkRow[]>([]);
+  const [links, setLinks] = useState<TicketLinkRow[]>([]);
 
   // Search / add state
   const [showSearch, setShowSearch] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
-  const [searchResults, setSearchResults] = useState<Array<{ id: string; item_number: number; title: string; status: string; priority: string }>>([]);
+  const [searchResults, setSearchResults] = useState<Array<{ id: string; ticket_number: number; subject: string; status: string }>>([]);
   const [searching, setSearching] = useState(false);
   const [linkType, setLinkType] = useState<BacklogLinkType>('related');
   const [linking, setLinking] = useState(false);
@@ -67,14 +69,14 @@ export function BacklogLinksPanel({ ticketId, onUpdate }: BacklogLinksPanelProps
     setLoading(true);
     setError(null);
     try {
-      const result = await getBacklogLinks(ticketId);
+      const result = await getTicketLinksForBacklogItem(itemId);
       setLinks(result);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to load backlog links');
+      setError(err instanceof Error ? err.message : 'Failed to load ticket links');
     } finally {
       setLoading(false);
     }
-  }, [ticketId]);
+  }, [itemId]);
 
   useEffect(() => {
     fetchLinks();
@@ -106,12 +108,12 @@ export function BacklogLinksPanel({ ticketId, onUpdate }: BacklogLinksPanelProps
     searchTimerRef.current = setTimeout(async () => {
       setSearching(true);
       try {
-        const results = await searchBacklogItemsForTicketLink(searchQuery, ticketId);
+        const results = await searchTicketsForBacklogLink(searchQuery, itemId);
         if (!cancelled) {
           setSearchResults(results);
         }
       } catch (err) {
-        console.error('Backlog item search failed:', err);
+        console.error('Ticket search failed:', err);
         if (!cancelled) {
           setSearchResults([]);
         }
@@ -128,13 +130,13 @@ export function BacklogLinksPanel({ ticketId, onUpdate }: BacklogLinksPanelProps
         clearTimeout(searchTimerRef.current);
       }
     };
-  }, [searchQuery, ticketId]);
+  }, [searchQuery, itemId]);
 
-  async function handleLink(backlogItemId: string) {
+  async function handleLink(ticketId: string) {
     setLinking(true);
     setError(null);
     try {
-      await createBacklogLink(ticketId, backlogItemId, linkType);
+      await createBacklogLink(ticketId, itemId, linkType);
       setSearchQuery('');
       setSearchResults([]);
       setShowSearch(false);
@@ -143,9 +145,9 @@ export function BacklogLinksPanel({ ticketId, onUpdate }: BacklogLinksPanelProps
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
       if (msg.includes('unique') || msg.includes('duplicate')) {
-        setError('This item is already linked');
+        setError('This ticket is already linked');
       } else {
-        setError(msg || 'Failed to link item');
+        setError(msg || 'Failed to link ticket');
       }
     } finally {
       setLinking(false);
@@ -160,7 +162,7 @@ export function BacklogLinksPanel({ ticketId, onUpdate }: BacklogLinksPanelProps
       fetchLinks();
       onUpdate?.();
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to unlink item');
+      setError(err instanceof Error ? err.message : 'Failed to unlink ticket');
     } finally {
       setUnlinking(null);
     }
@@ -173,7 +175,7 @@ export function BacklogLinksPanel({ ticketId, onUpdate }: BacklogLinksPanelProps
         className="flex items-center justify-between w-full text-left"
       >
         <span className="text-xs font-medium text-gray-500 uppercase tracking-wider">
-          Backlog Links ({links.length})
+          Support Tickets ({links.length})
         </span>
         <span className="text-xs text-gray-400">
           {expanded ? '\u25B2' : '\u25BC'}
@@ -198,11 +200,12 @@ export function BacklogLinksPanel({ ticketId, onUpdate }: BacklogLinksPanelProps
                   {links.map((link) => (
                     <div key={link.id} className="group py-1.5">
                       <div className="flex items-center gap-1.5">
+                        <Ticket className="h-3.5 w-3.5 text-gray-400 shrink-0" />
                         <Link
-                          href={`/dashboard/pm/tasks/${link.backlog_item_id}`}
+                          href={`/dashboard/support/${link.ticket_id}`}
                           className="text-sm text-gray-700 hover:text-blue-600 font-mono"
                         >
-                          BACKLOG-{link.item_number}
+                          {formatTicketNumber(link.ticket_number)}
                         </Link>
                         <span
                           className={`inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium ${LINK_TYPE_STYLES[link.link_type] || 'bg-gray-100 text-gray-600'}`}
@@ -213,7 +216,7 @@ export function BacklogLinksPanel({ ticketId, onUpdate }: BacklogLinksPanelProps
                           onClick={() => handleUnlink(link.id)}
                           disabled={unlinking === link.id}
                           className="opacity-0 group-hover:opacity-100 ml-auto p-0.5 text-gray-400 hover:text-red-500 transition-opacity"
-                          title="Unlink item"
+                          title="Unlink ticket"
                         >
                           {unlinking === link.id ? (
                             <Loader2 className="h-3.5 w-3.5 animate-spin" />
@@ -223,22 +226,17 @@ export function BacklogLinksPanel({ ticketId, onUpdate }: BacklogLinksPanelProps
                         </button>
                       </div>
                       <Link
-                        href={`/dashboard/pm/tasks/${link.backlog_item_id}`}
-                        className="block text-sm text-gray-600 hover:text-blue-600 truncate mt-0.5"
+                        href={`/dashboard/support/${link.ticket_id}`}
+                        className="block text-sm text-gray-600 hover:text-blue-600 truncate mt-0.5 pl-5"
                       >
-                        {link.title}
+                        {link.subject}
                       </Link>
-                      <div className="flex items-center gap-2 mt-0.5">
+                      <div className="flex items-center gap-2 mt-0.5 pl-5">
                         <span
-                          className={`inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium ${STATUS_STYLES[link.status] || 'bg-gray-100 text-gray-500'}`}
+                          className={`inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium ${TICKET_STATUS_STYLES[link.status] || 'bg-gray-100 text-gray-500'}`}
                         >
                           {link.status.replace('_', ' ')}
                         </span>
-                        {link.priority && (
-                          <span className="text-[10px] text-gray-400 capitalize">
-                            {link.priority}
-                          </span>
-                        )}
                       </div>
                     </div>
                   ))}
@@ -246,7 +244,7 @@ export function BacklogLinksPanel({ ticketId, onUpdate }: BacklogLinksPanelProps
               )}
 
               {links.length === 0 && !showSearch && (
-                <p className="text-xs text-gray-400 py-1">No linked backlog items</p>
+                <p className="text-xs text-gray-400 py-1">No linked tickets</p>
               )}
 
               {!showSearch ? (
@@ -255,7 +253,7 @@ export function BacklogLinksPanel({ ticketId, onUpdate }: BacklogLinksPanelProps
                   className="flex items-center gap-1 text-xs text-blue-600 hover:text-blue-700 font-medium mt-2"
                 >
                   <Plus className="h-3.5 w-3.5" />
-                  Link Backlog Item
+                  Link Ticket
                 </button>
               ) : (
                 <div className="mt-3 space-y-2">
@@ -266,7 +264,7 @@ export function BacklogLinksPanel({ ticketId, onUpdate }: BacklogLinksPanelProps
                       type="text"
                       value={searchQuery}
                       onChange={(e) => setSearchQuery(e.target.value)}
-                      placeholder="Search by BACKLOG # or title..."
+                      placeholder="Search by ticket # or subject..."
                       className="w-full text-sm text-gray-900 bg-white border border-gray-300 rounded-md pl-7 pr-2 py-1.5 focus:outline-none focus:ring-2 focus:ring-blue-500"
                     />
                   </div>
@@ -299,16 +297,16 @@ export function BacklogLinksPanel({ ticketId, onUpdate }: BacklogLinksPanelProps
                         >
                           <div className="flex items-center gap-1.5">
                             <span className="font-mono text-xs text-gray-500">
-                              BACKLOG-{result.item_number}
+                              {formatTicketNumber(result.ticket_number)}
                             </span>
                             <span
-                              className={`inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium ${STATUS_STYLES[result.status] || 'bg-gray-100 text-gray-500'}`}
+                              className={`inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium ${TICKET_STATUS_STYLES[result.status] || 'bg-gray-100 text-gray-500'}`}
                             >
                               {result.status.replace('_', ' ')}
                             </span>
                           </div>
                           <div className="truncate mt-0.5 text-gray-600">
-                            {result.title}
+                            {result.subject}
                           </div>
                         </button>
                       ))}
@@ -316,7 +314,7 @@ export function BacklogLinksPanel({ ticketId, onUpdate }: BacklogLinksPanelProps
                   )}
 
                   {!searching && searchQuery.length >= 1 && searchResults.length === 0 && (
-                    <p className="text-xs text-gray-400 py-1">No backlog items found</p>
+                    <p className="text-xs text-gray-400 py-1">No tickets found</p>
                   )}
 
                   <button

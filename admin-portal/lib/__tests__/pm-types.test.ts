@@ -24,6 +24,7 @@ const ALL_ITEM_STATUSES: ItemStatus[] = [
   'deferred',
   'obsolete',
   'reopened',
+  'waiting_for_user',
 ];
 
 const ALL_PRIORITIES: ItemPriority[] = ['low', 'medium', 'high', 'critical'];
