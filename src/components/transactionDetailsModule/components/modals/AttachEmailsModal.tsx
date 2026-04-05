@@ -310,7 +310,7 @@ export function AttachEmailsModal({
 
   return (
     <>
-    <ResponsiveModal onClose={onClose} zIndex="z-[70]" testId="attach-emails-modal" panelClassName="max-w-3xl sm:max-h-[80vh]">
+    <ResponsiveModal onClose={onClose} zIndex="z-[70]" testId="attach-emails-modal" panelClassName="max-w-3xl sm:max-h-[80vh] sm:!overflow-hidden">
         {/* Header */}
         <div className="flex-shrink-0 bg-gradient-to-r from-blue-500 to-indigo-600 px-3 sm:px-6 pt-6 sm:pt-4 pb-3 sm:pb-4 sm:rounded-t-xl shadow-lg">
           {/* Mobile */}
