@@ -278,12 +278,20 @@ export function useAutoRefresh({
     // On macOS, if hasPermissions is still false (async check pending), allow
     // the effect to re-fire when hasPermissions flips to true so messages
     // are included in the sync. On non-macOS, permissions don't matter.
-    if (hasTriggeredAutoRefresh && (!isMacOS || hasPermissions)) return;
+    //
+    // Email precache fix: Mirror the hasPermissions re-fire pattern for
+    // hasEmailConnected. On login/restart, hasEmailConnected may resolve to
+    // false initially (async state), then flip to true after the flag is set.
+    // Allow re-fire so emails are included once the connection state resolves.
+    const permissionsResolved = !isMacOS || hasPermissions;
+    const emailResolved = hasEmailConnected;
+    if (hasTriggeredAutoRefresh && permissionsResolved && emailResolved) return;
 
-    // Mark as triggered only when permissions are resolved (or non-macOS).
-    // This prevents the stale-permission race: first trigger with
-    // hasPermissions=false won't lock out a retry when it becomes true.
-    if (!isMacOS || hasPermissions) {
+    // Mark as triggered only when both permissions and email state are resolved.
+    // This prevents the stale-state race: first trigger with
+    // hasPermissions=false or hasEmailConnected=false won't lock out a retry
+    // when either flips to true.
+    if (permissionsResolved && emailResolved) {
       hasTriggeredAutoRefresh = true;
     }
 
@@ -293,8 +301,11 @@ export function useAutoRefresh({
       // BACKLOG-1367: Only skip if messages would actually be included in this sync.
       // When hasPermissions is false, messages won't be synced anyway, so don't
       // let a prior flag block the entire auto-refresh.
+      // Email precache fix: Don't skip the entire auto-refresh when messages were
+      // already imported but emails still need to sync. Only skip when there's
+      // nothing new to sync beyond what was already triggered.
       const willSyncMessages = isMacOS && hasPermissions;
-      if (willSyncMessages && hasMessagesImportTriggered()) {
+      if (willSyncMessages && hasMessagesImportTriggered() && !hasEmailConnected) {
         Sentry.addBreadcrumb({
           category: 'sync',
           message: 'Auto-refresh skipped: messages import already triggered this session',
