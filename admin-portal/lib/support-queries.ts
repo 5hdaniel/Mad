@@ -720,6 +720,199 @@ export interface BacklogLinkRow {
  * Fetch backlog items linked to a support ticket.
  * Joins support_ticket_backlog_links with pm_backlog_items.
  */
+/**
+ * Row shape for a support ticket linked to a backlog item (reverse direction).
+ */
+export interface TicketLinkRow {
+  id: string;
+  link_type: 'fix' | 'related' | 'duplicate';
+  ticket_id: string;
+  ticket_number: number;
+  subject: string;
+  status: string;
+}
+
+/**
+ * Fetch support tickets linked to a backlog item (reverse of getBacklogLinks).
+ * Given a backlog_item_id, returns the linked support tickets.
+ */
+export async function getTicketLinksForBacklogItem(backlogItemId: string): Promise<TicketLinkRow[]> {
+  const supabase = createClient();
+  const { data, error } = await supabase
+    .from('support_ticket_backlog_links')
+    .select(`
+      id,
+      link_type,
+      ticket_id,
+      support_tickets!inner (
+        ticket_number,
+        subject,
+        status
+      )
+    `)
+    .eq('backlog_item_id', backlogItemId)
+    .order('created_at', { ascending: false });
+
+  if (error) throw error;
+
+  return ((data ?? []) as unknown as Array<{
+    id: string;
+    link_type: 'fix' | 'related' | 'duplicate';
+    ticket_id: string;
+    support_tickets: {
+      ticket_number: number;
+      subject: string;
+      status: string;
+    };
+  }>).map((row) => ({
+    id: row.id,
+    link_type: row.link_type,
+    ticket_id: row.ticket_id,
+    ticket_number: row.support_tickets.ticket_number,
+    subject: row.support_tickets.subject,
+    status: row.support_tickets.status,
+  }));
+}
+
+/**
+ * Create a link between a support ticket and a backlog item.
+ */
+export async function createBacklogLink(
+  ticketId: string,
+  backlogItemId: string,
+  linkType: 'fix' | 'related' | 'duplicate'
+): Promise<{ id: string }> {
+  const supabase = createClient();
+  const { data, error } = await supabase
+    .from('support_ticket_backlog_links')
+    .insert({
+      ticket_id: ticketId,
+      backlog_item_id: backlogItemId,
+      link_type: linkType,
+      created_by: (await supabase.auth.getUser()).data.user?.id ?? null,
+    })
+    .select('id')
+    .single();
+
+  if (error) throw error;
+  return { id: data.id };
+}
+
+/**
+ * Remove a support ticket <-> backlog item link.
+ */
+export async function removeBacklogLink(linkId: string): Promise<void> {
+  const supabase = createClient();
+  const { error } = await supabase
+    .from('support_ticket_backlog_links')
+    .delete()
+    .eq('id', linkId);
+
+  if (error) throw error;
+}
+
+/**
+ * Search support tickets by number or subject for linking purposes.
+ * Returns up to 10 matching tickets.
+ */
+export async function searchTicketsForBacklogLink(
+  query: string,
+  excludeBacklogItemId: string
+): Promise<Array<{ id: string; ticket_number: number; subject: string; status: string }>> {
+  const supabase = createClient();
+
+  // Get already-linked ticket IDs to exclude
+  const { data: existingLinks } = await supabase
+    .from('support_ticket_backlog_links')
+    .select('ticket_id')
+    .eq('backlog_item_id', excludeBacklogItemId);
+
+  const excludeIds = (existingLinks ?? []).map(
+    (l: { ticket_id: string }) => l.ticket_id
+  );
+
+  // Search by ticket_number (if query is numeric) or subject (ilike)
+  const isNumeric = /^\d+$/.test(query.trim());
+
+  let baseQuery = supabase
+    .from('support_tickets')
+    .select('id, ticket_number, subject, status')
+    .is('deleted_at', null)
+    .order('created_at', { ascending: false })
+    .limit(10);
+
+  if (excludeIds.length > 0) {
+    baseQuery = baseQuery.not('id', 'in', `(${excludeIds.join(',')})`);
+  }
+
+  if (isNumeric) {
+    baseQuery = baseQuery.eq('ticket_number', parseInt(query.trim(), 10));
+  } else {
+    baseQuery = baseQuery.ilike('subject', `%${query.trim()}%`);
+  }
+
+  const { data, error } = await baseQuery;
+  if (error) throw error;
+
+  return (data ?? []).map((t: { id: string; ticket_number: number; subject: string; status: string }) => ({
+    id: t.id,
+    ticket_number: t.ticket_number,
+    subject: t.subject,
+    status: t.status,
+  }));
+}
+
+/**
+ * Search backlog items by number or title for linking from support side.
+ * Returns up to 10 matching backlog items.
+ */
+export async function searchBacklogItemsForTicketLink(
+  query: string,
+  excludeTicketId: string
+): Promise<Array<{ id: string; item_number: number; title: string; status: string; priority: string }>> {
+  const supabase = createClient();
+
+  // Get already-linked backlog item IDs to exclude
+  const { data: existingLinks } = await supabase
+    .from('support_ticket_backlog_links')
+    .select('backlog_item_id')
+    .eq('ticket_id', excludeTicketId);
+
+  const excludeIds = (existingLinks ?? []).map(
+    (l: { backlog_item_id: string }) => l.backlog_item_id
+  );
+
+  const isNumeric = /^\d+$/.test(query.trim());
+
+  let baseQuery = supabase
+    .from('pm_backlog_items')
+    .select('id, item_number, title, status, priority')
+    .is('deleted_at', null)
+    .order('item_number', { ascending: false })
+    .limit(10);
+
+  if (excludeIds.length > 0) {
+    baseQuery = baseQuery.not('id', 'in', `(${excludeIds.join(',')})`);
+  }
+
+  if (isNumeric) {
+    baseQuery = baseQuery.eq('item_number', parseInt(query.trim(), 10));
+  } else {
+    baseQuery = baseQuery.ilike('title', `%${query.trim()}%`);
+  }
+
+  const { data, error } = await baseQuery;
+  if (error) throw error;
+
+  return (data ?? []).map((i: { id: string; item_number: number; title: string; status: string; priority: string }) => ({
+    id: i.id,
+    item_number: i.item_number,
+    title: i.title,
+    status: i.status,
+    priority: i.priority,
+  }));
+}
+
 export async function getBacklogLinks(ticketId: string): Promise<BacklogLinkRow[]> {
   const supabase = createClient();
   const { data, error } = await supabase
