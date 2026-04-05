@@ -26,6 +26,7 @@ export const COLUMN_ORDER: BoardStatus[] = [
   'pending',
   'in_progress',
   'testing',
+  'waiting_for_user',
   'completed',
   'blocked',
   'deferred',
