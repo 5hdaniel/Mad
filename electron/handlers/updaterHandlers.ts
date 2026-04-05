@@ -98,6 +98,9 @@ export function registerUpdaterHandlers(mainWindow: BrowserWindow): void {
   // Install update and restart
   ipcMain.on("install-update", () => {
     logService.info("Installing update...", "UpdaterHandlers");
+    // TASK-2330: Track when user triggers install so Sentry breadcrumb trail
+    // shows the full lifecycle: check -> available -> downloaded -> install
+    Sentry.addBreadcrumb({ category: "auto-updater", message: "User triggered install-update", level: "info" });
 
     // Ensure app relaunches after update
     // Parameters: isSilent, isForceRunAfter

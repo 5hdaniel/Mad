@@ -82,7 +82,7 @@ export function useBoardData() {
   const [backlogOpen, setBacklogOpen] = useState(false);
   const [columns, setColumns] = useState<BoardColumns>({
     pending: [], in_progress: [], testing: [], completed: [],
-    blocked: [], deferred: [], obsolete: [], reopened: [],
+    blocked: [], deferred: [], obsolete: [], reopened: [], waiting_for_user: [],
   });
   const [backlogItems, setBacklogItems] = useState<PmBacklogItem[]>([]);
   const [backlogLoading, setBacklogLoading] = useState(false);
@@ -189,6 +189,7 @@ export function useBoardData() {
           deferred: items.filter((i) => i.status === 'deferred'),
           obsolete: items.filter((i) => i.status === 'obsolete'),
           reopened: items.filter((i) => i.status === 'reopened'),
+          waiting_for_user: items.filter((i) => i.status === 'waiting_for_user'),
         });
       } catch (fallbackErr) {
         console.error('Fallback listItems also failed:', fallbackErr);

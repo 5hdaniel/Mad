@@ -342,7 +342,7 @@ export function TicketSidebar({ ticket, participants, onTicketUpdated }: TicketS
       />
 
       {/* Backlog Links */}
-      <BacklogLinksPanel ticketId={ticket.id} />
+      <BacklogLinksPanel ticketId={ticket.id} onUpdate={onTicketUpdated} />
 
       {/* Timestamps */}
       <div className="px-4 py-3">
