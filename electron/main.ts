@@ -842,9 +842,22 @@ function createWindow(): void {
     mainWindow.loadURL('app://./index.html');
 
     // Check for updates after window loads (only in production)
-    setTimeout(() => {
-      autoUpdater.checkForUpdates();
-    }, UPDATE_CHECK_DELAY);
+    // macOS App Translocation: When the app is run from a quarantined/translocated
+    // path (e.g., /private/var/folders/.../AppTranslocation/...), Squirrel.Mac cannot
+    // write to the app bundle, causing "Cannot update while running on a read-only volume".
+    // Detect this and skip auto-update, notifying the user to move to /Applications.
+    if (process.platform === "darwin" && process.execPath.includes("/AppTranslocation/")) {
+      log.warn("[AutoUpdater] App Translocation detected — skipping auto-update. Path:", process.execPath);
+      setTimeout(() => {
+        if (mainWindow && !mainWindow.isDestroyed()) {
+          mainWindow.webContents.send("app-translocation-detected");
+        }
+      }, UPDATE_CHECK_DELAY);
+    } else {
+      setTimeout(() => {
+        autoUpdater.checkForUpdates();
+      }, UPDATE_CHECK_DELAY);
+    }
   }
 }
 
@@ -895,6 +908,16 @@ app.whenReady().then(async () => {
     if (downloadStallTimer) {
       clearTimeout(downloadStallTimer);
       downloadStallTimer = null;
+    }
+
+    // macOS: Classify "read-only volume" errors as App Translocation issues
+    // and surface user-friendly guidance instead of a generic error
+    const errMsg = err?.message?.toLowerCase() ?? "";
+    if (process.platform === "darwin" && (errMsg.includes("read-only volume") || errMsg.includes("readonly"))) {
+      log.warn("[AutoUpdater] Read-only volume error — likely App Translocation");
+      if (mainWindow && !mainWindow.isDestroyed()) {
+        mainWindow.webContents.send("app-translocation-detected");
+      }
     }
   });
 
