@@ -959,6 +959,135 @@ describe("useAutoRefresh", () => {
     });
   });
 
+  describe("email precache re-fire on login", () => {
+    it("should re-trigger sync with emails when hasEmailConnected flips from false to true", async () => {
+      // Scenario: App restarts, hasEmailConnected starts false (async state
+      // hasn't resolved), then flips to true. Emails should be included
+      // in a re-fired sync.
+      (usePlatform as jest.Mock).mockReturnValue({ isMacOS: true });
+
+      const { rerender } = renderHook(
+        (props) => useAutoRefresh(props),
+        { initialProps: { ...defaultOptions, hasEmailConnected: false } }
+      );
+
+      // Let preferences load
+      await act(async () => {
+        await Promise.resolve();
+        await Promise.resolve();
+      });
+
+      // Auto-refresh fires after 1.5s delay with hasEmailConnected=false
+      await act(async () => {
+        jest.advanceTimersByTime(1500);
+        await Promise.resolve();
+      });
+
+      // First trigger: contacts + messages (no emails because hasEmailConnected=false)
+      expect(mockRequestSync).toHaveBeenCalledTimes(1);
+      expect(mockRequestSync).toHaveBeenCalledWith(
+        ['contacts', 'messages'],
+        'test-user-123'
+      );
+
+      mockRequestSync.mockClear();
+
+      // Now hasEmailConnected resolves to true
+      rerender({ ...defaultOptions, hasEmailConnected: true });
+
+      // The effect should re-fire and schedule another sync
+      await act(async () => {
+        jest.advanceTimersByTime(1500);
+        await Promise.resolve();
+      });
+
+      // Second trigger: should now include emails
+      expect(mockRequestSync).toHaveBeenCalledTimes(1);
+      expect(mockRequestSync).toHaveBeenCalledWith(
+        ['contacts', 'emails', 'messages'],
+        'test-user-123'
+      );
+    });
+
+    it("should NOT re-trigger when hasEmailConnected was already true on first sync", async () => {
+      (usePlatform as jest.Mock).mockReturnValue({ isMacOS: true });
+
+      renderHook(() => useAutoRefresh(defaultOptions));
+
+      // Let preferences load
+      await act(async () => {
+        await Promise.resolve();
+        await Promise.resolve();
+      });
+
+      // Auto-refresh fires with hasEmailConnected=true
+      await act(async () => {
+        jest.advanceTimersByTime(1500);
+        await Promise.resolve();
+      });
+
+      expect(mockRequestSync).toHaveBeenCalledTimes(1);
+      expect(mockRequestSync).toHaveBeenCalledWith(
+        ['contacts', 'emails', 'messages'],
+        'test-user-123'
+      );
+
+      mockRequestSync.mockClear();
+
+      // Further effect re-fires should be blocked
+      await act(async () => {
+        jest.advanceTimersByTime(5000);
+        await Promise.resolve();
+      });
+
+      expect(mockRequestSync).not.toHaveBeenCalled();
+    });
+
+    it("should re-trigger on non-macOS when hasEmailConnected flips to true", async () => {
+      (usePlatform as jest.Mock).mockReturnValue({ isMacOS: false });
+
+      const { rerender } = renderHook(
+        (props) => useAutoRefresh(props),
+        { initialProps: { ...defaultOptions, hasEmailConnected: false } }
+      );
+
+      // Let preferences load
+      await act(async () => {
+        await Promise.resolve();
+        await Promise.resolve();
+      });
+
+      await act(async () => {
+        jest.advanceTimersByTime(1500);
+        await Promise.resolve();
+      });
+
+      // First trigger: contacts only (no email, non-macOS so no messages)
+      expect(mockRequestSync).toHaveBeenCalledTimes(1);
+      expect(mockRequestSync).toHaveBeenCalledWith(
+        ['contacts'],
+        'test-user-123'
+      );
+
+      mockRequestSync.mockClear();
+
+      // hasEmailConnected flips to true
+      rerender({ ...defaultOptions, hasEmailConnected: true });
+
+      await act(async () => {
+        jest.advanceTimersByTime(1500);
+        await Promise.resolve();
+      });
+
+      // Should re-trigger with emails included
+      expect(mockRequestSync).toHaveBeenCalledTimes(1);
+      expect(mockRequestSync).toHaveBeenCalledWith(
+        ['contacts', 'emails'],
+        'test-user-123'
+      );
+    });
+  });
+
   describe("cleanup", () => {
     it("should cancel pending timeout on unmount", async () => {
       const { unmount } = renderHook(() => useAutoRefresh(defaultOptions));

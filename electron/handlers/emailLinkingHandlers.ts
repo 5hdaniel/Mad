@@ -9,7 +9,7 @@ import { ipcMain } from "electron";
 import type { IpcMainInvokeEvent } from "electron";
 import transactionService from "../services/transactionService";
 import logService from "../services/logService";
-import { createEmail, getEmailByExternalId } from "../services/db/emailDbService";
+import { createEmail, getEmailByExternalId, getCachedEmails } from "../services/db/emailDbService";
 import { createCommunication } from "../services/db/communicationDbService";
 import gmailFetchService from "../services/gmailFetchService";
 import outlookFetchService from "../services/outlookFetchService";
@@ -65,6 +65,7 @@ export function registerEmailLinkingHandlers(): void {
         maxResults?: number;
         skip?: number;    // BACKLOG-711: offset for pagination (skip already-fetched results)
         transactionId?: string; // BACKLOG-712: filter by transaction contact emails
+        _skipCache?: boolean; // BACKLOG-1559: force provider fetch (background refresh after stale cache)
       },
     ): Promise<TransactionResponse> => {
       const effectiveMaxResults = Math.min(options?.maxResults || 100, 500);
@@ -90,7 +91,31 @@ export function registerEmailLinkingHandlers(): void {
         if (txnId) validatedTxnId = txnId;
       }
 
-      // TASK-2067: Delegate to EmailSyncService which fetches from provider AND stores locally
+      // BACKLOG-1559: Try local cache first (no pagination skip = not a "load more" request).
+      // Always serve from cache if data exists — instant response.
+      // Modal always does a background refresh to check for new emails.
+      // Skip cache if _skipCache flag is set (the background refresh call).
+      if (!options?.skip && !options?._skipCache) {
+        const cachedEmails = await getCachedEmails(validatedUserId, {
+          query: options?.query || undefined,
+          after: options?.after ? new Date(options.after) : null,
+          before: options?.before ? new Date(options.before) : null,
+          maxResults: effectiveMaxResults,
+        });
+        if (cachedEmails.length > 0) {
+          logService.info("Returning cached emails", "Transactions", {
+            count: cachedEmails.length,
+            query: options?.query || "(none)",
+          });
+          return {
+            success: true,
+            emails: cachedEmails,
+            fromCache: true,
+          };
+        }
+      }
+
+      // TASK-2067: Fall back to provider API if cache is empty or user is searching/paginating
       const result = await emailSyncService.searchProviderEmails({
         userId: validatedUserId,
         searchParams: {
