@@ -39,6 +39,9 @@ import type { TransactionWithDetails } from "./transactionService/types";
 // serves as a safety valve to prevent runaway fetches for extremely high-volume contacts.
 export const EMAIL_FETCH_SAFETY_CAP = 2000;
 
+/** How long the email cache is considered fresh after a precache completes. */
+const EMAIL_CACHE_FRESHNESS_MS = 10 * 60 * 1000; // 10 minutes
+
 // ============================================
 // TASK-2070: Provider error classification
 // ============================================
@@ -361,6 +364,16 @@ async function fetchStoreAndDedup(params: {
  */
 class EmailSyncService {
   private precacheInProgress = false;
+  private lastPrecacheCompletedAt: number | null = null;
+
+  /**
+   * Returns true if the email cache was populated recently enough to be trusted.
+   * Used by the get-unlinked-emails handler to decide cache-vs-provider.
+   */
+  isCacheFresh(): boolean {
+    if (this.lastPrecacheCompletedAt === null) return false;
+    return (Date.now() - this.lastPrecacheCompletedAt) < EMAIL_CACHE_FRESHNESS_MS;
+  }
 
   /**
    * Sync emails from provider(s) for a transaction, then auto-link communications.
@@ -1239,6 +1252,7 @@ class EmailSyncService {
       data: { totalFetched, totalStored },
     });
 
+    this.lastPrecacheCompletedAt = Date.now();
     return { fetched: totalFetched, stored: totalStored };
     } finally {
       this.precacheInProgress = false;

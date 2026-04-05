@@ -221,6 +221,42 @@ export async function getEmailsByUser(userId: string): Promise<Email[]> {
 }
 
 /**
+ * Get cached emails for a user with optional date range, search query, and limit.
+ * Used by the Attach Emails modal to read from local cache before hitting the provider API.
+ */
+export async function getCachedEmails(
+  userId: string,
+  options?: { query?: string; after?: Date | null; before?: Date | null; maxResults?: number }
+): Promise<Email[]> {
+  const conditions = ["user_id = ?"];
+  const params: (string | number)[] = [userId];
+
+  if (options?.after) {
+    conditions.push("sent_at >= ?");
+    params.push(options.after.toISOString());
+  }
+  if (options?.before) {
+    conditions.push("sent_at <= ?");
+    params.push(options.before.toISOString());
+  }
+  if (options?.query) {
+    conditions.push("(subject LIKE ? OR sender LIKE ? OR recipients LIKE ?)");
+    const q = `%${options.query}%`;
+    params.push(q, q, q);
+  }
+
+  const limit = options?.maxResults || 500;
+  const sql = `
+    SELECT ${EMAIL_COLUMNS_LIGHT} FROM emails
+    WHERE ${conditions.join(" AND ")}
+    ORDER BY sent_at DESC
+    LIMIT ?
+  `;
+  params.push(limit);
+  return dbAll<Email>(sql, params);
+}
+
+/**
  * Get emails in a thread
  */
 export async function getEmailsByThread(
