@@ -427,11 +427,11 @@ export function ContactSearchList({
 
   return (
     <div
-      className={`overflow-y-auto ${className}`}
+      className={`flex flex-col overflow-hidden ${className}`}
       data-testid="contact-search-list"
     >
-      {/* Sticky header: Search bar + Category filter pinned to top when scrolling */}
-      <div className="sticky top-0 z-10 bg-white">
+      {/* Search bar + Category filter - flex-shrink-0 keeps them pinned at top */}
+      <div className="flex-shrink-0">
         {/* Search Input and Add Manually Button */}
         <div className="p-2 sm:p-3 border-b border-gray-200">
           <div className="flex items-center gap-2">
@@ -585,7 +585,7 @@ export function ContactSearchList({
       {/* Contact List */}
       <div
         ref={listRef}
-        className=""
+        className="flex-1 min-h-0 overflow-y-auto"
         role="listbox"
         aria-multiselectable="true"
         aria-label="Contact list"

@@ -10,7 +10,7 @@
  * - Various modal dialogs
  */
 import React, { useState, useEffect, useCallback, useMemo } from "react";
-import { ResponsiveModal } from "./common/ResponsiveModal";
+import { ResponsiveModal, MODAL_PANEL } from "./common/ResponsiveModal";
 import type { Transaction } from "@/types";
 import { transactionService } from '../services';
 import ExportModal from "./ExportModal";
@@ -513,7 +513,7 @@ function TransactionDetails({
   // Show a loading overlay while initial data loads
   if (loading && contactAssignments.length === 0) {
     return (
-      <ResponsiveModal zIndex="z-[60]" panelClassName="max-w-4xl sm:h-[70vh] sm:max-h-[90vh] items-center justify-center">
+      <ResponsiveModal zIndex="z-[60]" panelClassName={`${MODAL_PANEL.lg} items-center justify-center`}>
           <div className="w-10 h-10 border-4 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
           <p className="text-gray-500 mt-4">Loading transaction...</p>
       </ResponsiveModal>
@@ -521,7 +521,7 @@ function TransactionDetails({
   }
 
   return (
-    <ResponsiveModal onClose={onClose} zIndex="z-[60]" panelClassName="max-w-4xl sm:h-[70vh] sm:max-h-[90vh]">
+    <ResponsiveModal onClose={onClose} zIndex="z-[60]" panelClassName={MODAL_PANEL.lg}>
         {/* Header */}
         <TransactionHeader
           transaction={transaction}
