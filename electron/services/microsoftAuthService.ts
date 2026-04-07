@@ -267,14 +267,11 @@ class MicrosoftAuthService {
                         closeMsg.style.marginBottom = '1.5rem';
                         returnBtn.style.display = 'inline-block';
 
-                        // Try to focus the app if possible (won't work in all browsers)
                         returnBtn.onclick = () => {
-                          // Attempt to close again
-                          window.close();
-                          // If still here, user needs to manually return
-                          if (!window.closed) {
-                            closeMsg.innerHTML = 'You can close this tab and return to the Mad Accountant application.';
-                          }
+                          // Use the app's deep link protocol to bring it to focus
+                          window.location.href = 'keepr://focus';
+                          // Also try to close the tab
+                          setTimeout(() => window.close(), 300);
                         };
                       }, 500);
                     }, 2000);
