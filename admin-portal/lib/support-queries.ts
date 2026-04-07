@@ -106,6 +106,27 @@ function notifyCustomerOfReply(
 }
 
 /**
+ * Notify customer that a support ticket has been created on their behalf.
+ * Called after successful createTicket from the admin portal.
+ */
+export function notifyTicketCreated(
+  ticketId: string,
+  ticket: { subject: string; ticket_number: number; requester_email: string },
+  brokerPortalUrl: string
+): void {
+  const ticketNumber = `TKT-${String(ticket.ticket_number).padStart(4, '0')}`;
+
+  sendTicketNotification({
+    type: 'confirmation',
+    ticketId,
+    ticketNumber,
+    ticketSubject: ticket.subject,
+    requesterEmail: ticket.requester_email,
+    ticketLink: `${brokerPortalUrl}/dashboard/support/${ticketId}`,
+  });
+}
+
+/**
  * Notify agent that a ticket has been assigned to them.
  * Called after successful assignTicket.
  */
