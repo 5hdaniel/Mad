@@ -374,6 +374,26 @@ export const transactionBridge = {
     ipcRenderer.invoke("transactions:restore-removed-message", ignoredCommId, messageIds, transactionId),
 
   /**
+   * BACKLOG-1578: Get removed/unlinked emails for a transaction.
+   * Returns emails that were manually unlinked (from ignored_communications).
+   * @param transactionId - Transaction ID to get removed emails for
+   * @returns List of removed emails with metadata
+   */
+  getRemovedEmails: (transactionId: string) =>
+    ipcRenderer.invoke("transactions:get-removed-emails", transactionId),
+
+  /**
+   * BACKLOG-1578: Restore a removed email (re-link + remove suppression).
+   * Deletes the ignored_communications record and re-links the email to the transaction.
+   * @param ignoredCommId - Ignored communication record ID to delete
+   * @param emailId - Email ID to re-link
+   * @param transactionId - Transaction ID to re-link email to
+   * @returns Restore result
+   */
+  restoreRemovedEmail: (ignoredCommId: string, emailId: string, transactionId: string) =>
+    ipcRenderer.invoke("transactions:restore-removed-email", ignoredCommId, emailId, transactionId),
+
+  /**
    * Auto-links text messages to a transaction based on assigned contacts
    * Finds SMS/iMessage messages from contacts' phone numbers and creates
    * communication references linking them to the transaction.

@@ -525,6 +525,124 @@ export function registerEmailLinkingHandlers(): void {
     }, { module: "Transactions" }),
   );
 
+  // BACKLOG-1578: Get removed/unlinked emails for a transaction
+  // Joins ignored_communications with emails to show what was removed
+  ipcMain.handle(
+    "transactions:get-removed-emails",
+    wrapHandler(async (
+      _event: IpcMainInvokeEvent,
+      transactionId: string,
+    ): Promise<TransactionResponse> => {
+      logService.info("Getting removed emails", "Transactions", { transactionId });
+
+      const validatedTransactionId = validateTransactionId(transactionId);
+      if (!validatedTransactionId) {
+        throw new ValidationError("Transaction ID validation failed", "transactionId");
+      }
+
+      // Query ignored_communications joined with emails to get actual email content
+      const sql = `
+        SELECT DISTINCT
+          ic.id as ignored_id,
+          ic.email_id as ic_email_id,
+          ic.reason,
+          ic.ignored_at,
+          e.id as email_id,
+          e.subject,
+          e.sender,
+          e.recipients,
+          e.cc,
+          e.sent_at,
+          e.thread_id,
+          e.body_preview,
+          e.body_plain,
+          e.has_attachments,
+          e.source
+        FROM ignored_communications ic
+        JOIN emails e ON (
+          (ic.email_id IS NOT NULL AND ic.email_id = e.id)
+          OR (ic.original_communication_id IS NOT NULL AND e.id = ic.original_communication_id)
+        )
+        WHERE ic.transaction_id = ?
+        AND e.id IS NOT NULL
+        ORDER BY ic.ignored_at DESC
+      `;
+
+      const rows = dbAll(sql, [validatedTransactionId]);
+
+      logService.info("Retrieved removed emails", "Transactions", {
+        transactionId: validatedTransactionId,
+        count: rows.length,
+      });
+
+      return {
+        success: true,
+        removedEmails: rows,
+      };
+    }, { module: "Transactions" }),
+  );
+
+  // BACKLOG-1578: Restore a removed email (re-link + remove suppression)
+  ipcMain.handle(
+    "transactions:restore-removed-email",
+    wrapHandler(async (
+      _event: IpcMainInvokeEvent,
+      ignoredCommId: string,
+      emailId: string,
+      transactionId: string,
+    ): Promise<TransactionResponse> => {
+      logService.info("Restoring removed email", "Transactions", {
+        ignoredCommId,
+        emailId,
+        transactionId,
+      });
+
+      const validatedTransactionId = validateTransactionId(transactionId);
+      if (!validatedTransactionId) {
+        throw new ValidationError("Transaction ID validation failed", "transactionId");
+      }
+
+      if (!ignoredCommId || typeof ignoredCommId !== "string") {
+        throw new ValidationError("Ignored communication ID is required", "ignoredCommId");
+      }
+
+      if (!emailId || typeof emailId !== "string") {
+        throw new ValidationError("Email ID is required", "emailId");
+      }
+
+      // Get transaction to get user_id
+      const transaction = await transactionService.getTransactionDetails(validatedTransactionId);
+      if (!transaction) {
+        throw new ValidationError("Transaction not found", "transactionId");
+      }
+
+      // Step 1: Remove the suppression record
+      await removeIgnoredCommunication(ignoredCommId);
+
+      // Step 2: Re-link the email to the transaction via communications table
+      await createCommunication({
+        user_id: transaction.user_id,
+        transaction_id: validatedTransactionId,
+        email_id: emailId,
+        communication_type: "email",
+        link_source: "manual",
+        link_confidence: 1.0,
+        has_attachments: false,
+        is_false_positive: false,
+      });
+
+      logService.info("Removed email restored", "Transactions", {
+        ignoredCommId,
+        emailId,
+        transactionId: validatedTransactionId,
+      });
+
+      return {
+        success: true,
+      };
+    }, { module: "Transactions" }),
+  );
+
   // BACKLOG-1577: Restore a removed message (re-link + remove suppression)
   ipcMain.handle(
     "transactions:restore-removed-message",
