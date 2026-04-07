@@ -15,6 +15,8 @@ import { normalizePhone } from "./messageMatchingService";
 import {
   createThreadCommunicationReference,
   isThreadLinkedToTransaction,
+  getIgnoredEmailIdsForTransaction,
+  getIgnoredThreadIdsForTransaction,
 } from "./db/communicationDbService";
 import { computeTransactionDateRange } from "../utils/emailDateRange";
 import { normalizeAddress, type NormalizedAddress } from "../utils/addressNormalization";
@@ -664,6 +666,31 @@ export async function autoLinkCommunicationsForContact(
           contactPhones: contactInfo.phoneNumbers,
         }
       );
+    }
+
+    // 5b. BACKLOG-1560: Filter out emails and threads that the user previously unlinked.
+    // This prevents deleted conversations from reappearing after re-sync.
+    const ignoredEmailIds = getIgnoredEmailIdsForTransaction(transactionId);
+    const ignoredThreadIds = getIgnoredThreadIdsForTransaction(transactionId);
+
+    if (ignoredEmailIds.size > 0 || ignoredThreadIds.size > 0) {
+      const emailCountBefore = emailIds.length;
+      emailIds = emailIds.filter((id) => !ignoredEmailIds.has(id));
+      const emailsSuppressed = emailCountBefore - emailIds.length;
+
+      const threadCountBefore = messagesWithThreads.length;
+      messagesWithThreads = messagesWithThreads.filter(
+        (msg) => !msg.thread_id || !ignoredThreadIds.has(msg.thread_id)
+      );
+      const threadsSuppressed = threadCountBefore - messagesWithThreads.length;
+
+      if (emailsSuppressed > 0 || threadsSuppressed > 0) {
+        await logService.debug(
+          `BACKLOG-1560: Suppressed ${emailsSuppressed} emails and ${threadsSuppressed} threads previously unlinked by user`,
+          "AutoLinkService",
+          { transactionId, emailsSuppressed, threadsSuppressed }
+        );
+      }
     }
 
     // 6. Link emails to transaction

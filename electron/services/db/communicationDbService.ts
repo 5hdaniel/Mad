@@ -292,11 +292,13 @@ export async function addIgnoredCommunication(
 ): Promise<IgnoredCommunication> {
   const id = crypto.randomUUID();
 
+  // BACKLOG-1560: Include email_id and thread_id columns for direct suppression
   const sql = `
     INSERT INTO ignored_communications (
       id, user_id, transaction_id, email_subject, email_sender,
-      email_sent_at, email_thread_id, original_communication_id, reason
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+      email_sent_at, email_thread_id, email_id, thread_id,
+      original_communication_id, reason
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `;
 
   const params = [
@@ -307,6 +309,8 @@ export async function addIgnoredCommunication(
     data.email_sender || null,
     data.email_sent_at || null,
     data.email_thread_id || null,
+    data.email_id || null,
+    data.thread_id || null,
     data.original_communication_id || null,
     data.reason || null,
   ];
@@ -322,6 +326,8 @@ export async function addIgnoredCommunication(
     email_sender: data.email_sender || null,
     email_sent_at: data.email_sent_at || null,
     email_thread_id: data.email_thread_id || null,
+    email_id: data.email_id || null,
+    thread_id: data.thread_id || null,
     original_communication_id: data.original_communication_id || null,
     reason: data.reason || null,
     ignored_at: new Date().toISOString(),
@@ -413,6 +419,36 @@ export async function isEmailIgnoredByUser(
 export async function removeIgnoredCommunication(ignoredCommId: string): Promise<void> {
   const sql = "DELETE FROM ignored_communications WHERE id = ?";
   dbRun(sql, [ignoredCommId]);
+}
+
+/**
+ * BACKLOG-1560: Get set of email IDs that are ignored for a specific transaction.
+ * Used by auto-link to skip previously unlinked emails.
+ */
+export function getIgnoredEmailIdsForTransaction(
+  transactionId: string,
+): Set<string> {
+  const sql = `
+    SELECT email_id FROM ignored_communications
+    WHERE transaction_id = ? AND email_id IS NOT NULL
+  `;
+  const rows = dbAll<{ email_id: string }>(sql, [transactionId]);
+  return new Set(rows.map((r) => r.email_id));
+}
+
+/**
+ * BACKLOG-1560: Get set of thread IDs that are ignored for a specific transaction.
+ * Used by auto-link to skip previously unlinked message threads.
+ */
+export function getIgnoredThreadIdsForTransaction(
+  transactionId: string,
+): Set<string> {
+  const sql = `
+    SELECT thread_id FROM ignored_communications
+    WHERE transaction_id = ? AND thread_id IS NOT NULL
+  `;
+  const rows = dbAll<{ thread_id: string }>(sql, [transactionId]);
+  return new Set(rows.map((r) => r.thread_id));
 }
 
 // ============================================

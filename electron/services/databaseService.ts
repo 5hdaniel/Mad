@@ -833,6 +833,39 @@ class DatabaseService implements IDatabaseService {
         `);
       },
     },
+    {
+      version: 37,
+      description: "Add email_id and thread_id columns to ignored_communications for auto-link suppression (BACKLOG-1560)",
+      migrate: (d) => {
+        const info = d.prepare("PRAGMA table_info(ignored_communications)").all() as { name: string }[];
+        if (!info.some((c) => c.name === "email_id")) {
+          d.exec("ALTER TABLE ignored_communications ADD COLUMN email_id TEXT");
+        }
+        if (!info.some((c) => c.name === "thread_id")) {
+          d.exec("ALTER TABLE ignored_communications ADD COLUMN thread_id TEXT");
+        }
+        d.exec(`
+          CREATE INDEX IF NOT EXISTS idx_ignored_comms_email_id
+            ON ignored_communications(email_id, transaction_id)
+            WHERE email_id IS NOT NULL
+        `);
+        d.exec(`
+          CREATE INDEX IF NOT EXISTS idx_ignored_comms_thread_id
+            ON ignored_communications(thread_id, transaction_id)
+            WHERE thread_id IS NOT NULL
+        `);
+        d.exec(`
+          UPDATE ignored_communications
+          SET email_id = (
+            SELECT c.email_id FROM communications c
+            WHERE c.id = ignored_communications.original_communication_id
+              AND c.email_id IS NOT NULL
+          )
+          WHERE email_id IS NULL
+            AND original_communication_id IS NOT NULL
+        `);
+      },
+    },
   ];
 
   static validateNoDuplicateVersions(migrations: MigrationEntry[]): void {
