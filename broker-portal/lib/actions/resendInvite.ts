@@ -7,6 +7,7 @@
  * and resends the invite email for a pending organization member.
  */
 
+import * as Sentry from '@sentry/nextjs';
 import { createClient } from '@/lib/supabase/server';
 import { randomBytes } from 'crypto';
 import { blockWriteDuringImpersonation } from '@/lib/impersonation-guards';
@@ -75,7 +76,10 @@ export async function resendInvite(input: ResendInviteInput): Promise<ResendInvi
     .eq('id', input.memberId);
 
   if (updateError) {
-    console.error('Error updating invitation:', updateError);
+    Sentry.captureException(updateError, {
+      tags: { action: 'resend_invite' },
+      extra: { memberId: input.memberId, organizationId: input.organizationId },
+    });
     return { success: false, error: 'Failed to regenerate invitation' };
   }
 
@@ -100,6 +104,13 @@ export async function resendInvite(input: ResendInviteInput): Promise<ResendInvi
     const inviterName = currentUserData?.display_name || currentUserData?.email || 'Your administrator';
     const orgName = organization?.name || 'your organization';
 
+    Sentry.addBreadcrumb({
+      category: 'email.invite',
+      message: 'Resending invite email',
+      level: 'info',
+      data: { recipientEmail: pendingMember.invited_email, organizationId: input.organizationId },
+    });
+
     const emailResult = await sendInviteEmail({
       recipientEmail: pendingMember.invited_email!,
       organizationName: orgName,
@@ -110,11 +121,17 @@ export async function resendInvite(input: ResendInviteInput): Promise<ResendInvi
     });
 
     if (!emailResult.success) {
-      console.error('Failed to send invite email:', emailResult.error);
+      Sentry.captureMessage('Failed to resend invite email', {
+        level: 'warning',
+        extra: { error: emailResult.error, recipientEmail: pendingMember.invited_email, organizationId: input.organizationId },
+      });
       return { success: false, error: 'Invitation updated but email could not be sent' };
     }
   } catch (emailError) {
-    console.error('Error sending invite email:', emailError);
+    Sentry.captureException(emailError, {
+      tags: { action: 'resend_invite_email' },
+      extra: { recipientEmail: pendingMember.invited_email, organizationId: input.organizationId },
+    });
     return { success: false, error: 'Invitation updated but email could not be sent' };
   }
 
