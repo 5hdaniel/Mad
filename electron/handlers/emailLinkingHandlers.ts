@@ -10,7 +10,8 @@ import type { IpcMainInvokeEvent } from "electron";
 import transactionService from "../services/transactionService";
 import logService from "../services/logService";
 import { createEmail, getEmailByExternalId, getCachedEmails } from "../services/db/emailDbService";
-import { createCommunication } from "../services/db/communicationDbService";
+import { createCommunication, removeIgnoredCommunication } from "../services/db/communicationDbService";
+import { dbAll } from "../services/db/core/dbConnection";
 import gmailFetchService from "../services/gmailFetchService";
 import outlookFetchService from "../services/outlookFetchService";
 import emailSyncService from "../services/emailSyncService";
@@ -459,6 +460,109 @@ export function registerEmailLinkingHandlers(): void {
 
       logService.info("Messages unlinked successfully", "Transactions", {
         messageCount: messageIds.length,
+      });
+
+      return {
+        success: true,
+      };
+    }, { module: "Transactions" }),
+  );
+
+  // BACKLOG-1577: Get removed/unlinked messages for a transaction
+  // Joins ignored_communications with messages to show what was removed
+  ipcMain.handle(
+    "transactions:get-removed-messages",
+    wrapHandler(async (
+      _event: IpcMainInvokeEvent,
+      transactionId: string,
+    ): Promise<TransactionResponse> => {
+      logService.info("Getting removed messages", "Transactions", { transactionId });
+
+      const validatedTransactionId = validateTransactionId(transactionId);
+      if (!validatedTransactionId) {
+        throw new ValidationError("Transaction ID validation failed", "transactionId");
+      }
+
+      // Query ignored_communications joined with messages to get actual message content
+      // Handles both thread-based suppression and per-message suppression
+      const sql = `
+        SELECT DISTINCT
+          ic.id as ignored_id,
+          ic.thread_id as ic_thread_id,
+          ic.reason,
+          ic.ignored_at,
+          m.id as message_id,
+          m.body_text as body,
+          m.subject,
+          m.channel,
+          m.thread_id,
+          m.sent_at,
+          m.received_at,
+          m.participants,
+          m.participants_flat,
+          m.direction
+        FROM ignored_communications ic
+        LEFT JOIN messages m ON (
+          (ic.thread_id IS NOT NULL AND ic.thread_id != '' AND m.thread_id = ic.thread_id)
+          OR (ic.original_communication_id IS NOT NULL AND m.id = ic.original_communication_id)
+        )
+        WHERE ic.transaction_id = ?
+        AND m.id IS NOT NULL
+        ORDER BY ic.ignored_at DESC, m.sent_at DESC
+      `;
+
+      const rows = dbAll(sql, [validatedTransactionId]);
+
+      logService.info("Retrieved removed messages", "Transactions", {
+        transactionId: validatedTransactionId,
+        count: rows.length,
+      });
+
+      return {
+        success: true,
+        removedMessages: rows,
+      };
+    }, { module: "Transactions" }),
+  );
+
+  // BACKLOG-1577: Restore a removed message (re-link + remove suppression)
+  ipcMain.handle(
+    "transactions:restore-removed-message",
+    wrapHandler(async (
+      _event: IpcMainInvokeEvent,
+      ignoredCommId: string,
+      messageIds: string[],
+      transactionId: string,
+    ): Promise<TransactionResponse> => {
+      logService.info("Restoring removed message", "Transactions", {
+        ignoredCommId,
+        messageCount: messageIds?.length || 0,
+        transactionId,
+      });
+
+      const validatedTransactionId = validateTransactionId(transactionId);
+      if (!validatedTransactionId) {
+        throw new ValidationError("Transaction ID validation failed", "transactionId");
+      }
+
+      if (!ignoredCommId || typeof ignoredCommId !== "string") {
+        throw new ValidationError("Ignored communication ID is required", "ignoredCommId");
+      }
+
+      if (!Array.isArray(messageIds) || messageIds.length === 0) {
+        throw new ValidationError("Message IDs must be a non-empty array", "messageIds");
+      }
+
+      // Step 1: Remove the suppression record so auto-link does not suppress again
+      await removeIgnoredCommunication(ignoredCommId);
+
+      // Step 2: Re-link the messages to the transaction
+      await transactionService.linkMessages(messageIds, validatedTransactionId);
+
+      logService.info("Removed message restored", "Transactions", {
+        ignoredCommId,
+        messageCount: messageIds.length,
+        transactionId: validatedTransactionId,
       });
 
       return {
