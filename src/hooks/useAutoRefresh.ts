@@ -256,6 +256,14 @@ export function useAutoRefresh({
     runAutoRefresh(userId, hasEmailConnected);
   }, [userId, hasEmailConnected, runAutoRefresh]);
 
+  // BACKLOG-1559: Reset auto-refresh trigger on login (userId change)
+  // so email precache runs after re-login, not just on app restart.
+  useEffect(() => {
+    if (userId) {
+      hasTriggeredAutoRefresh = false;
+    }
+  }, [userId]);
+
   // Auto-trigger refresh once per app session when first entering dashboard
   useEffect(() => {
     // Skip if not on dashboard (but don't reset flag - we only want to trigger once per session)
