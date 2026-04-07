@@ -954,6 +954,10 @@ CREATE TABLE IF NOT EXISTS ignored_communications (
   email_sent_at TEXT,
   email_thread_id TEXT,
 
+  -- BACKLOG-1560: Direct ID references for reliable suppression during auto-link
+  email_id TEXT,                          -- FK to emails table (for email suppression)
+  thread_id TEXT,                         -- Thread ID (for text message thread suppression)
+
   -- Original communication reference (if available)
   original_communication_id TEXT,
 
@@ -972,6 +976,15 @@ CREATE INDEX IF NOT EXISTS idx_ignored_comms_user_email
 
 CREATE INDEX IF NOT EXISTS idx_ignored_comms_transaction
   ON ignored_communications(transaction_id);
+
+-- BACKLOG-1560: Indexes for auto-link suppression lookups
+CREATE INDEX IF NOT EXISTS idx_ignored_comms_email_id
+  ON ignored_communications(email_id, transaction_id)
+  WHERE email_id IS NOT NULL;
+
+CREATE INDEX IF NOT EXISTS idx_ignored_comms_thread_id
+  ON ignored_communications(thread_id, transaction_id)
+  WHERE thread_id IS NOT NULL;
 
 -- ============================================
 -- PHONE LAST MESSAGE TABLE (BACKLOG-567, Migration 24)

@@ -15,6 +15,10 @@ import crypto from "crypto";
 import { dbAll, dbRun, dbGet } from "./db/core/dbConnection";
 import logService from "./logService";
 import { normalizeAddress, contentContainsAddress, type NormalizedAddress } from "../utils/addressNormalization";
+import {
+  getIgnoredEmailIdsForTransaction,
+  getIgnoredThreadIdsForTransaction,
+} from "./db/communicationDbService";
 
 /**
  * Result of matching a message to a contact
@@ -454,13 +458,38 @@ export async function autoLinkTextsToTransaction(
       { startDate, endDate }
     );
 
+    // BACKLOG-1560: Filter out messages whose threads were previously unlinked by user
+    const ignoredThreadIds = getIgnoredThreadIdsForTransaction(transactionId);
+    let filteredMatches = matches;
+    if (ignoredThreadIds.size > 0) {
+      // Look up thread_id for each matched message to check suppression
+      filteredMatches = matches.filter((match) => {
+        const msg = dbGet<{ thread_id: string | null }>(
+          "SELECT thread_id FROM messages WHERE id = ?",
+          [match.messageId]
+        );
+        if (msg?.thread_id && ignoredThreadIds.has(msg.thread_id)) {
+          return false; // Suppress this message
+        }
+        return true;
+      });
+
+      const suppressed = matches.length - filteredMatches.length;
+      if (suppressed > 0) {
+        logService.debug(
+          `BACKLOG-1560: Suppressed ${suppressed} text messages from ${ignoredThreadIds.size} ignored threads`,
+          "MessageMatchingService"
+        );
+      }
+    }
+
     logService.info(
-      `Found ${matches.length} text messages to link for transaction ${transactionId}`,
+      `Found ${filteredMatches.length} text messages to link for transaction ${transactionId}`,
       "MessageMatchingService"
     );
 
     // 4. Create communication references for each match
-    for (const match of matches) {
+    for (const match of filteredMatches) {
       try {
         const refId = await createCommunicationReference(
           match.messageId,
@@ -490,7 +519,7 @@ export async function autoLinkTextsToTransaction(
 
     // 5. Also update the message's transaction_id directly for consistency
     if (result.linked > 0) {
-      const linkedMessageIds = matches
+      const linkedMessageIds = filteredMatches
         .slice(0, result.linked)
         .map((m) => m.messageId);
 
@@ -745,13 +774,46 @@ export async function autoLinkEmailsToTransaction(
       }
     }
 
+    // BACKLOG-1560: Filter out emails that the user previously unlinked.
+    // The primary auto-link path (autoLinkService) uses email_id from the emails table.
+    // This path uses message_id from the messages table, so we cross-reference via
+    // the emails table to find ignored email_ids.
+    const ignoredEmailIds = getIgnoredEmailIdsForTransaction(transactionId);
+    let filteredEmailMatches = matches;
+    if (ignoredEmailIds.size > 0) {
+      filteredEmailMatches = matches.filter((match) => {
+        // Look up the message's external_id and check if a corresponding email is ignored
+        const msg = dbGet<{ external_id: string | null }>(
+          "SELECT external_id FROM messages WHERE id = ?",
+          [match.messageId]
+        );
+        if (msg?.external_id) {
+          const email = dbGet<{ id: string }>(
+            "SELECT id FROM emails WHERE external_id = ? AND id IN (" +
+            Array.from(ignoredEmailIds).map(() => "?").join(",") + ")",
+            [msg.external_id, ...Array.from(ignoredEmailIds)]
+          );
+          if (email) return false; // This email was previously ignored
+        }
+        return true;
+      });
+
+      const suppressed = matches.length - filteredEmailMatches.length;
+      if (suppressed > 0) {
+        logService.debug(
+          `BACKLOG-1560: Suppressed ${suppressed} emails previously unlinked by user`,
+          "MessageMatchingService"
+        );
+      }
+    }
+
     logService.info(
-      `Found ${matches.length} emails to link for transaction ${transactionId}`,
+      `Found ${filteredEmailMatches.length} emails to link for transaction ${transactionId}`,
       "MessageMatchingService"
     );
 
     // 4. Create communication references for each match
-    for (const match of matches) {
+    for (const match of filteredEmailMatches) {
       try {
         const refId = await createCommunicationReference(
           match.messageId,
@@ -781,7 +843,7 @@ export async function autoLinkEmailsToTransaction(
 
     // 5. Also update the message's transaction_id directly for consistency
     if (result.linked > 0) {
-      const linkedMessageIds = matches
+      const linkedMessageIds = filteredEmailMatches
         .slice(0, result.linked)
         .map((m) => m.messageId);
 

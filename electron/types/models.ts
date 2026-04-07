@@ -1111,6 +1111,10 @@ export interface IgnoredCommunication {
   email_sender?: string;
   email_sent_at?: string;
   email_thread_id?: string;
+  /** BACKLOG-1560: Direct reference to emails table for reliable suppression */
+  email_id?: string;
+  /** BACKLOG-1560: Thread ID for text message thread suppression */
+  thread_id?: string;
   original_communication_id?: string;
   reason?: string;
   ignored_at: string;
@@ -1126,6 +1130,10 @@ export interface NewIgnoredCommunication {
   email_sender?: string;
   email_sent_at?: string;
   email_thread_id?: string;
+  /** BACKLOG-1560: Direct reference to emails table for reliable suppression */
+  email_id?: string;
+  /** BACKLOG-1560: Thread ID for text message thread suppression */
+  thread_id?: string;
   original_communication_id?: string;
   reason?: string;
 }
