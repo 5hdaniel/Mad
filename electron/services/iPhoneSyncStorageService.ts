@@ -380,7 +380,7 @@ class IPhoneSyncStorageService {
       bodyText: string | null;
       participants: string;
       participantsFlat: string;
-      threadId: string;
+      threadId: string | null;
       sentAt: string;
       hasAttachments: number;
       messageType: string | null;
@@ -463,7 +463,7 @@ class IPhoneSyncStorageService {
         bodyText: sanitizedText,
         participants,
         participantsFlat,
-        threadId: threadId || "",
+        threadId: threadId || null,
         sentAt: msg.date.toISOString(),
         hasAttachments: msg.attachments.length > 0 ? 1 : 0,
         messageType,

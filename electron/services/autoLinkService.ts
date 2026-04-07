@@ -17,6 +17,7 @@ import {
   isThreadLinkedToTransaction,
   getIgnoredEmailIdsForTransaction,
   getIgnoredThreadIdsForTransaction,
+  getIgnoredCommunicationIdsForTransaction,
 } from "./db/communicationDbService";
 import { computeTransactionDateRange } from "../utils/emailDateRange";
 import { normalizeAddress, type NormalizedAddress } from "../utils/addressNormalization";
@@ -672,21 +673,27 @@ export async function autoLinkCommunicationsForContact(
     // This prevents deleted conversations from reappearing after re-sync.
     const ignoredEmailIds = getIgnoredEmailIdsForTransaction(transactionId);
     const ignoredThreadIds = getIgnoredThreadIdsForTransaction(transactionId);
+    // BACKLOG-1560: Per-message suppression for messages without a valid thread_id
+    const ignoredCommIds = getIgnoredCommunicationIdsForTransaction(transactionId);
 
-    if (ignoredEmailIds.size > 0 || ignoredThreadIds.size > 0) {
+    if (ignoredEmailIds.size > 0 || ignoredThreadIds.size > 0 || ignoredCommIds.size > 0) {
       const emailCountBefore = emailIds.length;
       emailIds = emailIds.filter((id) => !ignoredEmailIds.has(id));
       const emailsSuppressed = emailCountBefore - emailIds.length;
 
       const threadCountBefore = messagesWithThreads.length;
-      messagesWithThreads = messagesWithThreads.filter(
-        (msg) => !msg.thread_id || !ignoredThreadIds.has(msg.thread_id)
-      );
+      messagesWithThreads = messagesWithThreads.filter((msg) => {
+        // BACKLOG-1560: Check per-message suppression (for messages with no/empty thread_id)
+        if (ignoredCommIds.has(msg.id)) return false;
+        // Check thread-level suppression (only for messages with a valid thread_id)
+        if (msg.thread_id && msg.thread_id !== "" && ignoredThreadIds.has(msg.thread_id)) return false;
+        return true;
+      });
       const threadsSuppressed = threadCountBefore - messagesWithThreads.length;
 
       if (emailsSuppressed > 0 || threadsSuppressed > 0) {
         await logService.debug(
-          `BACKLOG-1560: Suppressed ${emailsSuppressed} emails and ${threadsSuppressed} threads previously unlinked by user`,
+          `BACKLOG-1560: Suppressed ${emailsSuppressed} emails and ${threadsSuppressed} threads/messages previously unlinked by user`,
           "AutoLinkService",
           { transactionId, emailsSuppressed, threadsSuppressed }
         );

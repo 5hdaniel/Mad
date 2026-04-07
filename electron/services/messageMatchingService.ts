@@ -18,6 +18,7 @@ import { normalizeAddress, contentContainsAddress, type NormalizedAddress } from
 import {
   getIgnoredEmailIdsForTransaction,
   getIgnoredThreadIdsForTransaction,
+  getIgnoredCommunicationIdsForTransaction,
 } from "./db/communicationDbService";
 
 /**
@@ -459,16 +460,21 @@ export async function autoLinkTextsToTransaction(
     );
 
     // BACKLOG-1560: Filter out messages whose threads were previously unlinked by user
+    // Also handles per-message suppression for messages with no/empty thread_id
     const ignoredThreadIds = getIgnoredThreadIdsForTransaction(transactionId);
+    const ignoredCommIds = getIgnoredCommunicationIdsForTransaction(transactionId);
     let filteredMatches = matches;
-    if (ignoredThreadIds.size > 0) {
+    if (ignoredThreadIds.size > 0 || ignoredCommIds.size > 0) {
       // Look up thread_id for each matched message to check suppression
       filteredMatches = matches.filter((match) => {
+        // BACKLOG-1560: Check per-message suppression first (for messages with no/empty thread_id)
+        if (ignoredCommIds.has(match.messageId)) return false;
         const msg = dbGet<{ thread_id: string | null }>(
           "SELECT thread_id FROM messages WHERE id = ?",
           [match.messageId]
         );
-        if (msg?.thread_id && ignoredThreadIds.has(msg.thread_id)) {
+        // BACKLOG-1560: Treat empty string thread_id as no thread_id
+        if (msg?.thread_id && msg.thread_id !== "" && ignoredThreadIds.has(msg.thread_id)) {
           return false; // Suppress this message
         }
         return true;
@@ -477,7 +483,7 @@ export async function autoLinkTextsToTransaction(
       const suppressed = matches.length - filteredMatches.length;
       if (suppressed > 0) {
         logService.debug(
-          `BACKLOG-1560: Suppressed ${suppressed} text messages from ${ignoredThreadIds.size} ignored threads`,
+          `BACKLOG-1560: Suppressed ${suppressed} text messages from ${ignoredThreadIds.size} ignored threads and ${ignoredCommIds.size} ignored messages`,
           "MessageMatchingService"
         );
       }

@@ -41,7 +41,7 @@ export function batchInsertMessages(
     bodyText: string | null;
     participants: string;
     participantsFlat: string;
-    threadId: string;
+    threadId: string | null;
     sentAt: string;
     hasAttachments: number;
     messageType: string | null;

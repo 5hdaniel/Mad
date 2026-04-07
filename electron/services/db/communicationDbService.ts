@@ -451,6 +451,22 @@ export function getIgnoredThreadIdsForTransaction(
   return new Set(rows.map((r) => r.thread_id));
 }
 
+/**
+ * BACKLOG-1560: Get set of original_communication_ids (message IDs) that are ignored
+ * for a specific transaction. Used for per-message suppression when messages have
+ * no valid thread_id (null or empty string).
+ */
+export function getIgnoredCommunicationIdsForTransaction(
+  transactionId: string,
+): Set<string> {
+  const sql = `
+    SELECT original_communication_id FROM ignored_communications
+    WHERE transaction_id = ? AND original_communication_id IS NOT NULL
+  `;
+  const rows = dbAll<{ original_communication_id: string }>(sql, [transactionId]);
+  return new Set(rows.map((r) => r.original_communication_id));
+}
+
 // ============================================
 // EXTRACTED DATA OPERATIONS
 // ============================================
