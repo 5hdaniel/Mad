@@ -1394,10 +1394,9 @@ class TransactionService {
       throw new Error("Communication is not linked to a transaction");
     }
 
-    // BACKLOG-1560: Extract email_id from communications junction record for suppression.
-    // The Communication type is aliased to Message which doesn't declare email_id,
-    // but getCommunicationById queries the communications table which has email_id.
-    const commRecord = communication as Communication & { email_id?: string };
+    // BACKLOG-1560: Extract email_id and thread_id from communications junction record.
+    // getCommunicationById queries the communications table which has these columns.
+    const commRecord = communication as Communication & { email_id?: string; thread_id?: string };
 
     await databaseService.addIgnoredCommunication({
       user_id: communication.user_id,
@@ -1407,6 +1406,9 @@ class TransactionService {
       email_sent_at: communication.sent_at,
       email_thread_id: communication.email_thread_id,
       email_id: commRecord.email_id,
+      // BACKLOG-1560: Write thread_id for text message suppression.
+      // Previous bug: only email_thread_id was written, but auto-link checks thread_id.
+      thread_id: commRecord.thread_id || undefined,
       original_communication_id: communicationId,
       reason: reason || "Manually unlinked by user",
     });
@@ -1737,7 +1739,9 @@ class TransactionService {
     const transactionThreadlessMessages = new Map<string, Set<string>>();
 
     for (const messageId of messageIds) {
+      console.log(`[BACKLOG-1560-RAW] unlinkMessages loop: messageId=${messageId}`);
       const message = await databaseService.getMessageById(messageId);
+      console.log(`[BACKLOG-1560-RAW] message found: thread_id=${message?.thread_id ?? 'NULL'}, user_id=${message?.user_id ?? 'NULL'}`);
 
       await logService.info("[BACKLOG-1560] unlinkMessages: processing message", "TransactionService", {
         messageId, thread_id: message?.thread_id ?? 'NULL', transaction_id: message?.transaction_id ?? 'NULL'
