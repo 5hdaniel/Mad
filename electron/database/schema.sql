@@ -978,13 +978,9 @@ CREATE INDEX IF NOT EXISTS idx_ignored_comms_transaction
   ON ignored_communications(transaction_id);
 
 -- BACKLOG-1560: Indexes for auto-link suppression lookups
-CREATE INDEX IF NOT EXISTS idx_ignored_comms_email_id
-  ON ignored_communications(email_id, transaction_id)
-  WHERE email_id IS NOT NULL;
-
-CREATE INDEX IF NOT EXISTS idx_ignored_comms_thread_id
-  ON ignored_communications(thread_id, transaction_id)
-  WHERE thread_id IS NOT NULL;
+-- These indexes are created by migration 37 (which also adds the columns).
+-- They cannot be in schema.sql because existing databases don't have these
+-- columns yet when schema.sql runs (before versioned migrations).
 
 -- ============================================
 -- PHONE LAST MESSAGE TABLE (BACKLOG-567, Migration 24)
