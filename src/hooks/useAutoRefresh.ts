@@ -264,6 +264,9 @@ export function useAutoRefresh({
     }
   }, [userId]);
 
+  // BACKLOG-1559: Email precache is now triggered from the main process
+  // (electron/main.ts) immediately after login, not from the renderer.
+
   // Auto-trigger refresh once per app session when first entering dashboard
   useEffect(() => {
     // Skip if not on dashboard (but don't reset flag - we only want to trigger once per session)
