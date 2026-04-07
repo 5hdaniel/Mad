@@ -262,6 +262,33 @@ export interface WindowApiTransactions {
     success: boolean;
     error?: string;
   }>;
+  /** BACKLOG-1578: Get removed/unlinked emails for a transaction */
+  getRemovedEmails: (transactionId: string) => Promise<{
+    success: boolean;
+    removedEmails?: Array<{
+      ignored_id: string;
+      ic_email_id: string | null;
+      reason: string | null;
+      ignored_at: string;
+      email_id: string;
+      subject: string | null;
+      sender: string | null;
+      recipients: string | null;
+      cc: string | null;
+      sent_at: string | null;
+      thread_id: string | null;
+      body_preview: string | null;
+      body_plain: string | null;
+      has_attachments: boolean | number | null;
+      source: string | null;
+    }>;
+    error?: string;
+  }>;
+  /** BACKLOG-1578: Restore a removed email (re-link + remove suppression) */
+  restoreRemovedEmail: (ignoredCommId: string, emailId: string, transactionId: string) => Promise<{
+    success: boolean;
+    error?: string;
+  }>;
   /** Link emails to a transaction */
   linkEmails: (emailIds: string[], transactionId: string) => Promise<{
     success: boolean;
