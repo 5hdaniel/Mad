@@ -77,7 +77,7 @@ export async function sendEmail(params: SendEmailParams): Promise<SendEmailResul
     const client = getGraphClient();
     if (!client) {
       const error = 'Email service not configured (missing Azure credentials)';
-      void logEmailDelivery({
+      await logEmailDelivery({
         emailType,
         recipientEmail,
         status: 'skipped',
@@ -90,7 +90,7 @@ export async function sendEmail(params: SendEmailParams): Promise<SendEmailResul
     const senderAddress = params.from || process.env.EMAIL_SENDER_ADDRESS;
     if (!senderAddress) {
       const error = 'Email service not configured (missing EMAIL_SENDER_ADDRESS)';
-      void logEmailDelivery({
+      await logEmailDelivery({
         emailType,
         recipientEmail,
         status: 'skipped',
@@ -122,7 +122,7 @@ export async function sendEmail(params: SendEmailParams): Promise<SendEmailResul
     await client.api(`/users/${senderAddress}/sendMail`).post({ message });
 
     // Log successful delivery
-    void logEmailDelivery({
+    await logEmailDelivery({
       emailType,
       recipientEmail,
       status: 'sent',
@@ -142,7 +142,7 @@ export async function sendEmail(params: SendEmailParams): Promise<SendEmailResul
     });
 
     // Log failed delivery
-    void logEmailDelivery({
+    await logEmailDelivery({
       emailType,
       recipientEmail,
       status: 'failed',
