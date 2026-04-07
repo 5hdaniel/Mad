@@ -205,7 +205,9 @@ export function CreateTicketDialog({ open, onClose, onCreated }: CreateTicketDia
         source_channel: 'admin_created',
       });
 
-      // Fire-and-forget: send confirmation email to requester
+      // Fire-and-forget: send confirmation email to requester.
+      // NOTE: Server-side trigger also sends this via send-ticket-confirmation
+      // edge function (BACKLOG-1573). This client call is kept as a fallback.
       const brokerPortalUrl =
         process.env.NEXT_PUBLIC_BROKER_PORTAL_URL || 'https://app.keeprcompliance.com';
       notifyTicketCreated(
