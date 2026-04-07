@@ -516,7 +516,8 @@ export type SprintSortColumn =
   | 'start_date'
   | 'end_date'
   | 'total_items'
-  | 'progress';
+  | 'progress'
+  | 'created_at';
 
 // ---------------------------------------------------------------------------
 // Timeline types
