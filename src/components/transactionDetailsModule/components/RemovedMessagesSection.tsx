@@ -38,6 +38,8 @@ interface RemovedThread {
 
 interface RemovedMessagesSectionProps {
   transactionId: string;
+  /** Map of phone number -> contact name for resolving senders */
+  contactNames?: Record<string, string>;
   /** Callback when a message is restored (to refresh the parent list) */
   onMessagesChanged?: () => void | Promise<void>;
   /** Toast handlers */
@@ -150,6 +152,7 @@ function groupByIgnoredId(rows: RemovedMessageRow[]): RemovedThread[] {
 export function RemovedMessagesSection({
   transactionId,
   onMessagesChanged,
+  contactNames = {},
   onShowSuccess,
   onShowError,
 }: RemovedMessagesSectionProps): React.ReactElement | null {
@@ -269,6 +272,8 @@ export function RemovedMessagesSection({
                   threadId={thread.threadId || thread.ignoredId}
                   messages={messageLikeMessages}
                   phoneNumber={phoneNumber}
+                  contactName={contactNames[phoneNumber] || contactNames[phoneNumber.replace(/\D/g, '').slice(-10)] || undefined}
+                  contactNames={contactNames}
                   isRemoved={true}
                   onRestore={() => handleRestore(thread)}
                   isRestoring={restoringId === thread.ignoredId}

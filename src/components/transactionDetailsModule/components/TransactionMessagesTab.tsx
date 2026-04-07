@@ -441,6 +441,17 @@ export function TransactionMessagesTab({
           </div>
         </div>
 
+        {/* BACKLOG-1577: Show removed conversations even when no active messages */}
+        {transactionId && (
+          <RemovedMessagesSection
+            transactionId={transactionId}
+            contactNames={contactNames}
+            onMessagesChanged={onMessagesChanged}
+            onShowSuccess={onShowSuccess}
+            onShowError={onShowError}
+          />
+        )}
+
         {/* Modals */}
         {showAttachModal && userId && transactionId && (
           <AttachMessagesModal
@@ -654,6 +665,7 @@ export function TransactionMessagesTab({
       {transactionId && (
         <RemovedMessagesSection
           transactionId={transactionId}
+          contactNames={contactNames}
           onMessagesChanged={onMessagesChanged}
           onShowSuccess={onShowSuccess}
           onShowError={onShowError}

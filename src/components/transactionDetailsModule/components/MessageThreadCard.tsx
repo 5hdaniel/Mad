@@ -295,10 +295,12 @@ export function MessageThreadCard({
           </div>
 
           {/* Date range and action buttons */}
-          <div className="flex items-center gap-2 sm:gap-4 flex-shrink-0">
-            <span className="text-sm text-gray-500 hidden sm:inline">
-              {getDateRange()}
-            </span>
+          <div className="flex items-center gap-2 sm:gap-3 flex-shrink-0">
+            {!isRemoved && (
+              <span className="text-sm text-gray-500 hidden sm:inline">
+                {getDateRange()}
+              </span>
+            )}
             <button
               onClick={() => setShowModal(true)}
               className="text-sm font-medium text-blue-600 hover:text-blue-800 transition-colors whitespace-nowrap"
@@ -310,7 +312,7 @@ export function MessageThreadCard({
               <button
                 onClick={() => onRestore(threadId)}
                 disabled={isRestoring}
-                className="flex items-center gap-1 px-2.5 py-1 text-xs font-medium text-blue-600 hover:text-blue-800 hover:bg-blue-50 rounded transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                className="flex items-center gap-1 px-2 py-1 text-xs font-medium text-green-600 hover:text-green-800 hover:bg-green-50 rounded transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                 data-testid="restore-removed-message"
                 title="Restore this conversation to the transaction"
               >
