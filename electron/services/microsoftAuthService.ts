@@ -364,17 +364,11 @@ class MicrosoftAuthService {
    */
   async authenticateForLogin(): Promise<AuthFlowResult> {
     this._ensureInitialized();
-    // BACKLOG-1570: Request mail scopes upfront so users don't need a second
-    // OAuth popup during the email connect onboarding step.
-    // If the user denies mail consent, Microsoft returns only approved scopes
-    // and the email connect step falls back to the normal flow.
     const scopes = [
       "openid",
       "profile",
       "email",
       "User.Read",
-      "Mail.Read",
-      "Contacts.Read",
       "offline_access",
     ];
 

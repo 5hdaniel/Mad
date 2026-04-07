@@ -673,40 +673,6 @@ export async function handleGoogleConnectMailbox(
     const user = await databaseService.getUserById(validatedUserId);
     const loginHint = user?.email ?? undefined;
 
-    // BACKLOG-1570: Check if login token already has Gmail scopes.
-    // If so, promote it to a mailbox token — no second popup needed.
-    const existingAuthToken = await databaseService.getOAuthToken(
-      validatedUserId,
-      "google",
-      "authentication"
-    );
-    if (existingAuthToken?.scopes_granted) {
-      const grantedScopes = existingAuthToken.scopes_granted.toLowerCase();
-      if (grantedScopes.includes("gmail.readonly")) {
-        await logService.info(
-          "Login token already has Gmail scopes — promoting to mailbox token (no popup needed)",
-          "AuthHandlers",
-          { userId: validatedUserId, email: user?.email }
-        );
-        await databaseService.saveOAuthToken(validatedUserId, "google", "mailbox", {
-          access_token: existingAuthToken.access_token,
-          refresh_token: existingAuthToken.refresh_token ?? undefined,
-          token_expires_at: existingAuthToken.token_expires_at ?? undefined,
-          scopes_granted: existingAuthToken.scopes_granted,
-          connected_email_address: user?.email ?? undefined,
-          mailbox_connected: true,
-        });
-        // Emit success event so onboarding UI updates
-        if (mainWindow && !mainWindow.isDestroyed()) {
-          mainWindow.webContents.send("google:mailbox-connected", {
-            success: true,
-            email: user?.email,
-          });
-        }
-        return { success: true };
-      }
-    }
-
     // Start auth flow
     const { authUrl, codePromise, codeVerifier, scopes } =
       await googleAuthService.authenticateForMailbox(loginHint);
