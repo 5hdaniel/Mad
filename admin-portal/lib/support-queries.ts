@@ -954,3 +954,33 @@ export async function getBacklogLinks(ticketId: string): Promise<BacklogLinkRow[
     priority: row.pm_backlog_items.priority,
   }));
 }
+
+// ---------------------------------------------------------------------------
+// Email delivery logs (BACKLOG-1567)
+// ---------------------------------------------------------------------------
+
+export interface EmailDeliveryLogRow {
+  id: string;
+  email_type: string;
+  recipient_email: string;
+  status: string;
+  error_message: string | null;
+  metadata: Record<string, unknown>;
+  created_at: string;
+}
+
+/**
+ * Fetch email delivery logs for a given recipient email.
+ * Used by the EmailLogPanel in ticket detail sidebar.
+ */
+export async function getEmailDeliveryLogs(recipientEmail: string): Promise<EmailDeliveryLogRow[]> {
+  const supabase = createClient();
+  const { data, error } = await supabase
+    .from('email_delivery_log')
+    .select('*')
+    .eq('recipient_email', recipientEmail)
+    .order('created_at', { ascending: false })
+    .limit(50);
+  if (error) throw error;
+  return (data ?? []) as EmailDeliveryLogRow[];
+}
