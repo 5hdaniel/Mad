@@ -15,6 +15,7 @@ import { DatabaseError } from "../../types";
 import { dbGet, dbAll, dbRun } from "./core/dbConnection";
 import { validateFields } from "../../utils/sqlFieldWhitelist";
 import { isTextMessage } from "../../utils/channelHelpers";
+import logService from "../logService";
 
 /**
  * Create a new communication (junction table entry linking content to transaction)
@@ -317,6 +318,10 @@ export async function addIgnoredCommunication(
 
   dbRun(sql, params);
 
+  logService.info("[BACKLOG-1560] addIgnoredCommunication SUCCESS", "CommunicationDbService", {
+    id, transaction_id: data.transaction_id, thread_id: data.thread_id ?? 'NULL'
+  });
+
   // BACKLOG-1107: Return data from memory instead of INSERT-then-SELECT.
   const ignoredComm: IgnoredCommunication = {
     id,
@@ -448,7 +453,13 @@ export function getIgnoredThreadIdsForTransaction(
     WHERE transaction_id = ? AND thread_id IS NOT NULL
   `;
   const rows = dbAll<{ thread_id: string }>(sql, [transactionId]);
-  return new Set(rows.map((r) => r.thread_id));
+  const result = new Set(rows.map((r) => r.thread_id));
+
+  logService.info("[BACKLOG-1560] getIgnoredThreadIds", "CommunicationDbService", {
+    transactionId, count: result.size, ids: Array.from(result)
+  });
+
+  return result;
 }
 
 /**
