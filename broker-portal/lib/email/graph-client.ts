@@ -13,6 +13,7 @@
  * TASK-2197: Email Service Infrastructure
  */
 
+import * as Sentry from '@sentry/nextjs';
 import { ClientSecretCredential } from '@azure/identity';
 import { Client } from '@microsoft/microsoft-graph-client';
 import {
@@ -20,6 +21,7 @@ import {
 } from '@microsoft/microsoft-graph-client/authProviders/azureTokenCredentials';
 
 let graphClient: Client | null = null;
+let credentialWarningLogged = false;
 
 /**
  * Returns a configured Microsoft Graph API client using client credentials,
@@ -33,9 +35,20 @@ export function getGraphClient(): Client | null {
   const clientSecret = process.env.AZURE_CLIENT_SECRET;
 
   if (!tenantId || !clientId || !clientSecret) {
-    console.warn(
-      '[Email] Azure credentials not configured -- emails will not be sent',
-    );
+    if (!credentialWarningLogged) {
+      Sentry.captureMessage(
+        'Graph API credentials missing — email delivery will fail',
+        {
+          level: 'warning',
+          extra: {
+            AZURE_TENANT_ID: tenantId ? 'set' : 'MISSING',
+            AZURE_CLIENT_ID: clientId ? 'set' : 'MISSING',
+            AZURE_CLIENT_SECRET: clientSecret ? 'set' : 'MISSING',
+          },
+        },
+      );
+      credentialWarningLogged = true;
+    }
     return null;
   }
 
