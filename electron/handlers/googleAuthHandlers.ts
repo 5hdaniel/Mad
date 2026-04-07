@@ -719,111 +719,17 @@ export async function handleGoogleConnectMailbox(
       "AuthHandlers"
     );
 
-    // Create a popup window for auth
-    const authWindow = new BrowserWindow({
-      width: 500,
-      height: 700,
-      webPreferences: {
-        nodeIntegration: false,
-        contextIsolation: true,
-        // webSecurity defaults to true - do not disable
-      },
-      autoHideMenuBar: true,
-      title: "Connect to Gmail",
-    });
-
-    // Strip CSP headers
-    const filter = {
-      urls: [
-        "*://*.google.com/*",
-        "*://*.googleapis.com/*",
-        "*://*.gstatic.com/*",
-        "*://*.googleusercontent.com/*",
-      ],
-    };
-    authWindow.webContents.session.webRequest.onHeadersReceived(
-      filter,
-      (
-        details: OnHeadersReceivedListenerDetails,
-        callback: (response: HeadersReceivedResponse) => void
-      ) => {
-        const responseHeaders = details.responseHeaders || {};
-        delete responseHeaders["content-security-policy"];
-        delete responseHeaders["content-security-policy-report-only"];
-        delete responseHeaders["x-content-security-policy"];
-        callback({ responseHeaders });
-      }
-    );
-
-    // Load the auth URL
-    authWindow.loadURL(authUrl);
+    // BACKLOG-1570: Use system browser instead of BrowserWindow popup.
+    // The system browser has the user's existing Google session from login,
+    // so they won't need to re-enter their password (RFC 8252 best practice).
+    // The local server (startLocalServer) catches the redirect callback.
+    const { shell } = await import("electron");
+    shell.openExternal(authUrl);
 
     let authCompleted = false;
 
-    // Clean up if window is closed
-    authWindow.on("closed", () => {
-      if (!authCompleted) {
-        googleAuthService.stopLocalServer();
-        logService.info(
-          "Google mailbox auth window closed by user",
-          "AuthHandlers"
-        );
-        if (mainWindow && !mainWindow.isDestroyed()) {
-          mainWindow.webContents.send("google:mailbox-cancelled");
-        }
-      }
-    });
-
-    // Intercept callback URL
-    const handleGoogleCallbackUrl = (callbackUrl: string) => {
-      const parsedUrl = new URL(callbackUrl);
-      const code = parsedUrl.searchParams.get("code");
-      const error = parsedUrl.searchParams.get("error");
-      const errorDescription = parsedUrl.searchParams.get("error_description");
-
-      if (error) {
-        logService.error(
-          `Google mailbox auth error: ${error}`,
-          "AuthHandlers",
-          { errorDescription }
-        );
-        googleAuthService.rejectCodeDirectly(errorDescription || error);
-        authCompleted = true;
-        if (authWindow && !authWindow.isDestroyed()) {
-          authWindow.close();
-        }
-      } else if (code) {
-        logService.info(
-          "Extracted Google mailbox auth code",
-          "AuthHandlers"
-        );
-        googleAuthService.resolveCodeDirectly(code);
-        authCompleted = true;
-        if (authWindow && !authWindow.isDestroyed()) {
-          authWindow.close();
-        }
-      }
-    };
-
-    authWindow.webContents.on(
-      "will-navigate",
-      (event: ElectronEvent, url: string) => {
-        if (url.startsWith("http://localhost:3001/callback")) {
-          event.preventDefault();
-          handleGoogleCallbackUrl(url);
-        }
-      }
-    );
-
-    authWindow.webContents.on(
-      "will-redirect",
-      (event: ElectronEvent, url: string) => {
-        if (url.startsWith("http://localhost:3001/callback")) {
-          event.preventDefault();
-          handleGoogleCallbackUrl(url);
-        }
-      }
-    );
+    // With system browser, the local server handles the callback directly.
+    // No BrowserWindow navigation interception needed.
 
     // Process in background
     setTimeout(async () => {

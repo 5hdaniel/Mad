@@ -599,100 +599,17 @@ export async function handleMicrosoftConnectMailbox(
     const { authUrl, codePromise, codeVerifier, scopes } =
       await microsoftAuthService.authenticateForMailbox(loginHint);
 
-    const authWindow = new BrowserWindow({
-      width: 500,
-      height: 700,
-      show: true,
-      webPreferences: {
-        nodeIntegration: false,
-        contextIsolation: true,
-        // webSecurity defaults to true - do not disable
-      },
-      autoHideMenuBar: true,
-      title: "Connect Microsoft Mailbox",
-    });
-
-    authWindow.show();
-    authWindow.focus();
-
-    const filter = {
-      urls: [
-        "*://*.microsoftonline.com/*",
-        "*://*.msauth.net/*",
-        "*://*.msftauth.net/*",
-      ],
-    };
-    authWindow.webContents.session.webRequest.onHeadersReceived(
-      filter,
-      (
-        details: OnHeadersReceivedListenerDetails,
-        callback: (response: HeadersReceivedResponse) => void
-      ) => {
-        const responseHeaders = details.responseHeaders || {};
-        delete responseHeaders["content-security-policy"];
-        delete responseHeaders["content-security-policy-report-only"];
-        delete responseHeaders["x-content-security-policy"];
-        callback({ responseHeaders });
-      }
-    );
-
-    authWindow.loadURL(authUrl);
+    // BACKLOG-1570: Use system browser instead of BrowserWindow popup.
+    // The system browser has the user's existing Microsoft session from login,
+    // so they won't need to re-enter their password (RFC 8252 best practice).
+    // The local server (startLocalServer) catches the redirect callback.
+    const { shell } = await import("electron");
+    shell.openExternal(authUrl);
 
     let authCompleted = false;
 
-    authWindow.on("closed", () => {
-      if (!authCompleted) {
-        microsoftAuthService.stopLocalServer();
-        logService.info(
-          "Microsoft mailbox auth window closed by user",
-          "AuthHandlers"
-        );
-        if (mainWindow && !mainWindow.isDestroyed()) {
-          mainWindow.webContents.send("microsoft:mailbox-cancelled");
-        }
-      }
-    });
-
-    const handleCallbackUrl = (callbackUrl: string) => {
-      const parsedUrl = new URL(callbackUrl);
-      const code = parsedUrl.searchParams.get("code");
-      const error = parsedUrl.searchParams.get("error");
-      const errorDescription = parsedUrl.searchParams.get("error_description");
-
-      if (error) {
-        microsoftAuthService.rejectCodeDirectly(errorDescription || error);
-        authCompleted = true;
-        if (authWindow && !authWindow.isDestroyed()) {
-          authWindow.close();
-        }
-      } else if (code) {
-        microsoftAuthService.resolveCodeDirectly(code);
-        authCompleted = true;
-        if (authWindow && !authWindow.isDestroyed()) {
-          authWindow.close();
-        }
-      }
-    };
-
-    authWindow.webContents.on(
-      "will-navigate",
-      (event: ElectronEvent, url: string) => {
-        if (url.startsWith("http://localhost:3000/callback")) {
-          event.preventDefault();
-          handleCallbackUrl(url);
-        }
-      }
-    );
-
-    authWindow.webContents.on(
-      "will-redirect",
-      (event: ElectronEvent, url: string) => {
-        if (url.startsWith("http://localhost:3000/callback")) {
-          event.preventDefault();
-          handleCallbackUrl(url);
-        }
-      }
-    );
+    // With system browser, the local server handles the callback directly.
+    // No BrowserWindow navigation interception needed.
 
     setTimeout(async () => {
       try {
