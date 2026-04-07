@@ -162,7 +162,8 @@ export async function findTextMessagesByPhones(
 
   // Build date filter clause if dates are provided
   let dateFilter = "";
-  const params: (string | null)[] = [userId, transactionId, transactionId];
+  // BACKLOG-1560: Extra params for ignored_communications SQL-level suppression
+  const params: (string | null)[] = [userId, transactionId, transactionId, transactionId, transactionId];
 
   if (options?.startDate) {
     dateFilter += " AND m.sent_at >= ?";
@@ -176,6 +177,9 @@ export async function findTextMessagesByPhones(
 
   // Query all text messages for this user that aren't already linked to this transaction
   // We use participants_flat which contains all participants in a searchable format
+  // BACKLOG-1560: SQL-level suppression against ignored_communications (belt-and-suspenders).
+  // Checks both thread_id suppression and per-message original_communication_id suppression.
+  // The JS-level filter after this query is the backup layer.
   const sql = `
     SELECT
       m.id,
@@ -194,7 +198,15 @@ export async function findTextMessagesByPhones(
       AND m.id NOT IN (
         SELECT message_id FROM communications
         WHERE transaction_id = ? AND message_id IS NOT NULL
-      )${dateFilter}
+      )
+      AND m.id NOT IN (
+        SELECT ic.original_communication_id FROM ignored_communications ic
+        WHERE ic.transaction_id = ? AND ic.original_communication_id IS NOT NULL
+      )
+      AND (m.thread_id IS NULL OR m.thread_id = '' OR m.thread_id NOT IN (
+        SELECT ic.thread_id FROM ignored_communications ic
+        WHERE ic.transaction_id = ? AND ic.thread_id IS NOT NULL
+      ))${dateFilter}
   `;
 
   const messages = dbAll<{

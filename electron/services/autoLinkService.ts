@@ -323,7 +323,8 @@ async function findMessagesByContactPhones(
     .map(() => "m.participants_flat LIKE ?")
     .join(" OR ");
 
-  const params: (string | number)[] = [userId, transactionId, transactionId];
+  // BACKLOG-1560: Extra param for ignored_communications SQL-level suppression
+  const params: (string | number)[] = [userId, transactionId, transactionId, transactionId];
 
   // Add phone patterns — use last 10 digits for suffix matching.
   // participants_flat may store phones with or without country code
@@ -343,6 +344,9 @@ async function findMessagesByContactPhones(
   // No LIMIT — local SQLite queries are fast and we want to link all matching threads
   // TASK-2087: Address filtering removed from text messages — only applies to emails.
   // People don't put property addresses in texts.
+  // BACKLOG-1560: SQL-level suppression check against ignored_communications (belt-and-suspenders).
+  // This is the primary defense — prevents suppressed threads from even being returned.
+  // The JS-level filter in autoLinkForContact is the backup layer.
   const sql = `
     SELECT DISTINCT m.thread_id, MIN(m.id) as id
     FROM messages m
@@ -356,6 +360,10 @@ async function findMessagesByContactPhones(
       AND m.thread_id NOT IN (
         SELECT thread_id FROM communications
         WHERE transaction_id = ? AND thread_id IS NOT NULL
+      )
+      AND m.thread_id NOT IN (
+        SELECT ic.thread_id FROM ignored_communications ic
+        WHERE ic.transaction_id = ? AND ic.thread_id IS NOT NULL
       )
       AND (${phoneConditions})
       AND m.sent_at >= ?
@@ -676,6 +684,17 @@ export async function autoLinkCommunicationsForContact(
     // BACKLOG-1560: Per-message suppression for messages without a valid thread_id
     const ignoredCommIds = getIgnoredCommunicationIdsForTransaction(transactionId);
 
+    await logService.info("[BACKLOG-1560] Auto-link suppression sets", "AutoLinkService", {
+      transactionId,
+      ignoredEmailIds: Array.from(ignoredEmailIds),
+      ignoredThreadIds: Array.from(ignoredThreadIds)
+    });
+
+    await logService.info("[BACKLOG-1560] Found message threads", "AutoLinkService", {
+      count: messagesWithThreads.length,
+      threads: messagesWithThreads.map(m => ({ id: m.id, thread_id: m.thread_id }))
+    });
+
     if (ignoredEmailIds.size > 0 || ignoredThreadIds.size > 0 || ignoredCommIds.size > 0) {
       const emailCountBefore = emailIds.length;
       emailIds = emailIds.filter((id) => !ignoredEmailIds.has(id));
@@ -698,6 +717,10 @@ export async function autoLinkCommunicationsForContact(
           { transactionId, emailsSuppressed, threadsSuppressed }
         );
       }
+
+      await logService.info("[BACKLOG-1560] After suppression filter", "AutoLinkService", {
+        remaining: messagesWithThreads.length, threadsSuppressed, emailsSuppressed
+      });
     }
 
     // 6. Link emails to transaction
@@ -764,6 +787,10 @@ export async function autoLinkCommunicationsForContact(
           result.alreadyLinked++;
           continue;
         }
+
+        await logService.info("[BACKLOG-1560] LINKING thread to transaction", "AutoLinkService", {
+          threadId, transactionId
+        });
 
         await createThreadCommunicationReference(
           threadId,
