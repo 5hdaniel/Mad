@@ -13,6 +13,7 @@ import {
   type MessageLike,
 } from "./MessageThreadCard";
 import { AttachMessagesModal, UnlinkMessageModal } from "./modals";
+import { RemovedMessagesSection } from "./RemovedMessagesSection";
 import { parseDateSafe } from "../../../utils/dateFormatters";
 import { extractAllHandles } from "../../../utils/phoneNormalization";
 import { mergeThreadsByContact, type MergedThreadEntry } from "../../../utils/threadMergeUtils";
@@ -647,6 +648,16 @@ export function TransactionMessagesTab({
             Show all messages
           </button>
         </div>
+      )}
+
+      {/* BACKLOG-1577: Show removed/unlinked conversations */}
+      {transactionId && (
+        <RemovedMessagesSection
+          transactionId={transactionId}
+          onMessagesChanged={onMessagesChanged}
+          onShowSuccess={onShowSuccess}
+          onShowError={onShowError}
+        />
       )}
 
       {/* Modals */}
