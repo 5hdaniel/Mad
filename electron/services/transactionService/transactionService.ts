@@ -1733,6 +1733,8 @@ class TransactionService {
     const transactionThreads = new Map<string, Set<string>>();
     // BACKLOG-1560: Track user_id per transaction for ignored_communications records
     const transactionUsers = new Map<string, string>();
+    // BACKLOG-1560: Track messages without valid thread_id for per-message suppression
+    const transactionThreadlessMessages = new Map<string, Set<string>>();
 
     for (const messageId of messageIds) {
       const message = await databaseService.getMessageById(messageId);
@@ -1743,13 +1745,22 @@ class TransactionService {
         const count = transactionCounts.get(transactionId) || 0;
         transactionCounts.set(transactionId, count + 1);
 
-        if (message?.thread_id) {
+        // BACKLOG-1560: Treat empty string thread_id the same as null
+        if (message?.thread_id && message.thread_id !== "") {
           let threads = transactionThreads.get(transactionId);
           if (!threads) {
             threads = new Set<string>();
             transactionThreads.set(transactionId, threads);
           }
           threads.add(message.thread_id);
+        } else {
+          // BACKLOG-1560: Message has no valid thread_id - track for per-message suppression
+          let threadless = transactionThreadlessMessages.get(transactionId);
+          if (!threadless) {
+            threadless = new Set<string>();
+            transactionThreadlessMessages.set(transactionId, threadless);
+          }
+          threadless.add(messageId);
         }
 
         // BACKLOG-1560: Capture user_id for suppression records
@@ -1784,6 +1795,21 @@ class TransactionService {
       }
     }
 
+    // BACKLOG-1560: Record per-message suppression for messages without valid thread_id
+    for (const [transactionId, msgIds] of transactionThreadlessMessages) {
+      const userId = transactionUsers.get(transactionId);
+      if (userId) {
+        for (const msgId of msgIds) {
+          await databaseService.addIgnoredCommunication({
+            user_id: userId,
+            transaction_id: transactionId,
+            original_communication_id: msgId,
+            reason: "Manually unlinked by user (no thread_id)",
+          });
+        }
+      }
+    }
+
     for (const [transactionId, unlinkedCount] of transactionCounts) {
       const transaction = await this.getTransactionDetails(transactionId);
       if (transaction) {
@@ -1800,6 +1826,7 @@ class TransactionService {
       {
         unlinkedCount: messageIds.length,
         threadsUnlinked: Array.from(transactionThreads.values()).reduce((sum, threads) => sum + threads.size, 0),
+        threadlessMessagesSuppressed: Array.from(transactionThreadlessMessages.values()).reduce((sum, msgs) => sum + msgs.size, 0),
       },
     );
   }

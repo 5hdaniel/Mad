@@ -53,6 +53,7 @@ jest.mock("../db/communicationDbService", () => ({
   isThreadLinkedToTransaction: (...args: unknown[]) => mockIsThreadLinkedToTransaction(...args),
   getIgnoredEmailIdsForTransaction: jest.fn().mockReturnValue(new Set()),
   getIgnoredThreadIdsForTransaction: jest.fn().mockReturnValue(new Set()),
+  getIgnoredCommunicationIdsForTransaction: jest.fn().mockReturnValue(new Set()),
 }));
 
 // Note: isContactSourceEnabled was removed from autoLinkService.
