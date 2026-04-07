@@ -50,7 +50,13 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json();
-    const targetUrl = `${brokerPortalUrl}/api/email/ticket-notification`;
+
+    // Route confirmation emails to the ticket-confirmation endpoint;
+    // all other notification types go to ticket-notification.
+    const targetPath = body.type === 'confirmation'
+      ? '/api/email/ticket-confirmation'
+      : '/api/email/ticket-notification';
+    const targetUrl = `${brokerPortalUrl}${targetPath}`;
 
     Sentry.addBreadcrumb({
       category: 'email.proxy',
