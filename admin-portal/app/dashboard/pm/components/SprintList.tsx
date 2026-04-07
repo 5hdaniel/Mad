@@ -33,6 +33,24 @@ function extractSprintNumber(sprint: PmSprint): number {
   return 0;
 }
 
+function formatRelativeTime(dateStr: string): string {
+  const date = new Date(dateStr);
+  const now = new Date();
+  const diffMs = now.getTime() - date.getTime();
+  const diffSec = Math.floor(diffMs / 1000);
+  const diffMin = Math.floor(diffSec / 60);
+  const diffHrs = Math.floor(diffMin / 60);
+  const diffDays = Math.floor(diffHrs / 24);
+
+  if (diffDays > 30) {
+    return date.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
+  }
+  if (diffDays > 0) return `${diffDays}d ago`;
+  if (diffHrs > 0) return `${diffHrs}h ago`;
+  if (diffMin > 0) return `${diffMin}m ago`;
+  return 'just now';
+}
+
 function getProgress(sprint: PmSprint): number {
   const completed = sprint.item_counts?.completed ?? 0;
   const total = sprint.total_items ?? 0;
@@ -74,6 +92,11 @@ function compareSprints(
     }
     case 'progress': {
       return (getProgress(a) - getProgress(b)) * dir;
+    }
+    case 'created_at': {
+      const dateA = new Date(a.created_at).getTime();
+      const dateB = new Date(b.created_at).getTime();
+      return (dateA - dateB) * dir;
     }
     default:
       return 0;
@@ -136,7 +159,7 @@ interface SprintListProps {
 }
 
 export function SprintList({ sprints, loading = false }: SprintListProps) {
-  const [sortBy, setSortBy] = useState<SprintSortColumn>('name');
+  const [sortBy, setSortBy] = useState<SprintSortColumn>('created_at');
   const [sortDir, setSortDir] = useState<SortDirection>('desc');
 
   const handleSort = (column: SprintSortColumn) => {
@@ -144,7 +167,7 @@ export function SprintList({ sprints, loading = false }: SprintListProps) {
       setSortDir((prev) => (prev === 'asc' ? 'desc' : 'asc'));
     } else {
       setSortBy(column);
-      setSortDir(column === 'name' ? 'desc' : 'asc');
+      setSortDir(column === 'name' || column === 'created_at' ? 'desc' : 'asc');
     }
   };
 
@@ -186,6 +209,7 @@ export function SprintList({ sprints, loading = false }: SprintListProps) {
               <SprintSortableHeader column="start_date" label="Dates" sortBy={sortBy} sortDir={sortDir} onSort={handleSort} />
               <SprintSortableHeader column="total_items" label="Items" sortBy={sortBy} sortDir={sortDir} onSort={handleSort} />
               <SprintSortableHeader column="progress" label="Progress" sortBy={sortBy} sortDir={sortDir} onSort={handleSort} />
+              <SprintSortableHeader column="created_at" label="Created" sortBy={sortBy} sortDir={sortDir} onSort={handleSort} />
             </tr>
           </thead>
           <tbody className="bg-white divide-y divide-gray-200">
@@ -244,6 +268,9 @@ export function SprintList({ sprints, loading = false }: SprintListProps) {
                       </div>
                       <span className="text-xs text-gray-500">{progress}%</span>
                     </div>
+                  </td>
+                  <td className="px-4 py-3 whitespace-nowrap text-xs text-gray-500" title={new Date(sprint.created_at).toLocaleString()}>
+                    {formatRelativeTime(sprint.created_at)}
                   </td>
                 </tr>
               );
