@@ -410,10 +410,16 @@ class GoogleAuthService {
   async authenticateForLogin(): Promise<AuthFlowResult> {
     this._ensureInitialized();
 
+    // BACKLOG-1570: Request mail scopes upfront so users don't need a second
+    // OAuth popup during the email connect onboarding step.
+    // If the user denies mail consent, Google returns only approved scopes
+    // and the email connect step falls back to the normal flow.
     const scopes = [
       "openid",
       "https://www.googleapis.com/auth/userinfo.email",
       "https://www.googleapis.com/auth/userinfo.profile",
+      "https://www.googleapis.com/auth/gmail.readonly",
+      "https://www.googleapis.com/auth/contacts.readonly",
     ];
 
     try {

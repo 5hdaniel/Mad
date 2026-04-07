@@ -562,6 +562,40 @@ export async function handleMicrosoftConnectMailbox(
     const user = await databaseService.getUserById(validatedUserId);
     const loginHint = user?.email ?? undefined;
 
+    // BACKLOG-1570: Check if login token already has mail scopes.
+    // If so, promote it to a mailbox token — no second popup needed.
+    const existingAuthToken = await databaseService.getOAuthToken(
+      validatedUserId,
+      "microsoft",
+      "authentication"
+    );
+    if (existingAuthToken?.scopes_granted) {
+      const grantedScopes = existingAuthToken.scopes_granted.toLowerCase();
+      if (grantedScopes.includes("mail.read")) {
+        await logService.info(
+          "Login token already has mail scopes — promoting to mailbox token (no popup needed)",
+          "AuthHandlers",
+          { userId: validatedUserId, email: user?.email }
+        );
+        await databaseService.saveOAuthToken(validatedUserId, "microsoft", "mailbox", {
+          access_token: existingAuthToken.access_token,
+          refresh_token: existingAuthToken.refresh_token ?? undefined,
+          token_expires_at: existingAuthToken.token_expires_at ?? undefined,
+          scopes_granted: existingAuthToken.scopes_granted,
+          connected_email_address: user?.email ?? undefined,
+          mailbox_connected: true,
+        });
+        // Emit success event so onboarding UI updates
+        if (mainWindow && !mainWindow.isDestroyed()) {
+          mainWindow.webContents.send("microsoft:mailbox-connected", {
+            success: true,
+            email: user?.email,
+          });
+        }
+        return { success: true };
+      }
+    }
+
     const { authUrl, codePromise, codeVerifier, scopes } =
       await microsoftAuthService.authenticateForMailbox(loginHint);
 
