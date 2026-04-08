@@ -47,9 +47,13 @@ jest.mock("../messageMatchingService", () => ({
 }));
 
 // BACKLOG-502: Mock the thread-based linking functions from communicationDbService
+// BACKLOG-1560: Added ignored email/thread ID lookups for suppression
 jest.mock("../db/communicationDbService", () => ({
   createThreadCommunicationReference: (...args: unknown[]) => mockCreateThreadCommunicationReference(...args),
   isThreadLinkedToTransaction: (...args: unknown[]) => mockIsThreadLinkedToTransaction(...args),
+  getIgnoredEmailIdsForTransaction: jest.fn().mockReturnValue(new Set()),
+  getIgnoredThreadIdsForTransaction: jest.fn().mockReturnValue(new Set()),
+  getIgnoredCommunicationIdsForTransaction: jest.fn().mockReturnValue(new Set()),
 }));
 
 // Note: isContactSourceEnabled was removed from autoLinkService.
@@ -858,6 +862,179 @@ describe("autoLinkService", () => {
       expect(result.totalErrors).toBe(0);
       expect(result.totalEmailsLinked).toBe(0);
       expect(result.totalMessagesLinked).toBe(0);
+    });
+  });
+
+  // BACKLOG-1560: Tests for auto-link suppression of previously unlinked conversations
+  describe("suppression of unlinked conversations (BACKLOG-1560)", () => {
+    const mockContactId = "contact-123";
+    const mockTransactionId = "txn-456";
+    const mockUserId = "user-789";
+
+    const {
+      getIgnoredEmailIdsForTransaction,
+      getIgnoredThreadIdsForTransaction,
+    } = jest.requireMock("../db/communicationDbService") as {
+      getIgnoredEmailIdsForTransaction: jest.Mock;
+      getIgnoredThreadIdsForTransaction: jest.Mock;
+    };
+
+    it("should suppress emails that were previously unlinked by user", async () => {
+      // Set up mocks for contact with emails
+      mockDbGet.mockImplementation((sql: string) => {
+        if (sql.includes("FROM contacts")) return { id: mockContactId };
+        if (sql.includes("FROM transactions")) {
+          return {
+            user_id: mockUserId,
+            started_at: "2024-01-01T00:00:00Z",
+            created_at: "2024-01-01T00:00:00Z",
+            closed_at: null,
+            property_address: null,
+            property_street: null,
+            skip_address_filter: 0,
+          };
+        }
+        if (sql.includes("FROM users_local")) return { email: "user@example.com" };
+        if (sql.includes("FROM emails WHERE id")) return { user_id: mockUserId };
+        if (sql.includes("FROM communications") && sql.includes("email_id")) return null;
+        return null;
+      });
+
+      mockDbAll.mockImplementation((sql: string) => {
+        if (sql.includes("FROM contact_emails")) return [{ email: "john@example.com" }];
+        if (sql.includes("FROM contact_phones")) return [];
+        // Return 3 emails, one of which will be suppressed
+        if (sql.includes("FROM emails e")) return [
+          { id: "email-1" },
+          { id: "email-2" },
+          { id: "email-3" },
+        ];
+        return [];
+      });
+
+      // Simulate email-2 being previously unlinked
+      getIgnoredEmailIdsForTransaction.mockReturnValue(new Set(["email-2"]));
+      getIgnoredThreadIdsForTransaction.mockReturnValue(new Set());
+
+      const result = await autoLinkCommunicationsForContact({
+        contactId: mockContactId,
+        transactionId: mockTransactionId,
+      });
+
+      // email-1 and email-3 should be linked, email-2 should be suppressed
+      expect(result.emailsLinked).toBe(2);
+      expect(result.errors).toBe(0);
+
+      // Verify dbRun was called for email-1 and email-3 but NOT email-2
+      const insertCalls = mockDbRun.mock.calls.filter(
+        (call) => typeof call[0] === "string" && call[0].includes("INSERT INTO communications")
+      );
+      expect(insertCalls.length).toBe(2);
+
+      // Verify the suppressed email was not in any insert
+      const allInsertParams = insertCalls.flatMap((call) => call[1] || []);
+      expect(allInsertParams).not.toContain("email-2");
+    });
+
+    it("should suppress message threads that were previously unlinked by user", async () => {
+      mockDbGet.mockImplementation((sql: string) => {
+        if (sql.includes("FROM contacts")) return { id: mockContactId };
+        if (sql.includes("FROM transactions")) {
+          return {
+            user_id: mockUserId,
+            started_at: "2024-01-01T00:00:00Z",
+            created_at: "2024-01-01T00:00:00Z",
+            closed_at: null,
+            property_address: null,
+            property_street: null,
+            skip_address_filter: 0,
+          };
+        }
+        if (sql.includes("FROM users_local")) return { email: "user@example.com" };
+        return null;
+      });
+
+      mockDbAll.mockImplementation((sql: string) => {
+        if (sql.includes("FROM contact_emails")) return [];
+        if (sql.includes("FROM contact_phones")) return [{ phone_e164: "+14155550000" }];
+        // Return 2 message threads
+        if (sql.includes("FROM messages") && sql.includes("sms")) return [
+          { id: "msg-1", thread_id: "thread-A" },
+          { id: "msg-2", thread_id: "thread-B" },
+        ];
+        return [];
+      });
+
+      // Simulate thread-A being previously unlinked
+      getIgnoredEmailIdsForTransaction.mockReturnValue(new Set());
+      getIgnoredThreadIdsForTransaction.mockReturnValue(new Set(["thread-A"]));
+
+      mockIsThreadLinkedToTransaction.mockResolvedValue(false);
+
+      const result = await autoLinkCommunicationsForContact({
+        contactId: mockContactId,
+        transactionId: mockTransactionId,
+      });
+
+      // Only thread-B should be linked, thread-A should be suppressed
+      expect(result.messagesLinked).toBe(1);
+      expect(result.errors).toBe(0);
+
+      // Verify createThreadCommunicationReference was called only for thread-B
+      expect(mockCreateThreadCommunicationReference).toHaveBeenCalledTimes(1);
+      expect(mockCreateThreadCommunicationReference).toHaveBeenCalledWith(
+        "thread-B",
+        mockTransactionId,
+        mockUserId,
+        "auto",
+        0.9
+      );
+    });
+
+    it("should not suppress anything when there are no ignored records", async () => {
+      mockDbGet.mockImplementation((sql: string) => {
+        if (sql.includes("FROM contacts")) return { id: mockContactId };
+        if (sql.includes("FROM transactions")) {
+          return {
+            user_id: mockUserId,
+            started_at: "2024-01-01T00:00:00Z",
+            created_at: "2024-01-01T00:00:00Z",
+            closed_at: null,
+            property_address: null,
+            property_street: null,
+            skip_address_filter: 0,
+          };
+        }
+        if (sql.includes("FROM users_local")) return { email: "user@example.com" };
+        if (sql.includes("FROM emails WHERE id")) return { user_id: mockUserId };
+        if (sql.includes("FROM communications") && sql.includes("email_id")) return null;
+        return null;
+      });
+
+      mockDbAll.mockImplementation((sql: string) => {
+        if (sql.includes("FROM contact_emails")) return [{ email: "john@example.com" }];
+        if (sql.includes("FROM contact_phones")) return [{ phone_e164: "+14155550000" }];
+        if (sql.includes("FROM emails e")) return [{ id: "email-1" }];
+        if (sql.includes("FROM messages") && sql.includes("sms")) return [
+          { id: "msg-1", thread_id: "thread-A" },
+        ];
+        return [];
+      });
+
+      // No ignored records
+      getIgnoredEmailIdsForTransaction.mockReturnValue(new Set());
+      getIgnoredThreadIdsForTransaction.mockReturnValue(new Set());
+
+      mockIsThreadLinkedToTransaction.mockResolvedValue(false);
+
+      const result = await autoLinkCommunicationsForContact({
+        contactId: mockContactId,
+        transactionId: mockTransactionId,
+      });
+
+      // Both should be linked -- nothing suppressed
+      expect(result.emailsLinked).toBe(1);
+      expect(result.messagesLinked).toBe(1);
     });
   });
 

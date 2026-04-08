@@ -14,6 +14,7 @@
  * BACKLOG-1534: Fix RLS-blocked INSERT via SECURITY DEFINER RPC
  */
 
+import * as Sentry from '@sentry/nextjs';
 import { createClient } from '@/lib/supabase/server';
 
 // ============================================================================
@@ -118,7 +119,10 @@ export async function inviteUser(input: InviteUserInput): Promise<InviteUserResu
   });
 
   if (rpcError) {
-    console.error('admin_invite_user RPC error:', rpcError);
+    Sentry.captureException(rpcError, {
+      tags: { action: 'invite_user' },
+      extra: { email: input.email, organizationId: input.organizationId },
+    });
     return { success: false, error: 'Failed to create invitation' };
   }
 
@@ -176,11 +180,17 @@ export async function inviteUser(input: InviteUserInput): Promise<InviteUserResu
       emailSent = result.success === true;
 
       if (!emailSent) {
-        console.error('Failed to send invite email via broker portal:', result.error);
+        Sentry.captureMessage('Failed to send invite email via broker portal', {
+          level: 'warning',
+          extra: { error: result.error, recipientEmail: input.email },
+        });
       }
     }
   } catch (emailError) {
-    console.error('Error sending invite email:', emailError);
+    Sentry.captureException(emailError, {
+      tags: { action: 'invite_user_email' },
+      extra: { recipientEmail: input.email },
+    });
   }
 
   return {

@@ -25,6 +25,7 @@ export { buildTicketAssignmentNotification } from './templates/ticket-assignment
 
 // Types
 export type {
+  EmailType,
   SendEmailParams,
   SendEmailResult,
   EmailContent,
@@ -63,7 +64,14 @@ export async function sendInviteEmail(
   params: InviteEmailParams,
 ): Promise<SendEmailResult> {
   const { subject, html, text } = buildInviteEmail(params);
-  return sendEmail({ to: params.recipientEmail, subject, html, text });
+  return sendEmail({
+    to: params.recipientEmail,
+    subject,
+    html,
+    text,
+    emailType: 'invite',
+    logMetadata: { organizationName: params.organizationName },
+  });
 }
 
 /**
@@ -73,7 +81,14 @@ export async function sendInternalInviteEmail(
   params: InternalInviteEmailParams,
 ): Promise<SendEmailResult> {
   const { subject, html, text } = buildInternalInviteEmail(params);
-  return sendEmail({ to: params.recipientEmail, subject, html, text });
+  return sendEmail({
+    to: params.recipientEmail,
+    subject,
+    html,
+    text,
+    emailType: 'invite',
+    logMetadata: { roleName: params.roleName, internal: true },
+  });
 }
 
 /**
@@ -83,7 +98,14 @@ export async function sendTicketConfirmationEmail(
   params: TicketConfirmationParams,
 ): Promise<SendEmailResult> {
   const { subject, html, text } = buildTicketConfirmationEmail(params);
-  return sendEmail({ to: params.recipientEmail, subject, html, text });
+  return sendEmail({
+    to: params.recipientEmail,
+    subject,
+    html,
+    text,
+    emailType: 'ticket_confirmation',
+    logMetadata: { ticketNumber: params.ticketNumber },
+  });
 }
 
 /**
@@ -95,7 +117,14 @@ export async function sendTicketReplyNotification(
   params: TicketReplyNotificationParams,
 ): Promise<SendEmailResult> {
   const { subject, html, text } = buildTicketReplyNotification(params);
-  return sendEmail({ to: params.recipientEmail, subject, html, text });
+  return sendEmail({
+    to: params.recipientEmail,
+    subject,
+    html,
+    text,
+    emailType: 'ticket_reply',
+    logMetadata: { ticketNumber: params.ticketNumber },
+  });
 }
 
 /**
@@ -107,5 +136,12 @@ export async function sendTicketAssignmentNotification(
   params: TicketAssignmentNotificationParams,
 ): Promise<SendEmailResult> {
   const { subject, html, text } = buildTicketAssignmentNotification(params);
-  return sendEmail({ to: params.recipientEmail, subject, html, text });
+  return sendEmail({
+    to: params.recipientEmail,
+    subject,
+    html,
+    text,
+    emailType: 'ticket_notification',
+    logMetadata: { ticketNumber: params.ticketNumber },
+  });
 }

@@ -8,6 +8,9 @@
 // Core send types
 // ---------------------------------------------------------------------------
 
+/** Email type for delivery logging */
+export type EmailType = 'invite' | 'ticket_notification' | 'ticket_confirmation' | 'ticket_reply' | 'other';
+
 export interface SendEmailParams {
   /** Recipient email address or array of addresses */
   to: string | string[];
@@ -21,6 +24,10 @@ export interface SendEmailParams {
   from?: string;
   /** Reply-to address */
   replyTo?: string;
+  /** Email type for delivery logging (defaults to 'other') */
+  emailType?: EmailType;
+  /** Additional metadata for delivery logging */
+  logMetadata?: Record<string, unknown>;
 }
 
 export interface SendEmailResult {

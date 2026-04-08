@@ -8,8 +8,10 @@
  * Authentication: shared secret via `x-api-secret` header.
  *
  * TASK-2199: Support Ticket Notification Emails
+ * BACKLOG-1567: Email Delivery Observability (Sentry)
  */
 
+import * as Sentry from '@sentry/nextjs';
 import { NextRequest, NextResponse } from 'next/server';
 import {
   sendTicketReplyNotification,
@@ -60,6 +62,13 @@ export async function POST(request: NextRequest) {
 
     const body: NotificationRequest = await request.json();
 
+    Sentry.addBreadcrumb({
+      category: 'email.route',
+      message: `Processing ticket-notification (${body.type})`,
+      level: 'info',
+      data: { type: body.type, ticketNumber: body.ticketNumber },
+    });
+
     if (body.type === 'reply') {
       const result = await sendTicketReplyNotification({
         recipientEmail: body.customerEmail,
@@ -69,6 +78,14 @@ export async function POST(request: NextRequest) {
         replyPreview: body.replyPreview,
         ticketLink: body.ticketUrl,
       });
+
+      if (!result.success) {
+        Sentry.captureMessage(`Ticket reply notification failed for ${body.customerEmail}`, {
+          level: 'warning',
+          extra: { error: result.error, ticketNumber: body.ticketNumber },
+        });
+      }
+
       return NextResponse.json({ success: result.success, error: result.error });
     }
 
@@ -81,11 +98,20 @@ export async function POST(request: NextRequest) {
         priority: body.priority,
         ticketLink: body.ticketUrl,
       });
+
+      if (!result.success) {
+        Sentry.captureMessage(`Ticket assignment notification failed for ${body.agentEmail}`, {
+          level: 'warning',
+          extra: { error: result.error, ticketNumber: body.ticketNumber },
+        });
+      }
+
       return NextResponse.json({ success: result.success, error: result.error });
     }
 
     return NextResponse.json({ error: 'Invalid notification type' }, { status: 400 });
   } catch (err) {
+    Sentry.captureException(err, { tags: { route: 'email/ticket-notification' } });
     console.error('[TicketNotification] Error:', err);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }

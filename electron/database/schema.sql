@@ -954,6 +954,10 @@ CREATE TABLE IF NOT EXISTS ignored_communications (
   email_sent_at TEXT,
   email_thread_id TEXT,
 
+  -- BACKLOG-1560: Direct ID references for reliable suppression during auto-link
+  email_id TEXT,                          -- FK to emails table (for email suppression)
+  thread_id TEXT,                         -- Thread ID (for text message thread suppression)
+
   -- Original communication reference (if available)
   original_communication_id TEXT,
 
@@ -972,6 +976,11 @@ CREATE INDEX IF NOT EXISTS idx_ignored_comms_user_email
 
 CREATE INDEX IF NOT EXISTS idx_ignored_comms_transaction
   ON ignored_communications(transaction_id);
+
+-- BACKLOG-1560: Indexes for auto-link suppression lookups
+-- These indexes are created by migration 37 (which also adds the columns).
+-- They cannot be in schema.sql because existing databases don't have these
+-- columns yet when schema.sql runs (before versioned migrations).
 
 -- ============================================
 -- PHONE LAST MESSAGE TABLE (BACKLOG-567, Migration 24)

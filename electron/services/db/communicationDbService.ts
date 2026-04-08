@@ -15,6 +15,7 @@ import { DatabaseError } from "../../types";
 import { dbGet, dbAll, dbRun } from "./core/dbConnection";
 import { validateFields } from "../../utils/sqlFieldWhitelist";
 import { isTextMessage } from "../../utils/channelHelpers";
+import logService from "../logService";
 
 /**
  * Create a new communication (junction table entry linking content to transaction)
@@ -292,11 +293,13 @@ export async function addIgnoredCommunication(
 ): Promise<IgnoredCommunication> {
   const id = crypto.randomUUID();
 
+  // BACKLOG-1560: Include email_id and thread_id columns for direct suppression
   const sql = `
     INSERT INTO ignored_communications (
       id, user_id, transaction_id, email_subject, email_sender,
-      email_sent_at, email_thread_id, original_communication_id, reason
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+      email_sent_at, email_thread_id, email_id, thread_id,
+      original_communication_id, reason
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `;
 
   const params = [
@@ -307,11 +310,17 @@ export async function addIgnoredCommunication(
     data.email_sender || null,
     data.email_sent_at || null,
     data.email_thread_id || null,
+    data.email_id || null,
+    data.thread_id || null,
     data.original_communication_id || null,
     data.reason || null,
   ];
 
   dbRun(sql, params);
+
+  logService.debug("[BACKLOG-1560] addIgnoredCommunication SUCCESS", "CommunicationDbService", {
+    id, transaction_id: data.transaction_id, thread_id: data.thread_id ?? 'NULL'
+  });
 
   // BACKLOG-1107: Return data from memory instead of INSERT-then-SELECT.
   const ignoredComm: IgnoredCommunication = {
@@ -322,6 +331,8 @@ export async function addIgnoredCommunication(
     email_sender: data.email_sender || null,
     email_sent_at: data.email_sent_at || null,
     email_thread_id: data.email_thread_id || null,
+    email_id: data.email_id || null,
+    thread_id: data.thread_id || null,
     original_communication_id: data.original_communication_id || null,
     reason: data.reason || null,
     ignored_at: new Date().toISOString(),
@@ -413,6 +424,58 @@ export async function isEmailIgnoredByUser(
 export async function removeIgnoredCommunication(ignoredCommId: string): Promise<void> {
   const sql = "DELETE FROM ignored_communications WHERE id = ?";
   dbRun(sql, [ignoredCommId]);
+}
+
+/**
+ * BACKLOG-1560: Get set of email IDs that are ignored for a specific transaction.
+ * Used by auto-link to skip previously unlinked emails.
+ */
+export function getIgnoredEmailIdsForTransaction(
+  transactionId: string,
+): Set<string> {
+  const sql = `
+    SELECT email_id FROM ignored_communications
+    WHERE transaction_id = ? AND email_id IS NOT NULL
+  `;
+  const rows = dbAll<{ email_id: string }>(sql, [transactionId]);
+  return new Set(rows.map((r) => r.email_id));
+}
+
+/**
+ * BACKLOG-1560: Get set of thread IDs that are ignored for a specific transaction.
+ * Used by auto-link to skip previously unlinked message threads.
+ */
+export function getIgnoredThreadIdsForTransaction(
+  transactionId: string,
+): Set<string> {
+  const sql = `
+    SELECT thread_id FROM ignored_communications
+    WHERE transaction_id = ? AND thread_id IS NOT NULL
+  `;
+  const rows = dbAll<{ thread_id: string }>(sql, [transactionId]);
+  const result = new Set(rows.map((r) => r.thread_id));
+
+  logService.debug("[BACKLOG-1560] getIgnoredThreadIds", "CommunicationDbService", {
+    transactionId, count: result.size, ids: Array.from(result)
+  });
+
+  return result;
+}
+
+/**
+ * BACKLOG-1560: Get set of original_communication_ids (message IDs) that are ignored
+ * for a specific transaction. Used for per-message suppression when messages have
+ * no valid thread_id (null or empty string).
+ */
+export function getIgnoredCommunicationIdsForTransaction(
+  transactionId: string,
+): Set<string> {
+  const sql = `
+    SELECT original_communication_id FROM ignored_communications
+    WHERE transaction_id = ? AND original_communication_id IS NOT NULL
+  `;
+  const rows = dbAll<{ original_communication_id: string }>(sql, [transactionId]);
+  return new Set(rows.map((r) => r.original_communication_id));
 }
 
 // ============================================
