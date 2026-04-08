@@ -1382,9 +1382,7 @@ describe("Auth Handlers", () => {
     });
   });
 
-  describe("Mailbox Connection Cancelled Events", () => {
-    const { BrowserWindow } = require("electron");
-
+  describe("Mailbox Connection via System Browser (BACKLOG-1570)", () => {
     beforeEach(() => {
       jest.clearAllMocks();
       mockDatabaseService.getUserById.mockResolvedValue({
@@ -1393,33 +1391,7 @@ describe("Auth Handlers", () => {
       });
     });
 
-    it("should send google:mailbox-cancelled when Google auth window is closed before completion", async () => {
-      // Track the 'closed' event handler
-      let closedHandler: (() => void) | null = null;
-      const mockAuthWindow = {
-        loadURL: jest.fn(),
-        close: jest.fn(),
-        show: jest.fn(),
-        focus: jest.fn(),
-        on: jest.fn((event: string, handler: () => void) => {
-          if (event === "closed") {
-            closedHandler = handler;
-          }
-        }),
-        isDestroyed: jest.fn().mockReturnValue(false),
-        webContents: {
-          on: jest.fn(),
-          send: jest.fn(),
-          session: {
-            webRequest: {
-              onHeadersReceived: jest.fn(),
-            },
-          },
-        },
-      };
-
-      BrowserWindow.mockImplementation(() => mockAuthWindow);
-
+    it("should open system browser for Google mailbox connect", async () => {
       mockGoogleAuthService.authenticateForMailbox.mockResolvedValue({
         authUrl: "https://accounts.google.com/oauth/mailbox",
         codePromise: new Promise(() => {}),
@@ -1429,55 +1401,13 @@ describe("Auth Handlers", () => {
       const handler = registeredHandlers.get("auth:google:connect-mailbox");
       await handler(mockEvent, TEST_USER_ID);
 
-      // Verify the 'closed' event handler was registered
-      expect(mockAuthWindow.on).toHaveBeenCalledWith(
-        "closed",
-        expect.any(Function),
-      );
-
-      // Simulate window being closed before auth completes
-      if (closedHandler) {
-        closedHandler();
-      }
-
-      // Verify the cancelled event was sent to the main window
-      expect(mockMainWindow.webContents.send).toHaveBeenCalledWith(
-        "google:mailbox-cancelled",
-      );
-      // Google mailbox handler logs window closed but doesn't log "Sent..." message
-      expect(mockLogService.info).toHaveBeenCalledWith(
-        "Google mailbox auth window closed by user",
-        "AuthHandlers",
+      // System browser used instead of BrowserWindow popup (RFC 8252)
+      expect(mockShellOpenExternal).toHaveBeenCalledWith(
+        "https://accounts.google.com/oauth/mailbox",
       );
     });
 
-    it("should send microsoft:mailbox-cancelled when Microsoft auth window is closed before completion", async () => {
-      // Track the 'closed' event handler
-      let closedHandler: (() => void) | null = null;
-      const mockAuthWindow = {
-        loadURL: jest.fn(),
-        close: jest.fn(),
-        show: jest.fn(),
-        focus: jest.fn(),
-        on: jest.fn((event: string, handler: () => void) => {
-          if (event === "closed") {
-            closedHandler = handler;
-          }
-        }),
-        isDestroyed: jest.fn().mockReturnValue(false),
-        webContents: {
-          on: jest.fn(),
-          send: jest.fn(),
-          session: {
-            webRequest: {
-              onHeadersReceived: jest.fn(),
-            },
-          },
-        },
-      };
-
-      BrowserWindow.mockImplementation(() => mockAuthWindow);
-
+    it("should open system browser for Microsoft mailbox connect", async () => {
       mockMicrosoftAuthService.authenticateForMailbox.mockResolvedValue({
         authUrl: "https://login.microsoftonline.com/oauth/mailbox",
         codePromise: new Promise(() => {}),
@@ -1488,62 +1418,9 @@ describe("Auth Handlers", () => {
       const handler = registeredHandlers.get("auth:microsoft:connect-mailbox");
       await handler(mockEvent, TEST_USER_ID);
 
-      // Verify the 'closed' event handler was registered
-      expect(mockAuthWindow.on).toHaveBeenCalledWith(
-        "closed",
-        expect.any(Function),
-      );
-
-      // Simulate window being closed before auth completes
-      if (closedHandler) {
-        closedHandler();
-      }
-
-      // Verify the cancelled event was sent to the main window
-      expect(mockMainWindow.webContents.send).toHaveBeenCalledWith(
-        "microsoft:mailbox-cancelled",
-      );
-      // Microsoft mailbox handler logs window closed but doesn't log "Sent..." message
-      expect(mockLogService.info).toHaveBeenCalledWith(
-        "Microsoft mailbox auth window closed by user",
-        "AuthHandlers",
-      );
-    });
-
-    it("should register closed event handler on auth window", async () => {
-      const mockAuthWindow = {
-        loadURL: jest.fn(),
-        close: jest.fn(),
-        show: jest.fn(),
-        focus: jest.fn(),
-        on: jest.fn(),
-        isDestroyed: jest.fn().mockReturnValue(false),
-        webContents: {
-          on: jest.fn(),
-          send: jest.fn(),
-          session: {
-            webRequest: {
-              onHeadersReceived: jest.fn(),
-            },
-          },
-        },
-      };
-
-      BrowserWindow.mockImplementation(() => mockAuthWindow);
-
-      mockGoogleAuthService.authenticateForMailbox.mockResolvedValue({
-        authUrl: "https://accounts.google.com/oauth/mailbox",
-        codePromise: new Promise(() => {}),
-        scopes: ["gmail.readonly"],
-      });
-
-      const handler = registeredHandlers.get("auth:google:connect-mailbox");
-      await handler(mockEvent, TEST_USER_ID);
-
-      // Verify the 'closed' event handler was registered on the auth window
-      expect(mockAuthWindow.on).toHaveBeenCalledWith(
-        "closed",
-        expect.any(Function),
+      // System browser used instead of BrowserWindow popup (RFC 8252)
+      expect(mockShellOpenExternal).toHaveBeenCalledWith(
+        "https://login.microsoftonline.com/oauth/mailbox",
       );
     });
   });
@@ -1612,7 +1489,7 @@ describe("Auth Handlers", () => {
       expect(callArgs.webPreferences?.contextIsolation).toBe(true);
     });
 
-    it("should create Google mailbox popup without webSecurity: false", async () => {
+    it("should use system browser for Google mailbox connect (RFC 8252)", async () => {
       mockDatabaseService.getUserById.mockResolvedValue({
         id: TEST_USER_ID,
         email: "test@example.com",
@@ -1627,21 +1504,13 @@ describe("Auth Handlers", () => {
       const handler = registeredHandlers.get("auth:google:connect-mailbox");
       await handler(mockEvent, TEST_USER_ID);
 
-      // Verify BrowserWindow was called
-      expect(BrowserWindow).toHaveBeenCalled();
-
-      // Get the configuration passed to BrowserWindow
-      const callArgs = BrowserWindow.mock.calls[0][0];
-
-      // Verify webSecurity is NOT set to false
-      expect(callArgs.webPreferences?.webSecurity).not.toBe(false);
-      // Verify allowRunningInsecureContent is NOT set to true
-      expect(callArgs.webPreferences?.allowRunningInsecureContent).not.toBe(
-        true,
+      // Verify system browser is used instead of BrowserWindow (BACKLOG-1570)
+      expect(mockShellOpenExternal).toHaveBeenCalledWith(
+        "https://accounts.google.com/oauth/mailbox",
       );
     });
 
-    it("should create Microsoft mailbox popup without webSecurity: false", async () => {
+    it("should use system browser for Microsoft mailbox connect (RFC 8252)", async () => {
       mockDatabaseService.getUserById.mockResolvedValue({
         id: TEST_USER_ID,
         email: "test@example.com",
@@ -1657,17 +1526,9 @@ describe("Auth Handlers", () => {
       const handler = registeredHandlers.get("auth:microsoft:connect-mailbox");
       await handler(mockEvent, TEST_USER_ID);
 
-      // Verify BrowserWindow was called
-      expect(BrowserWindow).toHaveBeenCalled();
-
-      // Get the configuration passed to BrowserWindow
-      const callArgs = BrowserWindow.mock.calls[0][0];
-
-      // Verify webSecurity is NOT set to false
-      expect(callArgs.webPreferences?.webSecurity).not.toBe(false);
-      // Verify allowRunningInsecureContent is NOT set to true
-      expect(callArgs.webPreferences?.allowRunningInsecureContent).not.toBe(
-        true,
+      // Verify system browser is used instead of BrowserWindow (BACKLOG-1570)
+      expect(mockShellOpenExternal).toHaveBeenCalledWith(
+        "https://login.microsoftonline.com/oauth/mailbox",
       );
     });
   });

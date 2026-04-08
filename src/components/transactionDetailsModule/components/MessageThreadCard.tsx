@@ -32,6 +32,12 @@ export interface MessageThreadCardProps {
   auditStartDate?: Date | string | null;
   /** Audit period end date for filtering (TASK-1157) */
   auditEndDate?: Date | string | null;
+  /** Whether this thread was removed/unlinked (grayed out styling) */
+  isRemoved?: boolean;
+  /** Callback when restore button is clicked (only shown when isRemoved) */
+  onRestore?: (threadId: string) => void;
+  /** Whether restore is in progress */
+  isRestoring?: boolean;
 }
 
 /**
@@ -184,6 +190,9 @@ export function MessageThreadCard({
   contactNames = {},
   auditStartDate,
   auditEndDate,
+  isRemoved = false,
+  onRestore,
+  isRestoring = false,
 }: MessageThreadCardProps): React.ReactElement {
   const [showModal, setShowModal] = useState(false);
 
@@ -208,8 +217,12 @@ export function MessageThreadCard({
   return (
     <>
       <div
-        className="bg-white rounded-lg border border-gray-200 mb-3 overflow-hidden hover:bg-gray-50 transition-colors"
-        data-testid="message-thread-card"
+        className={`rounded-lg border mb-3 overflow-hidden transition-colors ${
+          isRemoved
+            ? "bg-gray-50 border-gray-200 opacity-60"
+            : "bg-white border-gray-200 hover:bg-gray-50"
+        }`}
+        data-testid={isRemoved ? "removed-thread-card" : "message-thread-card"}
         data-thread-id={threadId}
       >
         {/* Compact single-line layout */}
@@ -242,9 +255,16 @@ export function MessageThreadCard({
             <div className="min-w-0 flex-1">
               {isGroup ? (
                 <div data-testid="thread-contact-name">
-                  <span className="font-semibold text-gray-900 block">
-                    Group Chat
-                  </span>
+                  <div className="flex items-center gap-2">
+                    <span className={`font-semibold block ${isRemoved ? "text-gray-500" : "text-gray-900"}`}>
+                      Group Chat
+                    </span>
+                    {isRemoved && (
+                      <span className="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium bg-red-50 text-red-600">
+                        Removed
+                      </span>
+                    )}
+                  </div>
                   <span
                     className="font-normal text-gray-500 text-sm block truncate"
                     title={formatParticipantNames(participants, contactNames, 999)}
@@ -254,9 +274,16 @@ export function MessageThreadCard({
                 </div>
               ) : (
                 <div data-testid="thread-contact-name">
-                  <span className="font-semibold text-gray-900 block">
-                    {contactName || phoneNumber}
-                  </span>
+                  <div className="flex items-center gap-2">
+                    <span className={`font-semibold block ${isRemoved ? "text-gray-500" : "text-gray-900"}`}>
+                      {contactName || phoneNumber}
+                    </span>
+                    {isRemoved && (
+                      <span className="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium bg-red-50 text-red-600">
+                        Removed
+                      </span>
+                    )}
+                  </div>
                   {contactName && phoneNumber && (
                     <span className="font-normal text-gray-500 text-sm block">
                       {phoneNumber}
@@ -268,10 +295,12 @@ export function MessageThreadCard({
           </div>
 
           {/* Date range and action buttons */}
-          <div className="flex items-center gap-2 sm:gap-4 flex-shrink-0">
-            <span className="text-sm text-gray-500 hidden sm:inline">
-              {getDateRange()}
-            </span>
+          <div className="flex items-center gap-2 sm:gap-3 flex-shrink-0">
+            {!isRemoved && (
+              <span className="text-sm text-gray-500 hidden sm:inline">
+                {getDateRange()}
+              </span>
+            )}
             <button
               onClick={() => setShowModal(true)}
               className="text-sm font-medium text-blue-600 hover:text-blue-800 transition-colors whitespace-nowrap"
@@ -279,7 +308,29 @@ export function MessageThreadCard({
             >
               View Full &rarr;
             </button>
-            {onUnlink && (
+            {isRemoved && onRestore ? (
+              <button
+                onClick={() => onRestore(threadId)}
+                disabled={isRestoring}
+                className="flex items-center gap-1 px-2 py-1 text-xs font-medium text-green-600 hover:text-green-800 hover:bg-green-50 rounded transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                data-testid="restore-removed-message"
+                title="Restore this conversation to the transaction"
+              >
+                {isRestoring ? (
+                  <>
+                    <div className="w-3 h-3 border-2 border-blue-400 border-t-transparent rounded-full animate-spin" />
+                    Restoring...
+                  </>
+                ) : (
+                  <>
+                    <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6" />
+                    </svg>
+                    Restore
+                  </>
+                )}
+              </button>
+            ) : onUnlink ? (
               <button
                 onClick={() => onUnlink(threadId)}
                 className="text-gray-400 hover:text-red-600 hover:bg-red-50 rounded p-1 transition-all"
@@ -300,7 +351,7 @@ export function MessageThreadCard({
                   />
                 </svg>
               </button>
-            )}
+            ) : null}
           </div>
         </div>
       </div>

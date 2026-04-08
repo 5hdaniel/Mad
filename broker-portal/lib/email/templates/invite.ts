@@ -24,21 +24,27 @@ export function buildInviteEmail(params: InviteEmailParams): EmailContent {
     expiresInDays,
   } = params;
 
-  const subject = `${inviterName} has invited you to the ${organizationName} team on Keepr.`;
+  const isOrgInvite = organizationName && organizationName !== 'Keepr';
+  const subject = isOrgInvite
+    ? `You've been invited to join ${organizationName} on Keepr`
+    : `You've been invited to join Keepr`;
 
   const html = baseLayout({
-    preheader: `${inviterName} has invited you to the ${organizationName} team on Keepr.`,
+    preheader: subject,
     body: `
       <h1 style="margin:0 0 16px 0; font-size:24px; font-weight:700; color:#111827; line-height:1.3;">
         You're Invited!
       </h1>
       <p style="margin:0 0 8px 0; font-size:16px; color:#374151; line-height:1.6;">
-        ${escapeHtml(inviterName)} has invited you to the
-        <strong>${escapeHtml(organizationName)}</strong> team on Keepr..
+        ${isOrgInvite
+          ? `You've been invited to join <strong>${escapeHtml(organizationName)}</strong> on Keepr.`
+          : `You've been invited to join <strong>Keepr</strong> — the real estate transaction auditing platform.`
+        }
       </p>
+      ${isOrgInvite && role ? `
       <p style="margin:0 0 24px 0; font-size:14px; color:#6b7280; line-height:1.5;">
         Role: <strong>${escapeHtml(role)}</strong>
-      </p>
+      </p>` : '<div style="margin:0 0 24px 0;"></div>'}
       <table cellpadding="0" cellspacing="0" border="0" style="margin:0 0 24px 0;">
         <tr>
           <td align="center" style="border-radius:6px; background-color:#4f46e5;">
@@ -59,18 +65,25 @@ export function buildInviteEmail(params: InviteEmailParams): EmailContent {
     `,
   });
 
-  const text = [
-    `${inviterName} has invited you to the ${organizationName} team on Keepr.`,
+  const textLines = [
+    subject,
     '',
-    `${inviterName} has invited you to the ${organizationName} team on Keepr..`,
-    `Role: ${role}`,
+    isOrgInvite
+      ? `You've been invited to join ${organizationName} on Keepr.`
+      : `You've been invited to join Keepr — the real estate transaction auditing platform.`,
+  ];
+  if (isOrgInvite && role) {
+    textLines.push(`Role: ${role}`);
+  }
+  textLines.push(
     '',
     `Accept your invitation: ${inviteLink}`,
     '',
     `This invitation expires in ${expiresInDays} day${expiresInDays !== 1 ? 's' : ''}.`,
     '',
     'If you didn\'t expect this invitation, you can safely ignore this email.',
-  ].join('\n');
+  );
+  const text = textLines.join('\n');
 
   return { subject, html, text };
 }
@@ -79,8 +92,8 @@ export function buildInviteEmail(params: InviteEmailParams): EmailContent {
 // Helpers
 // ---------------------------------------------------------------------------
 
-function escapeHtml(str: string): string {
-  return str
+function escapeHtml(str: string | null | undefined): string {
+  return (str ?? '')
     .replace(/&/g, '&amp;')
     .replace(/</g, '&lt;')
     .replace(/>/g, '&gt;')
@@ -88,8 +101,8 @@ function escapeHtml(str: string): string {
     .replace(/'/g, '&#039;');
 }
 
-function escapeAttr(str: string): string {
-  return str
+function escapeAttr(str: string | null | undefined): string {
+  return (str ?? '')
     .replace(/&/g, '&amp;')
     .replace(/"/g, '&quot;')
     .replace(/'/g, '&#039;')

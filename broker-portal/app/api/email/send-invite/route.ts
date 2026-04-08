@@ -9,8 +9,10 @@
  *  - /api/email/internal-invite (internal user emails)
  *
  * BACKLOG-1535: Proxy invite email through broker portal
+ * BACKLOG-1567: Email Delivery Observability (Sentry)
  */
 
+import * as Sentry from '@sentry/nextjs';
 import { NextRequest, NextResponse } from 'next/server';
 import { sendInviteEmail } from '@/lib/email';
 
@@ -34,21 +36,36 @@ export async function POST(request: NextRequest) {
     const body: SendInviteRequest = await request.json();
 
     // Validate required fields
-    if (!body.recipientEmail || !body.organizationName || !body.inviterName || !body.role || !body.inviteLink) {
+    if (!body.recipientEmail || !body.inviterName || !body.inviteLink) {
       return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
     }
 
+    Sentry.addBreadcrumb({
+      category: 'email.route',
+      message: 'Processing send-invite request',
+      level: 'info',
+      data: { recipientEmail: body.recipientEmail, organizationName: body.organizationName },
+    });
+
     const result = await sendInviteEmail({
       recipientEmail: body.recipientEmail,
-      organizationName: body.organizationName,
+      organizationName: body.organizationName || 'Keepr',
       inviterName: body.inviterName,
-      role: body.role,
+      role: body.role || 'Member',
       inviteLink: body.inviteLink,
       expiresInDays: body.expiresInDays || 7,
     });
 
+    if (!result.success) {
+      Sentry.captureMessage(`Invite email failed for ${body.recipientEmail}`, {
+        level: 'warning',
+        extra: { error: result.error, organizationName: body.organizationName },
+      });
+    }
+
     return NextResponse.json({ success: result.success, error: result.error });
   } catch (err) {
+    Sentry.captureException(err, { tags: { route: 'email/send-invite' } });
     console.error('[SendInvite] Error:', err);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }

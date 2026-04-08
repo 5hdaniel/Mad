@@ -236,6 +236,59 @@ export interface WindowApiTransactions {
     success: boolean;
     error?: string;
   }>;
+  /** BACKLOG-1577: Get removed/unlinked messages for a transaction */
+  getRemovedMessages: (transactionId: string) => Promise<{
+    success: boolean;
+    removedMessages?: Array<{
+      ignored_id: string;
+      ic_thread_id: string | null;
+      reason: string | null;
+      ignored_at: string;
+      message_id: string;
+      body: string | null;
+      subject: string | null;
+      channel: string | null;
+      thread_id: string | null;
+      sent_at: string | null;
+      received_at: string | null;
+      participants: string | null;
+      participants_flat: string | null;
+      direction: string | null;
+    }>;
+    error?: string;
+  }>;
+  /** BACKLOG-1577: Restore a removed message (re-link + remove suppression) */
+  restoreRemovedMessage: (ignoredCommId: string, messageIds: string[], transactionId: string) => Promise<{
+    success: boolean;
+    error?: string;
+  }>;
+  /** BACKLOG-1578: Get removed/unlinked emails for a transaction */
+  getRemovedEmails: (transactionId: string) => Promise<{
+    success: boolean;
+    removedEmails?: Array<{
+      ignored_id: string;
+      ic_email_id: string | null;
+      reason: string | null;
+      ignored_at: string;
+      email_id: string;
+      subject: string | null;
+      sender: string | null;
+      recipients: string | null;
+      cc: string | null;
+      sent_at: string | null;
+      thread_id: string | null;
+      body_preview: string | null;
+      body_plain: string | null;
+      has_attachments: boolean | number | null;
+      source: string | null;
+    }>;
+    error?: string;
+  }>;
+  /** BACKLOG-1578: Restore a removed email (re-link + remove suppression) */
+  restoreRemovedEmail: (ignoredCommId: string, emailId: string, transactionId: string) => Promise<{
+    success: boolean;
+    error?: string;
+  }>;
   /** Link emails to a transaction */
   linkEmails: (emailIds: string[], transactionId: string) => Promise<{
     success: boolean;

@@ -176,6 +176,23 @@ Limits are enforced per user per calendar month.
 - Check API is enabled in Google Cloud Console
 - Ensure billing is enabled (required even for free tier)
 
+### `send-ticket-confirmation`
+Sends a confirmation email when a new support ticket is created. Triggered automatically by a database webhook (pg_net) on `support_tickets` INSERT.
+
+**Features:**
+- Server-side trigger ensures ALL ticket sources receive confirmation emails
+- Calls the broker portal's existing `/api/email/ticket-confirmation` endpoint
+- Fire-and-forget: never blocks the ticket insert
+- Authenticated via `INTERNAL_API_SECRET` header
+
+**Required Secrets:**
+```bash
+supabase secrets set BROKER_PORTAL_URL=https://app.keeprcompliance.com
+supabase secrets set INTERNAL_API_SECRET=your-internal-api-secret
+```
+
+**Task:** BACKLOG-1573
+
 ## Future Functions
 
 Planned Edge Functions:

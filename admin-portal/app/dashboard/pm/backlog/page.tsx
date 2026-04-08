@@ -45,11 +45,12 @@ const STATUS_ORDER: Record<string, number> = {
   pending: 0,
   in_progress: 1,
   testing: 2,
-  reopened: 3,
-  blocked: 4,
-  completed: 5,
-  deferred: 6,
-  obsolete: 7,
+  waiting_for_user: 3,
+  reopened: 4,
+  blocked: 5,
+  completed: 6,
+  deferred: 7,
+  obsolete: 8,
 };
 
 const TYPE_ORDER: Record<string, number> = {

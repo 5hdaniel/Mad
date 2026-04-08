@@ -80,6 +80,7 @@ import {
   DEV_SERVER_URL,
   UPDATE_CHECK_DELAY,
   UPDATE_CHECK_INTERVAL,
+  DOWNLOAD_STALL_TIMEOUT_MS,
 } from "./constants";
 
 // Import handler registration functions
@@ -156,6 +157,15 @@ Sentry.init({
   release: app.getVersion(),
   // Don't send events in development unless DSN is explicitly set
   enabled: app.isPackaged || !!process.env.SENTRY_DSN,
+});
+
+// TASK-2330: Set auto-updater context immediately after Sentry.init()
+// so all subsequent events/breadcrumbs carry version + platform info
+Sentry.setContext("auto-updater", {
+  currentVersion: app.getVersion(),
+  platform: process.platform,
+  arch: process.arch,
+  feedRepo: "5hdaniel/keepr-releases",
 });
 
 // Global error handlers - must be registered early, before any async operations
@@ -583,6 +593,24 @@ async function handleDeepLinkCallback(url: string): Promise<void> {
       });
 
       focusMainWindow();
+
+      // BACKLOG-1559: Start email precache immediately after login.
+      // Don't wait for renderer/dashboard — start in the main process.
+      try {
+        const { default: emailSyncService } = await import("./services/emailSyncService");
+        const hasMailbox = await databaseService.getOAuthToken(localUserId, "microsoft", "mailbox")
+          || await databaseService.getOAuthToken(localUserId, "google", "mailbox");
+        if (hasMailbox) {
+          log.info("[DeepLink] Starting email precache after login");
+          emailSyncService.precacheEmails(localUserId).then(() => {
+            log.info("[DeepLink] Email precache completed");
+          }).catch((err: unknown) => {
+            log.warn("[DeepLink] Email precache failed (non-fatal):", err);
+          });
+        }
+      } catch (precacheErr) {
+        log.warn("[DeepLink] Email precache setup failed (non-fatal):", precacheErr);
+      }
     }
   } catch (error) {
     // Invalid URL format or unexpected error
@@ -838,15 +866,21 @@ function createWindow(): void {
   }
 }
 
+// TASK-2330: Download stall detection timer
+// If no download-progress event fires within DOWNLOAD_STALL_TIMEOUT_MS during
+// an active download, we report a stall to Sentry so we can diagnose stuck updates.
+let downloadStallTimer: ReturnType<typeof setTimeout> | null = null;
+
 const appStartTime = Date.now();
 app.whenReady().then(async () => {
   log.debug(`[PERF] app.whenReady: ${Date.now() - appStartTime}ms`);
   // Configure auto-updater after app is ready
   autoUpdater.logger = log;
 
-  // Auto-updater event handlers
+  // Auto-updater event handlers (TASK-2330: comprehensive Sentry monitoring)
   autoUpdater.on("checking-for-update", () => {
     log.info("Checking for update...");
+    Sentry.addBreadcrumb({ category: "auto-updater", message: "Checking for update", level: "info" });
   });
 
   autoUpdater.on("update-available", (info) => {
@@ -859,11 +893,27 @@ app.whenReady().then(async () => {
 
   autoUpdater.on("update-not-available", (info) => {
     log.info("Update not available:", info);
+    Sentry.addBreadcrumb({ category: "auto-updater", message: `Update not available (current: ${info.version})`, level: "info" });
   });
 
   autoUpdater.on("error", (err) => {
     log.error("Error in auto-updater:", err);
-    Sentry.captureException(err, { tags: { component: "auto-updater" } });
+    // TASK-2330: Strip query params from error message URLs for privacy before sending to Sentry
+    const sanitizedMessage = err.message?.replace(/\?[^\s]*/g, "") || "Unknown error";
+    Sentry.captureException(err, {
+      tags: {
+        component: "auto-updater",
+        currentVersion: app.getVersion(),
+        platform: process.platform,
+        arch: process.arch,
+      },
+      extra: { sanitizedMessage },
+    });
+    // TASK-2330: Clear stall timer on error to prevent stale fire
+    if (downloadStallTimer) {
+      clearTimeout(downloadStallTimer);
+      downloadStallTimer = null;
+    }
   });
 
   autoUpdater.on("download-progress", (progressObj) => {
@@ -872,11 +922,35 @@ app.whenReady().then(async () => {
     if (mainWindow && !mainWindow.isDestroyed()) {
       mainWindow.webContents.send("update-progress", progressObj);
     }
+    // TASK-2330: Reset download stall detection timer on each progress event.
+    // If no progress fires within DOWNLOAD_STALL_TIMEOUT_MS, report a stall.
+    if (downloadStallTimer) {
+      clearTimeout(downloadStallTimer);
+    }
+    downloadStallTimer = setTimeout(() => {
+      Sentry.captureMessage("Auto-update download stalled — no progress for 60s", {
+        level: "warning",
+        tags: {
+          component: "auto-updater",
+          currentVersion: app.getVersion(),
+        },
+        extra: {
+          lastPercent: progressObj.percent,
+          lastBytesPerSecond: progressObj.bytesPerSecond,
+        },
+      });
+      downloadStallTimer = null;
+    }, DOWNLOAD_STALL_TIMEOUT_MS);
   });
 
   autoUpdater.on("update-downloaded", (info) => {
     log.info("Update downloaded:", info);
     Sentry.addBreadcrumb({ category: "auto-updater", message: `Update downloaded: ${info.version}`, level: "info" });
+    // TASK-2330: Clear stall timer — download completed successfully
+    if (downloadStallTimer) {
+      clearTimeout(downloadStallTimer);
+      downloadStallTimer = null;
+    }
     if (mainWindow && !mainWindow.isDestroyed()) {
       mainWindow.webContents.send("update-downloaded", info);
     }

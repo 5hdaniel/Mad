@@ -1394,6 +1394,10 @@ class TransactionService {
       throw new Error("Communication is not linked to a transaction");
     }
 
+    // BACKLOG-1560: Extract email_id and thread_id from communications junction record.
+    // getCommunicationById queries the communications table which has these columns.
+    const commRecord = communication as Communication & { email_id?: string; thread_id?: string };
+
     await databaseService.addIgnoredCommunication({
       user_id: communication.user_id,
       transaction_id: communication.transaction_id,
@@ -1401,6 +1405,10 @@ class TransactionService {
       email_sender: communication.sender,
       email_sent_at: communication.sent_at,
       email_thread_id: communication.email_thread_id,
+      email_id: commRecord.email_id,
+      // BACKLOG-1560: Write thread_id for text message suppression.
+      // Previous bug: only email_thread_id was written, but auto-link checks thread_id.
+      thread_id: commRecord.thread_id || undefined,
       original_communication_id: communicationId,
       reason: reason || "Manually unlinked by user",
     });
@@ -1413,6 +1421,7 @@ class TransactionService {
       {
         communicationId,
         transactionId: communication.transaction_id,
+        emailId: commRecord.email_id,
         reason,
       },
     );
@@ -1718,10 +1727,16 @@ class TransactionService {
 
   /**
    * Unlink messages from a transaction
+   * BACKLOG-1560: Now records thread-level suppression in ignored_communications
+   * to prevent auto-link from re-adding unlinked threads on subsequent syncs.
    */
   async unlinkMessages(messageIds: string[], passedTransactionId?: string): Promise<void> {
     const transactionCounts = new Map<string, number>();
     const transactionThreads = new Map<string, Set<string>>();
+    // BACKLOG-1560: Track user_id per transaction for ignored_communications records
+    const transactionUsers = new Map<string, string>();
+    // BACKLOG-1560: Track messages without valid thread_id for per-message suppression
+    const transactionThreadlessMessages = new Map<string, Set<string>>();
 
     for (const messageId of messageIds) {
       const message = await databaseService.getMessageById(messageId);
@@ -1732,23 +1747,101 @@ class TransactionService {
         const count = transactionCounts.get(transactionId) || 0;
         transactionCounts.set(transactionId, count + 1);
 
-        if (message?.thread_id) {
+        // BACKLOG-1560: Treat empty string thread_id the same as null
+        if (message?.thread_id && message.thread_id !== "") {
           let threads = transactionThreads.get(transactionId);
           if (!threads) {
             threads = new Set<string>();
             transactionThreads.set(transactionId, threads);
           }
           threads.add(message.thread_id);
+        } else {
+          // BACKLOG-1560: Message has no valid thread_id - track for per-message suppression
+          let threadless = transactionThreadlessMessages.get(transactionId);
+          if (!threadless) {
+            threadless = new Set<string>();
+            transactionThreadlessMessages.set(transactionId, threadless);
+          }
+          threadless.add(messageId);
+        }
+
+        // BACKLOG-1560: Capture user_id for suppression records
+        if (message?.user_id && !transactionUsers.has(transactionId)) {
+          transactionUsers.set(transactionId, message.user_id);
+        }
+      }
+    }
+
+    // BACKLOG-1560 FIX: Record suppression BEFORE deleting communication records.
+    // Previous attempts deleted comms first, then if suppression INSERT failed,
+    // the communication was already gone and auto-link would re-add it.
+
+    // Record thread-level suppression so auto-link skips these threads
+    for (const [transactionId, threadIds] of transactionThreads) {
+      const userId = transactionUsers.get(transactionId);
+      if (userId) {
+        for (const threadId of threadIds) {
+          try {
+            await logService.debug("[BACKLOG-1560] Recording suppression", "TransactionService", {
+              transactionId, threadId, userId
+            });
+            await databaseService.addIgnoredCommunication({
+              user_id: userId,
+              transaction_id: transactionId,
+              thread_id: threadId,
+              reason: "Manually unlinked by user",
+            });
+          } catch (error) {
+            await logService.warn(
+              `[BACKLOG-1560] Failed to record thread suppression: ${error instanceof Error ? error.message : "Unknown"}`,
+              "TransactionService",
+              { transactionId, threadId }
+            );
+          }
         }
       }
 
+      await logService.debug("[BACKLOG-1560] Suppression records created", "TransactionService", {
+        transactionId, threadIds: Array.from(threadIds)
+      });
+    }
+
+    // Record per-message suppression for messages without valid thread_id
+    for (const [transactionId, msgIds] of transactionThreadlessMessages) {
+      const userId = transactionUsers.get(transactionId);
+      if (userId) {
+        for (const msgId of msgIds) {
+          try {
+            await logService.debug("[BACKLOG-1560] Recording suppression (no thread_id)", "TransactionService", {
+              transactionId, messageId: msgId, userId
+            });
+            await databaseService.addIgnoredCommunication({
+              user_id: userId,
+              transaction_id: transactionId,
+              original_communication_id: msgId,
+              reason: "Manually unlinked by user (no thread_id)",
+            });
+          } catch (error) {
+            await logService.warn(
+              `[BACKLOG-1560] Failed to record message suppression: ${error instanceof Error ? error.message : "Unknown"}`,
+              "TransactionService",
+              { transactionId, messageId: msgId }
+            );
+          }
+        }
+      }
+    }
+
+    // NOW delete communication records and unlink messages (after suppression is recorded)
+    for (const messageId of messageIds) {
+      const message = await databaseService.getMessageById(messageId);
       if (message?.transaction_id) {
         await databaseService.unlinkMessageFromTransaction(messageId);
       }
-
       await databaseService.deleteCommunicationByMessageId(messageId);
     }
 
+    // Delete thread-level communication records
     for (const [transactionId, threadIds] of transactionThreads) {
       for (const threadId of threadIds) {
         await databaseService.deleteCommunicationByThread(threadId, transactionId);
@@ -1771,6 +1864,7 @@ class TransactionService {
       {
         unlinkedCount: messageIds.length,
         threadsUnlinked: Array.from(transactionThreads.values()).reduce((sum, threads) => sum + threads.size, 0),
+        threadlessMessagesSuppressed: Array.from(transactionThreadlessMessages.values()).reduce((sum, msgs) => sum + msgs.size, 0),
       },
     );
   }

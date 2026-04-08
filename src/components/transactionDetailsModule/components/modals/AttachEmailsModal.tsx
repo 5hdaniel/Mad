@@ -113,6 +113,10 @@ export function AttachEmailsModal({
   // Track whether this is the initial load (for showing full-screen spinner vs inline)
   const isInitialLoad = useRef(true);
 
+  // Background refresh: "checking for new emails" → "you're up to date"
+  const [checkingForNew, setCheckingForNew] = useState(false);
+  const [upToDate, setUpToDate] = useState(false);
+
   // Infinite scroll sentinel ref
   const scrollSentinelRef = useRef<HTMLDivElement>(null);
 
@@ -161,7 +165,7 @@ export function AttachEmailsModal({
       const result = await window.api.transactions.getUnlinkedEmails(
         userId,
         options,
-      );
+      ) as { success?: boolean; emails?: EmailInfo[]; error?: string; fromCache?: boolean };
 
       if (result.success && result.emails) {
         if (isLoadMore) {
@@ -176,6 +180,27 @@ export function AttachEmailsModal({
         }
         // If fewer results returned than requested, provider has no more
         setHasMoreFromProvider(result.emails.length >= maxResults);
+
+        // BACKLOG-1559: If result came from cache, always do a background refresh from provider
+        if (result.fromCache && !isLoadMore) {
+          setCheckingForNew(true);
+          window.api.transactions.getUnlinkedEmails(userId, {
+            ...options,
+            skip: undefined,
+            _skipCache: true,
+          } as Record<string, unknown>).then((freshResult: { success?: boolean; emails?: EmailInfo[] }) => {
+            if (freshResult.success && freshResult.emails) {
+              setEmails(freshResult.emails);
+              setHasMoreFromProvider(freshResult.emails.length >= maxResults);
+            }
+          }).catch(() => {
+            // Silent fail — user already has cached results
+          }).finally(() => {
+            setCheckingForNew(false);
+            setUpToDate(true);
+            setTimeout(() => setUpToDate(false), 3000);
+          });
+        }
       } else {
         setError(result.error || "Failed to load emails");
       }
@@ -470,6 +495,22 @@ export function AttachEmailsModal({
                   ? "Try different search terms or adjust the date range"
                   : "All emails are already linked to transactions"}
               </p>
+            </div>
+          )}
+
+          {/* Background refresh indicator */}
+          {checkingForNew && (
+            <div className="flex items-center gap-2 px-3 py-1.5 mb-2 text-xs text-blue-600 bg-blue-50 rounded-md">
+              <div className="w-3 h-3 border-2 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
+              Checking for new emails...
+            </div>
+          )}
+          {upToDate && !checkingForNew && (
+            <div className="flex items-center gap-2 px-3 py-1.5 mb-2 text-xs text-green-600 bg-green-50 rounded-md">
+              <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+              </svg>
+              You&apos;re up to date
             </div>
           )}
 

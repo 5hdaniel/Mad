@@ -17,6 +17,8 @@ export {
   extractPhoneFromThread,
   sortThreadsByRecent,
 } from "./MessageThreadCard";
+export { RemovedMessagesSection } from "./RemovedMessagesSection";
+export { RemovedEmailsSection } from "./RemovedEmailsSection";
 export { SubmissionStatusBadge } from "./SubmissionStatusBadge";
 export { ReviewNotesPanel } from "./ReviewNotesPanel";
 export * from "./modals";

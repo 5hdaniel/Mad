@@ -17,7 +17,8 @@ export type ItemStatus =
   | 'blocked'
   | 'deferred'
   | 'obsolete'
-  | 'reopened';
+  | 'reopened'
+  | 'waiting_for_user';
 
 export type ItemPriority = 'low' | 'medium' | 'high' | 'critical';
 
@@ -365,6 +366,7 @@ export interface BoardColumns {
   deferred: PmBacklogItem[];
   obsolete: PmBacklogItem[];
   reopened: PmBacklogItem[];
+  waiting_for_user: PmBacklogItem[];
 }
 
 // ---------------------------------------------------------------------------
@@ -374,12 +376,13 @@ export interface BoardColumns {
 export const ALLOWED_TRANSITIONS: Record<ItemStatus, ItemStatus[]> = {
   pending: ['in_progress', 'blocked', 'deferred'],
   in_progress: ['testing', 'blocked', 'deferred', 'pending'],
-  testing: ['completed', 'in_progress', 'blocked'],
+  testing: ['completed', 'in_progress', 'blocked', 'waiting_for_user'],
   completed: ['reopened'],
   blocked: ['pending', 'in_progress'],
   deferred: ['pending'],
   obsolete: [],
   reopened: ['in_progress', 'pending'],
+  waiting_for_user: ['completed', 'testing', 'in_progress'],
 };
 
 // ---------------------------------------------------------------------------
@@ -395,6 +398,7 @@ export const STATUS_LABELS: Record<ItemStatus, string> = {
   deferred: 'Deferred',
   obsolete: 'Obsolete',
   reopened: 'Reopened',
+  waiting_for_user: 'Waiting for User',
 };
 
 export const STATUS_COLORS: Record<ItemStatus, string> = {
@@ -406,6 +410,7 @@ export const STATUS_COLORS: Record<ItemStatus, string> = {
   deferred: 'bg-orange-100 text-orange-800',
   obsolete: 'bg-gray-100 text-gray-500',
   reopened: 'bg-purple-100 text-purple-800',
+  waiting_for_user: 'bg-amber-100 text-amber-800',
 };
 
 export const PRIORITY_LABELS: Record<ItemPriority, string> = {
@@ -511,7 +516,8 @@ export type SprintSortColumn =
   | 'start_date'
   | 'end_date'
   | 'total_items'
-  | 'progress';
+  | 'progress'
+  | 'created_at';
 
 // ---------------------------------------------------------------------------
 // Timeline types

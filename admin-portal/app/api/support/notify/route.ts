@@ -8,6 +8,7 @@
  * TASK-2199: Support Ticket Notification Emails
  */
 
+import * as Sentry from '@sentry/nextjs';
 import { NextRequest, NextResponse } from 'next/server';
 import { createServerClient } from '@supabase/ssr';
 import { cookies } from 'next/headers';
@@ -49,12 +50,19 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json();
-    const targetUrl = `${brokerPortalUrl}/api/email/ticket-notification`;
 
-    console.info('[Support] Proxying notification to broker portal:', {
-      type: body.type,
-      ticketNumber: body.ticketNumber,
-      targetUrl,
+    // Route confirmation emails to the ticket-confirmation endpoint;
+    // all other notification types go to ticket-notification.
+    const targetPath = body.type === 'confirmation'
+      ? '/api/email/ticket-confirmation'
+      : '/api/email/ticket-notification';
+    const targetUrl = `${brokerPortalUrl}${targetPath}`;
+
+    Sentry.addBreadcrumb({
+      category: 'email.proxy',
+      message: `Proxying ${body.type} notification to broker portal`,
+      level: 'info',
+      data: { type: body.type, ticketNumber: body.ticketNumber, targetUrl },
     });
 
     const response = await fetch(targetUrl, {
@@ -69,14 +77,15 @@ export async function POST(request: NextRequest) {
     const result = await response.json();
 
     if (!response.ok) {
-      console.error('[Support] Broker portal notification failed:', {
-        status: response.status,
-        result,
+      Sentry.captureMessage('Broker portal notification failed', {
+        level: 'warning',
+        extra: { status: response.status, result, type: body.type, ticketNumber: body.ticketNumber },
       });
     }
 
     return NextResponse.json(result, { status: response.status });
   } catch (err) {
+    Sentry.captureException(err, { tags: { route: 'support/notify' } });
     console.error('[Support] Notification proxy error:', err);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }

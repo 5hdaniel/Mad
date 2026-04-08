@@ -549,6 +549,22 @@ class DatabaseService implements IDatabaseService {
     const schemaPath = path.join(__dirname, "../database/schema.sql");
     const schemaSql = fs.readFileSync(schemaPath, "utf8");
 
+    // BACKLOG-1576: Set Sentry user context before migrations run.
+    // The DB is open (just not migrated), so we can query users_local
+    // to attribute migration errors to the correct user.
+    try {
+      const tables = currentDb.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='users_local'").all();
+      if (tables.length > 0) {
+        const user = currentDb.prepare("SELECT id, email FROM users_local LIMIT 1").get() as { id: string; email?: string } | undefined;
+        if (user?.id) {
+          Sentry.setUser({ id: user.id, email: user.email || undefined });
+          await logService.info("[Sentry] Pre-migration user context set", "DatabaseService", { userId: user.id });
+        }
+      }
+    } catch {
+      // Non-fatal: if user query fails, Sentry just won't have user context
+    }
+
     // Pre-migration backup (TASK-1969)
     if (this.dbPath && fs.existsSync(this.dbPath)) {
       try {
@@ -831,6 +847,43 @@ class DatabaseService implements IDatabaseService {
           LEFT JOIN contact_emails ce ON c.id = ce.contact_id
           LEFT JOIN contact_phones cp ON c.id = cp.contact_id;
         `);
+      },
+    },
+    {
+      version: 37,
+      description: "Add email_id and thread_id columns to ignored_communications for auto-link suppression (BACKLOG-1560)",
+      migrate: (d) => {
+        const info = d.prepare("PRAGMA table_info(ignored_communications)").all() as { name: string }[];
+        if (!info.some((c) => c.name === "email_id")) {
+          d.exec("ALTER TABLE ignored_communications ADD COLUMN email_id TEXT");
+        }
+        if (!info.some((c) => c.name === "thread_id")) {
+          d.exec("ALTER TABLE ignored_communications ADD COLUMN thread_id TEXT");
+        }
+        d.exec(`
+          CREATE INDEX IF NOT EXISTS idx_ignored_comms_email_id
+            ON ignored_communications(email_id, transaction_id)
+            WHERE email_id IS NOT NULL
+        `);
+        d.exec(`
+          CREATE INDEX IF NOT EXISTS idx_ignored_comms_thread_id
+            ON ignored_communications(thread_id, transaction_id)
+            WHERE thread_id IS NOT NULL
+        `);
+        // Backfill email_id from communications table (if it exists)
+        const tables = d.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='communications'").all();
+        if (tables.length > 0) {
+          d.exec(`
+            UPDATE ignored_communications
+            SET email_id = (
+              SELECT c.email_id FROM communications c
+              WHERE c.id = ignored_communications.original_communication_id
+                AND c.email_id IS NOT NULL
+            )
+            WHERE email_id IS NULL
+              AND original_communication_id IS NOT NULL
+          `);
+        }
       },
     },
   ];

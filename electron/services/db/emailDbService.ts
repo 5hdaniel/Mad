@@ -221,6 +221,55 @@ export async function getEmailsByUser(userId: string): Promise<Email[]> {
 }
 
 /**
+ * Get cached emails for a user with optional date range, search query, and limit.
+ * Used by the Attach Emails modal to read from local cache before hitting the provider API.
+ */
+export async function getCachedEmails(
+  userId: string,
+  options?: { query?: string; after?: Date | null; before?: Date | null; maxResults?: number }
+): Promise<Email[]> {
+  const conditions = ["user_id = ?"];
+  const params: (string | number)[] = [userId];
+
+  if (options?.after) {
+    conditions.push("sent_at >= ?");
+    params.push(options.after.toISOString());
+  }
+  if (options?.before) {
+    conditions.push("sent_at <= ?");
+    params.push(options.before.toISOString());
+  }
+  if (options?.query) {
+    conditions.push("(subject LIKE ? OR sender LIKE ? OR recipients LIKE ?)");
+    const q = `%${options.query}%`;
+    params.push(q, q, q);
+  }
+
+  const limit = options?.maxResults || 500;
+
+  // BACKLOG-1579: Return provider-prefixed IDs (e.g. "gmail:xxx" or "outlook:xxx")
+  // so cached emails are compatible with the linkEmails handler, which expects
+  // provider-format IDs. Fall back to the internal UUID if source/external_id are missing.
+  const sql = `
+    SELECT
+      COALESCE(e.source || ':' || e.external_id, e.id) as id,
+      e.user_id, e.external_id, e.source, e.account_id, e.direction,
+      e.subject, e.sender, e.recipients, e.cc, e.bcc,
+      e.thread_id, e.thread_id as email_thread_id,
+      e.in_reply_to, e.references_header,
+      e.sent_at, e.received_at,
+      e.has_attachments, e.attachment_count, e.message_id_header,
+      e.content_hash, e.labels, e.created_at
+    FROM emails e
+    WHERE ${conditions.join(" AND ")}
+    ORDER BY sent_at DESC
+    LIMIT ?
+  `;
+  params.push(limit);
+  return dbAll<Email>(sql, params);
+}
+
+/**
  * Get emails in a thread
  */
 export async function getEmailsByThread(

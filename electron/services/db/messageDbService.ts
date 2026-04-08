@@ -107,9 +107,11 @@ export function searchLocalEmailCache(userId: string, query: string, limit = 500
 }> {
   const db = ensureDb();
   const pattern = `%${query}%`;
+  // BACKLOG-1579: Return provider-prefixed IDs (e.g. "gmail:xxx" or "outlook:xxx")
+  // so cached emails are compatible with the linkEmails handler.
   const sql = `
     SELECT
-      e.id,
+      COALESCE(e.source || ':' || e.external_id, e.id) as id,
       e.subject,
       e.sender,
       e.sent_at,

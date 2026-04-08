@@ -9,6 +9,7 @@
  * TASK-1810: Invite user modal and server action
  */
 
+import * as Sentry from '@sentry/nextjs';
 import { createClient } from '@/lib/supabase/server';
 import { randomBytes } from 'crypto';
 import { blockWriteDuringImpersonation } from '@/lib/impersonation-guards';
@@ -169,7 +170,10 @@ export async function inviteUser(input: InviteUserInput): Promise<InviteUserResu
     });
 
   if (insertError) {
-    console.error('Error creating invitation:', insertError);
+    Sentry.captureException(insertError, {
+      tags: { action: 'invite_user' },
+      extra: { email: normalizedEmail, organizationId: input.organizationId },
+    });
     return { success: false, error: 'Failed to create invitation' };
   }
 
@@ -183,6 +187,13 @@ export async function inviteUser(input: InviteUserInput): Promise<InviteUserResu
     const inviterName = currentUserData?.display_name || currentUserData?.email || 'Your administrator';
     const orgName = organization?.name || 'your organization';
 
+    Sentry.addBreadcrumb({
+      category: 'email.invite',
+      message: 'Sending invite email',
+      level: 'info',
+      data: { recipientEmail: normalizedEmail, organizationName: orgName },
+    });
+
     const emailResult = await sendInviteEmail({
       recipientEmail: normalizedEmail,
       organizationName: orgName,
@@ -194,10 +205,16 @@ export async function inviteUser(input: InviteUserInput): Promise<InviteUserResu
 
     emailSent = emailResult.success;
     if (!emailResult.success) {
-      console.error('Failed to send invite email:', emailResult.error);
+      Sentry.captureMessage('Failed to send invite email', {
+        level: 'warning',
+        extra: { error: emailResult.error, recipientEmail: normalizedEmail, organizationId: input.organizationId },
+      });
     }
   } catch (emailError) {
-    console.error('Error sending invite email:', emailError);
+    Sentry.captureException(emailError, {
+      tags: { action: 'invite_email' },
+      extra: { recipientEmail: normalizedEmail, organizationId: input.organizationId },
+    });
   }
 
   return {
