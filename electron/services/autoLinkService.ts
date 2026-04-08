@@ -684,13 +684,13 @@ export async function autoLinkCommunicationsForContact(
     // BACKLOG-1560: Per-message suppression for messages without a valid thread_id
     const ignoredCommIds = getIgnoredCommunicationIdsForTransaction(transactionId);
 
-    await logService.info("[BACKLOG-1560] Auto-link suppression sets", "AutoLinkService", {
+    await logService.debug("[BACKLOG-1560] Auto-link suppression sets", "AutoLinkService", {
       transactionId,
       ignoredEmailIds: Array.from(ignoredEmailIds),
       ignoredThreadIds: Array.from(ignoredThreadIds)
     });
 
-    await logService.info("[BACKLOG-1560] Found message threads", "AutoLinkService", {
+    await logService.debug("[BACKLOG-1560] Found message threads", "AutoLinkService", {
       count: messagesWithThreads.length,
       threads: messagesWithThreads.map(m => ({ id: m.id, thread_id: m.thread_id }))
     });
@@ -718,7 +718,7 @@ export async function autoLinkCommunicationsForContact(
         );
       }
 
-      await logService.info("[BACKLOG-1560] After suppression filter", "AutoLinkService", {
+      await logService.debug("[BACKLOG-1560] After suppression filter", "AutoLinkService", {
         remaining: messagesWithThreads.length, threadsSuppressed, emailsSuppressed
       });
     }
@@ -788,7 +788,7 @@ export async function autoLinkCommunicationsForContact(
           continue;
         }
 
-        await logService.info("[BACKLOG-1560] LINKING thread to transaction", "AutoLinkService", {
+        await logService.debug("[BACKLOG-1560] LINKING thread to transaction", "AutoLinkService", {
           threadId, transactionId
         });
 

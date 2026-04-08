@@ -602,14 +602,8 @@ async function handleDeepLinkCallback(url: string): Promise<void> {
           || await databaseService.getOAuthToken(localUserId, "google", "mailbox");
         if (hasMailbox) {
           log.info("[DeepLink] Starting email precache after login");
-          if (mainWindow && !mainWindow.isDestroyed()) {
-            mainWindow.webContents.executeJavaScript(`console.log("[EmailPrecache] Starting email precache after login...")`);
-          }
           emailSyncService.precacheEmails(localUserId).then(() => {
             log.info("[DeepLink] Email precache completed");
-            if (mainWindow && !mainWindow.isDestroyed()) {
-              mainWindow.webContents.executeJavaScript(`console.log("[EmailPrecache] ✓ Email precache complete — emails are cached")`);
-            }
           }).catch((err: unknown) => {
             log.warn("[DeepLink] Email precache failed (non-fatal):", err);
           });

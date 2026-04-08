@@ -692,8 +692,6 @@ export async function handleGoogleConnectMailbox(
     const { shell } = await import("electron");
     shell.openExternal(authUrl);
 
-    let authCompleted = false;
-
     // With system browser, the local server handles the callback directly.
     // No BrowserWindow navigation interception needed.
 
@@ -701,7 +699,6 @@ export async function handleGoogleConnectMailbox(
     setTimeout(async () => {
       try {
         const code = await codePromise;
-        authCompleted = true;
         await logService.info(
           "Received Gmail authorization code",
           "AuthHandlers"

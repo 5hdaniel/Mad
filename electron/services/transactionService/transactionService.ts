@@ -1739,13 +1739,7 @@ class TransactionService {
     const transactionThreadlessMessages = new Map<string, Set<string>>();
 
     for (const messageId of messageIds) {
-      console.log(`[BACKLOG-1560-RAW] unlinkMessages loop: messageId=${messageId}`);
       const message = await databaseService.getMessageById(messageId);
-      console.log(`[BACKLOG-1560-RAW] message found: thread_id=${message?.thread_id ?? 'NULL'}, user_id=${message?.user_id ?? 'NULL'}`);
-
-      await logService.info("[BACKLOG-1560] unlinkMessages: processing message", "TransactionService", {
-        messageId, thread_id: message?.thread_id ?? 'NULL', transaction_id: message?.transaction_id ?? 'NULL'
-      });
 
       const transactionId = passedTransactionId || message?.transaction_id;
 
@@ -1788,7 +1782,7 @@ class TransactionService {
       if (userId) {
         for (const threadId of threadIds) {
           try {
-            await logService.info("[BACKLOG-1560] Recording suppression", "TransactionService", {
+            await logService.debug("[BACKLOG-1560] Recording suppression", "TransactionService", {
               transactionId, threadId, userId
             });
             await databaseService.addIgnoredCommunication({
@@ -1807,7 +1801,7 @@ class TransactionService {
         }
       }
 
-      await logService.info("[BACKLOG-1560] Suppression records created", "TransactionService", {
+      await logService.debug("[BACKLOG-1560] Suppression records created", "TransactionService", {
         transactionId, threadIds: Array.from(threadIds)
       });
     }
@@ -1818,7 +1812,7 @@ class TransactionService {
       if (userId) {
         for (const msgId of msgIds) {
           try {
-            await logService.info("[BACKLOG-1560] Recording suppression (no thread_id)", "TransactionService", {
+            await logService.debug("[BACKLOG-1560] Recording suppression (no thread_id)", "TransactionService", {
               transactionId, messageId: msgId, userId
             });
             await databaseService.addIgnoredCommunication({

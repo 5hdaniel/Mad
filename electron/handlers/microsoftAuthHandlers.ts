@@ -245,7 +245,6 @@ export async function handleMicrosoftLogin(
         ]);
 
         const code = await codeWithTimeout;
-        authCompleted = true;
         await logService.info(
           "Received authorization code from redirect",
           "AuthHandlers"
@@ -572,8 +571,6 @@ export async function handleMicrosoftConnectMailbox(
     const { shell } = await import("electron");
     shell.openExternal(authUrl);
 
-    let authCompleted = false;
-
     // With system browser, the local server handles the callback directly.
     // No BrowserWindow navigation interception needed.
 
@@ -591,7 +588,6 @@ export async function handleMicrosoftConnectMailbox(
         ]);
 
         const code = await codeWithTimeout;
-        authCompleted = true;
 
         const tokens = await microsoftAuthService.exchangeCodeForTokens(
           code,
@@ -831,7 +827,6 @@ export async function handleMicrosoftConnectMailboxPending(
         ]);
 
         const code = await codeWithTimeout;
-        authCompleted = true;
 
         const tokens = await microsoftAuthService.exchangeCodeForTokens(
           code,
