@@ -36,7 +36,7 @@ export async function POST(request: NextRequest) {
     const body: SendInviteRequest = await request.json();
 
     // Validate required fields
-    if (!body.recipientEmail || !body.organizationName || !body.inviterName || !body.role || !body.inviteLink) {
+    if (!body.recipientEmail || !body.inviterName || !body.inviteLink) {
       return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
     }
 
@@ -49,9 +49,9 @@ export async function POST(request: NextRequest) {
 
     const result = await sendInviteEmail({
       recipientEmail: body.recipientEmail,
-      organizationName: body.organizationName,
+      organizationName: body.organizationName || 'Keepr',
       inviterName: body.inviterName,
-      role: body.role,
+      role: body.role || 'Member',
       inviteLink: body.inviteLink,
       expiresInDays: body.expiresInDays || 7,
     });
