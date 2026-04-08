@@ -246,8 +246,21 @@ export async function getCachedEmails(
   }
 
   const limit = options?.maxResults || 500;
+
+  // BACKLOG-1579: Return provider-prefixed IDs (e.g. "gmail:xxx" or "outlook:xxx")
+  // so cached emails are compatible with the linkEmails handler, which expects
+  // provider-format IDs. Fall back to the internal UUID if source/external_id are missing.
   const sql = `
-    SELECT ${EMAIL_COLUMNS_LIGHT} FROM emails
+    SELECT
+      COALESCE(e.source || ':' || e.external_id, e.id) as id,
+      e.user_id, e.external_id, e.source, e.account_id, e.direction,
+      e.subject, e.sender, e.recipients, e.cc, e.bcc,
+      e.thread_id, e.thread_id as email_thread_id,
+      e.in_reply_to, e.references_header,
+      e.sent_at, e.received_at,
+      e.has_attachments, e.attachment_count, e.message_id_header,
+      e.content_hash, e.labels, e.created_at
+    FROM emails e
     WHERE ${conditions.join(" AND ")}
     ORDER BY sent_at DESC
     LIMIT ?
