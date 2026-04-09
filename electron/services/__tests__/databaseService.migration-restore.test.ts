@@ -78,6 +78,8 @@ jest.mock("electron", () => ({
 const mockCaptureException = jest.fn();
 jest.mock("@sentry/electron/main", () => ({
   captureException: mockCaptureException,
+  setUser: jest.fn(),
+  addBreadcrumb: jest.fn(),
 }));
 
 // Mock logService
@@ -199,7 +201,7 @@ describe("DatabaseService Migration Auto-Restore (TASK-2057)", () => {
         };
       }
       if (sql.includes("SELECT version FROM schema_version")) {
-        return { get: jest.fn().mockReturnValue({ version: 37 }) };
+        return { get: jest.fn().mockReturnValue({ version: 38 }) };
       }
       if (sql.includes("SELECT 1")) {
         return { get: jest.fn().mockReturnValue({ ok: 1 }) };
