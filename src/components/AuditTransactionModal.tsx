@@ -181,7 +181,7 @@ function AuditTransactionModal({
         )}
 
         {/* Content */}
-        <div className={`flex-1 min-h-0 ${step === 1 ? "overflow-y-auto p-6" : "flex flex-col pt-0 px-2 pb-2"}`}>
+        <div className={`flex-1 min-h-0 ${step === 1 ? "overflow-y-auto p-6" : "flex flex-col overflow-hidden pt-0 px-2 pb-2"}`}>
           {step === 1 && (
             <AddressVerificationStep
               addressData={addressData}
