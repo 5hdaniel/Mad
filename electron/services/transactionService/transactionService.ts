@@ -1403,24 +1403,24 @@ class TransactionService {
     // Without email_id, the ignored_communications row won't appear in "Show removed emails".
     let resolvedEmailId = commRecord.email_id || undefined;
     if (!resolvedEmailId) {
-      // Fallback 1: Look up email via message_id in the emails table
-      if (commRecord.message_id) {
-        const emailByMsgId = dbGet<{ id: string }>(
-          "SELECT id FROM emails WHERE message_id = ? LIMIT 1",
-          [commRecord.message_id],
-        );
-        if (emailByMsgId) {
-          resolvedEmailId = emailByMsgId.id;
-        }
-      }
-      // Fallback 2: Look up email via thread_id in the emails table
-      if (!resolvedEmailId && commRecord.thread_id) {
-        const emailByThread = dbGet<{ id: string }>(
-          "SELECT id FROM emails WHERE thread_id = ? ORDER BY sent_at DESC LIMIT 1",
-          [commRecord.thread_id],
-        );
-        if (emailByThread) {
-          resolvedEmailId = emailByThread.id;
+      // Fallback: Look up email via thread_id in the emails table.
+      // Note: commRecord.message_id is a FK to the messages table (SMS), not emails —
+      // the emails table has no message_id column, so that lookup has been removed.
+      if (commRecord.thread_id) {
+        try {
+          const emailByThread = dbGet<{ id: string }>(
+            "SELECT id FROM emails WHERE thread_id = ? ORDER BY sent_at DESC LIMIT 1",
+            [commRecord.thread_id],
+          );
+          if (emailByThread) {
+            resolvedEmailId = emailByThread.id;
+          }
+        } catch (err) {
+          await logService.warn(
+            "thread_id fallback failed during unlinkCommunication",
+            "TransactionService.unlinkCommunication",
+            { communicationId, thread_id: commRecord.thread_id, err },
+          );
         }
       }
     }
@@ -1449,7 +1449,7 @@ class TransactionService {
         communicationId,
         transactionId: communication.transaction_id,
         emailId: resolvedEmailId,
-        emailIdSource: commRecord.email_id ? "direct" : resolvedEmailId ? "fallback" : "none",
+        emailIdSource: commRecord.email_id ? "direct" : resolvedEmailId ? "thread_id-fallback" : "none",
         reason,
       },
     );
