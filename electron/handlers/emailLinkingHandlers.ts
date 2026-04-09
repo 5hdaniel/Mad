@@ -9,7 +9,7 @@ import { ipcMain } from "electron";
 import type { IpcMainInvokeEvent } from "electron";
 import transactionService from "../services/transactionService";
 import logService from "../services/logService";
-import { createEmail, getEmailByExternalId, getCachedEmails } from "../services/db/emailDbService";
+import { createEmail, getEmailById, getEmailByExternalId, getCachedEmails } from "../services/db/emailDbService";
 import { createCommunication, removeIgnoredCommunication } from "../services/db/communicationDbService";
 import { dbAll } from "../services/db/core/dbConnection";
 import gmailFetchService from "../services/gmailFetchService";
@@ -179,7 +179,10 @@ export function registerEmailLinkingHandlers(): void {
         throw new ValidationError("Transaction not found", "transactionId");
       }
 
-      // Group emails by provider
+      // BACKLOG-1579 Phase 2: Classify email IDs as local UUIDs or provider-prefixed.
+      // UUIDs are looked up directly in the emails table; provider-prefixed IDs
+      // fall back to the legacy fetch-from-provider path for backward compatibility.
+      const uuidIds: string[] = [];
       const gmailIds: string[] = [];
       const outlookIds: string[] = [];
       for (const emailId of emailIds) {
@@ -188,12 +191,86 @@ export function registerEmailLinkingHandlers(): void {
           gmailIds.push(emailId.replace("gmail:", ""));
         } else if (emailId.startsWith("outlook:")) {
           outlookIds.push(emailId.replace("outlook:", ""));
+        } else {
+          // Treat as local UUID
+          uuidIds.push(emailId);
         }
       }
 
       let linkedCount = 0;
 
-      // Fetch and save Gmail emails
+      // BACKLOG-1579 Phase 2: Link emails by local UUID (primary path)
+      for (const localId of uuidIds) {
+        try {
+          let emailRecord = await getEmailById(localId);
+
+          if (!emailRecord) {
+            logService.warn(`Email UUID not found in DB, skipping: ${localId}`, "Transactions");
+            continue;
+          }
+
+          // If body is missing, fetch from provider using source + external_id
+          if (!emailRecord.body_html && !emailRecord.body_plain && emailRecord.source && emailRecord.external_id) {
+            try {
+              if (emailRecord.source === "gmail") {
+                const isReady = await gmailFetchService.initialize(transaction.user_id);
+                if (isReady) {
+                  const fullEmail = await gmailFetchService.getEmailById(emailRecord.external_id);
+                  emailRecord = {
+                    ...emailRecord,
+                    body_html: fullEmail.body,
+                    body_plain: fullEmail.bodyPlain,
+                    subject: fullEmail.subject ?? emailRecord.subject,
+                    sender: fullEmail.from ?? emailRecord.sender,
+                    recipients: fullEmail.to ?? emailRecord.recipients,
+                    has_attachments: fullEmail.hasAttachments || emailRecord.has_attachments,
+                  };
+                }
+              } else if (emailRecord.source === "outlook") {
+                const isReady = await outlookFetchService.initialize(transaction.user_id);
+                if (isReady) {
+                  const fullEmail = await outlookFetchService.getEmailById(emailRecord.external_id);
+                  emailRecord = {
+                    ...emailRecord,
+                    body_html: fullEmail.body,
+                    body_plain: fullEmail.bodyPlain,
+                    subject: fullEmail.subject ?? emailRecord.subject,
+                    sender: fullEmail.from ?? emailRecord.sender,
+                    recipients: fullEmail.to ?? emailRecord.recipients,
+                    has_attachments: fullEmail.hasAttachments || emailRecord.has_attachments,
+                  };
+                }
+              }
+            } catch (fetchError) {
+              logService.warn(`Failed to fetch body for email UUID ${localId}`, "Transactions", {
+                error: fetchError instanceof Error ? fetchError.message : "Unknown",
+                source: emailRecord.source,
+                external_id: emailRecord.external_id,
+              });
+              // Continue linking even without body — the record still exists
+            }
+          }
+
+          // Create junction link in communications table
+          await createCommunication({
+            user_id: transaction.user_id,
+            transaction_id: validatedTransactionId,
+            email_id: emailRecord.id,
+            communication_type: "email",
+            link_source: "manual",
+            link_confidence: 1.0,
+            has_attachments: emailRecord.has_attachments || false,
+            is_false_positive: false,
+          });
+          linkedCount++;
+        } catch (emailError) {
+          logService.warn(`Failed to link email UUID ${localId}`, "Transactions", {
+            error: emailError instanceof Error ? emailError.message : "Unknown",
+          });
+        }
+      }
+
+      // Legacy fallback: Fetch and save Gmail emails (provider-prefixed IDs)
       if (gmailIds.length > 0) {
         try {
           const isReady = await gmailFetchService.initialize(transaction.user_id);
@@ -224,9 +301,6 @@ export function registerEmailLinkingHandlers(): void {
                   });
                 }
 
-                // BACKLOG-1369: Attachment downloads removed from link-emails.
-                // Attachments are now downloaded on-demand when user views email or during export.
-
                 // Create junction link in communications table
                 await createCommunication({
                   user_id: transaction.user_id,
@@ -253,7 +327,7 @@ export function registerEmailLinkingHandlers(): void {
         }
       }
 
-      // Fetch and save Outlook emails
+      // Legacy fallback: Fetch and save Outlook emails (provider-prefixed IDs)
       if (outlookIds.length > 0) {
         try {
           const isReady = await outlookFetchService.initialize(transaction.user_id);
@@ -283,9 +357,6 @@ export function registerEmailLinkingHandlers(): void {
                     attachment_count: email.attachmentCount || 0,
                   });
                 }
-
-                // BACKLOG-1369: Attachment downloads removed from link-emails.
-                // Attachments are now downloaded on-demand when user views email or during export.
 
                 // Create junction link in communications table
                 await createCommunication({
