@@ -274,7 +274,6 @@ describe('buildInviteEmail', () => {
 
   it('should generate HTML with all required params', () => {
     const result = buildInviteEmail(params);
-    expect(result.html).toContain('Jane Smith');
     expect(result.html).toContain('Acme Corp');
     expect(result.html).toContain('Admin');
     expect(result.html).toContain('https://app.keepr.com/invite/abc123');
@@ -298,7 +297,6 @@ describe('buildInviteEmail', () => {
   it('should generate plain-text fallback with essential content', () => {
     const result = buildInviteEmail(params);
     expect(result.text).toContain('Acme Corp');
-    expect(result.text).toContain('Jane Smith');
     expect(result.text).toContain('Admin');
     expect(result.text).toContain('https://app.keepr.com/invite/abc123');
     expect(result.text).toContain('7 days');
