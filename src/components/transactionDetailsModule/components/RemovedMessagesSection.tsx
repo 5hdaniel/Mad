@@ -6,6 +6,7 @@
  */
 import React, { useState, useCallback } from "react";
 import logger from "../../../utils/logger";
+import { extractAllHandles } from "../../../utils/phoneNormalization";
 import { MessageThreadCard } from "./MessageThreadCard";
 import type { MessageLike } from "./MessageThreadCard";
 
@@ -45,6 +46,8 @@ interface RemovedMessagesSectionProps {
   /** Toast handlers */
   onShowSuccess?: (message: string) => void;
   onShowError?: (message: string) => void;
+  /** BACKLOG-1589: Callback to merge newly resolved contact names into parent state */
+  onContactNamesResolved?: (names: Record<string, string>) => void;
 }
 
 /**
@@ -155,6 +158,7 @@ export function RemovedMessagesSection({
   contactNames = {},
   onShowSuccess,
   onShowError,
+  onContactNamesResolved,
 }: RemovedMessagesSectionProps): React.ReactElement | null {
   const [isOpen, setIsOpen] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -172,6 +176,37 @@ export function RemovedMessagesSection({
           const threads = groupByIgnoredId(result.removedMessages);
           setRemovedThreads(threads);
           setTotalCount(threads.length);
+
+          // BACKLOG-1589: Resolve contact names for removed message handles
+          // so phone numbers display as contact names instead of raw numbers.
+          if (onContactNamesResolved && result.removedMessages.length > 0) {
+            const messageLike = mapToMessageLike(result.removedMessages);
+            const handles = extractAllHandles(messageLike);
+            if (handles.length > 0) {
+              try {
+                const nameResult = await window.api.contacts.resolveHandles(handles);
+                if (nameResult.success && nameResult.names) {
+                  const namesWithNormalized: Record<string, string> = {};
+                  Object.entries(nameResult.names as Record<string, string>).forEach(([handle, name]) => {
+                    namesWithNormalized[handle] = name;
+                    const isPhone = handle.startsWith("+") || /^\d[\d\s\-()]{6,}$/.test(handle);
+                    if (isPhone) {
+                      const normalized = handle.replace(/\D/g, '').slice(-10);
+                      if (normalized.length >= 7) {
+                        namesWithNormalized[normalized] = name;
+                      }
+                    }
+                    if (handle.includes("@")) {
+                      namesWithNormalized[handle.toLowerCase()] = name;
+                    }
+                  });
+                  onContactNamesResolved(namesWithNormalized);
+                }
+              } catch (err) {
+                logger.error("Failed to resolve removed message contact names:", err);
+              }
+            }
+          }
         } else {
           setRemovedThreads([]);
           setTotalCount(0);
@@ -185,7 +220,7 @@ export function RemovedMessagesSection({
       }
     }
     setIsOpen((prev) => !prev);
-  }, [isOpen, transactionId]);
+  }, [isOpen, transactionId, onContactNamesResolved]);
 
   // Restore a removed thread (re-link messages + delete suppression record)
   const handleRestore = useCallback(async (thread: RemovedThread) => {
