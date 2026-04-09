@@ -247,12 +247,11 @@ export async function getCachedEmails(
 
   const limit = options?.maxResults || 500;
 
-  // BACKLOG-1579: Return provider-prefixed IDs (e.g. "gmail:xxx" or "outlook:xxx")
-  // so cached emails are compatible with the linkEmails handler, which expects
-  // provider-format IDs. Fall back to the internal UUID if source/external_id are missing.
+  // BACKLOG-1579 Phase 2: Return native UUID from the emails table.
+  // linkEmails now accepts UUIDs directly, so no provider-prefix needed.
   const sql = `
     SELECT
-      COALESCE(e.source || ':' || e.external_id, e.id) as id,
+      e.id,
       e.user_id, e.external_id, e.source, e.account_id, e.direction,
       e.subject, e.sender, e.recipients, e.cc, e.bcc,
       e.thread_id, e.thread_id as email_thread_id,
