@@ -24,6 +24,7 @@ export function AddInternalUserForm({ onSuccess, roles }: AddInternalUserFormPro
   const [selectedSlug, setSelectedSlug] = useState(defaultSlug);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [isDuplicateError, setIsDuplicateError] = useState(false);
   const [success, setSuccess] = useState<string | null>(null);
   const dialogRef = useRef<HTMLDivElement>(null);
 
@@ -31,6 +32,7 @@ export function AddInternalUserForm({ onSuccess, roles }: AddInternalUserFormPro
     setEmail('');
     setSelectedSlug(defaultSlug);
     setError(null);
+    setIsDuplicateError(false);
     setSuccess(null);
     setIsSubmitting(false);
   }, [defaultSlug]);
@@ -68,6 +70,7 @@ export function AddInternalUserForm({ onSuccess, roles }: AddInternalUserFormPro
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
     setError(null);
+    setIsDuplicateError(false);
     setSuccess(null);
 
     const trimmedEmail = email.trim();
@@ -93,7 +96,9 @@ export function AddInternalUserForm({ onSuccess, roles }: AddInternalUserFormPro
       };
 
       if (!response.ok || !json.success) {
-        setError(json.error || 'Failed to add user');
+        const errMsg = json.error || 'Failed to add user';
+        setError(errMsg);
+        setIsDuplicateError(response.status === 409);
         return;
       }
 
@@ -196,9 +201,18 @@ export function AddInternalUserForm({ onSuccess, roles }: AddInternalUserFormPro
 
               {/* Status messages */}
               {error && (
-                <div className="mt-4 rounded-md bg-red-50 border border-red-200 px-4 py-3">
-                  <p className="text-sm text-red-700">{error}</p>
-                </div>
+                isDuplicateError ? (
+                  <div className="mt-4 rounded-md bg-amber-50 border border-amber-200 px-4 py-3">
+                    <p className="text-sm text-amber-800">{error}</p>
+                    <p className="mt-1 text-xs text-amber-600">
+                      You can resend the invitation from the internal users table below.
+                    </p>
+                  </div>
+                ) : (
+                  <div className="mt-4 rounded-md bg-red-50 border border-red-200 px-4 py-3">
+                    <p className="text-sm text-red-700">{error}</p>
+                  </div>
+                )
               )}
               {success && (
                 <div className="mt-4 rounded-md bg-green-50 border border-green-200 px-4 py-3">
