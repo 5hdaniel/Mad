@@ -558,6 +558,12 @@ class DatabaseService implements IDatabaseService {
         const user = currentDb.prepare("SELECT id, email FROM users_local LIMIT 1").get() as { id: string; email?: string } | undefined;
         if (user?.id) {
           Sentry.setUser({ id: user.id, email: user.email || undefined });
+          Sentry.addBreadcrumb({
+            category: "database",
+            message: "Pre-migration user context set",
+            level: "info",
+            data: { userId: user.id },
+          });
           await logService.info("[Sentry] Pre-migration user context set", "DatabaseService", { userId: user.id });
         }
       }
@@ -884,6 +890,26 @@ class DatabaseService implements IDatabaseService {
               AND original_communication_id IS NOT NULL
           `);
         }
+      },
+    },
+    {
+      version: 38,
+      description: "TEMPORARY: Sentry context verification test (BACKLOG-1576) — REMOVE after verifying in Sentry",
+      migrate: (d) => {
+        // Only throw in real environments where a user exists.
+        // This ensures Sentry.setUser() was called before this error fires.
+        const tables = d.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='users_local'").all() as { name: string }[];
+        if (tables.length > 0) {
+          const user = d.prepare("SELECT id FROM users_local LIMIT 1").get() as { id: string } | undefined;
+          if (user?.id) {
+            throw new Error(
+              "SENTRY_VERIFICATION_TEST: Deliberate test error to verify Sentry user attribution in migration failures. " +
+              "If you see this in Sentry WITH a user ID attached, the fix is confirmed working. " +
+              "Remove migration 38 after verification. (BACKLOG-1576)"
+            );
+          }
+        }
+        // No user found — skip (fresh install or test environment)
       },
     },
   ];
