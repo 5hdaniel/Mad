@@ -102,6 +102,12 @@ describe('sendEmail', () => {
           content: '<p>Hello</p>',
         },
         toRecipients: [{ emailAddress: { address: 'user@example.com' } }],
+        internetMessageHeaders: [
+          {
+            name: 'List-Unsubscribe',
+            value: '<mailto:unsubscribe@keeprcompliance.com>',
+          },
+        ],
       },
     });
   });
