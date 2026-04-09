@@ -632,7 +632,9 @@ export function registerEmailLinkingHandlers(): void {
         FROM ignored_communications ic
         JOIN emails e ON (
           (ic.email_id IS NOT NULL AND ic.email_id = e.id)
-          OR (ic.original_communication_id IS NOT NULL AND e.id = ic.original_communication_id)
+          OR (ic.original_communication_id IS NOT NULL
+              AND EXISTS (SELECT 1 FROM communications c
+                          WHERE c.id = ic.original_communication_id AND c.email_id = e.id))
         )
         WHERE ic.transaction_id = ?
         AND e.id IS NOT NULL
