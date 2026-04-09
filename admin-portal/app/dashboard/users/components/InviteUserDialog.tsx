@@ -42,6 +42,7 @@ export function InviteUserDialog({ onClose, onInvited }: InviteUserDialogProps) 
   const [selectedPlanId, setSelectedPlanId] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [isDuplicateError, setIsDuplicateError] = useState(false);
   const [successResult, setSuccessResult] = useState<{
     inviteLink: string;
     emailSent: boolean;
@@ -125,6 +126,7 @@ export function InviteUserDialog({ onClose, onInvited }: InviteUserDialogProps) 
 
     setIsLoading(true);
     setError(null);
+    setIsDuplicateError(false);
 
     const result = await inviteUser({
       email: email.trim(),
@@ -137,7 +139,10 @@ export function InviteUserDialog({ onClose, onInvited }: InviteUserDialogProps) 
     });
 
     if (!result.success) {
-      setError(result.error ?? 'Failed to send invitation');
+      const errMsg = result.error ?? 'Failed to send invitation';
+      const isDuplicate = errMsg.includes('pending invitation') || errMsg.includes('already a member');
+      setError(errMsg);
+      setIsDuplicateError(isDuplicate);
       setIsLoading(false);
       return;
     }
@@ -420,7 +425,18 @@ export function InviteUserDialog({ onClose, onInvited }: InviteUserDialogProps) 
 
           {/* Error */}
           {error && (
-            <p className="text-sm text-red-600">{error}</p>
+            isDuplicateError ? (
+              <div className="rounded-md bg-amber-50 border border-amber-200 px-4 py-3">
+                <p className="text-sm text-amber-800">{error}</p>
+                <p className="mt-1 text-xs text-amber-600">
+                  You can close this dialog and resend the invitation from the users list.
+                </p>
+              </div>
+            ) : (
+              <div className="rounded-md bg-red-50 border border-red-200 px-4 py-3">
+                <p className="text-sm text-red-700">{error}</p>
+              </div>
+            )
           )}
 
           {/* Actions */}
