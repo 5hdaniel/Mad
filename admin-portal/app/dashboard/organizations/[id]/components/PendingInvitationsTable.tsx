@@ -9,7 +9,6 @@
 import { useState, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { Clock, RotateCw, X } from 'lucide-react';
-import { createClient } from '@/lib/supabase/client';
 import { formatDate } from '@/lib/format';
 
 export interface PendingInvitationRow {
@@ -18,7 +17,6 @@ export interface PendingInvitationRow {
   role: string;
   invited_at: string | null;
   invitation_expires_at: string | null;
-  last_invited_at: string | null;
 }
 
 interface PendingInvitationsTableProps {
@@ -66,16 +64,19 @@ export function PendingInvitationsTable({ invitations }: PendingInvitationsTable
     setCancelling(invitationId);
     setError(null);
     try {
-      const supabase = createClient();
-      const { error: deleteError } = await supabase
-        .from('organization_members')
-        .delete()
-        .eq('id', invitationId);
-      if (deleteError) {
-        setError(`Failed to cancel invitation: ${deleteError.message}`);
-      } else {
+      const res = await fetch('/api/users/cancel-invite', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ membershipId: invitationId }),
+      });
+      if (res.ok) {
         router.refresh();
+      } else {
+        const data = await res.json().catch(() => ({}));
+        setError(data.error || 'Failed to cancel invitation');
       }
+    } catch {
+      setError('Failed to cancel invitation');
     } finally {
       setCancelling(null);
     }
@@ -143,7 +144,7 @@ export function PendingInvitationsTable({ invitations }: PendingInvitationsTable
                     </span>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                    {formatDate(inv.last_invited_at || inv.invited_at)}
+                    {formatDate(inv.invited_at)}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                     {inv.invitation_expires_at

@@ -1,17 +1,18 @@
 /**
  * API Route: Resend User Invite
  *
- * Re-sends the invitation email for a pending org-member or individual invitation.
+ * Re-sends the invitation email for a pending org-member invitation.
  * Regenerates the token + extends expiration by 7 days.
+ * Uses service role client to bypass RLS (admin portal users are not org members).
  *
  * POST /api/users/resend-invite
- * Body: { membershipId: string, type: 'org' | 'individual' }
+ * Body: { membershipId: string }
  *
  * BACKLOG-1581: Add resend invite button for pending invitations
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { createClient } from '@/lib/supabase/server';
+import { createClient, createServiceClient } from '@/lib/supabase/server';
 
 export async function POST(request: NextRequest) {
   const supabase = await createClient();
@@ -34,11 +35,9 @@ export async function POST(request: NextRequest) {
 
   // Parse body
   let membershipId: string;
-  let type: 'org' | 'individual';
   try {
     const body = await request.json();
     membershipId = typeof body.membershipId === 'string' ? body.membershipId.trim() : '';
-    type = body.type === 'individual' ? 'individual' : 'org';
   } catch {
     return NextResponse.json({ error: 'Invalid request body' }, { status: 400 });
   }
@@ -51,11 +50,7 @@ export async function POST(request: NextRequest) {
   const newToken = generateToken();
   const newExpiry = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString();
 
-  if (type === 'org') {
-    return handleOrgResend(supabase, membershipId, newToken, newExpiry, user);
-  } else {
-    return handleIndividualResend(supabase, membershipId, newToken, newExpiry, user);
-  }
+  return handleOrgResend(membershipId, newToken, newExpiry, user);
 }
 
 function generateToken(): string {
@@ -67,14 +62,16 @@ function generateToken(): string {
 }
 
 async function handleOrgResend(
-  supabase: Awaited<ReturnType<typeof createClient>>,
   membershipId: string,
   newToken: string,
   newExpiry: string,
   user: { id: string; email?: string; user_metadata?: Record<string, string> }
 ) {
+  // Use service role client to bypass RLS — admin portal users are not org members
+  const adminClient = createServiceClient();
+
   // Look up the pending invitation
-  const { data: membership, error: lookupError } = await supabase
+  const { data: membership, error: lookupError } = await adminClient
     .from('organization_members')
     .select('id, invited_email, role, organization_id, user_id, organizations(name)')
     .eq('id', membershipId)
@@ -94,13 +91,12 @@ async function handleOrgResend(
     return NextResponse.json({ error: 'This is not a pending invitation' }, { status: 400 });
   }
 
-  // Update token + expiry + last_invited_at
-  const { error: updateError } = await supabase
+  // Update token + expiry (updated_at is managed automatically)
+  const { error: updateError } = await adminClient
     .from('organization_members')
     .update({
       invitation_token: newToken,
       invitation_expires_at: newExpiry,
-      last_invited_at: new Date().toISOString(),
     })
     .eq('id', membershipId);
 
@@ -123,64 +119,6 @@ async function handleOrgResend(
     organizationName: orgName,
     inviterName,
     role: membership.role,
-    inviteLink,
-  });
-
-  return NextResponse.json({ success: true, emailSent });
-}
-
-async function handleIndividualResend(
-  supabase: Awaited<ReturnType<typeof createClient>>,
-  invitationId: string,
-  newToken: string,
-  newExpiry: string,
-  user: { id: string; email?: string; user_metadata?: Record<string, string> }
-) {
-  // Look up the pending individual invitation
-  const { data: invitation, error: lookupError } = await supabase
-    .from('individual_invitations')
-    .select('id, invited_email, accepted_at')
-    .eq('id', invitationId)
-    .maybeSingle();
-
-  if (lookupError) {
-    console.error('[resend-invite] Individual lookup error:', lookupError.message);
-    return NextResponse.json({ error: 'Failed to look up invitation' }, { status: 500 });
-  }
-
-  if (!invitation) {
-    return NextResponse.json({ error: 'Invitation not found' }, { status: 404 });
-  }
-
-  // Must not be accepted
-  if (invitation.accepted_at) {
-    return NextResponse.json({ error: 'This invitation has already been accepted' }, { status: 400 });
-  }
-
-  // Update token + expiry
-  const { error: updateError } = await supabase
-    .from('individual_invitations')
-    .update({
-      invitation_token: newToken,
-      invitation_expires_at: newExpiry,
-    })
-    .eq('id', invitationId);
-
-  if (updateError) {
-    console.error('[resend-invite] Individual update error:', updateError.message);
-    return NextResponse.json({ error: 'Failed to update invitation' }, { status: 500 });
-  }
-
-  // Send email
-  const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://app.keeprcompliance.com';
-  const inviteLink = `${baseUrl}/invite/${newToken}`;
-  const inviterName = getInviterName(user);
-
-  const emailSent = await sendInviteEmail({
-    recipientEmail: invitation.invited_email,
-    organizationName: 'Keepr',
-    inviterName,
-    role: null,
     inviteLink,
   });
 

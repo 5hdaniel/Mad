@@ -67,7 +67,7 @@ export default async function OrganizationDetailPage({
       .order('joined_at', { ascending: false }),
     supabase
       .from('organization_members')
-      .select('id, invited_email, role, license_status, invited_at, invitation_expires_at, last_invited_at')
+      .select('id, invited_email, role, license_status, invited_at, invitation_expires_at')
       .eq('organization_id', id)
       .is('user_id', null)
       .not('invited_email', 'is', null)
@@ -107,7 +107,6 @@ export default async function OrganizationDetailPage({
     role: p.role,
     invited_at: p.invited_at,
     invitation_expires_at: p.invitation_expires_at,
-    last_invited_at: p.last_invited_at,
   }));
 
   return (
