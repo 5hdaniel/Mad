@@ -56,7 +56,7 @@ describe("AttachEmailsModal", () => {
       sender: "agent@example.com",
       sent_at: "2024-06-01T10:00:00Z",
       body_preview: "Here are the closing docs",
-      email_thread_id: "thread-1",
+      thread_id: "thread-1",
     },
     {
       id: "gmail:msg-2",
@@ -64,7 +64,7 @@ describe("AttachEmailsModal", () => {
       sender: "buyer@example.com",
       sent_at: "2024-06-02T12:00:00Z",
       body_preview: "Thanks for sending",
-      email_thread_id: "thread-1",
+      thread_id: "thread-1",
     },
     {
       id: "gmail:msg-3",
@@ -72,7 +72,7 @@ describe("AttachEmailsModal", () => {
       sender: "inspector@example.com",
       sent_at: "2024-05-15T09:00:00Z",
       body_preview: "Inspection complete",
-      email_thread_id: "thread-2",
+      thread_id: "thread-2",
     },
   ];
 

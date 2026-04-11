@@ -62,30 +62,30 @@ describe("normalizeSubject", () => {
 });
 
 describe("groupEmailsByThread", () => {
-  it("groups emails by email_thread_id", () => {
+  it("groups emails by thread_id", () => {
     const emails = [
-      createMockEmail({ id: "1", email_thread_id: "thread-A", subject: "Hello" }),
-      createMockEmail({ id: "2", email_thread_id: "thread-A", subject: "Re: Hello" }),
-      createMockEmail({ id: "3", email_thread_id: "thread-B", subject: "Other" }),
+      createMockEmail({ id: "1", thread_id: "thread-A", subject: "Hello" }),
+      createMockEmail({ id: "2", thread_id: "thread-A", subject: "Re: Hello" }),
+      createMockEmail({ id: "3", thread_id: "thread-B", subject: "Other" }),
     ];
 
     const grouped = groupEmailsByThread(emails);
 
     expect(grouped.size).toBe(2);
-    expect(grouped.get("provider-thread-A")).toHaveLength(2);
-    expect(grouped.get("provider-thread-B")).toHaveLength(1);
+    expect(grouped.get("thread-thread-A")).toHaveLength(2);
+    expect(grouped.get("thread-thread-B")).toHaveLength(1);
   });
 
-  it("groups emails by thread_id when email_thread_id is missing", () => {
+  it("falls back to subject grouping when thread_id is missing", () => {
     const emails = [
-      createMockEmail({ id: "1", thread_id: "msg-thread-1", subject: "Hello" }),
-      createMockEmail({ id: "2", thread_id: "msg-thread-1", subject: "Re: Hello" }),
+      createMockEmail({ id: "1", subject: "Hello" }),
+      createMockEmail({ id: "2", subject: "Re: Hello" }),
     ];
 
     const grouped = groupEmailsByThread(emails);
 
     expect(grouped.size).toBe(1);
-    expect(grouped.get("thread-msg-thread-1")).toHaveLength(2);
+    expect(grouped.get("subject-hello")).toHaveLength(2);
   });
 
   it("groups emails by normalized subject when no thread ID", () => {
@@ -116,13 +116,13 @@ describe("groupEmailsByThread", () => {
 
   it("sorts emails within thread chronologically", () => {
     const emails = [
-      createMockEmail({ id: "3", email_thread_id: "t1", sent_at: "2024-01-03T10:00:00Z" }),
-      createMockEmail({ id: "1", email_thread_id: "t1", sent_at: "2024-01-01T10:00:00Z" }),
-      createMockEmail({ id: "2", email_thread_id: "t1", sent_at: "2024-01-02T10:00:00Z" }),
+      createMockEmail({ id: "3", thread_id: "t1", sent_at: "2024-01-03T10:00:00Z" }),
+      createMockEmail({ id: "1", thread_id: "t1", sent_at: "2024-01-01T10:00:00Z" }),
+      createMockEmail({ id: "2", thread_id: "t1", sent_at: "2024-01-02T10:00:00Z" }),
     ];
 
     const grouped = groupEmailsByThread(emails);
-    const thread = grouped.get("provider-t1");
+    const thread = grouped.get("thread-t1");
 
     expect(thread).toBeDefined();
     expect(thread![0].id).toBe("1");
@@ -153,7 +153,7 @@ describe("createEmailThreads", () => {
     const emails = [
       createMockEmail({
         id: "1",
-        email_thread_id: "t1",
+        thread_id: "t1",
         subject: "Meeting",
         sender: "Alice <alice@example.com>",
         recipients: "bob@example.com",
@@ -161,7 +161,7 @@ describe("createEmailThreads", () => {
       }),
       createMockEmail({
         id: "2",
-        email_thread_id: "t1",
+        thread_id: "t1",
         subject: "Re: Meeting",
         sender: "Bob <bob@example.com>",
         recipients: "alice@example.com",
@@ -185,13 +185,13 @@ describe("createEmailThreads", () => {
     const emails = [
       createMockEmail({
         id: "1",
-        email_thread_id: "t1",
+        thread_id: "t1",
         sender: "alice@example.com",
         recipients: "bob@example.com",
       }),
       createMockEmail({
         id: "2",
-        email_thread_id: "t1",
+        thread_id: "t1",
         sender: "Alice Smith <alice@example.com>",
         recipients: "bob@example.com",
       }),
@@ -255,19 +255,19 @@ describe("processEmailThreads", () => {
     const communications = [
       createMockEmail({
         id: "1",
-        email_thread_id: "t1",
+        thread_id: "t1",
         subject: "First Thread",
         sent_at: "2024-01-01T10:00:00Z",
       }),
       createMockEmail({
         id: "2",
-        email_thread_id: "t1",
+        thread_id: "t1",
         subject: "Re: First Thread",
         sent_at: "2024-01-02T10:00:00Z",
       }),
       createMockEmail({
         id: "3",
-        email_thread_id: "t2",
+        thread_id: "t2",
         subject: "Second Thread",
         sent_at: "2024-01-05T10:00:00Z",
       }),
