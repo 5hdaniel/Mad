@@ -599,6 +599,10 @@ class DatabaseService implements IDatabaseService {
       Sentry.captureException(error, {
         tags: { service: "database-service", operation: "runMigrations" },
       });
+      // BACKLOG-1576: Flush Sentry before re-throwing so the event
+      // (with user context) is guaranteed to be sent even if the
+      // process exits quickly after the auto-restore flow.
+      await Sentry.flush(2000);
       throw error;
     }
 
