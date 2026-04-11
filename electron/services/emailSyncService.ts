@@ -157,7 +157,7 @@ export interface ProviderEmailResult {
   sender: string | null;
   sent_at: string | null;
   body_preview?: string | null;
-  email_thread_id?: string | null;
+  thread_id?: string | null;
   has_attachments?: boolean;
   provider: "gmail" | "outlook";
 }
@@ -713,7 +713,7 @@ class EmailSyncService {
                 sender: email.from,
                 sent_at: email.date ? new Date(email.date).toISOString() : null,
                 body_preview: (email.snippet || email.bodyPlain?.substring(0, 200)) || null,
-                email_thread_id: email.threadId || null,
+                thread_id: email.threadId || null,
                 has_attachments: email.hasAttachments || false,
                 provider: "gmail" as const,
               };
@@ -801,7 +801,7 @@ class EmailSyncService {
                 sender: email.from,
                 sent_at: email.date ? new Date(email.date).toISOString() : null,
                 body_preview: (email.snippet || email.bodyPlain?.substring(0, 200)) || null,
-                email_thread_id: email.threadId || null,
+                thread_id: email.threadId || null,
                 has_attachments: email.hasAttachments || false,
                 provider: "outlook" as const,
               };
@@ -861,7 +861,7 @@ class EmailSyncService {
             sender: e.sender || null,
             sent_at: e.sent_at || null,
             body_preview: e.body_preview || null,
-            email_thread_id: e.email_thread_id || null,
+            thread_id: e.thread_id || null,
             has_attachments: e.has_attachments || false,
             provider: "outlook" as const, // sourced from local cache of provider emails
           }));

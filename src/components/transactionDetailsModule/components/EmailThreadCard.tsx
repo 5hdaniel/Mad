@@ -16,7 +16,7 @@ import { getEmailAvatarInitial } from "../../../utils/avatarUtils";
  * Email thread data structure for grouping emails into conversations
  */
 export interface EmailThread {
-  /** Thread identifier (email_thread_id, thread_id, or generated from subject) */
+  /** Thread identifier (thread_id, or generated from subject) */
   id: string;
   /** Thread subject (normalized, without Re:/Fwd: prefixes) */
   subject: string;
@@ -261,17 +261,11 @@ function getEmailParticipants(email: Communication): string[] {
 /**
  * Generate a thread key for grouping emails.
  * Priority:
- * 1. email_thread_id (from provider, e.g., Gmail thread ID)
- * 2. thread_id (from messages table join)
- * 3. Normalized subject (fallback)
+ * 1. thread_id (canonical thread identifier)
+ * 2. Normalized subject (fallback)
  */
 function getEmailThreadKey(email: Communication): string {
-  // Use provider thread ID if available
-  if (email.email_thread_id) {
-    return `provider-${email.email_thread_id}`;
-  }
-
-  // Use thread_id from messages join if available
+  // Use thread_id if available (canonical field since BACKLOG-1579)
   if (email.thread_id) {
     return `thread-${email.thread_id}`;
   }
@@ -288,7 +282,7 @@ function getEmailThreadKey(email: Communication): string {
 
 /**
  * Group emails by conversation thread.
- * Uses email headers (thread_id, email_thread_id) first, falls back to subject matching.
+ * Uses thread_id first, falls back to subject matching.
  */
 export function groupEmailsByThread(
   emails: Communication[]

@@ -1431,10 +1431,8 @@ class TransactionService {
       email_subject: communication.subject,
       email_sender: communication.sender,
       email_sent_at: communication.sent_at,
-      email_thread_id: communication.email_thread_id,
       email_id: resolvedEmailId,
-      // BACKLOG-1560: Write thread_id for text message suppression.
-      // Previous bug: only email_thread_id was written, but auto-link checks thread_id.
+      // BACKLOG-1560: Write thread_id for thread suppression during auto-link.
       thread_id: commRecord.thread_id || undefined,
       original_communication_id: communicationId,
       reason: reason || "Manually unlinked by user",

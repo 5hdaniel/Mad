@@ -209,7 +209,7 @@ export interface WindowApiTransactions {
       sender: string | null;
       sent_at: string | null;
       body_preview?: string | null;
-      email_thread_id?: string | null;
+      thread_id?: string | null;
       has_attachments?: boolean;
     }>;
     error?: string;
