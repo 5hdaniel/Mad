@@ -843,9 +843,10 @@ export class DeviceDetectionService extends EventEmitter {
     // - Encrypted backups include much more data than unencrypted
     // - Photos, messages with attachments can be very large
     // - "Used space" from iOS disk_usage may not include all backed-up data
-    // We use a conservative high estimate to avoid underestimating
-    // (Better to overestimate disk space needed than underestimate)
-    const BACKUP_SIZE_RATIO = 1.5; // 150% of "used" space - iOS reports usage conservatively
+    // Since skipApps is always true, apps (often 60-70% of used space) are excluded.
+    // Real backups without apps are typically 15-25% of used space.
+    // 25% is conservative enough to avoid underestimates.
+    const BACKUP_SIZE_RATIO = 0.25; // 25% of "used" space (apps are skipped)
     const estimatedBackupSize = Math.round(usedSpace * BACKUP_SIZE_RATIO);
 
     log.info(`[DeviceDetection] Estimated backup size: ${Math.round(estimatedBackupSize / 1024 / 1024)} MB (${BACKUP_SIZE_RATIO * 100}% of used space)`);

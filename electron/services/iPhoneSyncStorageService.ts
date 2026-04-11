@@ -511,9 +511,10 @@ class IPhoneSyncStorageService {
       return { stored: 0, skipped: 0 };
     }
 
-    // TASK-1950: Check if macOS/iPhone contacts source is enabled
+    // Check if iPhone contacts source is enabled (check both keys for compatibility)
+    const iphoneEnabled = await isContactSourceEnabled(userId, "direct", "iphoneContacts", true);
     const macosEnabled = await isContactSourceEnabled(userId, "direct", "macosContacts", true);
-    if (!macosEnabled) {
+    if (!iphoneEnabled && !macosEnabled) {
       log.info(`[${IPhoneSyncStorageService.SERVICE_NAME}] iPhone contacts storage skipped (disabled in preferences)`);
       return { stored: 0, skipped: contacts.length };
     }

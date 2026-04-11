@@ -147,7 +147,7 @@ export function TransactionMessagesTab({
       if (handles.length === 0) return;
 
       try {
-        const result = await window.api.contacts.resolveHandles(handles);
+        const result = await window.api.contacts.resolveHandles(handles, userId);
 
         if (result.success && result.names) {
           // Build a lookup map with both original and normalized keys
