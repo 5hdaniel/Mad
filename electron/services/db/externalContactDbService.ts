@@ -716,6 +716,48 @@ export function fullSync(userId: string, macOSContacts: MacOSContact[]): SyncRes
  * Search external contacts by name, phone, or email
  * Useful for contact selection when user types a query
  */
+/**
+ * Look up contact names by normalized phone digits from external_contacts.
+ * Uses json_each to expand phones_json arrays for matching.
+ */
+export function getNamesByPhoneDigits(
+  userId: string,
+  normalizedPhones: string[]
+): { phone: string; name: string }[] {
+  if (normalizedPhones.length === 0) return [];
+  const db = ensureDb();
+  const placeholders = normalizedPhones.map(() => "?").join(", ");
+  const sql = `
+    SELECT je.value as phone, ec.name
+    FROM external_contacts ec, json_each(ec.phones_json) je
+    WHERE ec.user_id = ?
+      AND ec.name IS NOT NULL
+      AND substr(replace(replace(replace(je.value, '+', ''), '-', ''), ' ', ''), -10) IN (${placeholders})
+  `;
+  return db.prepare(sql).all(userId, ...normalizedPhones) as { phone: string; name: string }[];
+}
+
+/**
+ * Look up contact names by email from external_contacts.
+ * Uses json_each to expand emails_json arrays for matching.
+ */
+export function getNamesByEmails(
+  userId: string,
+  lowerEmails: string[]
+): { email: string; name: string }[] {
+  if (lowerEmails.length === 0) return [];
+  const db = ensureDb();
+  const placeholders = lowerEmails.map(() => "?").join(", ");
+  const sql = `
+    SELECT je.value as email, ec.name
+    FROM external_contacts ec, json_each(ec.emails_json) je
+    WHERE ec.user_id = ?
+      AND ec.name IS NOT NULL
+      AND LOWER(je.value) IN (${placeholders})
+  `;
+  return db.prepare(sql).all(userId, ...lowerEmails) as { email: string; name: string }[];
+}
+
 export function search(userId: string, query: string, limit: number = 50): ExternalContact[] {
   const searchPattern = `%${query}%`;
 

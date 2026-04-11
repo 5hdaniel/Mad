@@ -254,6 +254,7 @@ export function registerContactHandlers(mainWindow: BrowserWindow): void {
 
         // TASK-1950: Check contact source preferences
         const macosEnabled = await isContactSourceEnabled(validatedUserId, "direct", "macosContacts", true);
+        const iphoneEnabled = await isContactSourceEnabled(validatedUserId, "direct", "iphoneContacts", true);
         const outlookEnabled = await isContactSourceEnabled(validatedUserId, "direct", "outlookContacts", true);
         const googleContactsEnabled = await isContactSourceEnabled(validatedUserId, "direct", "googleContacts", true);
 
@@ -374,7 +375,7 @@ export function registerContactHandlers(mainWindow: BrowserWindow): void {
         // STEP 1: Get unimported contacts from database (iPhone synced contacts)
         // These take precedence because they have real DB IDs
         // TASK-1950: Skip if macOS/iPhone contacts source is disabled
-        const unimportedDbContacts = macosEnabled
+        const unimportedDbContacts = (macosEnabled || iphoneEnabled)
           ? await databaseService.getUnimportedContactsByUserId(validatedUserId)
           : [];
 
@@ -427,8 +428,8 @@ export function registerContactHandlers(mainWindow: BrowserWindow): void {
         }
 
         // STEP 2: TASK-1773 - Read from external_contacts shadow table
-        // TASK-1950: Only sync macOS contacts if source is enabled
-        if (macosEnabled) {
+        // TASK-1950: Only sync macOS/iPhone contacts if source is enabled
+        if (macosEnabled || iphoneEnabled) {
           // Check if shadow table is populated, if not trigger background sync
           const cachedCount = externalContactDb.getCount(validatedUserId);
 
@@ -538,7 +539,13 @@ export function registerContactHandlers(mainWindow: BrowserWindow): void {
           if (extContact.source === "google_contacts" && !googleContactsEnabled) {
             continue;
           }
-          if (extContact.source !== "outlook" && extContact.source !== "google_contacts" && !macosEnabled) {
+          if (extContact.source === "iphone" && !iphoneEnabled && !macosEnabled) {
+            continue;
+          }
+          if (extContact.source === "macos" && !macosEnabled) {
+            continue;
+          }
+          if (extContact.source !== "outlook" && extContact.source !== "google_contacts" && extContact.source !== "iphone" && extContact.source !== "macos" && !macosEnabled) {
             continue;
           }
 
@@ -1438,13 +1445,16 @@ export function registerContactHandlers(mainWindow: BrowserWindow): void {
     async (
       _event: IpcMainInvokeEvent,
       handles: string[],
+      userId?: string,
     ): Promise<{ success: boolean; names: Record<string, string>; error?: string }> => {
       try {
         if (!Array.isArray(handles)) {
           return { success: false, names: {}, error: "handles must be an array" };
         }
 
-        const names = await resolveHandles(handles);
+        // Pass userId to enable external_contacts lookup (iPhone, macOS, Outlook, Google)
+        const validatedUserId = userId ? await getValidUserId(userId, "Contacts") : undefined;
+        const names = await resolveHandles(handles, validatedUserId || undefined);
         return { success: true, names };
       } catch (error) {
         logService.error("Resolve handles failed", "Contacts", {

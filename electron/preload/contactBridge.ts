@@ -112,8 +112,8 @@ export const contactBridge = {
    * @param handles - Array of phone numbers, emails, or Apple IDs to resolve
    * @returns Map of handle -> contact name
    */
-  resolveHandles: (handles: string[]): Promise<{ success: boolean; names: Record<string, string>; error?: string }> =>
-    ipcRenderer.invoke("contacts:resolve-handles", handles),
+  resolveHandles: (handles: string[], userId?: string): Promise<{ success: boolean; names: Record<string, string>; error?: string }> =>
+    ipcRenderer.invoke("contacts:resolve-handles", handles, userId),
 
   /**
    * Update the default_role on a contact (manual override)
