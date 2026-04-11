@@ -70,10 +70,17 @@ async function handleOrgResend(
   // Use service role client to bypass RLS — admin portal users are not org members
   const adminClient = createServiceClient();
 
+  // Debug: verify service client can query at all
+  const { data: testData, error: testError } = await adminClient
+    .from('organization_members')
+    .select('id')
+    .limit(1);
+  console.log('[resend-invite] Service client test:', { hasData: !!testData?.length, testError: testError?.message, membershipId });
+
   // Look up the pending invitation
   const { data: membership, error: lookupError } = await adminClient
     .from('organization_members')
-    .select('id, invited_email, role, organization_id, user_id, organizations(name)')
+    .select('id, invited_email, role, organization_id, user_id')
     .eq('id', membershipId)
     .maybeSingle();
 
@@ -83,8 +90,25 @@ async function handleOrgResend(
   }
 
   if (!membership) {
-    return NextResponse.json({ error: 'Invitation not found' }, { status: 404 });
+    return NextResponse.json({
+      error: 'Invitation not found',
+      debug: {
+        membershipId,
+        testHasData: !!testData?.length,
+        testError: testError?.message || null,
+        lookupError: lookupError?.message || null,
+        hasServiceKey: !!process.env.SUPABASE_SERVICE_ROLE_KEY,
+        serviceKeyPrefix: process.env.SUPABASE_SERVICE_ROLE_KEY?.substring(0, 10),
+      }
+    }, { status: 404 });
   }
+
+  // Fetch org name separately for the email
+  const { data: org } = await adminClient
+    .from('organizations')
+    .select('name')
+    .eq('id', membership.organization_id)
+    .maybeSingle();
 
   // Must be a pending invitation (user_id is null, invited_email is set)
   if (membership.user_id || !membership.invited_email) {
@@ -105,9 +129,7 @@ async function handleOrgResend(
     return NextResponse.json({ error: 'Failed to update invitation' }, { status: 500 });
   }
 
-  // Extract org name from join
-  const orgData = membership.organizations as unknown as { name: string } | null;
-  const orgName = orgData?.name ?? 'Keepr';
+  const orgName = org?.name ?? 'Keepr';
 
   // Send email
   const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://app.keeprcompliance.com';
@@ -160,6 +182,7 @@ async function sendInviteEmail(params: {
         organizationName: params.organizationName,
         inviterName: params.inviterName,
         role: params.role,
+        isResend: true,
         inviteLink: params.inviteLink,
         expiresInDays: 7,
       }),

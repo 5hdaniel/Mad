@@ -72,7 +72,7 @@ export function baseLayout({ preheader, body }: LayoutParams): string {
           <tr>
             <td style="padding:24px 32px; background-color:#f9fafb; border-top:1px solid #e5e7eb;">
               <p style="margin:0; font-size:12px; color:#6b7280; line-height:1.5;">
-                Keepr Compliance | Austin, TX
+                Keepr Compliance | 382 NE 191st St PMB 64835, Miami FL 33179
               </p>
               <p style="margin:8px 0 0 0; font-size:11px; color:#9ca3af; line-height:1.5;">
                 Questions? Contact <a href="mailto:support@keeprcompliance.com" style="color:#9ca3af;">support@keeprcompliance.com</a>

@@ -115,7 +115,7 @@ export async function sendEmail(params: SendEmailParams): Promise<SendEmailResul
       toRecipients,
       internetMessageHeaders: [
         {
-          name: 'List-Unsubscribe',
+          name: 'X-List-Unsubscribe',
           value: '<mailto:unsubscribe@keeprcompliance.com>',
         },
       ],
