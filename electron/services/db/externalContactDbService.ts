@@ -713,10 +713,6 @@ export function fullSync(userId: string, macOSContacts: MacOSContact[]): SyncRes
 // ============================================
 
 /**
- * Search external contacts by name, phone, or email
- * Useful for contact selection when user types a query
- */
-/**
  * Look up contact names by normalized phone digits from external_contacts.
  * Uses json_each to expand phones_json arrays for matching.
  */
@@ -758,6 +754,10 @@ export function getNamesByEmails(
   return db.prepare(sql).all(userId, ...lowerEmails) as { email: string; name: string }[];
 }
 
+/**
+ * Search external contacts by name, phone, or email
+ * Useful for contact selection when user types a query
+ */
 export function search(userId: string, query: string, limit: number = 50): ExternalContact[] {
   const searchPattern = `%${query}%`;
 
