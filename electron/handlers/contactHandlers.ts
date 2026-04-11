@@ -1454,7 +1454,7 @@ export function registerContactHandlers(mainWindow: BrowserWindow): void {
 
         // Pass userId to enable external_contacts lookup (iPhone, macOS, Outlook, Google)
         const validatedUserId = userId ? await getValidUserId(userId, "Contacts") : undefined;
-        const names = await resolveHandles(handles, validatedUserId);
+        const names = await resolveHandles(handles, validatedUserId ?? undefined);
         return { success: true, names };
       } catch (error) {
         logService.error("Resolve handles failed", "Contacts", {
