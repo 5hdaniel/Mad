@@ -1083,10 +1083,11 @@ describe("Contact Handlers", () => {
   });
 
   describe("contacts:get-available (preference gating)", () => {
-    it("should skip iPhone DB contacts when macOS source is disabled", async () => {
+    it("should skip iPhone DB contacts when both macOS and iPhone sources are disabled", async () => {
       mockIsContactSourceEnabled.mockImplementation(
         async (_userId: string, _category: string, key: string) => {
           if (key === "macosContacts") return false;
+          if (key === "iphoneContacts") return false;
           return true;
         }
       );
@@ -1096,8 +1097,26 @@ describe("Contact Handlers", () => {
       const result = await handler(mockEvent, TEST_USER_ID);
 
       expect(result.success).toBe(true);
-      // getUnimportedContactsByUserId should NOT be called when macOS is disabled
+      // getUnimportedContactsByUserId should NOT be called when both sources are disabled
       expect(mockDatabaseService.getUnimportedContactsByUserId).not.toHaveBeenCalled();
+    });
+
+    it("should include iPhone DB contacts when iphoneContacts is enabled but macOS is disabled", async () => {
+      mockIsContactSourceEnabled.mockImplementation(
+        async (_userId: string, _category: string, key: string) => {
+          if (key === "macosContacts") return false;
+          return true; // iphoneContacts returns true
+        }
+      );
+      mockDatabaseService.getImportedContactsByUserIdAsync.mockResolvedValue([]);
+      mockDatabaseService.getUnimportedContactsByUserId.mockResolvedValue([]);
+
+      const handler = registeredHandlers.get("contacts:get-available");
+      const result = await handler(mockEvent, TEST_USER_ID);
+
+      expect(result.success).toBe(true);
+      // getUnimportedContactsByUserId SHOULD be called when iphoneContacts is enabled
+      expect(mockDatabaseService.getUnimportedContactsByUserId).toHaveBeenCalled();
     });
 
     it("should include iPhone DB contacts when macOS source is enabled", async () => {
