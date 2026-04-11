@@ -625,7 +625,7 @@ export function registerEmailLinkingHandlers(): void {
           e.cc,
           e.sent_at,
           e.thread_id,
-          e.body_preview,
+          SUBSTR(e.body_plain, 1, 200) as body_preview,
           e.body_plain,
           e.has_attachments,
           e.source
