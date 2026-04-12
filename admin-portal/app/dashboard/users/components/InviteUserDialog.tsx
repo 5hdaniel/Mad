@@ -12,6 +12,7 @@
  */
 
 import { useState, useEffect, useRef, useId, useMemo } from 'react';
+import { useRouter } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
 import { inviteUser } from '@/lib/actions/inviteUser';
 import { getActivePlans, type Plan } from '@/lib/admin-queries';
@@ -59,6 +60,7 @@ export function InviteUserDialog({ onClose, onInvited }: InviteUserDialogProps) 
 
   const dialogRef = useRef<HTMLDivElement>(null);
   const titleId = useId();
+  const router = useRouter();
 
   // Load organizations on mount
   useEffect(() => {
@@ -429,7 +431,24 @@ export function InviteUserDialog({ onClose, onInvited }: InviteUserDialogProps) 
               <div className="rounded-md bg-amber-50 border border-amber-200 px-4 py-3">
                 <p className="text-sm text-amber-800">{error}</p>
                 <p className="mt-1 text-xs text-amber-600">
-                  You can close this dialog and resend the invitation from the users list.
+                  {organizationId ? (
+                    <>
+                      You can{' '}
+                      <button
+                        type="button"
+                        onClick={() => {
+                          onClose();
+                          router.push(`/dashboard/organizations/${organizationId}`);
+                        }}
+                        className="underline font-medium text-amber-700 hover:text-amber-900"
+                      >
+                        go to the organization page
+                      </button>{' '}
+                      to resend the invitation.
+                    </>
+                  ) : (
+                    'You can close this dialog and resend the invitation from the users list.'
+                  )}
                 </p>
               </div>
             ) : (
