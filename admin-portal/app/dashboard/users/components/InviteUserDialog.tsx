@@ -447,7 +447,20 @@ export function InviteUserDialog({ onClose, onInvited }: InviteUserDialogProps) 
                       to resend the invitation.
                     </>
                   ) : (
-                    'You can close this dialog and resend the invitation from the users list.'
+                    <>
+                      You can{' '}
+                      <button
+                        type="button"
+                        onClick={() => {
+                          onClose();
+                          router.push('/dashboard/users');
+                        }}
+                        className="underline font-medium text-amber-700 hover:text-amber-900"
+                      >
+                        go to the users list
+                      </button>{' '}
+                      to resend the invitation.
+                    </>
                   )}
                 </p>
               </div>
