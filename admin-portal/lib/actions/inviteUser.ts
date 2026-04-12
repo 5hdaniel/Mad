@@ -36,6 +36,8 @@ interface InviteUserResult {
   inviteLink?: string;
   emailSent?: boolean;
   error?: string;
+  existingOrgId?: string | null;
+  existingOrgName?: string | null;
 }
 
 // ============================================================================
@@ -130,7 +132,12 @@ export async function inviteUser(input: InviteUserInput): Promise<InviteUserResu
   if (!rpcResult?.success) {
     const errorCode = rpcResult?.error as string;
     const friendlyMessage = RPC_ERROR_MAP[errorCode] || 'Failed to create invitation';
-    return { success: false, error: friendlyMessage };
+    return {
+      success: false,
+      error: friendlyMessage,
+      existingOrgId: (rpcResult?.existing_org_id as string | null) ?? undefined,
+      existingOrgName: (rpcResult?.existing_org_name as string | null) ?? undefined,
+    };
   }
 
   const invitationToken = rpcResult.invitation_token as string;
