@@ -752,7 +752,10 @@ interface Screen2OverlayProps {
 
 /**
  * Screen 2: Add Contacts overlay using ContactSearchList
- * Each contact has a "+ Add Contact" button that adds immediately
+ * Uses the same checkbox multi-select pattern as New Transaction (ContactAssignmentStep)
+ * for a unified contact selection UX.
+ *
+ * @see BACKLOG-1590: Contact Selection UX Unification
  */
 function Screen2Overlay({
   assignedContactIds,
@@ -766,10 +769,18 @@ function Screen2Overlay({
   const [externalLoading, setExternalLoading] = useState(false);
   const [externalLoaded, setExternalLoaded] = useState(false);
 
-  // Contact preview/edit modal state
-  const [previewContact, setPreviewContact] = useState<ExtendedContact | null>(null);
+  // Checkbox multi-select state (unified UX matching New Transaction flow)
+  const [selectedContactIds, setSelectedContactIds] = useState<string[]>([]);
+
+  // Track which contacts have been added (for visual feedback on imported externals)
+  const [addedContactIds, setAddedContactIds] = useState<Set<string>>(new Set());
+
+  // Edit contact modal state
   const [showEditModal, setShowEditModal] = useState(false);
   const [editContact, setEditContact] = useState<ExtendedContact | undefined>(undefined);
+
+  // Track adding state to disable button during batch add
+  const [isAddingSelected, setIsAddingSelected] = useState(false);
 
   // Load external contacts from Contacts app when component mounts
   useEffect(() => {
@@ -817,44 +828,21 @@ function Screen2Overlay({
     );
   }, [externalContacts, contacts, assignedContactIds]);
 
-  // Track which contacts have been added (for visual feedback)
-  const [addedContactIds, setAddedContactIds] = useState<Set<string>>(new Set());
-
-  // Helper to check if a contact is external
-  const isExternal = (contact: ExtendedContact): boolean => {
-    return contact.is_message_derived === true || contact.is_message_derived === 1;
-  };
-
-  // Handle clicking on a contact to view details
-  const handleContactClick = useCallback((contact: ExtendedContact) => {
-    setPreviewContact(contact);
-  }, []);
-
-  // Handle editing a contact from preview
-  const handlePreviewEdit = useCallback(() => {
-    if (previewContact) {
-      setPreviewContact(null);
-      setEditContact(previewContact);
-      setShowEditModal(true);
-    }
-  }, [previewContact]);
-
   // Handle adding a new contact manually
   const handleAddManually = useCallback(() => {
     setEditContact(undefined);
     setShowEditModal(true);
   }, []);
 
-  // Handle importing and adding a contact in one action
-  // For external contacts: import first, then add to transaction
-  // For database contacts: add directly to transaction
-  const handleImportAndAddContact = useCallback(
+  // Handle importing an external contact (auto-import when selected via checkbox)
+  // This mirrors the ContactAssignmentStep pattern where selecting an external contact triggers import
+  const handleImportContact = useCallback(
     async (contact: ExtendedContact): Promise<ExtendedContact> => {
-      const isExternal = contact.is_message_derived === true || contact.is_message_derived === 1 || contact.isFromDatabase === false;
+      const isExternalContact = contact.is_message_derived === true || contact.is_message_derived === 1 || contact.isFromDatabase === false;
       const contactName = contact.display_name || contact.name || "Unknown";
 
-      if (isExternal) {
-        // External contact: import first, then add
+      if (isExternalContact) {
+        // External contact: import into database first
         const userId = contacts.length > 0 ? contacts[0].user_id : "";
 
         if (!userId) {
@@ -878,8 +866,6 @@ function Screen2Overlay({
           if (contact.default_role && !importedContact.default_role) {
             importedContact.default_role = contact.default_role;
           }
-          // Add the imported contact to the transaction
-          onAddContact(importedContact.id, importedContact);
           // Mark as added for visual feedback
           setAddedContactIds((prev) => new Set(prev).add(contact.id));
           // Silent refresh so Screen1 can find the new contact
@@ -889,26 +875,38 @@ function Screen2Overlay({
 
         throw new Error(result.error || "Failed to import contact");
       } else {
-        // Database contact: add directly to transaction
-        onAddContact(contact.id, contact);
-        // Mark as added for visual feedback
-        setAddedContactIds((prev) => new Set(prev).add(contact.id));
+        // Database contact: no import needed
         return contact;
       }
     },
-    [contacts, onAddContact]
+    [contacts, silentRefresh]
   );
 
-  // Handle importing from preview modal
-  const handlePreviewImport = useCallback(async () => {
-    if (!previewContact) return;
+  // Handle "Add Selected" button - batch add all selected contacts to the transaction
+  const handleAddSelected = useCallback(async () => {
+    if (selectedContactIds.length === 0) return;
+
+    setIsAddingSelected(true);
     try {
-      await handleImportAndAddContact(previewContact);
-      setPreviewContact(null);
-    } catch (err) {
-      logger.error("Failed to import contact:", err);
+      // All available contacts (imported + external) in a lookup map
+      const allContacts = new Map<string, ExtendedContact>();
+      availableContacts.forEach((c) => allContacts.set(c.id, c));
+      filteredExternalContacts.forEach((c) => allContacts.set(c.id, c));
+
+      for (const contactId of selectedContactIds) {
+        const contact = allContacts.get(contactId);
+        if (contact) {
+          onAddContact(contactId, contact);
+        } else {
+          // Contact might have been imported (external -> new ID), just add by ID
+          onAddContact(contactId);
+        }
+      }
+    } finally {
+      setIsAddingSelected(false);
     }
-  }, [previewContact, handleImportAndAddContact]);
+    onClose();
+  }, [selectedContactIds, availableContacts, filteredExternalContacts, onAddContact, onClose]);
 
   // Get userId for ContactFormModal
   const userId = contacts.length > 0 ? contacts[0].user_id : "";
@@ -948,16 +946,14 @@ function Screen2Overlay({
         </div>
       </div>
 
-      {/* ContactSearchList with built-in category filter (pill-style buttons) */}
-      {/* min-h-0 required for flex child scrolling */}
+      {/* ContactSearchList with checkbox multi-select (unified UX) */}
+      {/* No onContactClick = selection mode with checkboxes, matching New Transaction flow */}
       <ContactSearchList
         contacts={availableContacts}
         externalContacts={filteredExternalContacts}
-        selectedIds={[]}
-        onSelectionChange={() => {}}
-        onImportContact={handleImportAndAddContact}
-        showAddButtonForImported={true}
-        onContactClick={handleContactClick}
+        selectedIds={selectedContactIds}
+        onSelectionChange={setSelectedContactIds}
+        onImportContact={handleImportContact}
         onAddManually={handleAddManually}
         addedContactIds={addedContactIds}
         isLoading={loading || externalLoading}
@@ -967,33 +963,30 @@ function Screen2Overlay({
         className="flex-1 min-h-0"
       />
 
-      {/* Footer with Assign Roles button - only show when contacts have been added */}
-      {addedContactIds.size > 0 && (
-        <div className="flex-shrink-0 px-6 py-4 bg-gray-50 rounded-b-xl flex items-center justify-between">
-          <p className="text-sm text-gray-600">
-            {addedContactIds.size} contact{addedContactIds.size !== 1 ? "s" : ""} added
-          </p>
-          <button
-            onClick={onClose}
-            className="px-6 py-2 rounded-lg font-semibold bg-gradient-to-r from-purple-500 to-pink-600 text-white hover:from-purple-600 hover:to-pink-700 shadow-md hover:shadow-lg transition-all"
-            data-testid="assign-roles-button"
-          >
-            Assign Roles →
-          </button>
-        </div>
-      )}
-
-      {/* Contact Preview Modal */}
-      {previewContact && (
-        <ContactPreview
-          contact={previewContact}
-          isExternal={isExternal(previewContact)}
-          transactions={[]}
-          onEdit={handlePreviewEdit}
-          onImport={handlePreviewImport}
-          onClose={() => setPreviewContact(null)}
-        />
-      )}
+      {/* Footer with Add Selected button - matches New Transaction Continue pattern */}
+      <div className="flex-shrink-0 px-6 py-4 bg-gray-50 rounded-b-xl flex items-center justify-between">
+        <p className="text-sm text-gray-600">
+          {selectedContactIds.length > 0
+            ? `${selectedContactIds.length} contact${selectedContactIds.length !== 1 ? "s" : ""} selected`
+            : "Select contacts to add"}
+        </p>
+        <button
+          onClick={handleAddSelected}
+          disabled={selectedContactIds.length === 0 || isAddingSelected}
+          className={`px-6 py-2 rounded-lg font-semibold transition-all ${
+            selectedContactIds.length === 0 || isAddingSelected
+              ? "bg-gray-300 text-gray-500 cursor-not-allowed"
+              : "bg-gradient-to-r from-purple-500 to-pink-600 text-white hover:from-purple-600 hover:to-pink-700 shadow-md hover:shadow-lg"
+          }`}
+          data-testid="add-selected-button"
+        >
+          {isAddingSelected
+            ? "Adding..."
+            : selectedContactIds.length > 0
+              ? `Add Selected (${selectedContactIds.length})`
+              : "Add Selected"}
+        </button>
+      </div>
 
       {/* Add/Edit Contact Modal */}
       {showEditModal && userId && (
