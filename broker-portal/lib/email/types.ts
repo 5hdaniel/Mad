@@ -67,6 +67,8 @@ export interface InviteEmailParams {
   inviteLink: string;
   /** Number of days until the invite expires */
   expiresInDays: number;
+  /** Whether this is a resend of an existing invite (changes subject/heading) */
+  isResend?: boolean;
 }
 
 export interface TicketReplyNotificationParams {
