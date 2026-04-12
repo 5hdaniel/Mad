@@ -19,7 +19,7 @@ name: PR Metrics Validation
 
 on:
   pull_request:
-    branches: [main, develop]
+    branches: [main, develop, 'int/**']
     types: [opened, edited, synchronize, reopened]
 
 jobs:
