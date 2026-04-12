@@ -23,6 +23,7 @@ interface SendInviteRequest {
   role: string;
   inviteLink: string;
   expiresInDays: number;
+  isResend?: boolean;
 }
 
 export async function POST(request: NextRequest) {
@@ -54,6 +55,7 @@ export async function POST(request: NextRequest) {
       role: body.role || 'Member',
       inviteLink: body.inviteLink,
       expiresInDays: body.expiresInDays || 7,
+      isResend: body.isResend ?? false,
     });
 
     if (!result.success) {

@@ -22,18 +22,29 @@ export function buildInviteEmail(params: InviteEmailParams): EmailContent {
     role,
     inviteLink,
     expiresInDays,
+    isResend = false,
   } = params;
 
   const isOrgInvite = organizationName && organizationName !== 'Keepr';
-  const subject = isOrgInvite
-    ? `You've been invited to join ${organizationName} on Keepr`
-    : `You've been invited to join Keepr`;
+
+  let subject: string;
+  if (isResend) {
+    subject = isOrgInvite
+      ? `Reminder: Your invitation to join ${organizationName} expires in ${expiresInDays} day${expiresInDays !== 1 ? 's' : ''}`
+      : `Reminder: Your invitation to join Keepr expires in ${expiresInDays} day${expiresInDays !== 1 ? 's' : ''}`;
+  } else {
+    subject = isOrgInvite
+      ? `You've been invited to join ${organizationName} on Keepr`
+      : `You've been invited to join Keepr`;
+  }
+
+  const heading = isResend ? 'Invitation Reminder' : "You're Invited!";
 
   const html = baseLayout({
     preheader: subject,
     body: `
       <h1 style="margin:0 0 16px 0; font-size:24px; font-weight:700; color:#111827; line-height:1.3;">
-        You're Invited!
+        ${heading}
       </h1>
       <p style="margin:0 0 8px 0; font-size:16px; color:#374151; line-height:1.6;">
         ${isOrgInvite
