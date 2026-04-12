@@ -197,7 +197,7 @@ export default function SupportSettingsPage() {
                 onChange={(e) => setForm((p) => ({ ...p, body: e.target.value }))}
                 placeholder="Hi {{customer_name}}, thank you for reaching out..."
                 rows={6}
-                className="w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-1 focus:ring-blue-400 resize-none"
+                className="w-full px-3 py-2 text-sm text-gray-900 bg-white border border-gray-300 rounded-md focus:outline-none focus:ring-1 focus:ring-blue-400 resize-none"
               />
               <div className="mt-2 flex items-center gap-2">
                 <span className="text-xs text-gray-400">Insert variable:</span>
