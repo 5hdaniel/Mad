@@ -177,6 +177,11 @@ export function TransactionMessagesTab({
     lookupContactNames();
   }, [messages]);
 
+  // BACKLOG-1589: Merge newly resolved contact names from removed messages into state
+  const handleContactNamesResolved = useCallback((names: Record<string, string>) => {
+    setContactNames(prev => ({ ...prev, ...names }));
+  }, []);
+
   // Handle attach button click
   const handleAttachClick = useCallback(() => {
     setShowAttachModal(true);
@@ -449,6 +454,7 @@ export function TransactionMessagesTab({
             onMessagesChanged={onMessagesChanged}
             onShowSuccess={onShowSuccess}
             onShowError={onShowError}
+            onContactNamesResolved={handleContactNamesResolved}
           />
         )}
 
@@ -669,6 +675,7 @@ export function TransactionMessagesTab({
           onMessagesChanged={onMessagesChanged}
           onShowSuccess={onShowSuccess}
           onShowError={onShowError}
+          onContactNamesResolved={handleContactNamesResolved}
         />
       )}
 

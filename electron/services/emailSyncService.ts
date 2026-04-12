@@ -14,7 +14,7 @@ import * as Sentry from "@sentry/electron/main";
 import logService from "./logService";
 import { autoLinkCommunicationsForContact } from "./autoLinkService";
 import type { AutoLinkResult } from "./autoLinkService";
-import { countEmailsByUser } from "./db/emailDbService";
+import { countEmailsByUser, getEmailByExternalId } from "./db/emailDbService";
 import { dbGet, dbAll, getRawDatabase } from "./db/core/dbConnection";
 import gmailFetchService from "./gmailFetchService";
 import outlookFetchService from "./outlookFetchService";
@@ -157,7 +157,7 @@ export interface ProviderEmailResult {
   sender: string | null;
   sent_at: string | null;
   body_preview?: string | null;
-  email_thread_id?: string | null;
+  thread_id?: string | null;
   has_attachments?: boolean;
   provider: "gmail" | "outlook";
 }
@@ -703,15 +703,20 @@ class EmailSyncService {
               seenIds,
             });
 
-            emails = gmailEmails.map((email: { id: string; subject: string | null; from: string | null; date: Date; bodyPlain: string; snippet: string; threadId: string; hasAttachments: boolean }) => ({
-              id: `gmail:${email.id}`,
-              subject: email.subject,
-              sender: email.from,
-              sent_at: email.date ? new Date(email.date).toISOString() : null,
-              body_preview: (email.snippet || email.bodyPlain?.substring(0, 200)) || null,
-              email_thread_id: email.threadId || null,
-              has_attachments: email.hasAttachments || false,
-              provider: "gmail" as const,
+            // BACKLOG-1579 Phase 2: Return local UUIDs instead of provider-prefixed IDs.
+            // Look up each email by external_id to get the local UUID from the emails table.
+            emails = await Promise.all(gmailEmails.map(async (email: { id: string; subject: string | null; from: string | null; date: Date; bodyPlain: string; snippet: string; threadId: string; hasAttachments: boolean }) => {
+              const localRecord = await getEmailByExternalId(userId, email.id);
+              return {
+                id: localRecord?.id ?? `gmail:${email.id}`,
+                subject: email.subject,
+                sender: email.from,
+                sent_at: email.date ? new Date(email.date).toISOString() : null,
+                body_preview: (email.snippet || email.bodyPlain?.substring(0, 200)) || null,
+                thread_id: email.threadId || null,
+                has_attachments: email.hasAttachments || false,
+                provider: "gmail" as const,
+              };
             }));
             logService.info(`Fetched and stored ${emails.length} emails from Gmail`, "EmailSyncService");
           }
@@ -787,15 +792,19 @@ class EmailSyncService {
               getAttachmentsFn: (msgId) => outlookFetchService.getAttachments(msgId),
             });
 
-            emails = dedupedOutlook.map((email: { id: string; subject: string | null; from: string | null; date: Date; bodyPlain: string; snippet: string; threadId: string; hasAttachments: boolean }) => ({
-              id: `outlook:${email.id}`,
-              subject: email.subject,
-              sender: email.from,
-              sent_at: email.date ? new Date(email.date).toISOString() : null,
-              body_preview: (email.snippet || email.bodyPlain?.substring(0, 200)) || null,
-              email_thread_id: email.threadId || null,
-              has_attachments: email.hasAttachments || false,
-              provider: "outlook" as const,
+            // BACKLOG-1579 Phase 2: Return local UUIDs instead of provider-prefixed IDs.
+            emails = await Promise.all(dedupedOutlook.map(async (email: { id: string; subject: string | null; from: string | null; date: Date; bodyPlain: string; snippet: string; threadId: string; hasAttachments: boolean }) => {
+              const localRecord = await getEmailByExternalId(userId, email.id);
+              return {
+                id: localRecord?.id ?? `outlook:${email.id}`,
+                subject: email.subject,
+                sender: email.from,
+                sent_at: email.date ? new Date(email.date).toISOString() : null,
+                body_preview: (email.snippet || email.bodyPlain?.substring(0, 200)) || null,
+                thread_id: email.threadId || null,
+                has_attachments: email.hasAttachments || false,
+                provider: "outlook" as const,
+              };
             }));
             logService.info(`Fetched and stored ${outlookEmails.length} inbox + ${sentEmails.length} sent = ${emails.length} unique from Outlook`, "EmailSyncService");
           }
@@ -852,7 +861,7 @@ class EmailSyncService {
             sender: e.sender || null,
             sent_at: e.sent_at || null,
             body_preview: e.body_preview || null,
-            email_thread_id: e.email_thread_id || null,
+            thread_id: e.thread_id || null,
             has_attachments: e.has_attachments || false,
             provider: "outlook" as const, // sourced from local cache of provider emails
           }));

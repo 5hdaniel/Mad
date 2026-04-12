@@ -27,6 +27,15 @@
  */
 import React from "react";
 
+/**
+ * Panel size presets — single source of truth for modal sizing.
+ * Change the value here and every modal using the preset updates.
+ */
+export const MODAL_PANEL = {
+  /** Large workflow modals (audit, transaction details, edit contacts) */
+  lg: "max-w-4xl sm:h-[85vh] sm:min-h-[85vh] sm:max-h-[90vh]",
+} as const;
+
 interface ResponsiveModalProps {
   /** Close handler — called on backdrop click (desktop only) */
   onClose?: () => void;

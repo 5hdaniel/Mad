@@ -9,7 +9,7 @@
  * @see BACKLOG-418: Redesign Contact Selection UX (Select First, Assign Roles Second)
  */
 import React, { useState, useEffect, useMemo, useCallback } from "react";
-import { ResponsiveModal } from "../../../common/ResponsiveModal";
+import { ResponsiveModal, MODAL_PANEL } from "../../../common/ResponsiveModal";
 import type { Transaction } from "@/types";
 import type { ExtendedContact } from "../../../../types/components";
 import { ROLE_TO_CATEGORY, AUDIT_WORKFLOW_STEPS } from "../../../../constants/contactRoles";
@@ -367,7 +367,7 @@ export function EditContactsModal({
   };
 
   return (
-    <ResponsiveModal onClose={onClose} zIndex="z-[70]" panelClassName="max-w-4xl sm:h-[70vh] sm:max-h-[90vh] relative">
+    <ResponsiveModal onClose={onClose} zIndex="z-[70]" panelClassName={`${MODAL_PANEL.lg} relative`}>
         {/* Header */}
         <div className="flex-shrink-0 bg-gradient-to-r from-blue-500 to-indigo-600 px-3 sm:px-6 pt-6 sm:pt-4 pb-3 sm:pb-4 flex items-center justify-between sm:rounded-t-xl shadow-lg">
           {/* Mobile: back button + title right */}

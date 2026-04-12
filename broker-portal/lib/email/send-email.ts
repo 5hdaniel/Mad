@@ -113,6 +113,12 @@ export async function sendEmail(params: SendEmailParams): Promise<SendEmailResul
         content: params.html,
       },
       toRecipients,
+      internetMessageHeaders: [
+        {
+          name: 'X-List-Unsubscribe',
+          value: '<mailto:unsubscribe@keeprcompliance.com>',
+        },
+      ],
     };
 
     if (params.replyTo) {

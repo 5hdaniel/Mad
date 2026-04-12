@@ -12,7 +12,7 @@ import {
   FileText,
   File,
 } from "lucide-react";
-import { ResponsiveModal } from "../../../common/ResponsiveModal";
+import { ResponsiveModal, MODAL_PANEL } from "../../../common/ResponsiveModal";
 import { Document, Page, pdfjs } from "react-pdf";
 import DOMPurify from "dompurify";
 // BACKLOG-1126: mammoth is lazy-loaded at point of use to reduce initial bundle size
@@ -441,7 +441,7 @@ export function AttachmentPreviewModal({
   };
 
   return (
-    <ResponsiveModal onClose={onClose} zIndex="z-[100]" overlayClassName="bg-black bg-opacity-80" testId="attachment-preview-backdrop" panelClassName="max-w-4xl sm:max-h-[90vh]">
+    <ResponsiveModal onClose={onClose} zIndex="z-[100]" overlayClassName="bg-black bg-opacity-80" testId="attachment-preview-backdrop" panelClassName={MODAL_PANEL.lg}>
         {/* Header */}
         <div className="flex items-center justify-between px-4 py-3 border-b border-gray-200">
           <div className="flex items-center gap-3 min-w-0">

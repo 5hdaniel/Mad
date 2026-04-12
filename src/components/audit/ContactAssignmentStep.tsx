@@ -396,7 +396,7 @@ function ContactAssignmentStep({
           data-testid="contact-assignment-step-2"
         >
           {/* Contact Search List - no header since parent modal shows "Step 2: Select Contacts" */}
-          <div className="flex-1 min-h-0">
+          <div className="flex-1 min-h-0 overflow-hidden">
             <ContactSearchList
               contacts={extendedContacts}
               externalContacts={extendedExternalContacts}

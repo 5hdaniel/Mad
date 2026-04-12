@@ -3,6 +3,7 @@ import { redirect, notFound } from 'next/navigation';
 import Link from 'next/link';
 import { ArrowLeft, Building2, Shield } from 'lucide-react';
 import { MembersTable, type MemberRow } from './components/MembersTable';
+import { PendingInvitationsTable, type PendingInvitationRow } from './components/PendingInvitationsTable';
 import { PlanAssignment } from './components/PlanAssignment';
 import { formatDate } from '@/lib/format';
 
@@ -51,8 +52,8 @@ export default async function OrganizationDetailPage({
     required_permission: 'plans.manage',
   });
 
-  // Fetch org details and members in parallel
-  const [orgResult, membersResult] = await Promise.all([
+  // Fetch org details, members, and pending invitations in parallel
+  const [orgResult, membersResult, pendingResult] = await Promise.all([
     supabase
       .from('organizations')
       .select('id, name, slug, max_seats, created_at, organization_plans(plan_id, plans(id, name, tier))')
@@ -62,7 +63,15 @@ export default async function OrganizationDetailPage({
       .from('organization_members')
       .select('user_id, role, license_status, joined_at, users(id, email, display_name, status, suspended_at)')
       .eq('organization_id', id)
+      .not('user_id', 'is', null)
       .order('joined_at', { ascending: false }),
+    supabase
+      .from('organization_members')
+      .select('id, invited_email, role, license_status, invited_at, invitation_expires_at')
+      .eq('organization_id', id)
+      .is('user_id', null)
+      .not('invited_email', 'is', null)
+      .order('invited_at', { ascending: false }),
   ]);
 
   if (!orgResult.data) {
@@ -90,6 +99,15 @@ export default async function OrganizationDetailPage({
       status: user?.status ?? null,
     };
   });
+
+  // Transform pending invitations
+  const pendingInvitations: PendingInvitationRow[] = (pendingResult.data ?? []).map((p) => ({
+    id: p.id,
+    invited_email: p.invited_email!,
+    role: p.role,
+    invited_at: p.invited_at,
+    invitation_expires_at: p.invitation_expires_at,
+  }));
 
   return (
     <div className="max-w-5xl mx-auto space-y-6">
@@ -147,6 +165,16 @@ export default async function OrganizationDetailPage({
 
       {/* Plan assignment */}
       <PlanAssignment organizationId={org.id} canManage={!!canManagePlans} />
+
+      {/* Pending invitations */}
+      {pendingInvitations.length > 0 && (
+        <div>
+          <h2 className="text-sm font-semibold text-gray-900 uppercase tracking-wider mb-4">
+            Pending Invitations ({pendingInvitations.length})
+          </h2>
+          <PendingInvitationsTable invitations={pendingInvitations} />
+        </div>
+      )}
 
       {/* Members table (includes license summary filter cards) */}
       <div>
