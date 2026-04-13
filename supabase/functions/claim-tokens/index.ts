@@ -133,16 +133,22 @@ Deno.serve(async (req: Request) => {
     // -----------------------------------------------------------------------
 
     // Mark claimed first (audit trail in case delete fails)
-    await serviceClient
+    const { error: updateError } = await serviceClient
       .from("token_claims")
       .update({ claimed_at: new Date().toISOString() })
       .eq("id", claimId);
+    if (updateError) {
+      console.error("[claim-tokens] Failed to mark claim:", updateError.message);
+    }
 
     // Delete the row (tokens should not persist)
-    await serviceClient
+    const { error: deleteError } = await serviceClient
       .from("token_claims")
       .delete()
       .eq("id", claimId);
+    if (deleteError) {
+      console.error("[claim-tokens] Failed to delete claim:", deleteError.message);
+    }
 
     console.log(
       `[claim-tokens] Claim successful: claim_id=${claimId}, user_id=${claim.user_id}, provider=${claim.provider}`,

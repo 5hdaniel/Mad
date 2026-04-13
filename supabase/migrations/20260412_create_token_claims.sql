@@ -86,5 +86,5 @@ CREATE EXTENSION IF NOT EXISTS pg_cron WITH SCHEMA extensions;
 SELECT cron.schedule(
   'cleanup-expired-token-claims',
   '*/5 * * * *',
-  $$DELETE FROM public.token_claims WHERE expires_at < now() AND claimed_at IS NULL$$
+  $$DELETE FROM public.token_claims WHERE expires_at < now()$$
 );

@@ -409,6 +409,7 @@ async function handleDeepLinkCallback(url: string): Promise<void> {
 
       let accessToken: string | null = null;
       let refreshToken: string | null = null;
+      const hashParams = parsed.hash ? new URLSearchParams(parsed.hash.slice(1)) : null;
 
       if (claimId) {
         // New claim-code flow: retrieve tokens via HTTPS edge function
@@ -433,7 +434,6 @@ async function handleDeepLinkCallback(url: string): Promise<void> {
         // Legacy flow: tokens embedded directly in URL (deprecated)
         // TASK-1508A: Parse tokens from both query params AND URL fragment
         // Supabase OAuth returns tokens in fragment (#access_token=...) not query params (?access_token=...)
-        const hashParams = parsed.hash ? new URLSearchParams(parsed.hash.slice(1)) : null;
         accessToken = parsed.searchParams.get("access_token") || hashParams?.get("access_token") || null;
         refreshToken = parsed.searchParams.get("refresh_token") || hashParams?.get("refresh_token") || null;
 
@@ -450,7 +450,6 @@ async function handleDeepLinkCallback(url: string): Promise<void> {
       }
 
       // Extract OAuth error information if present (provider tells us exactly why auth failed)
-      const hashParams = parsed.hash ? new URLSearchParams(parsed.hash.slice(1)) : null;
       const oauthError = parsed.searchParams.get("error") || hashParams?.get("error");
       const oauthErrorDescription = parsed.searchParams.get("error_description") || hashParams?.get("error_description");
 
