@@ -890,27 +890,29 @@ function Screen2Overlay({
       </div>
 
       {/* Reuse ContactAssignmentStep at step 2 for contact search/select/import */}
-      <ContactAssignmentStep
-        step={2}
-        contactAssignments={{}}
-        selectedContactIds={selectedContactIds}
-        onSelectedContactIdsChange={setSelectedContactIds}
-        onAssignContact={noopAssignContact}
-        onRemoveContact={noopRemoveContact}
-        userId={userId}
-        transactionType={transactionType}
-        propertyAddress={propertyAddress}
-        contacts={availableContacts}
-        contactsLoading={loading}
-        contactsError={error}
-        onRefreshContacts={refreshContacts}
-        onSilentRefreshContacts={silentRefresh}
-        externalContacts={filteredExternalContacts}
-        externalContactsLoading={externalLoading}
-      />
+      <div className="flex-1 min-h-0 overflow-hidden">
+        <ContactAssignmentStep
+          step={2}
+          contactAssignments={{}}
+          selectedContactIds={selectedContactIds}
+          onSelectedContactIdsChange={setSelectedContactIds}
+          onAssignContact={noopAssignContact}
+          onRemoveContact={noopRemoveContact}
+          userId={userId}
+          transactionType={transactionType}
+          propertyAddress={propertyAddress}
+          contacts={availableContacts}
+          contactsLoading={loading}
+          contactsError={error}
+          onRefreshContacts={refreshContacts}
+          onSilentRefreshContacts={silentRefresh}
+          externalContacts={filteredExternalContacts}
+          externalContactsLoading={externalLoading}
+        />
+      </div>
 
-      {/* Footer with Add Selected button */}
-      <div className="flex-shrink-0 px-6 py-4 bg-gray-50 rounded-b-xl flex items-center justify-between">
+      {/* Desktop footer */}
+      <div className="hidden sm:flex flex-shrink-0 px-6 py-4 bg-gray-50 rounded-b-xl items-center justify-between">
         <p className="text-sm text-gray-600">
           {selectedContactIds.length > 0
             ? `${selectedContactIds.length} contact${selectedContactIds.length !== 1 ? "s" : ""} selected`
@@ -925,6 +927,25 @@ function Screen2Overlay({
               : "bg-gradient-to-r from-purple-500 to-pink-600 text-white hover:from-purple-600 hover:to-pink-700 shadow-md hover:shadow-lg"
           }`}
           data-testid="add-selected-button"
+        >
+          {isAddingSelected
+            ? "Adding..."
+            : selectedContactIds.length > 0
+              ? `Add Selected (${selectedContactIds.length})`
+              : "Add Selected"}
+        </button>
+      </div>
+      {/* Mobile floating button */}
+      <div className="sm:hidden fixed bottom-4 right-4 z-[71]">
+        <button
+          onClick={handleAddSelected}
+          disabled={selectedContactIds.length === 0 || isAddingSelected}
+          className={`px-6 py-3 rounded-full font-semibold text-sm shadow-lg transition-all ${
+            selectedContactIds.length === 0 || isAddingSelected
+              ? "bg-gray-300 text-gray-500 cursor-not-allowed"
+              : "bg-gradient-to-r from-purple-500 to-pink-600 text-white hover:from-purple-600 hover:to-pink-700 shadow-lg hover:shadow-xl"
+          }`}
+          data-testid="add-selected-button-mobile"
         >
           {isAddingSelected
             ? "Adding..."
