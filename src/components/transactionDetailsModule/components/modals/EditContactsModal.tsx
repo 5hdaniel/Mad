@@ -70,6 +70,10 @@ export interface AutoLinkResult {
 
 export interface EditContactsModalProps {
   transaction: Transaction;
+  /** Current logged-in user's ID — used for loading contacts from ContactsProvider.
+   *  Must NOT use transaction.user_id which may be stale after DB reset / re-login.
+   *  @see BACKLOG-1611 */
+  userId: string;
   onClose: () => void;
   onSave: (autoLinkResults?: AutoLinkResult[]) => void;
 }
@@ -95,6 +99,7 @@ interface RoleConfig {
  */
 export function EditContactsModal({
   transaction,
+  userId,
   onClose,
   onSave,
 }: EditContactsModalProps): React.ReactElement {
@@ -398,7 +403,7 @@ export function EditContactsModal({
 
         {/* Shared ContactsProvider for both Screen1 and Screen2 */}
         <ContactsProvider
-          userId={transaction.user_id}
+          userId={userId}
           propertyAddress={transaction.property_address || ""}
         >
           {/* Content */}
