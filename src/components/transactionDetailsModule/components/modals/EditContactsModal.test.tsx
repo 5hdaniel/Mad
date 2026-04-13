@@ -200,6 +200,7 @@ const createDefaultProps = (
   overrides: Partial<EditContactsModalProps> = {}
 ): EditContactsModalProps => ({
   transaction: createTestTransaction(),
+  userId: "user-1",
   onClose: jest.fn(),
   onSave: jest.fn(),
   ...overrides,

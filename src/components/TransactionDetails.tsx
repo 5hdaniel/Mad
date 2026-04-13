@@ -728,6 +728,7 @@ function TransactionDetails({
       {showEditContactsModal && (
         <EditContactsModal
           transaction={transaction}
+          userId={userId || transaction.user_id}
           onClose={() => setShowEditContactsModal(false)}
           onSave={(autoLinkResults?: AutoLinkResult[]) => {
             loadDetails();
