@@ -7,7 +7,7 @@
  * Templates support dynamic variables: {{customer_name}}, {{ticket_number}}, {{agent_name}}.
  */
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import Link from 'next/link';
 import { ArrowLeft, Plus, Pencil, Trash2, FileText, ToggleLeft, ToggleRight } from 'lucide-react';
 import { listAllTemplates, createTemplate, updateTemplate, deleteTemplate } from '@/lib/support-queries';
@@ -38,6 +38,7 @@ export default function SupportSettingsPage() {
   const [form, setForm] = useState<TemplateFormData>(EMPTY_FORM);
   const [saving, setSaving] = useState(false);
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   const loadTemplates = useCallback(async () => {
     try {
@@ -111,7 +112,21 @@ export default function SupportSettingsPage() {
   }
 
   function insertVariable(variable: string) {
-    setForm((prev) => ({ ...prev, body: prev.body + variable }));
+    const textarea = textareaRef.current;
+    const cursorPos = textarea?.selectionStart ?? form.body.length;
+    const before = form.body.slice(0, cursorPos);
+    const after = form.body.slice(cursorPos);
+    const newBody = before + variable + after;
+    setForm((prev) => ({ ...prev, body: newBody }));
+
+    // Refocus and place cursor after inserted variable
+    requestAnimationFrame(() => {
+      if (textarea) {
+        textarea.focus();
+        const newPos = cursorPos + variable.length;
+        textarea.setSelectionRange(newPos, newPos);
+      }
+    });
   }
 
   // Group templates by category
@@ -193,6 +208,7 @@ export default function SupportSettingsPage() {
             <div>
               <label className="block text-xs font-medium text-gray-700 mb-1">Template Body</label>
               <textarea
+                ref={textareaRef}
                 value={form.body}
                 onChange={(e) => setForm((p) => ({ ...p, body: e.target.value }))}
                 placeholder="Hi {{customer_name}}, thank you for reaching out..."
