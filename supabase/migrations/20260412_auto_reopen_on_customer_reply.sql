@@ -3,7 +3,7 @@
 -- Problem: When a customer replies to a resolved or closed ticket,
 --          the ticket stays in its current status instead of reopening.
 -- Fix: After inserting a customer reply, check if the ticket is
---      resolved or closed and update status to 'open'.
+--      resolved or closed and update status to 'in_progress'.
 -- Ref: BACKLOG-1606
 -- ============================================
 
@@ -93,7 +93,7 @@ BEGIN
   -- automatically reopen it so agents see it needs attention again.
   IF NOT v_is_agent AND p_message_type = 'reply' AND v_ticket_status IN ('resolved', 'closed') THEN
     UPDATE support_tickets
-    SET status = 'open', updated_at = now()
+    SET status = 'in_progress', reopened_count = reopened_count + 1, updated_at = now()
     WHERE id = p_ticket_id;
 
     -- Log the auto-reopen event
@@ -103,8 +103,8 @@ BEGIN
       v_sender_id,
       'status_changed',
       v_ticket_status,
-      'open',
-      jsonb_build_object('reason', 'customer_reply_after_resolved', 'message_id', v_message_id)
+      'in_progress',
+      jsonb_build_object('reason', 'customer_reply_after_resolved', 'message_id', v_message_id, 'auto', true)
     );
   END IF;
 
