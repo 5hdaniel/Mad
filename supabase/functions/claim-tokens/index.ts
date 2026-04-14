@@ -11,15 +11,16 @@
  * Flow:
  *   1. Broker portal completes OAuth, calls create_token_claim() RPC
  *   2. Desktop app receives claim_id via deep link
- *   3. Desktop app calls this function with claim_id + auth session
- *   4. Function validates ownership, returns payload, marks claimed, deletes row
+ *   3. Desktop app calls this function with claim_id
+ *   4. Function validates claim (not expired, not used), returns payload, deletes row
  *
  * Security:
- *   - Auth required (Authorization header with valid session)
- *   - user_id must match auth.uid() (defense in depth beyond RLS)
+ *   - Deployed with --no-verify-jwt (desktop app has no user session yet)
+ *   - The claim_id UUID (128 bits of entropy) is the authentication
  *   - Claims expire after 60 seconds
  *   - Claims can only be used once (claimed_at check)
  *   - Row is deleted after successful claim
+ *   - API key required in request (apikey header)
  */
 
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
@@ -59,47 +60,11 @@ Deno.serve(async (req: Request) => {
 
   try {
     // -----------------------------------------------------------------------
-    // 1. Validate auth session
+    // 1. Parse and validate request body
     // -----------------------------------------------------------------------
-
-    const authHeader = req.headers.get("Authorization");
-    if (!authHeader) {
-      return new Response(
-        JSON.stringify({ error: "Missing authorization header" }),
-        {
-          status: 401,
-          headers: { ...CORS_HEADERS, "Content-Type": "application/json" },
-        },
-      );
-    }
 
     const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
-    const SUPABASE_ANON_KEY = Deno.env.get("SUPABASE_ANON_KEY")!;
     const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-
-    // User client to verify the caller's identity
-    const userClient = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
-      global: { headers: { Authorization: authHeader } },
-    });
-
-    const {
-      data: { user },
-      error: authError,
-    } = await userClient.auth.getUser();
-
-    if (authError || !user) {
-      return new Response(
-        JSON.stringify({ error: "Invalid or expired session" }),
-        {
-          status: 401,
-          headers: { ...CORS_HEADERS, "Content-Type": "application/json" },
-        },
-      );
-    }
-
-    // -----------------------------------------------------------------------
-    // 2. Parse and validate request body
-    // -----------------------------------------------------------------------
 
     const body = await req.json();
     const claimId = body?.claim_id;
@@ -124,14 +89,13 @@ Deno.serve(async (req: Request) => {
       .from("token_claims")
       .select("id, user_id, payload, provider")
       .eq("id", claimId)
-      .eq("user_id", user.id)
       .is("claimed_at", null)
       .gt("expires_at", new Date().toISOString())
       .single();
 
     if (selectError || !claim) {
       console.log(
-        `[claim-tokens] Claim not found: claim_id=${claimId}, user_id=${user.id}`,
+        `[claim-tokens] Claim not found or expired: claim_id=${claimId}`,
       );
       return new Response(
         JSON.stringify({
@@ -161,7 +125,7 @@ Deno.serve(async (req: Request) => {
       .eq("id", claimId);
 
     console.log(
-      `[claim-tokens] Claim successful: claim_id=${claimId}, user_id=${user.id}, provider=${claim.provider}`,
+      `[claim-tokens] Claim successful: claim_id=${claimId}, provider=${claim.provider}`,
     );
 
     // -----------------------------------------------------------------------

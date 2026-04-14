@@ -100,7 +100,9 @@ function DesktopCallbackContent() {
       if (!claimResult.success || !claimResult.claimId) {
         // Claim creation failed — fall back to direct token passing
         // This ensures auth still works if the token_claims infrastructure has issues
-        console.warn('[DesktopCallback] Token claim failed, using direct token fallback:', claimResult.error);
+        // WARNING: This fallback embeds tokens in the URL, which is less secure.
+        // If this fires in production, investigate why token_claims is failing.
+        console.error('[DesktopCallback] SECURITY: Token claim failed, falling back to direct token in URL. Error:', claimResult.error);
         const fallbackUrl = new URL('keepr://callback');
         fallbackUrl.searchParams.set('access_token', session.access_token);
         fallbackUrl.searchParams.set('refresh_token', session.refresh_token);

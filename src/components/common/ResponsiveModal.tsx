@@ -83,7 +83,7 @@ export function ResponsiveModal({
       data-testid={testId}
     >
       <div
-        className={`${panelBg} flex flex-col w-full max-w-[100vw] h-full overflow-hidden sm:rounded-xl sm:shadow-2xl ${panelClassName ? panelClassName : 'sm:overflow-y-auto sm:h-auto sm:max-h-[90vh]'}`}
+        className={`${panelBg} flex flex-col w-full max-w-[100vw] h-full overflow-hidden sm:rounded-xl sm:shadow-2xl sm:overflow-y-auto sm:h-auto sm:max-h-[90vh] ${panelClassName || ''}`}
       >
         {children}
       </div>

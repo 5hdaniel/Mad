@@ -1,3 +1,4 @@
+#!/bin/sh
 # Skip type-check for docs/* branches (Option A)
 branch=$(git rev-parse --abbrev-ref HEAD)
 if [[ "$branch" == docs/* ]]; then
