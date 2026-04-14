@@ -132,6 +132,47 @@ export function registerDeviceHandlers(mainWindow: BrowserWindow): void {
     },
   );
 
+  /**
+   * BACKLOG-1582: Request trust/pairing with a device.
+   * Triggers the "Trust This Computer?" prompt on the iPhone.
+   */
+  ipcMain.handle("device:request-trust", async (_event, udid: string) => {
+    try {
+      return await deviceDetectionService.pairDevice(udid);
+    } catch (error) {
+      log.error("[DeviceHandlers] Error requesting trust:", error);
+      return {
+        success: false,
+        error: (error as Error).message,
+      };
+    }
+  });
+
+  // Forward device-needs-trust events to renderer
+  deviceDetectionService.on("device-needs-trust", (data: { udid: string }) => {
+    log.info(`[DeviceHandlers] Device needs trust: ${data.udid}`);
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.webContents.send("device:needs-trust", data);
+    }
+  });
+
+  /**
+   * BACKLOG-1582: Run device detection diagnostics on demand.
+   * Returns actionable info about why devices aren't detected.
+   */
+  ipcMain.handle("device:run-diagnostics", async () => {
+    try {
+      const result = await deviceDetectionService.runDiagnosticChain();
+      return { success: true, ...result };
+    } catch (error) {
+      log.error("[DeviceHandlers] Error running diagnostics:", error);
+      return {
+        success: false,
+        error: (error as Error).message,
+      };
+    }
+  });
+
   log.info("[DeviceHandlers] Device handlers registered successfully");
 }
 
