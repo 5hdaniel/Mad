@@ -558,6 +558,12 @@ class DatabaseService implements IDatabaseService {
         const user = currentDb.prepare("SELECT id, email FROM users_local LIMIT 1").get() as { id: string; email?: string } | undefined;
         if (user?.id) {
           Sentry.setUser({ id: user.id, email: user.email || undefined });
+          Sentry.addBreadcrumb({
+            category: "database",
+            message: "Pre-migration user context set",
+            level: "info",
+            data: { userId: user.id },
+          });
           await logService.info("[Sentry] Pre-migration user context set", "DatabaseService", { userId: user.id });
         }
       }
@@ -593,6 +599,10 @@ class DatabaseService implements IDatabaseService {
       Sentry.captureException(error, {
         tags: { service: "database-service", operation: "runMigrations" },
       });
+      // BACKLOG-1576: Flush Sentry before re-throwing so the event
+      // (with user context) is guaranteed to be sent even if the
+      // process exits quickly after the auto-restore flow.
+      await Sentry.flush(2000);
       throw error;
     }
 
@@ -883,6 +893,56 @@ class DatabaseService implements IDatabaseService {
             WHERE email_id IS NULL
               AND original_communication_id IS NOT NULL
           `);
+        }
+      },
+    },
+    {
+      version: 38,
+      description: "No-op — Sentry verification moved to separate beta build (BACKLOG-1576)",
+      migrate: () => {
+        // Originally a deliberate-throw test for Sentry user attribution.
+        // Removed to unblock migration 39. Sentry verification will be done
+        // via a separate beta build with a standalone test migration.
+      },
+    },
+    {
+      version: 39,
+      description: "Migrate old provider-prefixed email IDs to UUIDs (BACKLOG-1579 Phase 2)",
+      migrate: (d) => {
+        // Old records have id like 'outlook:AQMk...' or 'gmail:abc123'
+        // New records already have UUID ids from fetchStoreAndDedup.
+        // This migration converts old records to UUIDs and updates all FK references.
+        const oldEmails = d.prepare(
+          "SELECT id, source, external_id FROM emails WHERE id LIKE 'gmail:%' OR id LIKE 'outlook:%'"
+        ).all() as { id: string; source: string | null; external_id: string | null }[];
+
+        if (oldEmails.length === 0) return;
+
+        const crypto = require("crypto");
+
+        const updateEmail = d.prepare("UPDATE emails SET id = ?, external_id = ?, source = ? WHERE id = ?");
+        const updateComm = d.prepare("UPDATE communications SET email_id = ? WHERE email_id = ?");
+        const updateAttach = d.prepare("UPDATE attachments SET email_id = ? WHERE email_id = ?");
+        const updateIgnored = d.prepare("UPDATE ignored_communications SET email_id = ? WHERE email_id = ?");
+
+        for (const email of oldEmails) {
+          const newId = crypto.randomUUID();
+          const colonIdx = email.id.indexOf(":");
+          const prefix = email.id.substring(0, colonIdx);   // 'outlook' or 'gmail'
+          const externalId = email.id.substring(colonIdx + 1); // the provider message ID
+
+          // Update emails table — set UUID id, ensure external_id and source are populated
+          updateEmail.run(
+            newId,
+            email.external_id || externalId,
+            email.source || prefix,
+            email.id
+          );
+
+          // Update all FK references
+          updateComm.run(newId, email.id);
+          updateAttach.run(newId, email.id);
+          updateIgnored.run(newId, email.id);
         }
       },
     },

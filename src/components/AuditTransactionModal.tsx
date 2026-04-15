@@ -1,5 +1,5 @@
 import React from "react";
-import { ResponsiveModal } from "./common/ResponsiveModal";
+import { ResponsiveModal, MODAL_PANEL } from "./common/ResponsiveModal";
 import AddressVerificationStep from "./audit/AddressVerificationStep";
 import ContactAssignmentStep from "./audit/ContactAssignmentStep";
 import type { Transaction } from "../../electron/types/models";
@@ -89,7 +89,7 @@ function AuditTransactionModal({
   const displayStep = isEditing ? 1 : Math.min(step, 3);
 
   return (
-    <ResponsiveModal onClose={onClose} panelClassName="max-w-4xl sm:max-h-[90vh]">
+    <ResponsiveModal onClose={onClose} panelClassName={MODAL_PANEL.lg}>
         {/* Header */}
         <div className="flex-shrink-0 bg-gradient-to-r from-indigo-500 to-purple-600 px-3 sm:px-6 pt-6 sm:pt-4 pb-3 sm:pb-4 sm:rounded-t-xl shadow-lg">
           {/* Mobile layout */}
@@ -181,7 +181,7 @@ function AuditTransactionModal({
         )}
 
         {/* Content */}
-        <div className={`flex-1 overflow-y-auto ${step === 1 ? "p-6" : "pt-0 px-2 pb-2"}`}>
+        <div className={`flex-1 min-h-0 ${step === 1 ? "overflow-y-auto p-6" : "flex flex-col overflow-hidden pt-0 px-2 pb-2"}`}>
           {step === 1 && (
             <AddressVerificationStep
               addressData={addressData}

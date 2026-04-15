@@ -61,6 +61,9 @@ export function useIPhoneSync(): UseIPhoneSyncReturn {
   // TASK-910: Sync lock state
   const [syncLocked, setSyncLocked] = useState(false);
   const [lockReason, setLockReason] = useState<string | null>(null);
+  // BACKLOG-1582: Trust state — device visible but not yet trusted
+  const [needsTrust, setNeedsTrust] = useState(false);
+  const [needsTrustUdid, setNeedsTrustUdid] = useState<string | null>(null);
 
   // Track cleanup functions
   const cleanupRef = useRef<(() => void)[]>([]);
@@ -147,6 +150,9 @@ export function useIPhoneSync(): UseIPhoneSyncReturn {
       setIsConnected(true);
       setDevice(mappedDevice);
       setError(null);
+      // BACKLOG-1582: Clear trust state on successful connection
+      setNeedsTrust(false);
+      setNeedsTrustUdid(null);
       logger.debug("[useIPhoneSync] Device connected:", mappedDevice.name);
 
       // TASK-2121: Fetch persisted lastSyncTime from Supabase for this device
@@ -476,6 +482,20 @@ export function useIPhoneSync(): UseIPhoneSyncReturn {
       },
     });
 
+    // BACKLOG-1582: Listen for device-needs-trust events
+    if (deviceApi) {
+      type DeviceApiWithTrust = { onNeedsTrust?: (cb: (data: { udid: string }) => void) => () => void };
+      const deviceApiTyped = deviceApi as DeviceApiWithTrust;
+      if (deviceApiTyped.onNeedsTrust) {
+        const unsub = deviceApiTyped.onNeedsTrust((data) => {
+          logger.info("[useIPhoneSync] Device needs trust:", data.udid);
+          setNeedsTrust(true);
+          setNeedsTrustUdid(data.udid);
+        });
+        cleanups.push(unsub);
+      }
+    }
+
     if (syncApi?.startDetection) {
       syncApi.startDetection();
     } else if (deviceApi?.startDetection) {
@@ -545,6 +565,28 @@ export function useIPhoneSync(): UseIPhoneSyncReturn {
           hint: "No device connected when user initiated sync — possible trust dialog not shown or USB restriction",
         },
       });
+
+      // BACKLOG-1582: Run diagnostics to give user actionable guidance
+      try {
+        type DiagnosticStep = { name: string; status: "pass" | "fail" | "skip"; error?: string };
+        type DiagnosticResult = { success: boolean; steps?: DiagnosticStep[] };
+        const deviceApi = window.api?.device as { runDiagnostics?: () => Promise<DiagnosticResult> } | undefined;
+        if (deviceApi?.runDiagnostics) {
+          const result = await deviceApi.runDiagnostics();
+          if (result.success && result.steps) {
+            const failedStep = result.steps.find((s: DiagnosticStep) => s.status === "fail");
+            if (failedStep) {
+              const guidance = mapDiagnosticToGuidance(failedStep);
+              logger.info("[useIPhoneSync] Diagnostic guidance:", guidance.title);
+              setUserError(guidance);
+              setError(guidance.title);
+              return;
+            }
+          }
+        }
+      } catch (err) {
+        logger.warn("[useIPhoneSync] Diagnostic check failed (non-fatal):", err);
+      }
 
       setError("No device connected");
       return;
@@ -736,6 +778,37 @@ export function useIPhoneSync(): UseIPhoneSyncReturn {
     setUserError(null); // TASK-2276: Clear structured error on dismiss
   }, []);
 
+  /** BACKLOG-1582: Manually request trust/pairing with the detected device */
+  const requestTrust = useCallback(async () => {
+    const udid = needsTrustUdid;
+    if (!udid) {
+      logger.warn("[useIPhoneSync] No device UDID to request trust for");
+      return;
+    }
+
+    logger.info("[useIPhoneSync] Requesting trust for device:", udid);
+    try {
+      type DeviceApiWithTrust = { requestTrust?: (udid: string) => Promise<{ success: boolean; needsTrust?: boolean; error?: string }> };
+      const deviceApi = window.api?.device as DeviceApiWithTrust | undefined;
+      if (deviceApi?.requestTrust) {
+        const result = await deviceApi.requestTrust(udid);
+        if (result.needsTrust) {
+          setUserError({
+            code: "TRUST_REQUESTED",
+            title: "Check your iPhone",
+            description: "A \"Trust This Computer?\" prompt has been sent to your iPhone.",
+            actionSuggestion: "Unlock your iPhone, tap Trust, and enter your passcode.",
+          });
+        } else if (result.success) {
+          setNeedsTrust(false);
+          setNeedsTrustUdid(null);
+        }
+      }
+    } catch (err) {
+      logger.error("[useIPhoneSync] Request trust failed:", err);
+    }
+  }, [needsTrustUdid]);
+
   return {
     isConnected,
     device,
@@ -749,12 +822,54 @@ export function useIPhoneSync(): UseIPhoneSyncReturn {
     // TASK-910: Sync lock state
     syncLocked,
     lockReason,
+    // BACKLOG-1582: Trust state
+    needsTrust,
+    needsTrustUdid,
     startSync,
     submitPassword,
     cancelSync,
     dismissSync,
     checkSyncStatus,
+    requestTrust,
   };
+}
+
+/**
+ * BACKLOG-1582: Map a failed diagnostic step to user-facing guidance.
+ */
+function mapDiagnosticToGuidance(
+  failedStep: { name: string; error?: string },
+): UserFacingError {
+  switch (failedStep.name) {
+    case "libimobiledevice_check":
+      return {
+        code: "MISSING_DRIVERS",
+        title: "Apple drivers not installed",
+        description: "Your computer needs Apple's tools to communicate with your iPhone.",
+        actionSuggestion: "Install iTunes from the Microsoft Store, then reconnect your iPhone and try again.",
+      };
+    case "device_enumeration":
+      return {
+        code: "NO_DEVICE_DETECTED",
+        title: "iPhone not detected",
+        description: "Apple tools are installed but no iPhone was found. Make sure your phone is unlocked and connected via USB.",
+        actionSuggestion: "Unlock your iPhone, tap \"Trust This Computer\" if prompted, and try a different USB cable or port.",
+      };
+    case "device_info":
+      return {
+        code: "DEVICE_INFO_FAILED",
+        title: "Cannot communicate with iPhone",
+        description: "Your iPhone is connected but not responding. It may need to be trusted or unlocked.",
+        actionSuggestion: "Unlock your iPhone and tap \"Trust This Computer\" when prompted. If that doesn't work, try disconnecting and reconnecting.",
+      };
+    default:
+      return {
+        code: "DETECTION_FAILED",
+        title: "Device detection failed",
+        description: failedStep.error || "An unexpected error occurred while checking for connected devices.",
+        actionSuggestion: "Try disconnecting and reconnecting your iPhone, or restart the app.",
+      };
+  }
 }
 
 export default useIPhoneSync;

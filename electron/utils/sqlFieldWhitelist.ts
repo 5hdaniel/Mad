@@ -174,7 +174,6 @@ export const TABLE_FIELDS = {
     // Legacy content fields
     "communication_type",
     "source",
-    "email_thread_id",
     "sender",
     "recipients",
     "cc",

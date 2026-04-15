@@ -427,69 +427,71 @@ export function ContactSearchList({
 
   return (
     <div
-      className={`flex flex-col ${className}`}
+      className={`flex flex-col overflow-hidden ${className}`}
       data-testid="contact-search-list"
     >
-      {/* Search Input and Add Manually Button */}
-      <div className="p-2 sm:p-3 border-b border-gray-200">
-        <div className="flex items-center gap-2">
-          <div className="relative flex-1">
-            <input
-              ref={searchInputRef}
-              type="text"
-              value={searchQuery}
-              onChange={handleSearchChange}
-              onKeyDown={handleKeyDown}
-              placeholder={searchPlaceholder}
-              className="w-full pl-10 pr-4 py-2.5 sm:py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500 focus:outline-none text-gray-900 bg-white text-sm sm:text-base min-h-[44px]"
-              aria-label="Search contacts"
-              data-testid="contact-search-input"
-            />
-            <svg
-              className="w-5 h-5 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2"
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
-              aria-hidden="true"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
+      {/* Search bar + Category filter - flex-shrink-0 keeps them pinned at top */}
+      <div className="flex-shrink-0">
+        {/* Search Input and Add Manually Button */}
+        <div className="p-2 sm:p-3 border-b border-gray-200">
+          <div className="flex items-center gap-2">
+            <div className="relative flex-1">
+              <input
+                ref={searchInputRef}
+                type="text"
+                value={searchQuery}
+                onChange={handleSearchChange}
+                onKeyDown={handleKeyDown}
+                placeholder={searchPlaceholder}
+                className="w-full pl-10 pr-4 py-2.5 sm:py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500 focus:outline-none text-gray-900 bg-white text-sm sm:text-base min-h-[44px]"
+                aria-label="Search contacts"
+                data-testid="contact-search-input"
               />
-            </svg>
-          </div>
-          {onAddManually && (
-            <button
-              type="button"
-              onClick={onAddManually}
-              className="flex-shrink-0 px-2 py-2 sm:px-3 text-sm font-medium text-purple-600 hover:text-purple-700 hover:bg-purple-50 rounded-lg transition-colors flex items-center gap-1"
-              data-testid="add-manually-button"
-            >
               <svg
-                className="w-4 h-4"
+                className="w-5 h-5 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2"
                 fill="none"
                 stroke="currentColor"
                 viewBox="0 0 24 24"
+                aria-hidden="true"
               >
                 <path
                   strokeLinecap="round"
                   strokeLinejoin="round"
                   strokeWidth={2}
-                  d="M12 6v6m0 0v6m0-6h6m-6 0H6"
+                  d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
                 />
               </svg>
-              <span className="hidden sm:inline">Add Manually</span>
-              <span className="sm:hidden">Add</span>
-            </button>
-          )}
+            </div>
+            {onAddManually && (
+              <button
+                type="button"
+                onClick={onAddManually}
+                className="flex-shrink-0 px-2 py-2 sm:px-3 text-sm font-medium text-purple-600 hover:text-purple-700 hover:bg-purple-50 rounded-lg transition-colors flex items-center gap-1"
+                data-testid="add-manually-button"
+              >
+                <svg
+                  className="w-4 h-4"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M12 6v6m0 0v6m0-6h6m-6 0H6"
+                  />
+                </svg>
+                <span className="hidden sm:inline">Add Manually</span>
+                <span className="sm:hidden">Add</span>
+              </button>
+            )}
+          </div>
         </div>
-      </div>
 
-      {/* Category Filter - matches SourcePill display */}
-      {showCategoryFilter && (
-        <div className="flex-shrink-0 px-2 sm:px-3 py-2 border-b border-gray-100 flex items-center gap-1.5 sm:gap-2 overflow-x-auto scrollbar-hide">
+        {/* Category Filter - matches SourcePill display */}
+        {showCategoryFilter && (
+          <div className="px-2 sm:px-3 py-2 border-b border-gray-100 flex items-center gap-1.5 sm:gap-2 overflow-x-auto scrollbar-hide">
           <span className="text-xs text-gray-400 mr-0.5 sm:mr-1 flex-shrink-0">
             <span className="hidden sm:inline">Filter:</span>
             <svg className="w-3.5 h-3.5 sm:hidden" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -577,12 +579,13 @@ export function ContactSearchList({
             Outlook
           </button>
         </div>
-      )}
+        )}
+      </div>
 
       {/* Contact List */}
       <div
         ref={listRef}
-        className="flex-1 overflow-y-auto"
+        className="flex-1 min-h-0 overflow-y-auto"
         role="listbox"
         aria-multiselectable="true"
         aria-label="Contact list"

@@ -309,7 +309,7 @@ export async function addIgnoredCommunication(
     data.email_subject || null,
     data.email_sender || null,
     data.email_sent_at || null,
-    data.email_thread_id || null,
+    data.thread_id || null,
     data.email_id || null,
     data.thread_id || null,
     data.original_communication_id || null,
@@ -330,7 +330,6 @@ export async function addIgnoredCommunication(
     email_subject: data.email_subject || null,
     email_sender: data.email_sender || null,
     email_sent_at: data.email_sent_at || null,
-    email_thread_id: data.email_thread_id || null,
     email_id: data.email_id || null,
     thread_id: data.thread_id || null,
     original_communication_id: data.original_communication_id || null,
@@ -658,7 +657,6 @@ export async function getCommunicationsWithMessages(
       COALESCE(m.sent_at, e.sent_at) as sent_at,
       COALESCE(m.received_at, e.received_at) as received_at,
       COALESCE(m.has_attachments, e.has_attachments) as has_attachments,
-      COALESCE(m.thread_id, e.thread_id) as email_thread_id,
       -- Thread ID for grouping messages into conversations
       COALESCE(m.thread_id, e.thread_id) as thread_id,
       -- Participants JSON for group chat detection and sender identification

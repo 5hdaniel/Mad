@@ -40,7 +40,7 @@ interface EmailInfo {
   sender: string | null;
   sent_at: string | null;
   body_preview?: string | null;
-  email_thread_id?: string | null;
+  thread_id?: string | null;
   has_attachments?: boolean;
 }
 
@@ -55,7 +55,7 @@ function emailInfoToCommunication(email: EmailInfo): Communication & { body_prev
     sender: email.sender || undefined,
     sent_at: email.sent_at || undefined,
     communication_type: "email",
-    email_thread_id: email.email_thread_id || undefined,
+    thread_id: email.thread_id || undefined,
     body_preview: email.body_preview,
     // Map body_preview to body_text so EmailThreadViewModal can display content
     body_text: email.body_preview || undefined,

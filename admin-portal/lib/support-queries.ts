@@ -127,6 +127,33 @@ export function notifyTicketCreated(
 }
 
 /**
+ * Notify requester that their ticket has been resolved or closed.
+ * Called after successful updateTicketStatus to 'resolved' or 'closed'.
+ *
+ * BACKLOG-1574: Ticket Lifecycle Emails
+ */
+function notifyTicketResolved(
+  ticketId: string,
+  ticket: { subject: string; ticket_number: number; requester_email: string },
+  newStatus: 'resolved' | 'closed',
+  resolutionSummary: string | undefined,
+  brokerPortalUrl: string
+): void {
+  const ticketNumber = `TKT-${String(ticket.ticket_number).padStart(4, '0')}`;
+
+  sendTicketNotification({
+    type: 'ticket_resolved',
+    ticketId,
+    ticketNumber,
+    ticketSubject: ticket.subject,
+    customerEmail: ticket.requester_email,
+    resolutionSummary,
+    ticketUrl: `${brokerPortalUrl}/support/${ticketId}`,
+    newStatus,
+  });
+}
+
+/**
  * Notify agent that a ticket has been assigned to them.
  * Called after successful assignTicket.
  */
@@ -222,7 +249,49 @@ export async function updateTicketStatus(
     p_pending_reason: pendingReason || null,
   });
   if (error) throw error;
-  return data as unknown as { id: string; status: string; changed: boolean };
+
+  const result = data as unknown as { id: string; status: string; changed: boolean };
+
+  // Fire-and-forget: notify requester when ticket is resolved or closed.
+  // BACKLOG-1574: Ticket Lifecycle Emails
+  if (result.changed && (newStatus === 'resolved' || newStatus === 'closed')) {
+    const brokerPortalUrl =
+      process.env.NEXT_PUBLIC_BROKER_PORTAL_URL || 'https://app.keeprcompliance.com';
+
+    Promise.all([
+      supabase
+        .from('support_tickets')
+        .select('subject, ticket_number, requester_email')
+        .eq('id', ticketId)
+        .single(),
+      supabase
+        .from('support_messages')
+        .select('body')
+        .eq('ticket_id', ticketId)
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .single(),
+    ])
+      .then(([ticketResult, msgResult]) => {
+        if (ticketResult.data) {
+          const summary = msgResult.data?.body
+            ? stripHtmlAndMarkdown(msgResult.data.body).substring(0, 300)
+            : undefined;
+          notifyTicketResolved(
+            ticketId,
+            ticketResult.data,
+            newStatus as 'resolved' | 'closed',
+            summary,
+            brokerPortalUrl
+          );
+        }
+      })
+      .catch((notifyErr: unknown) => {
+        console.error('[Support] Failed to prepare resolved notification:', notifyErr);
+      });
+  }
+
+  return result;
 }
 
 export async function updateTicketPriority(

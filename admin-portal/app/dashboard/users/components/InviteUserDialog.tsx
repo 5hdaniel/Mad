@@ -12,6 +12,7 @@
  */
 
 import { useState, useEffect, useRef, useId, useMemo } from 'react';
+import { useRouter } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
 import { inviteUser } from '@/lib/actions/inviteUser';
 import { getActivePlans, type Plan } from '@/lib/admin-queries';
@@ -42,6 +43,9 @@ export function InviteUserDialog({ onClose, onInvited }: InviteUserDialogProps) 
   const [selectedPlanId, setSelectedPlanId] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [isDuplicateError, setIsDuplicateError] = useState(false);
+  const [existingOrgId, setExistingOrgId] = useState<string | null>(null);
+  const [existingOrgName, setExistingOrgName] = useState<string | null>(null);
   const [successResult, setSuccessResult] = useState<{
     inviteLink: string;
     emailSent: boolean;
@@ -58,6 +62,7 @@ export function InviteUserDialog({ onClose, onInvited }: InviteUserDialogProps) 
 
   const dialogRef = useRef<HTMLDivElement>(null);
   const titleId = useId();
+  const router = useRouter();
 
   // Load organizations on mount
   useEffect(() => {
@@ -125,6 +130,9 @@ export function InviteUserDialog({ onClose, onInvited }: InviteUserDialogProps) 
 
     setIsLoading(true);
     setError(null);
+    setIsDuplicateError(false);
+    setExistingOrgId(null);
+    setExistingOrgName(null);
 
     const result = await inviteUser({
       email: email.trim(),
@@ -137,7 +145,14 @@ export function InviteUserDialog({ onClose, onInvited }: InviteUserDialogProps) 
     });
 
     if (!result.success) {
-      setError(result.error ?? 'Failed to send invitation');
+      const errMsg = result.error ?? 'Failed to send invitation';
+      const isDuplicate = errMsg.includes('pending invitation') || errMsg.includes('already a member');
+      setError(errMsg);
+      setIsDuplicateError(isDuplicate);
+      if (isDuplicate) {
+        setExistingOrgId(result.existingOrgId ?? null);
+        setExistingOrgName(result.existingOrgName ?? null);
+      }
       setIsLoading(false);
       return;
     }
@@ -420,7 +435,49 @@ export function InviteUserDialog({ onClose, onInvited }: InviteUserDialogProps) 
 
           {/* Error */}
           {error && (
-            <p className="text-sm text-red-600">{error}</p>
+            isDuplicateError ? (
+              <div className="rounded-md bg-amber-50 border border-amber-200 px-4 py-3">
+                <p className="text-sm text-amber-800">{error}</p>
+                <p className="mt-1 text-xs text-amber-600">
+                  {existingOrgId ? (
+                    <>
+                      The existing invitation is in{' '}
+                      <strong>{existingOrgName}</strong>. You can{' '}
+                      <button
+                        type="button"
+                        onClick={() => {
+                          onClose();
+                          router.push(`/dashboard/organizations/${existingOrgId}`);
+                        }}
+                        className="underline font-medium text-amber-700 hover:text-amber-900"
+                      >
+                        go to that organization page
+                      </button>{' '}
+                      to resend the invitation.
+                    </>
+                  ) : (
+                    <>
+                      You can{' '}
+                      <button
+                        type="button"
+                        onClick={() => {
+                          onClose();
+                          router.push('/dashboard/users');
+                        }}
+                        className="underline font-medium text-amber-700 hover:text-amber-900"
+                      >
+                        go to the users list
+                      </button>{' '}
+                      to resend the invitation.
+                    </>
+                  )}
+                </p>
+              </div>
+            ) : (
+              <div className="rounded-md bg-red-50 border border-red-200 px-4 py-3">
+                <p className="text-sm text-red-700">{error}</p>
+              </div>
+            )
           )}
 
           {/* Actions */}

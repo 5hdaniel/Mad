@@ -31,6 +31,28 @@ export const deviceBridge = {
   checkAvailability: () => ipcRenderer.invoke("device:check-availability"),
 
   /**
+   * BACKLOG-1582: Run device detection diagnostics on demand.
+   * Returns actionable info about why devices aren't detected.
+   */
+  runDiagnostics: () => ipcRenderer.invoke("device:run-diagnostics"),
+
+  /**
+   * BACKLOG-1582: Request trust/pairing with a device.
+   * Triggers the "Trust This Computer?" prompt on the iPhone.
+   */
+  requestTrust: (udid: string) => ipcRenderer.invoke("device:request-trust", udid),
+
+  /**
+   * BACKLOG-1582: Subscribe to device-needs-trust events.
+   * Fires when a device is visible but not yet trusted.
+   */
+  onNeedsTrust: (callback: (data: { udid: string }) => void) => {
+    const listener = (_: IpcRendererEvent, data: { udid: string }) => callback(data);
+    ipcRenderer.on("device:needs-trust", listener);
+    return () => ipcRenderer.removeListener("device:needs-trust", listener);
+  },
+
+  /**
    * Subscribes to device connected events
    * @param callback - Callback function when device connects
    * @returns Cleanup function to remove listener

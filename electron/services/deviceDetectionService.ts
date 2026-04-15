@@ -77,6 +77,8 @@ export class DeviceDetectionService extends EventEmitter {
   /** BACKLOG-1354: Tracks whether we've already sent a Sentry warning for 0 devices found.
    *  Resets when devices are found, so we only fire once per "no devices" period. */
   private sentZeroDevicesWarning: boolean = false;
+  /** BACKLOG-1582: Track UDIDs we've already attempted to auto-pair, to avoid spamming every poll */
+  private autoPairAttempted: Set<string> = new Set();
 
   constructor() {
     super();
@@ -409,11 +411,22 @@ export class DeviceDetectionService extends EventEmitter {
               data: { udid: udid.substring(0, 8) + "...", productType: deviceInfo.productType },
             });
             this.emit("device-connected", deviceInfo);
+            // BACKLOG-1582: Clear auto-pair flag on successful connection
+            this.autoPairAttempted.delete(udid);
           } catch (err) {
             log.error(
               `[DeviceDetection] Failed to get info for device ${udid}:`,
               err,
             );
+            // BACKLOG-1582: Device visible but not trusted — auto-attempt pairing
+            if (!this.autoPairAttempted.has(udid)) {
+              this.autoPairAttempted.add(udid);
+              log.info(`[DeviceDetection] Auto-attempting pair for untrusted device: ${udid}`);
+              this.emit("device-needs-trust", { udid });
+              this.pairDevice(udid).catch(() => {
+                // Fire-and-forget — pairDevice logs its own errors
+              });
+            }
           }
         }
       }
@@ -436,6 +449,8 @@ export class DeviceDetectionService extends EventEmitter {
               data: { udid: udid.substring(0, 8) + "...", productType: device.productType },
             });
             this.emit("device-disconnected", device);
+            // BACKLOG-1582: Clear auto-pair flag so next plug-in can auto-pair
+            this.autoPairAttempted.delete(udid);
           }
         }
       }
@@ -632,6 +647,54 @@ export class DeviceDetectionService extends EventEmitter {
           data: { udid: validatedUdid.substring(0, 8) + "...", platform: process.platform },
         });
         reject(new Error(`Failed to spawn ideviceinfo: ${err.message}`));
+      });
+    });
+  }
+
+  /**
+   * BACKLOG-1582: Send a pairing request to a device.
+   * This triggers the "Trust This Computer?" prompt on the iPhone.
+   * @param udid Device UDID
+   * @returns Promise that resolves with the pair result
+   */
+  async pairDevice(udid: string): Promise<{ success: boolean; needsTrust: boolean; error?: string }> {
+    // SECURITY: Validate UDID before spawning process
+    let validatedUdid: string;
+    try {
+      validatedUdid = validateDeviceUdid(udid);
+    } catch (error) {
+      log.error("[DeviceDetection] Invalid UDID for pairing:", error);
+      return { success: false, needsTrust: false, error: "Invalid device UDID" };
+    }
+
+    return new Promise((resolve) => {
+      const idevicepairCmd = getCommand("idevicepair");
+      log.info(`[DeviceDetection] Requesting pair for device: ${validatedUdid}`);
+
+      const proc = spawn(idevicepairCmd, ["pair", "-u", validatedUdid]);
+      let stdout = "";
+      let stderr = "";
+
+      proc.stdout.on("data", (data) => { stdout += data.toString(); });
+      proc.stderr.on("data", (data) => { stderr += data.toString(); });
+
+      proc.on("close", (code) => {
+        const output = (stdout + stderr).toLowerCase();
+        if (code === 0 && output.includes("success")) {
+          log.info(`[DeviceDetection] Pairing successful for device: ${validatedUdid}`);
+          resolve({ success: true, needsTrust: false });
+        } else if (output.includes("trust") || output.includes("accept")) {
+          log.info(`[DeviceDetection] Trust prompt sent to device: ${validatedUdid}`);
+          resolve({ success: false, needsTrust: true });
+        } else {
+          log.warn(`[DeviceDetection] Pair failed: ${stdout.trim()} ${stderr.trim()}`);
+          resolve({ success: false, needsTrust: false, error: stdout.trim() || stderr.trim() });
+        }
+      });
+
+      proc.on("error", (err) => {
+        log.error("[DeviceDetection] Failed to spawn idevicepair:", err);
+        resolve({ success: false, needsTrust: false, error: err.message });
       });
     });
   }
@@ -843,9 +906,10 @@ export class DeviceDetectionService extends EventEmitter {
     // - Encrypted backups include much more data than unencrypted
     // - Photos, messages with attachments can be very large
     // - "Used space" from iOS disk_usage may not include all backed-up data
-    // We use a conservative high estimate to avoid underestimating
-    // (Better to overestimate disk space needed than underestimate)
-    const BACKUP_SIZE_RATIO = 1.5; // 150% of "used" space - iOS reports usage conservatively
+    // Since skipApps is always true, apps (often 60-70% of used space) are excluded.
+    // Real backups without apps are typically 15-25% of used space.
+    // 25% is conservative enough to avoid underestimates.
+    const BACKUP_SIZE_RATIO = 0.25; // 25% of "used" space (apps are skipped)
     const estimatedBackupSize = Math.round(usedSpace * BACKUP_SIZE_RATIO);
 
     log.info(`[DeviceDetection] Estimated backup size: ${Math.round(estimatedBackupSize / 1024 / 1024)} MB (${BACKUP_SIZE_RATIO * 100}% of used space)`);

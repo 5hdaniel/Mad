@@ -147,7 +147,7 @@ export function TransactionMessagesTab({
       if (handles.length === 0) return;
 
       try {
-        const result = await window.api.contacts.resolveHandles(handles);
+        const result = await window.api.contacts.resolveHandles(handles, userId);
 
         if (result.success && result.names) {
           // Build a lookup map with both original and normalized keys
@@ -176,6 +176,11 @@ export function TransactionMessagesTab({
 
     lookupContactNames();
   }, [messages]);
+
+  // BACKLOG-1589: Merge newly resolved contact names from removed messages into state
+  const handleContactNamesResolved = useCallback((names: Record<string, string>) => {
+    setContactNames(prev => ({ ...prev, ...names }));
+  }, []);
 
   // Handle attach button click
   const handleAttachClick = useCallback(() => {
@@ -449,6 +454,7 @@ export function TransactionMessagesTab({
             onMessagesChanged={onMessagesChanged}
             onShowSuccess={onShowSuccess}
             onShowError={onShowError}
+            onContactNamesResolved={handleContactNamesResolved}
           />
         )}
 
@@ -669,6 +675,7 @@ export function TransactionMessagesTab({
           onMessagesChanged={onMessagesChanged}
           onShowSuccess={onShowSuccess}
           onShowError={onShowError}
+          onContactNamesResolved={handleContactNamesResolved}
         />
       )}
 

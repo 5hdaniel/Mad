@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from "react";
-import { ResponsiveModal } from "../../common/ResponsiveModal";
+import { ResponsiveModal, MODAL_PANEL } from "../../common/ResponsiveModal";
 import { ExtendedContact } from "../types";
 import { OfflineNotice } from "../../common/OfflineNotice";
 
@@ -123,7 +123,7 @@ function ImportContactsModal({
   );
 
   return (
-    <ResponsiveModal onClose={onClose} zIndex="z-[60]" panelClassName="max-w-4xl sm:max-h-[90vh]">
+    <ResponsiveModal onClose={onClose} zIndex="z-[60]" panelClassName={MODAL_PANEL.lg}>
         {/* Header */}
         <div className="bg-gradient-to-r from-purple-500 to-pink-600 px-6 py-4 flex items-center justify-between rounded-t-xl flex-shrink-0">
           <h3 className="text-lg font-bold text-white">Import Contacts</h3>

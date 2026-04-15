@@ -28,6 +28,7 @@ import { FIRST_SCAN_LOOKBACK_MONTHS } from "../../constants";
 import { createCommunicationReference } from "../messageMatchingService";
 import { autoLinkCommunicationsForContact } from "../autoLinkService";
 import emailSyncService from "../emailSyncService";
+import { dbGet } from "../db/core/dbConnection";
 import { createEmail, getEmailByExternalId } from "../db/emailDbService";
 import emailAttachmentService from "../emailAttachmentService";
 import * as externalContactDb from "../db/externalContactDbService";
@@ -1396,7 +1397,33 @@ class TransactionService {
 
     // BACKLOG-1560: Extract email_id and thread_id from communications junction record.
     // getCommunicationById queries the communications table which has these columns.
-    const commRecord = communication as Communication & { email_id?: string; thread_id?: string };
+    const commRecord = communication as Communication & { email_id?: string; thread_id?: string; message_id?: string };
+
+    // BACKLOG-1585: Resolve email_id when null (older records or thread-based linking).
+    // Without email_id, the ignored_communications row won't appear in "Show removed emails".
+    let resolvedEmailId = commRecord.email_id || undefined;
+    if (!resolvedEmailId) {
+      // Fallback: Look up email via thread_id in the emails table.
+      // Note: commRecord.message_id is a FK to the messages table (SMS), not emails —
+      // the emails table has no message_id column, so that lookup has been removed.
+      if (commRecord.thread_id) {
+        try {
+          const emailByThread = dbGet<{ id: string }>(
+            "SELECT id FROM emails WHERE thread_id = ? ORDER BY sent_at DESC LIMIT 1",
+            [commRecord.thread_id],
+          );
+          if (emailByThread) {
+            resolvedEmailId = emailByThread.id;
+          }
+        } catch (err) {
+          await logService.warn(
+            "thread_id fallback failed during unlinkCommunication",
+            "TransactionService.unlinkCommunication",
+            { communicationId, thread_id: commRecord.thread_id, err },
+          );
+        }
+      }
+    }
 
     await databaseService.addIgnoredCommunication({
       user_id: communication.user_id,
@@ -1404,10 +1431,8 @@ class TransactionService {
       email_subject: communication.subject,
       email_sender: communication.sender,
       email_sent_at: communication.sent_at,
-      email_thread_id: communication.email_thread_id,
-      email_id: commRecord.email_id,
-      // BACKLOG-1560: Write thread_id for text message suppression.
-      // Previous bug: only email_thread_id was written, but auto-link checks thread_id.
+      email_id: resolvedEmailId,
+      // BACKLOG-1560: Write thread_id for thread suppression during auto-link.
       thread_id: commRecord.thread_id || undefined,
       original_communication_id: communicationId,
       reason: reason || "Manually unlinked by user",
@@ -1421,7 +1446,8 @@ class TransactionService {
       {
         communicationId,
         transactionId: communication.transaction_id,
-        emailId: commRecord.email_id,
+        emailId: resolvedEmailId,
+        emailIdSource: commRecord.email_id ? "direct" : resolvedEmailId ? "thread_id-fallback" : "none",
         reason,
       },
     );

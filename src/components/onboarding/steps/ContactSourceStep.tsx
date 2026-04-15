@@ -269,7 +269,7 @@ export function Content({
   const [selected, setSelected] = useState<Record<string, boolean>>({
     macosContacts: !isAndroid,
     outlookContacts: isAndroid ? false : context.authProvider === "microsoft",
-    iphoneContacts: false,
+    iphoneContacts: !isAndroid,
     googleContacts: isAndroid ? true : context.authProvider === "google",
     androidContacts: isAndroid,
   });

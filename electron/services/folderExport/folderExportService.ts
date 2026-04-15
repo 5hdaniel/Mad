@@ -171,7 +171,7 @@ class FolderExportService {
 
       // TASK-2026: Pre-load contact names for all handles (phones + emails + Apple IDs)
       const allHandles = extractParticipantHandles(texts);
-      const phoneNameMap = await resolveAllHandles(allHandles);
+      const phoneNameMap = await resolveAllHandles(allHandles, transaction.user_id);
 
       // Get user's name and email for "me" display in group chats
       let userName: string | undefined;
@@ -864,7 +864,7 @@ class FolderExportService {
       });
 
       const allHandles = extractParticipantHandles(texts);
-      const phoneNameMap = await resolveAllHandles(allHandles);
+      const phoneNameMap = await resolveAllHandles(allHandles, transaction.user_id);
 
       let userName: string | undefined;
       let userEmail: string | undefined;
