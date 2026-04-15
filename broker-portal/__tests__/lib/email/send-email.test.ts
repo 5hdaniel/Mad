@@ -104,7 +104,7 @@ describe('sendEmail', () => {
         toRecipients: [{ emailAddress: { address: 'user@example.com' } }],
         internetMessageHeaders: [
           {
-            name: 'List-Unsubscribe',
+            name: 'X-List-Unsubscribe',
             value: '<mailto:unsubscribe@keeprcompliance.com>',
           },
         ],
