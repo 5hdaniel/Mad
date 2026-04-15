@@ -12,7 +12,7 @@
  * - Submission to support platform via Supabase RPC
  */
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { ResponsiveModal } from "../common/ResponsiveModal";
 import {
   useSupportTicket,
@@ -81,11 +81,17 @@ export function SupportTicketDialog({
   // Name/email form fields — pre-filled when user info is available, always editable
   const [formName, setFormName] = useState(userName || "");
   const [formEmail, setFormEmail] = useState(userEmail || "");
+  // BACKLOG-1607: Track whether user has manually edited name/email fields.
+  // When false, we accept late-arriving prop values (async user detection).
+  // When true, we preserve the user's manual edits over prop updates.
+  const nameEditedByUser = useRef(false);
+  const emailEditedByUser = useRef(false);
 
   // Update form fields if user info becomes available after mount
+  // (e.g., async IPC detection completes after dialog is already open)
   useEffect(() => {
-    if (userName && !formName) setFormName(userName);
-    if (userEmail && !formEmail) setFormEmail(userEmail);
+    if (userName && !nameEditedByUser.current) setFormName(userName);
+    if (userEmail && !emailEditedByUser.current) setFormEmail(userEmail);
   }, [userName, userEmail]);
 
   // Collect diagnostics when dialog opens
@@ -229,7 +235,7 @@ export function SupportTicketDialog({
                   id="support-name"
                   type="text"
                   value={formName}
-                  onChange={(e) => setFormName(e.target.value)}
+                  onChange={(e) => { nameEditedByUser.current = true; setFormName(e.target.value); }}
                   placeholder="Your name"
                   className="w-full px-3 py-2.5 border border-gray-300 rounded-lg text-sm text-gray-900 bg-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none min-h-[44px]"
                   required
@@ -247,7 +253,7 @@ export function SupportTicketDialog({
                   id="support-email"
                   type="email"
                   value={formEmail}
-                  onChange={(e) => setFormEmail(e.target.value)}
+                  onChange={(e) => { emailEditedByUser.current = true; setFormEmail(e.target.value); }}
                   placeholder="Your email address"
                   className="w-full px-3 py-2.5 border border-gray-300 rounded-lg text-sm text-gray-900 bg-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none min-h-[44px]"
                   required

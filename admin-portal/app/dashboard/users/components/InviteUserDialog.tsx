@@ -44,6 +44,8 @@ export function InviteUserDialog({ onClose, onInvited }: InviteUserDialogProps) 
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [isDuplicateError, setIsDuplicateError] = useState(false);
+  const [existingOrgId, setExistingOrgId] = useState<string | null>(null);
+  const [existingOrgName, setExistingOrgName] = useState<string | null>(null);
   const [successResult, setSuccessResult] = useState<{
     inviteLink: string;
     emailSent: boolean;
@@ -129,6 +131,8 @@ export function InviteUserDialog({ onClose, onInvited }: InviteUserDialogProps) 
     setIsLoading(true);
     setError(null);
     setIsDuplicateError(false);
+    setExistingOrgId(null);
+    setExistingOrgName(null);
 
     const result = await inviteUser({
       email: email.trim(),
@@ -145,6 +149,10 @@ export function InviteUserDialog({ onClose, onInvited }: InviteUserDialogProps) 
       const isDuplicate = errMsg.includes('pending invitation') || errMsg.includes('already a member');
       setError(errMsg);
       setIsDuplicateError(isDuplicate);
+      if (isDuplicate) {
+        setExistingOrgId(result.existingOrgId ?? null);
+        setExistingOrgName(result.existingOrgName ?? null);
+      }
       setIsLoading(false);
       return;
     }
@@ -431,23 +439,37 @@ export function InviteUserDialog({ onClose, onInvited }: InviteUserDialogProps) 
               <div className="rounded-md bg-amber-50 border border-amber-200 px-4 py-3">
                 <p className="text-sm text-amber-800">{error}</p>
                 <p className="mt-1 text-xs text-amber-600">
-                  {organizationId ? (
+                  {existingOrgId ? (
+                    <>
+                      The existing invitation is in{' '}
+                      <strong>{existingOrgName}</strong>. You can{' '}
+                      <button
+                        type="button"
+                        onClick={() => {
+                          onClose();
+                          router.push(`/dashboard/organizations/${existingOrgId}`);
+                        }}
+                        className="underline font-medium text-amber-700 hover:text-amber-900"
+                      >
+                        go to that organization page
+                      </button>{' '}
+                      to resend the invitation.
+                    </>
+                  ) : (
                     <>
                       You can{' '}
                       <button
                         type="button"
                         onClick={() => {
                           onClose();
-                          router.push(`/dashboard/organizations/${organizationId}`);
+                          router.push('/dashboard/users');
                         }}
                         className="underline font-medium text-amber-700 hover:text-amber-900"
                       >
-                        go to the organization page
+                        go to the users list
                       </button>{' '}
                       to resend the invitation.
                     </>
-                  ) : (
-                    'You can close this dialog and resend the invitation from the users list.'
                   )}
                 </p>
               </div>

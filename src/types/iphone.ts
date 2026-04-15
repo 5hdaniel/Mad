@@ -127,6 +127,10 @@ export interface UseIPhoneSyncReturn {
   syncLocked: boolean;
   /** Human-readable description of the blocking operation (TASK-910) */
   lockReason: string | null;
+  /** BACKLOG-1582: Whether a device is visible but needs trust */
+  needsTrust: boolean;
+  /** BACKLOG-1582: UDID of the device that needs trust */
+  needsTrustUdid: string | null;
   startSync: () => Promise<void>;
   submitPassword: (password: string) => void;
   cancelSync: () => Promise<void>;
@@ -134,4 +138,6 @@ export interface UseIPhoneSyncReturn {
   dismissSync: () => void;
   /** Refresh the sync lock status (TASK-910) */
   checkSyncStatus: () => Promise<void>;
+  /** BACKLOG-1582: Manually request trust/pairing with a device */
+  requestTrust: () => Promise<void>;
 }

@@ -77,17 +77,34 @@ export function SupportWidget({
   const userName = propName || detectedName;
 
   const handleOpen = useCallback(async () => {
-    // Capture screenshot BEFORE opening the dialog so we get the actual page
-    try {
-      const result = await window.api.support.captureScreenshot();
-      if (result.success && result.screenshot) {
-        setPreCapturedScreenshot(result.screenshot);
-      }
-    } catch {
-      // Screenshot capture failed — dialog will still open without it
+    // BACKLOG-1607: Detect user AND capture screenshot BEFORE opening dialog.
+    // Run both IPC calls in parallel so user info is available when the dialog
+    // mounts, avoiding the race condition where the dialog renders with empty
+    // fields before the async detection in the useEffect completes.
+    const [, userResult] = await Promise.all([
+      // Capture screenshot BEFORE opening the dialog so we get the actual page
+      window.api.support.captureScreenshot()
+        .then((result) => {
+          if (result.success && result.screenshot) {
+            setPreCapturedScreenshot(result.screenshot);
+          }
+        })
+        .catch(() => {
+          // Screenshot capture failed — dialog will still open without it
+        }),
+      // Detect user info if not already detected
+      (!propEmail || !propName) && !detectedEmail
+        ? window.api.auth.getCurrentUser().catch(() => null)
+        : Promise.resolve(null),
+    ]);
+
+    if (userResult && userResult.success && userResult.user) {
+      setDetectedEmail(userResult.user.email || "");
+      setDetectedName(userResult.user.display_name || userResult.user.email || "");
     }
+
     setIsOpen(true);
-  }, []);
+  }, [propEmail, propName, detectedEmail]);
 
   const handleClose = useCallback(() => {
     setIsOpen(false);

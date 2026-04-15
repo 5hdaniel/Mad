@@ -3,7 +3,7 @@
  *
  * Modal for editing contact assignments on a transaction using a 2-screen workflow:
  * - Screen 1: View/edit assigned contacts with inline role dropdowns
- * - Screen 2: Add contacts overlay using ContactSearchList
+ * - Screen 2: Add contacts overlay reusing ContactAssignmentStep
  *
  * @see TASK-1765: EditContactsModal 2-Screen Flow Redesign
  * @see BACKLOG-418: Redesign Contact Selection UX (Select First, Assign Roles Second)
@@ -17,19 +17,17 @@ import {
   ContactsProvider,
   useContacts,
 } from "../../../../contexts/ContactsContext";
-import { ContactSearchList } from "../../../shared/ContactSearchList";
 import { ContactRoleRow } from "../../../shared/ContactRoleRow";
 import { ContactPreview } from "../../../shared/ContactPreview";
 import { ContactFormModal } from "../../../contact";
 import type { RoleOption } from "../../../shared/ContactRoleRow";
+import ContactAssignmentStep from "../../../audit/ContactAssignmentStep";
 import {
   filterRolesByTransactionType,
   flipRoleForTransactionType,
   getRoleDisplayName,
 } from "../../../../utils/transactionRoleUtils";
-import { contactService, settingsService } from "../../../../services";
-// Category filtering is now handled by ContactSearchList with its built-in pill-style filters
-import { sortByRecentCommunication } from "../../../../utils/contactSortUtils";
+import { settingsService } from "../../../../services";
 import logger from '../../../../utils/logger';
 import { OfflineNotice } from '../../../common/OfflineNotice';
 
@@ -72,6 +70,10 @@ export interface AutoLinkResult {
 
 export interface EditContactsModalProps {
   transaction: Transaction;
+  /** Current logged-in user's ID — used for loading contacts from ContactsProvider.
+   *  Must NOT use transaction.user_id which may be stale after DB reset / re-login.
+   *  @see BACKLOG-1611 */
+  userId: string;
   onClose: () => void;
   onSave: (autoLinkResults?: AutoLinkResult[]) => void;
 }
@@ -97,6 +99,7 @@ interface RoleConfig {
  */
 export function EditContactsModal({
   transaction,
+  userId,
   onClose,
   onSave,
 }: EditContactsModalProps): React.ReactElement {
@@ -400,7 +403,7 @@ export function EditContactsModal({
 
         {/* Shared ContactsProvider for both Screen1 and Screen2 */}
         <ContactsProvider
-          userId={transaction.user_id}
+          userId={userId}
           propertyAddress={transaction.property_address || ""}
         >
           {/* Content */}
@@ -483,6 +486,8 @@ export function EditContactsModal({
           {showAddModal && !loading && (
             <Screen2Overlay
               assignedContactIds={assignedContactIds}
+              transactionType={transactionType}
+              propertyAddress={transaction.property_address || ""}
               onClose={() => setShowAddModal(false)}
               onAddContact={(contactId, contact) => {
                 // Add the contact to assigned list
@@ -742,50 +747,60 @@ function Screen1Content({
 
 // ============================================
 // SCREEN 2: ADD CONTACTS OVERLAY
+// Reuses ContactAssignmentStep (step 2) for unified contact selection UX.
+// Only the overlay chrome (header, footer with "Add Selected") is custom.
 // ============================================
 
 interface Screen2OverlayProps {
   assignedContactIds: string[];
+  transactionType: string;
+  propertyAddress: string;
   onClose: () => void;
   onAddContact: (contactId: string, contact?: ExtendedContact) => void;
 }
 
 /**
- * Screen 2: Add Contacts overlay using ContactSearchList
- * Each contact has a "+ Add Contact" button that adds immediately
+ * Screen 2: Add Contacts overlay
+ * Reuses ContactAssignmentStep at step=2 for contact search/selection/import,
+ * wrapping it with the overlay header and "Add Selected" footer.
+ *
+ * @see BACKLOG-1590: Reuse ContactAssignmentStep for unified UX
  */
 function Screen2Overlay({
   assignedContactIds,
+  transactionType,
+  propertyAddress,
   onClose,
   onAddContact,
 }: Screen2OverlayProps): React.ReactElement {
-  const { contacts, loading, error, silentRefresh } = useContacts();
+  const { contacts, loading, error, refreshContacts, silentRefresh } = useContacts();
 
-  // External contacts from macOS Contacts app (lazy-loaded) - now using ExtendedContact[]
+  // External contacts from macOS Contacts app (lazy-loaded)
   const [externalContacts, setExternalContacts] = useState<ExtendedContact[]>([]);
   const [externalLoading, setExternalLoading] = useState(false);
   const [externalLoaded, setExternalLoaded] = useState(false);
 
-  // Contact preview/edit modal state
-  const [previewContact, setPreviewContact] = useState<ExtendedContact | null>(null);
-  const [showEditModal, setShowEditModal] = useState(false);
-  const [editContact, setEditContact] = useState<ExtendedContact | undefined>(undefined);
+  // Selected contact IDs — managed here, passed to ContactAssignmentStep
+  const [selectedContactIds, setSelectedContactIds] = useState<string[]>([]);
+
+  // Track adding state to disable button during batch add
+  const [isAddingSelected, setIsAddingSelected] = useState(false);
+
+  // Get userId from contacts context
+  const userId = contacts.length > 0 ? contacts[0].user_id : "";
 
   // Load external contacts from Contacts app when component mounts
   useEffect(() => {
     const loadExternalContacts = async () => {
-      // Get userId from first contact
-      const userId = contacts.length > 0 ? contacts[0].user_id : "";
       if (!userId || externalLoaded) return;
 
       setExternalLoading(true);
       try {
         const result = await window.api.contacts.getAvailable(userId);
         if (result.success && result.contacts) {
-          // External contacts come as ExtendedContact[], mark them with is_message_derived for UI
           const external: ExtendedContact[] = result.contacts.map((c: ExtendedContact) => ({
             ...c,
-            is_message_derived: true, // Mark as external for SourcePill display
+            is_message_derived: true,
           }));
           setExternalContacts(external);
         }
@@ -798,17 +813,14 @@ function Screen2Overlay({
     };
 
     loadExternalContacts();
-  }, [contacts, externalLoaded]);
+  }, [userId, externalLoaded]);
 
-  // Filter out already assigned contacts - category filtering is handled by ContactSearchList
+  // Filter out already assigned contacts so they don't appear in the selection list
   const availableContacts = useMemo(() => {
-    const filtered = contacts.filter((c) => !assignedContactIds.includes(c.id));
-    // Sort by most recent communication first
-    return sortByRecentCommunication(filtered);
+    return contacts.filter((c) => !assignedContactIds.includes(c.id));
   }, [contacts, assignedContactIds]);
 
-  // Filter external contacts - exclude those already in database or assigned
-  // Category filtering is handled by ContactSearchList
+  // Filter external contacts — exclude those already in database or already assigned
   const filteredExternalContacts = useMemo(() => {
     const existingIds = new Set(contacts.map((c) => c.id));
     const assignedIds = new Set(assignedContactIds);
@@ -817,101 +829,35 @@ function Screen2Overlay({
     );
   }, [externalContacts, contacts, assignedContactIds]);
 
-  // Track which contacts have been added (for visual feedback)
-  const [addedContactIds, setAddedContactIds] = useState<Set<string>>(new Set());
+  // Handle "Add Selected" button — batch add all selected contacts to the transaction
+  const handleAddSelected = useCallback(async () => {
+    if (selectedContactIds.length === 0) return;
 
-  // Helper to check if a contact is external
-  const isExternal = (contact: ExtendedContact): boolean => {
-    return contact.is_message_derived === true || contact.is_message_derived === 1;
-  };
-
-  // Handle clicking on a contact to view details
-  const handleContactClick = useCallback((contact: ExtendedContact) => {
-    setPreviewContact(contact);
-  }, []);
-
-  // Handle editing a contact from preview
-  const handlePreviewEdit = useCallback(() => {
-    if (previewContact) {
-      setPreviewContact(null);
-      setEditContact(previewContact);
-      setShowEditModal(true);
-    }
-  }, [previewContact]);
-
-  // Handle adding a new contact manually
-  const handleAddManually = useCallback(() => {
-    setEditContact(undefined);
-    setShowEditModal(true);
-  }, []);
-
-  // Handle importing and adding a contact in one action
-  // For external contacts: import first, then add to transaction
-  // For database contacts: add directly to transaction
-  const handleImportAndAddContact = useCallback(
-    async (contact: ExtendedContact): Promise<ExtendedContact> => {
-      const isExternal = contact.is_message_derived === true || contact.is_message_derived === 1 || contact.isFromDatabase === false;
-      const contactName = contact.display_name || contact.name || "Unknown";
-
-      if (isExternal) {
-        // External contact: import first, then add
-        const userId = contacts.length > 0 ? contacts[0].user_id : "";
-
-        if (!userId) {
-          throw new Error("Cannot import contact: no user context");
-        }
-
-        const result = await contactService.create(userId, {
-          name: contactName,
-          display_name: contactName,
-          email: contact.email,
-          phone: contact.phone,
-          company: contact.company,
-          source: contact.source || "contacts_app",
-          allEmails: contact.allEmails || [],
-          allPhones: contact.allPhones || [],
-        });
-
-        if (result.success && result.data) {
-          const importedContact = result.data as ExtendedContact;
-          // Preserve default_role from original contact onto imported contact
-          if (contact.default_role && !importedContact.default_role) {
-            importedContact.default_role = contact.default_role;
-          }
-          // Add the imported contact to the transaction
-          onAddContact(importedContact.id, importedContact);
-          // Mark as added for visual feedback
-          setAddedContactIds((prev) => new Set(prev).add(contact.id));
-          // Silent refresh so Screen1 can find the new contact
-          silentRefresh();
-          return importedContact;
-        }
-
-        throw new Error(result.error || "Failed to import contact");
-      } else {
-        // Database contact: add directly to transaction
-        onAddContact(contact.id, contact);
-        // Mark as added for visual feedback
-        setAddedContactIds((prev) => new Set(prev).add(contact.id));
-        return contact;
-      }
-    },
-    [contacts, onAddContact]
-  );
-
-  // Handle importing from preview modal
-  const handlePreviewImport = useCallback(async () => {
-    if (!previewContact) return;
+    setIsAddingSelected(true);
     try {
-      await handleImportAndAddContact(previewContact);
-      setPreviewContact(null);
-    } catch (err) {
-      logger.error("Failed to import contact:", err);
-    }
-  }, [previewContact, handleImportAndAddContact]);
+      // Build lookup map of all available contacts (imported + external)
+      const allContacts = new Map<string, ExtendedContact>();
+      availableContacts.forEach((c) => allContacts.set(c.id, c));
+      filteredExternalContacts.forEach((c) => allContacts.set(c.id, c));
 
-  // Get userId for ContactFormModal
-  const userId = contacts.length > 0 ? contacts[0].user_id : "";
+      for (const contactId of selectedContactIds) {
+        const contact = allContacts.get(contactId);
+        if (contact) {
+          onAddContact(contactId, contact);
+        } else {
+          // Contact might have been imported (external -> new DB ID), just add by ID
+          onAddContact(contactId);
+        }
+      }
+    } finally {
+      setIsAddingSelected(false);
+    }
+    onClose();
+  }, [selectedContactIds, availableContacts, filteredExternalContacts, onAddContact, onClose]);
+
+  // No-op callbacks for ContactAssignmentStep props we don't use in step 2
+  const noopAssignContact = useCallback(() => {}, []);
+  const noopRemoveContact = useCallback(() => {}, []);
 
   return (
     <div
@@ -948,69 +894,71 @@ function Screen2Overlay({
         </div>
       </div>
 
-      {/* ContactSearchList with built-in category filter (pill-style buttons) */}
-      {/* min-h-0 required for flex child scrolling */}
-      <ContactSearchList
-        contacts={availableContacts}
-        externalContacts={filteredExternalContacts}
-        selectedIds={[]}
-        onSelectionChange={() => {}}
-        onImportContact={handleImportAndAddContact}
-        showAddButtonForImported={true}
-        onContactClick={handleContactClick}
-        onAddManually={handleAddManually}
-        addedContactIds={addedContactIds}
-        isLoading={loading || externalLoading}
-        error={error}
-        searchPlaceholder="Search contacts to add..."
-        showCategoryFilter={true}
-        className="flex-1 min-h-0"
-      />
-
-      {/* Footer with Assign Roles button - only show when contacts have been added */}
-      {addedContactIds.size > 0 && (
-        <div className="flex-shrink-0 px-6 py-4 bg-gray-50 rounded-b-xl flex items-center justify-between">
-          <p className="text-sm text-gray-600">
-            {addedContactIds.size} contact{addedContactIds.size !== 1 ? "s" : ""} added
-          </p>
-          <button
-            onClick={onClose}
-            className="px-6 py-2 rounded-lg font-semibold bg-gradient-to-r from-purple-500 to-pink-600 text-white hover:from-purple-600 hover:to-pink-700 shadow-md hover:shadow-lg transition-all"
-            data-testid="assign-roles-button"
-          >
-            Assign Roles →
-          </button>
-        </div>
-      )}
-
-      {/* Contact Preview Modal */}
-      {previewContact && (
-        <ContactPreview
-          contact={previewContact}
-          isExternal={isExternal(previewContact)}
-          transactions={[]}
-          onEdit={handlePreviewEdit}
-          onImport={handlePreviewImport}
-          onClose={() => setPreviewContact(null)}
-        />
-      )}
-
-      {/* Add/Edit Contact Modal */}
-      {showEditModal && userId && (
-        <ContactFormModal
+      {/* Reuse ContactAssignmentStep at step 2 for contact search/select/import */}
+      <div className="flex-1 min-h-0 overflow-hidden">
+        <ContactAssignmentStep
+          step={2}
+          contactAssignments={{}}
+          selectedContactIds={selectedContactIds}
+          onSelectedContactIdsChange={setSelectedContactIds}
+          onAssignContact={noopAssignContact}
+          onRemoveContact={noopRemoveContact}
           userId={userId}
-          contact={editContact}
-          onClose={() => {
-            setShowEditModal(false);
-            setEditContact(undefined);
-          }}
-          onSuccess={() => {
-            setShowEditModal(false);
-            setEditContact(undefined);
-            silentRefresh();
-          }}
+          transactionType={transactionType}
+          propertyAddress={propertyAddress}
+          contacts={availableContacts}
+          contactsLoading={loading}
+          contactsError={error}
+          onRefreshContacts={refreshContacts}
+          onSilentRefreshContacts={silentRefresh}
+          externalContacts={filteredExternalContacts}
+          externalContactsLoading={externalLoading}
         />
-      )}
+      </div>
+
+      {/* Desktop footer */}
+      <div className="hidden sm:flex flex-shrink-0 px-6 py-4 bg-gray-50 rounded-b-xl items-center justify-between">
+        <p className="text-sm text-gray-600">
+          {selectedContactIds.length > 0
+            ? `${selectedContactIds.length} contact${selectedContactIds.length !== 1 ? "s" : ""} selected`
+            : "Select contacts to add"}
+        </p>
+        <button
+          onClick={handleAddSelected}
+          disabled={selectedContactIds.length === 0 || isAddingSelected}
+          className={`px-6 py-2 rounded-lg font-semibold transition-all ${
+            selectedContactIds.length === 0 || isAddingSelected
+              ? "bg-gray-300 text-gray-500 cursor-not-allowed"
+              : "bg-gradient-to-r from-purple-500 to-pink-600 text-white hover:from-purple-600 hover:to-pink-700 shadow-md hover:shadow-lg"
+          }`}
+          data-testid="add-selected-button"
+        >
+          {isAddingSelected
+            ? "Adding..."
+            : selectedContactIds.length > 0
+              ? `Add Selected (${selectedContactIds.length})`
+              : "Add Selected"}
+        </button>
+      </div>
+      {/* Mobile floating button */}
+      <div className="sm:hidden fixed bottom-4 right-4 z-[71]">
+        <button
+          onClick={handleAddSelected}
+          disabled={selectedContactIds.length === 0 || isAddingSelected}
+          className={`px-6 py-3 rounded-full font-semibold text-sm shadow-lg transition-all ${
+            selectedContactIds.length === 0 || isAddingSelected
+              ? "bg-gray-300 text-gray-500 cursor-not-allowed"
+              : "bg-gradient-to-r from-purple-500 to-pink-600 text-white hover:from-purple-600 hover:to-pink-700 shadow-lg hover:shadow-xl"
+          }`}
+          data-testid="add-selected-button-mobile"
+        >
+          {isAddingSelected
+            ? "Adding..."
+            : selectedContactIds.length > 0
+              ? `Add Selected (${selectedContactIds.length})`
+              : "Add Selected"}
+        </button>
+      </div>
     </div>
   );
 }

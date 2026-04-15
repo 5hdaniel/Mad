@@ -51,11 +51,15 @@ export async function POST(request: NextRequest) {
 
     const body = await request.json();
 
-    // Route confirmation emails to the ticket-confirmation endpoint;
-    // all other notification types go to ticket-notification.
-    const targetPath = body.type === 'confirmation'
-      ? '/api/email/ticket-confirmation'
-      : '/api/email/ticket-notification';
+    // Route to the appropriate broker portal email endpoint by type.
+    let targetPath: string;
+    if (body.type === 'confirmation') {
+      targetPath = '/api/email/ticket-confirmation';
+    } else if (body.type === 'ticket_resolved') {
+      targetPath = '/api/email/ticket-resolved';
+    } else {
+      targetPath = '/api/email/ticket-notification';
+    }
     const targetUrl = `${brokerPortalUrl}${targetPath}`;
 
     Sentry.addBreadcrumb({

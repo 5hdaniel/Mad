@@ -63,6 +63,14 @@ export class BackupService extends EventEmitter {
   private backupCommandStartTime: number = 0;
   private static readonly PASSCODE_WAIT_DETECTION_MS = 5000; // 5 seconds without progress = waiting for passcode
 
+  // BACKLOG-1582: Watchdog timer to detect zombie idevicebackup2 processes
+  private lastStdoutTimestamp: number = 0;
+  private watchdogInterval: NodeJS.Timeout | null = null;
+  private watchdogFired: boolean = false;
+  private static readonly WATCHDOG_CHECK_INTERVAL_MS = 30_000; // Check every 30s
+  private static readonly WATCHDOG_PREPARING_TIMEOUT_MS = 180_000; // 3 min during preparation
+  private static readonly WATCHDOG_TRANSFER_TIMEOUT_MS = 120_000; // 2 min during active transfer
+
   constructor() {
     super();
   }
@@ -293,6 +301,11 @@ export class BackupService extends EventEmitter {
       };
       this.emit("progress", this.lastProgress);
 
+      // BACKLOG-1582: Reset watchdog state
+      this.watchdogFired = false;
+      this.lastStdoutTimestamp = Date.now();
+      this.clearWatchdog();
+
       this.currentProcess = spawn(idevicebackup2, args, {
         stdio: ["pipe", "pipe", "pipe"],
       });
@@ -305,6 +318,8 @@ export class BackupService extends EventEmitter {
           const waitTime = ((Date.now() - this.backupCommandStartTime) / 1000).toFixed(1);
           log.info(`[BackupService] No file progress after ${waitTime}s - waiting for user passcode`);
           this.emit("waiting-for-passcode");
+          // BACKLOG-1582: Start watchdog with preparing timeout (longer, user may take time)
+          this.startWatchdog(BackupService.WATCHDOG_PREPARING_TIMEOUT_MS);
         }
       }, BackupService.PASSCODE_WAIT_DETECTION_MS);
 
@@ -314,6 +329,9 @@ export class BackupService extends EventEmitter {
       this.currentProcess.stdout?.on("data", (data: Buffer) => {
         const output = data.toString();
         stdoutBuffer += output;
+
+        // BACKLOG-1582: Track last stdout activity for watchdog
+        this.lastStdoutTimestamp = Date.now();
 
         // Only log non-progress-bar output (progress bars are very spammy)
         // Progress bars look like: [====] XX% (X.X MB/Y.Y MB)
@@ -338,6 +356,8 @@ export class BackupService extends EventEmitter {
               log.info(`[BackupService] File transfer started after ${waitTime}s - passcode entered`);
               this.emit("passcode-entered");
             }
+            // BACKLOG-1582: Start watchdog with transfer timeout now that data is flowing
+            this.startWatchdog(BackupService.WATCHDOG_TRANSFER_TIMEOUT_MS);
           }
           this.lastProgress = progress;
           this.emit("progress", progress);
@@ -398,6 +418,27 @@ export class BackupService extends EventEmitter {
         if (this.passcodeWaitingTimer) {
           clearTimeout(this.passcodeWaitingTimer);
           this.passcodeWaitingTimer = null;
+        }
+
+        // BACKLOG-1582: Clear watchdog
+        this.clearWatchdog();
+
+        // BACKLOG-1582: If watchdog killed this process, emit timeout result
+        if (this.watchdogFired) {
+          log.warn(`[BackupService] Process exited after watchdog kill (code: ${code}, duration: ${duration}ms)`);
+          const result: BackupResult = {
+            success: false,
+            backupPath: null,
+            error: "Backup process became unresponsive and was terminated",
+            duration,
+            deviceUdid: options.udid,
+            isIncremental: previousBackupExists,
+            backupSize: 0,
+            errorCode: "BACKUP_TIMEOUT",
+          };
+          this.emit("complete", result);
+          resolve(result);
+          return;
         }
 
         const success = code === 0;
@@ -550,6 +591,9 @@ export class BackupService extends EventEmitter {
   cancelBackup(): void {
     log.info("[BackupService] Cancelling backup");
 
+    // BACKLOG-1582: Clear watchdog on cancel
+    this.clearWatchdog();
+
     if (this.currentProcess) {
       this.currentProcess.kill("SIGTERM");
 
@@ -563,6 +607,94 @@ export class BackupService extends EventEmitter {
 
     // Always reset state — even if process is null (race between spawn and cancel)
     this.isRunning = false;
+  }
+
+  /**
+   * BACKLOG-1582: Start the watchdog timer that detects zombie idevicebackup2 processes.
+   * If no stdout activity is received within the timeout, kills the process.
+   */
+  private startWatchdog(timeoutMs: number): void {
+    this.clearWatchdog();
+    log.info(`[BackupService] Watchdog started (timeout: ${timeoutMs / 1000}s)`);
+
+    this.watchdogInterval = setInterval(() => {
+      if (!this.currentProcess || !this.isRunning) {
+        this.clearWatchdog();
+        return;
+      }
+
+      const elapsed = Date.now() - this.lastStdoutTimestamp;
+      if (elapsed >= timeoutMs) {
+        log.error(`[BackupService] Watchdog: no stdout for ${Math.round(elapsed / 1000)}s — killing zombie process`);
+        this.killZombieProcess();
+      }
+    }, BackupService.WATCHDOG_CHECK_INTERVAL_MS);
+  }
+
+  /**
+   * BACKLOG-1582: Clear the watchdog interval.
+   */
+  private clearWatchdog(): void {
+    if (this.watchdogInterval) {
+      clearInterval(this.watchdogInterval);
+      this.watchdogInterval = null;
+    }
+  }
+
+  /**
+   * BACKLOG-1582: Kill an unresponsive idevicebackup2 process.
+   * Sets watchdogFired flag so the close handler emits a BACKUP_TIMEOUT result.
+   */
+  private killZombieProcess(): void {
+    if (!this.currentProcess || this.currentProcess.killed) return;
+
+    this.watchdogFired = true;
+    this.clearWatchdog();
+
+    const pid = this.currentProcess.pid;
+    log.warn(`[BackupService] Watchdog: killing unresponsive process (PID: ${pid})`);
+
+    Sentry.captureMessage("Backup process killed by watchdog (zombie detected)", {
+      level: "warning",
+      tags: { component: "backup_service", platform: process.platform },
+      extra: {
+        pid,
+        durationAliveMs: Date.now() - this.backupCommandStartTime,
+        lastProgress: this.lastProgress?.phase,
+        hasReceivedFileProgress: this.hasReceivedFileProgress,
+        hasEmittedPasscodeWaiting: this.hasEmittedPasscodeWaiting,
+      },
+    });
+
+    try {
+      this.currentProcess.kill("SIGTERM");
+    } catch (err) {
+      log.error(`[BackupService] Watchdog: kill failed, pid=${pid}`, err);
+    }
+
+    // On macOS, give it 5s then SIGKILL. On Windows, SIGTERM already hard-kills.
+    if (process.platform !== "win32") {
+      setTimeout(() => {
+        try {
+          if (this.currentProcess && !this.currentProcess.killed) {
+            this.currentProcess.kill("SIGKILL");
+          }
+        } catch { /* process already dead */ }
+      }, 5000);
+    }
+
+    // Safety net: if close event never fires after kill, force-reset state
+    setTimeout(() => {
+      if (this.isRunning && this.currentProcess) {
+        log.error("[BackupService] Watchdog: process did not exit after kill, force-resetting state");
+        this.isRunning = false;
+        this.currentProcess = null;
+        this.currentDeviceUdid = null;
+        this.emit("error", Object.assign(new Error("Backup process became unresponsive and was terminated"), {
+          code: "BACKUP_TIMEOUT",
+        }));
+      }
+    }, 10_000);
   }
 
   /**

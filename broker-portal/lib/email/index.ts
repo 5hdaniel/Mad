@@ -22,6 +22,7 @@ export { buildInternalInviteEmail } from './templates/internal-invite';
 export { buildTicketConfirmationEmail } from './templates/ticket-confirmation';
 export { buildTicketReplyNotification } from './templates/ticket-reply-notification';
 export { buildTicketAssignmentNotification } from './templates/ticket-assignment-notification';
+export { buildTicketResolvedEmail } from './templates/ticket-resolved';
 
 // Types
 export type {
@@ -34,6 +35,7 @@ export type {
   TicketConfirmationParams,
   TicketReplyNotificationParams,
   TicketAssignmentNotificationParams,
+  TicketResolvedParams,
 } from './types';
 
 // ---------------------------------------------------------------------------
@@ -46,12 +48,14 @@ import { buildInternalInviteEmail } from './templates/internal-invite';
 import { buildTicketConfirmationEmail } from './templates/ticket-confirmation';
 import { buildTicketReplyNotification } from './templates/ticket-reply-notification';
 import { buildTicketAssignmentNotification } from './templates/ticket-assignment-notification';
+import { buildTicketResolvedEmail } from './templates/ticket-resolved';
 import type {
   InviteEmailParams,
   InternalInviteEmailParams,
   TicketConfirmationParams,
   TicketReplyNotificationParams,
   TicketAssignmentNotificationParams,
+  TicketResolvedParams,
   SendEmailResult,
 } from './types';
 
@@ -143,5 +147,24 @@ export async function sendTicketAssignmentNotification(
     text,
     emailType: 'ticket_notification',
     logMetadata: { ticketNumber: params.ticketNumber },
+  });
+}
+
+/**
+ * Send a ticket resolved/closed notification to the requester.
+ *
+ * Composes the resolved notification template and sends it via Graph API.
+ */
+export async function sendTicketResolvedEmail(
+  params: TicketResolvedParams,
+): Promise<SendEmailResult> {
+  const { subject, html, text } = buildTicketResolvedEmail(params);
+  return sendEmail({
+    to: params.recipientEmail,
+    subject,
+    html,
+    text,
+    emailType: 'ticket_resolved',
+    logMetadata: { ticketNumber: params.ticketNumber, newStatus: params.newStatus },
   });
 }
