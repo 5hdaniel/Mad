@@ -19,6 +19,9 @@ const execAsync = promisify(exec);
 /** Minimum polling interval in milliseconds */
 const MIN_POLL_INTERVAL_MS = 2000;
 
+/** Slow polling interval when tools are confirmed missing (BACKLOG-1621) */
+const TOOLS_MISSING_POLL_INTERVAL_MS = 60000;
+
 /** Mock device for development without Windows/iPhone */
 const MOCK_DEVICE: iOSDevice = {
   udid: "00000000-0000000000000000",
@@ -79,6 +82,10 @@ export class DeviceDetectionService extends EventEmitter {
   private sentZeroDevicesWarning: boolean = false;
   /** BACKLOG-1582: Track UDIDs we've already attempted to auto-pair, to avoid spamming every poll */
   private autoPairAttempted: Set<string> = new Set();
+  /** BACKLOG-1621: Whether we've already emitted tools-missing and backed off polling */
+  private toolsMissingEmitted: boolean = false;
+  /** BACKLOG-1621: Current polling interval (may be elevated when tools are missing) */
+  private currentPollIntervalMs: number = MIN_POLL_INTERVAL_MS;
 
   constructor() {
     super();
@@ -94,7 +101,9 @@ export class DeviceDetectionService extends EventEmitter {
    * @returns Promise that resolves to true if available
    */
   async checkLibimobiledeviceAvailable(): Promise<boolean> {
-    if (this.libimobiledeviceAvailable !== null) {
+    // BACKLOG-1621: When tools were previously missing, always re-check
+    // so we detect when the user installs iTunes mid-session.
+    if (this.libimobiledeviceAvailable !== null && !this.toolsMissingEmitted) {
       return this.libimobiledeviceAvailable;
     }
 
@@ -112,6 +121,15 @@ export class DeviceDetectionService extends EventEmitter {
       log.info(`[DeviceDetection] Checking libimobiledevice at: ${ideviceIdCmd}`);
       await execAsync(`"${ideviceIdCmd}" --version`);
       this.libimobiledeviceAvailable = true;
+
+      // BACKLOG-1621: Tools became available after being missing — resume
+      if (this.toolsMissingEmitted) {
+        this.toolsMissingEmitted = false;
+        log.info("[DeviceDetection] Tools now available after previously missing");
+        this.emit("tools-available");
+        this.resumeNormalPolling();
+      }
+
       log.info("[DeviceDetection] libimobiledevice is available");
       return true;
     } catch (err) {
@@ -135,6 +153,7 @@ export class DeviceDetectionService extends EventEmitter {
     }
 
     const actualInterval = Math.max(intervalMs, MIN_POLL_INTERVAL_MS);
+    this.currentPollIntervalMs = actualInterval;
     log.info(
       `[DeviceDetection] Starting device polling (interval: ${actualInterval}ms)`,
     );
@@ -157,6 +176,41 @@ export class DeviceDetectionService extends EventEmitter {
       clearInterval(this.pollInterval);
       this.pollInterval = null;
     }
+  }
+
+  /**
+   * BACKLOG-1621: Switch polling to a slow interval when tools are confirmed missing.
+   * If tools become available later (user installs iTunes), checkLibimobiledeviceAvailable
+   * will detect the change and resume normal polling.
+   */
+  private backOffPolling(): void {
+    if (!this.pollInterval) return; // not currently polling
+    // Already backed off — nothing to do
+    if (this.currentPollIntervalMs === TOOLS_MISSING_POLL_INTERVAL_MS) return;
+
+    clearInterval(this.pollInterval);
+    this.currentPollIntervalMs = TOOLS_MISSING_POLL_INTERVAL_MS;
+    log.info(
+      `[DeviceDetection] Backed off polling to ${TOOLS_MISSING_POLL_INTERVAL_MS}ms`,
+    );
+    this.pollInterval = setInterval(() => {
+      this.pollDevices();
+    }, TOOLS_MISSING_POLL_INTERVAL_MS);
+  }
+
+  /**
+   * BACKLOG-1621: Resume normal-speed polling after tools become available.
+   */
+  private resumeNormalPolling(): void {
+    if (!this.pollInterval) return;
+    if (this.currentPollIntervalMs === MIN_POLL_INTERVAL_MS) return;
+
+    clearInterval(this.pollInterval);
+    this.currentPollIntervalMs = MIN_POLL_INTERVAL_MS;
+    log.info("[DeviceDetection] Resuming normal polling interval");
+    this.pollInterval = setInterval(() => {
+      this.pollDevices();
+    }, MIN_POLL_INTERVAL_MS);
   }
 
   /**
@@ -563,6 +617,21 @@ export class DeviceDetectionService extends EventEmitter {
           level: "error",
           data: { platform: process.platform },
         });
+
+        // BACKLOG-1621: Detect ENOENT (executable not found) and mark tools unavailable
+        if ((err as NodeJS.ErrnoException).code === "ENOENT") {
+          this.libimobiledeviceAvailable = false;
+          if (!this.toolsMissingEmitted) {
+            this.toolsMissingEmitted = true;
+            log.warn(
+              "[DeviceDetection] libimobiledevice tools not found (ENOENT). " +
+              "Emitting tools-missing and backing off to 60s polling.",
+            );
+            this.emit("tools-missing");
+            this.backOffPolling();
+          }
+        }
+
         resolve([]);
       });
     });

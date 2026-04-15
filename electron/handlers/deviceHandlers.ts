@@ -156,6 +156,22 @@ export function registerDeviceHandlers(mainWindow: BrowserWindow): void {
     }
   });
 
+  // BACKLOG-1620/1621: Forward tools-missing event to renderer
+  deviceDetectionService.on("tools-missing", () => {
+    log.warn("[DeviceHandlers] Forwarding tools-missing event to renderer");
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.webContents.send("device:tools-missing");
+    }
+  });
+
+  // BACKLOG-1621: Forward tools-available event when tools are installed mid-session
+  deviceDetectionService.on("tools-available", () => {
+    log.info("[DeviceHandlers] Forwarding tools-available event to renderer");
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.webContents.send("device:tools-available");
+    }
+  });
+
   /**
    * BACKLOG-1582: Run device detection diagnostics on demand.
    * Returns actionable info about why devices aren't detected.

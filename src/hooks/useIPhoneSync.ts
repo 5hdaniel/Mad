@@ -64,6 +64,8 @@ export function useIPhoneSync(): UseIPhoneSyncReturn {
   // BACKLOG-1582: Trust state — device visible but not yet trusted
   const [needsTrust, setNeedsTrust] = useState(false);
   const [needsTrustUdid, setNeedsTrustUdid] = useState<string | null>(null);
+  // BACKLOG-1620/1621: Tools missing state — libimobiledevice not installed
+  const [toolsMissing, setToolsMissing] = useState(false);
 
   // Track cleanup functions
   const cleanupRef = useRef<(() => void)[]>([]);
@@ -496,6 +498,36 @@ export function useIPhoneSync(): UseIPhoneSyncReturn {
       }
     }
 
+    // BACKLOG-1620/1621: Listen for tools-missing and tools-available events
+    if (deviceApi) {
+      type DeviceApiWithTools = {
+        onToolsMissing?: (cb: () => void) => () => void;
+        onToolsAvailable?: (cb: () => void) => () => void;
+      };
+      const deviceApiTyped = deviceApi as DeviceApiWithTools;
+      if (deviceApiTyped.onToolsMissing) {
+        const unsub = deviceApiTyped.onToolsMissing(() => {
+          logger.warn("[useIPhoneSync] Tools missing — libimobiledevice not found");
+          setToolsMissing(true);
+          setUserError({
+            code: "MISSING_DRIVERS",
+            title: "Apple drivers not installed",
+            description: "Your computer needs Apple\u2019s tools to communicate with your iPhone.",
+            actionSuggestion: "Install iTunes from the Microsoft Store, then reconnect your iPhone and try again.",
+          });
+        });
+        cleanups.push(unsub);
+      }
+      if (deviceApiTyped.onToolsAvailable) {
+        const unsub = deviceApiTyped.onToolsAvailable(() => {
+          logger.info("[useIPhoneSync] Tools now available — clearing missing state");
+          setToolsMissing(false);
+          setUserError(null);
+        });
+        cleanups.push(unsub);
+      }
+    }
+
     if (syncApi?.startDetection) {
       syncApi.startDetection();
     } else if (deviceApi?.startDetection) {
@@ -825,6 +857,8 @@ export function useIPhoneSync(): UseIPhoneSyncReturn {
     // BACKLOG-1582: Trust state
     needsTrust,
     needsTrustUdid,
+    // BACKLOG-1620/1621: Tools missing state
+    toolsMissing,
     startSync,
     submitPassword,
     cancelSync,
