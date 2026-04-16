@@ -36,6 +36,7 @@ import type {
   SortableColumn,
   SortDirection,
 } from '@/lib/pm-types';
+import { STATUS_LABELS } from '@/lib/pm-types';
 import { TaskTable } from '../../components/TaskTable';
 import { InlineSprintStatusPicker } from '../../components/InlineSprintStatusPicker';
 import { DualProgressBar } from '../../components/DualProgressBar';
@@ -87,6 +88,7 @@ export default function SprintDetailPage() {
   const [deleting, setDeleting] = useState(false);
   const [sortBy, setSortBy] = useState<SortableColumn | null>(null);
   const [sortDir, setSortDir] = useState<SortDirection>('asc');
+  const [statusFilter, setStatusFilter] = useState<ItemStatus | null>(null);
 
   const pageSize = 50;
 
@@ -146,6 +148,12 @@ export default function SprintDetailPage() {
   }
 
   const sortedItems = useMemo(() => sortItems(items, sortBy, sortDir), [items, sortBy, sortDir]);
+
+  // Apply status filter from progress bar click (bar itself stays unchanged)
+  const filteredItems = useMemo(() => {
+    if (!statusFilter) return sortedItems;
+    return sortedItems.filter(item => item.status === statusFilter);
+  }, [sortedItems, statusFilter]);
 
   // Build task URL with sprint context (must be before early returns for hook rules)
   const buildItemUrl = useMemo(
@@ -362,6 +370,8 @@ export default function SprintDetailPage() {
           byStatus={sprint.item_counts}
           estTokens={metrics.total_est_tokens}
           actualTokens={metrics.total_actual_tokens}
+          onStatusFilter={setStatusFilter}
+          activeFilter={statusFilter}
         />
         <div className="grid grid-cols-3 gap-4 mt-4 pt-4 border-t border-gray-100">
           {statusBreakdown.map((item) => {
@@ -496,15 +506,29 @@ export default function SprintDetailPage() {
 
       {/* Sprint Items Table */}
       <div className="mb-6">
-        <h2 className="text-sm font-semibold text-gray-900 mb-3">
-          Sprint Items ({totalCount})
-        </h2>
+        <div className="flex items-center gap-2 mb-3">
+          <h2 className="text-sm font-semibold text-gray-900">
+            Sprint Items ({statusFilter ? filteredItems.length : totalCount})
+          </h2>
+          {statusFilter && (
+            <span className="inline-flex items-center gap-1 px-2 py-0.5 text-xs rounded-full bg-gray-100 text-gray-700">
+              Filtered: {STATUS_LABELS[statusFilter]}
+              <button
+                type="button"
+                onClick={() => setStatusFilter(null)}
+                className="ml-0.5 text-gray-400 hover:text-gray-700"
+              >
+                &times;
+              </button>
+            </span>
+          )}
+        </div>
         <TaskTable
-          items={sortedItems}
-          totalCount={totalCount}
-          page={page}
+          items={filteredItems}
+          totalCount={statusFilter ? filteredItems.length : totalCount}
+          page={statusFilter ? 1 : page}
           pageSize={pageSize}
-          totalPages={totalPages}
+          totalPages={statusFilter ? Math.max(1, Math.ceil(filteredItems.length / pageSize)) : totalPages}
           onPageChange={setPage}
           loading={itemsLoading}
           buildItemUrl={buildItemUrl}
