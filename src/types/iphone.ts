@@ -137,6 +137,8 @@ export interface UseIPhoneSyncReturn {
   needsTrust: boolean;
   /** BACKLOG-1582: UDID of the device that needs trust */
   needsTrustUdid: string | null;
+  /** BACKLOG-1620/1621: Whether libimobiledevice tools are missing (iTunes not installed) */
+  toolsMissing: boolean;
   startSync: () => Promise<void>;
   submitPassword: (password: string) => void;
   cancelSync: () => Promise<void>;

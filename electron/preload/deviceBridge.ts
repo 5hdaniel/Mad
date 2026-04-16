@@ -53,6 +53,26 @@ export const deviceBridge = {
   },
 
   /**
+   * BACKLOG-1620/1621: Subscribe to tools-missing events.
+   * Fires when libimobiledevice executables are not found (ENOENT).
+   */
+  onToolsMissing: (callback: () => void) => {
+    const listener = () => callback();
+    ipcRenderer.on("device:tools-missing", listener);
+    return () => ipcRenderer.removeListener("device:tools-missing", listener);
+  },
+
+  /**
+   * BACKLOG-1621: Subscribe to tools-available events.
+   * Fires when tools become available after previously being missing.
+   */
+  onToolsAvailable: (callback: () => void) => {
+    const listener = () => callback();
+    ipcRenderer.on("device:tools-available", listener);
+    return () => ipcRenderer.removeListener("device:tools-available", listener);
+  },
+
+  /**
    * Subscribes to device connected events
    * @param callback - Callback function when device connects
    * @returns Cleanup function to remove listener
