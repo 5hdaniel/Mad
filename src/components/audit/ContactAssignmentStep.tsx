@@ -119,6 +119,9 @@ function ContactAssignmentStep({
   // Track imported contact IDs for visual feedback
   const [addedContactIds, setAddedContactIds] = useState<Set<string>>(new Set());
 
+  // Track contact IDs to auto-select after manual add via ContactFormModal
+  const [pendingAutoSelectIds, setPendingAutoSelectIds] = useState<string[]>([]);
+
   // BACKLOG-1355: Auto-fill role state
   const [autoRoleEnabled, setAutoRoleEnabled] = useState(false);
   const [autoFilledContactIds, setAutoFilledContactIds] = useState<Set<string>>(new Set());
@@ -251,6 +254,27 @@ function ContactAssignmentStep({
       setAutoFilledContactIds(new Set());
     }
   }, [step]);
+
+  // Auto-select contacts added via ContactFormModal once they appear in the contacts list
+  // Pattern from ContactSelectModal: wait for refresh, then select
+  useEffect(() => {
+    if (pendingAutoSelectIds.length === 0) return;
+
+    const contactIdSet = new Set(contacts.map((c) => c.id));
+    const idsToSelect = pendingAutoSelectIds.filter((id) => contactIdSet.has(id));
+
+    if (idsToSelect.length > 0) {
+      // Add to selectedContactIds (avoid duplicates)
+      const newIds = idsToSelect.filter((id) => !selectedContactIds.includes(id));
+      if (newIds.length > 0) {
+        onSelectedContactIdsChange([...selectedContactIds, ...newIds]);
+      }
+      // Clear pending IDs that were successfully selected
+      setPendingAutoSelectIds((prev) =>
+        prev.filter((id) => !contactIdSet.has(id))
+      );
+    }
+  }, [pendingAutoSelectIds, contacts, selectedContactIds, onSelectedContactIdsChange]);
 
   // Get selected contacts for step 2
   const selectedContacts = useMemo(() => {
@@ -476,9 +500,13 @@ function ContactAssignmentStep({
             setShowEditModal(false);
             setEditContact(undefined);
           }}
-          onSuccess={() => {
+          onSuccess={(savedContact) => {
             setShowEditModal(false);
             setEditContact(undefined);
+            // If a new contact was created (not editing), queue it for auto-select
+            if (savedContact?.id && !editContact) {
+              setPendingAutoSelectIds((prev) => [...prev, savedContact.id]);
+            }
             onRefreshContacts();
           }}
         />
