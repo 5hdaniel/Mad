@@ -24,6 +24,7 @@ import type { AppState } from "./types";
 jest.mock("@sentry/electron/renderer", () => ({
   addBreadcrumb: jest.fn(),
   setTag: jest.fn(),
+  captureException: jest.fn(),
   captureMessage: jest.fn(),
 }));
 
