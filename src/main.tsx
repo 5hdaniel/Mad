@@ -8,6 +8,7 @@ import {
   FeatureFlaggedProvider,
   LoadingOrchestrator,
 } from "./appCore/state/machine";
+import { clearCorruptedSession } from "./utils/clearCorruptedSession";
 import "./index.css";
 
 // Initialize Sentry in the renderer process (TASK-1967)
@@ -29,6 +30,23 @@ Sentry.init({
     return event;
   },
 });
+
+// BACKLOG-1632: Clear corrupted Supabase session data from localStorage
+// before the SDK can attempt to parse it. Reports to Sentry if corruption found.
+const corruptedKeys = clearCorruptedSession();
+if (corruptedKeys.length > 0) {
+  Sentry.captureMessage("Corrupted Supabase session cleared from localStorage", {
+    level: "warning",
+    tags: {
+      component: "clearCorruptedSession",
+      issue: "BACKLOG-1632",
+    },
+    extra: {
+      corruptedKeys,
+      count: corruptedKeys.length,
+    },
+  });
+}
 
 // Capture unhandled promise rejections in the renderer (BACKLOG-1119)
 window.addEventListener('unhandledrejection', (event: PromiseRejectionEvent) => {
