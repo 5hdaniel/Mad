@@ -430,3 +430,239 @@ jobs:
             artifacts/release-windows/*.exe \
             artifacts/release-windows/*.yml \
             artifacts/release-windows/*.blockmap
+
+      # Verify that the sha512 hashes in latest.yml / latest-mac.yml match
+      # what GitHub actually serves. GitHub may alter binaries during upload,
+      # causing auto-updater checksum failures (see BACKLOG-1642).
+      - name: Verify release asset integrity
+        env:
+          GH_TOKEN: ${{ secrets.PUBLIC_RELEASE_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          VERSION: v${{ steps.version.outputs.version }}
+        run: |
+          set -euo pipefail
+
+          PRIVATE_REPO="${GITHUB_REPOSITORY}"
+          PUBLIC_REPO="5hdaniel/keepr-releases"
+          VERIFY_DIR=$(mktemp -d)
+          MISMATCH_FOUND=false
+
+          echo "=== Verifying release asset integrity for ${VERSION} ==="
+
+          # ── Helper: compute sha512 in base64 (matches electron-builder format) ──
+          compute_hash() {
+            openssl dgst -sha512 -binary "$1" | openssl base64 -A
+          }
+
+          # ── Helper: extract hash for a filename from a yml file ──
+          # electron-builder yml has: top-level sha512/path, and files[].sha512/url
+          extract_hash() {
+            local YML_FILE="$1"
+            local ASSET_NAME="$2"
+            node -e "
+              const fs = require('fs');
+              const content = fs.readFileSync('${YML_FILE}', 'utf8');
+              // Parse the simple YAML manually — electron-builder format is predictable
+              // Top-level: path: <name>\nsha512: <hash>
+              // Files section: - url: <name>\n  sha512: <hash>
+              const lines = content.split('\n');
+
+              // Check top-level path match
+              let topPath = '', topHash = '';
+              for (const line of lines) {
+                const pm = line.match(/^path:\s*(.+)/);
+                if (pm) topPath = pm[1].trim();
+                const hm = line.match(/^sha512:\s*(.+)/);
+                if (hm) topHash = hm[1].trim();
+              }
+              if (topPath === '${ASSET_NAME}' && topHash) {
+                process.stdout.write(topHash);
+                process.exit(0);
+              }
+
+              // Check files entries
+              let currentUrl = '';
+              for (const line of lines) {
+                const um = line.match(/^\s+-?\s*url:\s*(.+)/);
+                if (um) currentUrl = um[1].trim();
+                const sm = line.match(/^\s+sha512:\s*(.+)/);
+                if (sm && currentUrl === '${ASSET_NAME}') {
+                  process.stdout.write(sm[1].trim());
+                  process.exit(0);
+                }
+              }
+              // Not found — output empty
+            " 2>/dev/null || true
+          }
+
+          # ── Helper: update hash for a filename in a yml file ──
+          update_hash() {
+            local YML_FILE="$1"
+            local ASSET_NAME="$2"
+            local NEW_HASH="$3"
+            local NEW_SIZE="$4"
+            node -e "
+              const fs = require('fs');
+              let content = fs.readFileSync('${YML_FILE}', 'utf8');
+              const lines = content.split('\n');
+              const result = [];
+              let topPath = '';
+              let inTargetFile = false;
+
+              for (let i = 0; i < lines.length; i++) {
+                let line = lines[i];
+
+                // Detect top-level path
+                const pm = line.match(/^path:\s*(.+)/);
+                if (pm) topPath = pm[1].trim();
+
+                // Replace top-level sha512 if path matches
+                if (line.match(/^sha512:\s/) && topPath === '${ASSET_NAME}') {
+                  line = 'sha512: ${NEW_HASH}';
+                }
+
+                // Replace top-level size if path matches
+                if (line.match(/^size:\s/) && topPath === '${ASSET_NAME}') {
+                  line = 'size: ${NEW_SIZE}';
+                }
+
+                // Track which file entry we are in
+                const um = line.match(/^(\s+-?\s*)url:\s*(.+)/);
+                if (um) {
+                  inTargetFile = um[2].trim() === '${ASSET_NAME}';
+                }
+
+                // Replace sha512 in the matching files entry
+                if (inTargetFile && line.match(/^\s+sha512:\s/)) {
+                  const indent = line.match(/^(\s+)/)[1];
+                  line = indent + 'sha512: ${NEW_HASH}';
+                }
+
+                // Replace size in the matching files entry
+                if (inTargetFile && line.match(/^\s+size:\s/)) {
+                  const indent = line.match(/^(\s+)/)[1];
+                  line = indent + 'size: ${NEW_SIZE}';
+                }
+
+                result.push(line);
+              }
+              fs.writeFileSync('${YML_FILE}', result.join('\n'));
+            "
+          }
+
+          # ── Helper: verify and fix one asset file against its yml ──
+          verify_asset() {
+            local ASSET_FILE="$1"
+            local YML_FILE="$2"
+            local TOKEN="$3"
+            local REPO="$4"
+            local REPO_LABEL="$5"
+
+            local ASSET_NAME
+            ASSET_NAME=$(basename "${ASSET_FILE}")
+            local YML_NAME
+            YML_NAME=$(basename "${YML_FILE}")
+
+            local ACTUAL_HASH
+            ACTUAL_HASH=$(compute_hash "${ASSET_FILE}")
+
+            local EXPECTED_HASH
+            EXPECTED_HASH=$(extract_hash "${YML_FILE}" "${ASSET_NAME}")
+
+            if [ -z "${EXPECTED_HASH}" ]; then
+              echo "  Skip: ${ASSET_NAME} not referenced in ${YML_NAME}"
+              return 0
+            fi
+
+            if [ "${ACTUAL_HASH}" = "${EXPECTED_HASH}" ]; then
+              echo "  OK: ${ASSET_NAME} hash matches ${YML_NAME}"
+            else
+              echo "::warning::MISMATCH in ${REPO_LABEL}: ${ASSET_NAME} hash differs from ${YML_NAME}"
+              echo "    Expected: ${EXPECTED_HASH}"
+              echo "    Actual:   ${ACTUAL_HASH}"
+              MISMATCH_FOUND=true
+
+              local ACTUAL_SIZE
+              ACTUAL_SIZE=$(stat -c%s "${ASSET_FILE}" 2>/dev/null || stat -f%z "${ASSET_FILE}")
+
+              update_hash "${YML_FILE}" "${ASSET_NAME}" "${ACTUAL_HASH}" "${ACTUAL_SIZE}"
+              echo "    Updated ${YML_NAME} with correct hash"
+
+              # Return non-zero to signal the yml needs re-uploading
+              return 1
+            fi
+          }
+
+          # ── Main: verify one repo ──────────────────────────────────
+          verify_repo() {
+            local REPO="$1"
+            local TOKEN="$2"
+            local REPO_LABEL="$3"
+            local DL_DIR="${VERIFY_DIR}/${REPO_LABEL}"
+            mkdir -p "${DL_DIR}"
+
+            echo ""
+            echo "--- Verifying ${REPO_LABEL} (${REPO}) ---"
+
+            # Download all release assets
+            GH_TOKEN="${TOKEN}" gh release download "${VERSION}" \
+              --repo "${REPO}" \
+              --dir "${DL_DIR}" 2>/dev/null || {
+                echo "::warning::Could not download assets from ${REPO}. Skipping."
+                return 0
+              }
+
+            echo "Downloaded assets:"
+            ls -la "${DL_DIR}/"
+
+            # ── Windows: verify .exe against latest.yml ──
+            if [ -f "${DL_DIR}/latest.yml" ]; then
+              echo ""
+              echo "Checking Windows assets..."
+              local WIN_NEEDS_UPLOAD=false
+              for EXE_FILE in "${DL_DIR}"/*.exe; do
+                [ -f "${EXE_FILE}" ] || continue
+                verify_asset "${EXE_FILE}" "${DL_DIR}/latest.yml" "${TOKEN}" "${REPO}" "${REPO_LABEL}" || WIN_NEEDS_UPLOAD=true
+              done
+              if [ "${WIN_NEEDS_UPLOAD}" = true ]; then
+                echo "  Re-uploading corrected latest.yml to ${REPO_LABEL}..."
+                GH_TOKEN="${TOKEN}" gh release upload "${VERSION}" \
+                  --repo "${REPO}" --clobber "${DL_DIR}/latest.yml"
+              fi
+            fi
+
+            # ── macOS: verify .dmg and .zip against latest-mac.yml ──
+            if [ -f "${DL_DIR}/latest-mac.yml" ]; then
+              echo ""
+              echo "Checking macOS assets..."
+              local MAC_NEEDS_UPLOAD=false
+              for DMG_FILE in "${DL_DIR}"/*.dmg; do
+                [ -f "${DMG_FILE}" ] || continue
+                verify_asset "${DMG_FILE}" "${DL_DIR}/latest-mac.yml" "${TOKEN}" "${REPO}" "${REPO_LABEL}" || MAC_NEEDS_UPLOAD=true
+              done
+              for ZIP_FILE in "${DL_DIR}"/*.zip; do
+                [ -f "${ZIP_FILE}" ] || continue
+                verify_asset "${ZIP_FILE}" "${DL_DIR}/latest-mac.yml" "${TOKEN}" "${REPO}" "${REPO_LABEL}" || MAC_NEEDS_UPLOAD=true
+              done
+              if [ "${MAC_NEEDS_UPLOAD}" = true ]; then
+                echo "  Re-uploading corrected latest-mac.yml to ${REPO_LABEL}..."
+                GH_TOKEN="${TOKEN}" gh release upload "${VERSION}" \
+                  --repo "${REPO}" --clobber "${DL_DIR}/latest-mac.yml"
+              fi
+            fi
+          }
+
+          # Verify both repos — public first (auto-updater fetches from here)
+          verify_repo "${PUBLIC_REPO}" "${GH_TOKEN}" "public"
+          verify_repo "${PRIVATE_REPO}" "${GITHUB_TOKEN}" "private"
+
+          # Cleanup
+          rm -rf "${VERIFY_DIR}"
+
+          if [ "${MISMATCH_FOUND}" = true ]; then
+            echo ""
+            echo "::warning::Hash mismatches were detected and corrected. Updated yml files re-uploaded."
+          else
+            echo ""
+            echo "All release asset hashes verified successfully."
+          fi
