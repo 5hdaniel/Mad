@@ -80,16 +80,30 @@ function clearCorruptedCookies(): void {
   if (typeof document === 'undefined') return;
   try {
     const parsed = parse(document.cookie);
-    for (const name of Object.keys(parsed)) {
+    const cookieNames = Object.keys(parsed);
+    const corruptedTokenPrefixes = new Set<string>();
+
+    // First pass: find corrupted cookies and identify their token prefix
+    for (const name of cookieNames) {
       if (name.includes('supabase') || name.startsWith('sb-')) {
         const value = parsed[name];
         if (value && value.startsWith('base64-')) {
           if (!isValidBase64UrlUtf8(value.substring(7))) {
-            console.warn(
-              `[Supabase] Clearing corrupted cookie: ${name}`
-            );
-            document.cookie = serialize(name, '', { maxAge: 0, path: '/' });
+            // Extract the token prefix (e.g., "sb-xxx-auth-token" from "sb-xxx-auth-token.0")
+            const prefix = name.replace(/\.\d+$/, '');
+            corruptedTokenPrefixes.add(prefix);
           }
+        }
+      }
+    }
+
+    // Second pass: expire ALL chunks of any corrupted token
+    if (corruptedTokenPrefixes.size > 0) {
+      for (const name of cookieNames) {
+        const prefix = name.replace(/\.\d+$/, '');
+        if (corruptedTokenPrefixes.has(prefix) || corruptedTokenPrefixes.has(name)) {
+          console.warn(`[Supabase] Clearing corrupted cookie: ${name}`);
+          document.cookie = serialize(name, '', { maxAge: 0, path: '/' });
         }
       }
     }
@@ -113,27 +127,46 @@ function safeGetAllCookies(): { name: string; value: string }[] {
   if (typeof document === 'undefined') return [];
   try {
     const parsed = parse(document.cookie);
-    const results: { name: string; value: string }[] = [];
-    for (const name of Object.keys(parsed)) {
-      const value = parsed[name];
-      // Validate Supabase cookies with base64url-encoded values
+    const cookieNames = Object.keys(parsed);
+    const corruptedTokenPrefixes = new Set<string>();
+
+    // First pass: identify corrupted token prefixes
+    for (const name of cookieNames) {
       const isSupabaseCookie =
         name.includes('supabase') || name.startsWith('sb-');
-      if (isSupabaseCookie && value && value.startsWith('base64-')) {
-        if (!isValidBase64UrlUtf8(value.substring(7))) {
-          console.warn(
-            `[Supabase] Filtering corrupted cookie from getAll: ${name}`
-          );
-          // Also expire the corrupted cookie
-          document.cookie = serialize(name, '', { maxAge: 0, path: '/' });
-          continue;
+      if (isSupabaseCookie) {
+        const value = parsed[name];
+        if (value && value.startsWith('base64-')) {
+          if (!isValidBase64UrlUtf8(value.substring(7))) {
+            const prefix = name.replace(/\.\d+$/, '');
+            corruptedTokenPrefixes.add(prefix);
+          }
         }
       }
-      results.push({ name, value });
+    }
+
+    // Second pass: filter out ALL chunks of corrupted tokens, expire them
+    if (corruptedTokenPrefixes.size > 0) {
+      for (const name of cookieNames) {
+        const prefix = name.replace(/\.\d+$/, '');
+        if (corruptedTokenPrefixes.has(prefix) || corruptedTokenPrefixes.has(name)) {
+          console.warn(`[Supabase] Filtering corrupted cookie from getAll: ${name}`);
+          document.cookie = serialize(name, '', { maxAge: 0, path: '/' });
+        }
+      }
+    }
+
+    // Return only non-corrupted cookies
+    const results: { name: string; value: string }[] = [];
+    for (const name of cookieNames) {
+      const prefix = name.replace(/\.\d+$/, '');
+      if (corruptedTokenPrefixes.has(prefix) || corruptedTokenPrefixes.has(name)) {
+        continue;
+      }
+      results.push({ name, value: parsed[name] });
     }
     return results;
   } catch {
-    // Entire document.cookie read failed
     return [];
   }
 }
