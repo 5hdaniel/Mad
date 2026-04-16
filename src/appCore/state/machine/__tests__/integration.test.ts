@@ -17,6 +17,11 @@
 import React from "react";
 import { act, waitFor, renderHook, screen } from "@testing-library/react";
 
+// BACKLOG-1629: Mock Sentry since ErrorScreen now reports errors to Sentry
+jest.mock("@sentry/electron/renderer", () => ({
+  captureException: jest.fn(),
+}));
+
 // BACKLOG-1629: Mock SupportWidget since ErrorScreen now includes it
 // and PlatformProvider is not available in the test wrapper
 jest.mock("../../../../components/support/SupportWidget", () => ({

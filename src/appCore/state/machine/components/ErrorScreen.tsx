@@ -2,15 +2,17 @@
  * Error Screen Component
  * TASK-1800: Enhanced with error reporting to Supabase
  * TASK-1802: Added Reset App Data self-healing feature
+ * BACKLOG-1629: Improved UX — friendly message, SupportWidget integration,
+ *   collapsible technical details, Sentry logging, streamlined reset dialog
  *
  * Displays error information when the application encounters
- * a non-recoverable error during initialization. Users can optionally
- * submit feedback about what they were doing when the error occurred.
+ * a non-recoverable error during initialization.
  *
  * @module appCore/state/machine/components/ErrorScreen
  */
 
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
+import * as Sentry from "@sentry/electron/renderer";
 import { ResponsiveModal } from "../../../../components/common/ResponsiveModal";
 import type { AppError } from "../types";
 import { OfflineNotice } from "../../../../components/common/OfflineNotice";
@@ -23,59 +25,52 @@ interface ErrorScreenProps {
   onRetry?: () => void;
 }
 
+/** Dispatch the 'open-support-widget' custom event to open the SupportWidget dialog. */
+function openSupportWidget(subject: string): void {
+  window.dispatchEvent(
+    new CustomEvent("open-support-widget", { detail: { subject } }),
+  );
+}
+
 /**
  * Error screen shown when app encounters a non-recoverable error.
- * Displays error message, code, optional retry button, error reporting,
- * and a reset app data option for self-healing.
+ * Displays a user-friendly message, optional retry button, contact support,
+ * collapsible technical details, and a reset app data option for self-healing.
  */
 export function ErrorScreen({
   error,
   onRetry,
 }: ErrorScreenProps): React.ReactElement {
-  const [feedback, setFeedback] = useState("");
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const [submitted, setSubmitted] = useState(false);
-  const [submitError, setSubmitError] = useState<string | null>(null);
-
   // Reset dialog state
   const [showResetDialog, setShowResetDialog] = useState(false);
-  const [resetConfirmation, setResetConfirmation] = useState("");
   const [isResetting, setIsResetting] = useState(false);
   const [resetError, setResetError] = useState<string | null>(null);
 
-  const handleSubmitReport = async () => {
-    setIsSubmitting(true);
-    setSubmitError(null);
+  // Log the full technical error to Sentry on mount
+  useEffect(() => {
+    Sentry.captureException(
+      error.details instanceof Error
+        ? error.details
+        : new Error(error.message),
+      {
+        tags: { error_code: error.code },
+        extra: {
+          errorCode: error.code,
+          errorMessage: error.message,
+          errorDetails:
+            typeof error.details === "string"
+              ? error.details
+              : String(error.details ?? ""),
+        },
+      },
+    );
+  }, [error]);
 
-    try {
-      const result = await window.api.errorLogging.submit({
-        errorType: "app_error",
-        errorCode: error.code,
-        errorMessage: error.message,
-        stackTrace: typeof error.details === "string" ? error.details : undefined,
-        userFeedback: feedback || undefined,
-        currentScreen: "ErrorScreen",
-      });
-
-      if (result.success) {
-        setSubmitted(true);
-      } else {
-        // Silent fail - don't show another error to the user
-        // The error has already been queued for retry
-        setSubmitted(true);
-      }
-    } catch {
-      // Silent fail - don't show another error when user already has one
-      // Just mark as submitted to provide closure
-      setSubmitted(true);
-    } finally {
-      setIsSubmitting(false);
-    }
+  const handleContactSupport = () => {
+    openSupportWidget(`${error.code} error encountered`);
   };
 
   const handleReset = async () => {
-    if (resetConfirmation !== "RESET") return;
-
     setIsResetting(true);
     setResetError(null);
 
@@ -94,7 +89,6 @@ export function ErrorScreen({
 
   const handleCloseResetDialog = () => {
     setShowResetDialog(false);
-    setResetConfirmation("");
     setResetError(null);
   };
 
@@ -126,49 +120,36 @@ export function ErrorScreen({
           </svg>
         </div>
 
-        {/* Error message */}
+        {/* User-friendly error message */}
         <h1 className="text-xl font-semibold text-gray-900 mb-2">
           Something went wrong
         </h1>
-        <p className="text-gray-600 mb-4">{error.message}</p>
-        <p className="text-sm text-gray-500 mb-6">Error code: {error.code}</p>
+        <p className="text-gray-600 mb-4">
+          Keepr couldn&apos;t start because the local database failed to
+          initialize. This is usually fixed by restarting the app. If the
+          problem persists, please contact support.
+        </p>
+        <p className="text-xs text-gray-400 mb-4">
+          Error code: {error.code}
+        </p>
 
-        {/* Error report section */}
-        {!submitted ? (
-          <div className="mb-6 text-left">
-            <label
-              htmlFor="feedback"
-              className="block text-sm font-medium text-gray-700 mb-2"
-            >
-              Help us improve (optional)
-            </label>
-            <textarea
-              id="feedback"
-              value={feedback}
-              onChange={(e) => setFeedback(e.target.value)}
-              placeholder="What were you doing when this happened?"
-              className="w-full p-3 border border-gray-300 rounded-lg mb-3 text-sm resize-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-gray-900 bg-white"
-              rows={3}
-              disabled={isSubmitting}
-            />
-            {submitError && (
-              <p className="text-red-500 text-sm mb-3">{submitError}</p>
-            )}
-            <button
-              onClick={handleSubmitReport}
-              disabled={isSubmitting}
-              className="w-full px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed text-sm"
-              type="button"
-            >
-              {isSubmitting ? "Submitting..." : "Submit Error Report"}
-            </button>
-          </div>
-        ) : (
-          <div className="mb-6 p-3 bg-green-50 border border-green-200 rounded-lg">
-            <p className="text-green-700 text-sm">
-              Thank you! Your report has been submitted.
-            </p>
-          </div>
+        {/* Collapsible technical details */}
+        {(error.message || Boolean(error.details)) && (
+          <details className="text-left mb-6 bg-gray-50 rounded-lg p-4">
+            <summary className="text-sm font-medium text-gray-700 cursor-pointer">
+              Technical Details
+            </summary>
+            <div className="mt-2 text-xs font-mono text-gray-600 overflow-auto max-h-32">
+              <p className="font-semibold text-red-600 mb-2">
+                {error.message}
+              </p>
+              {typeof error.details === "string" && error.details && (
+                <pre className="whitespace-pre-wrap text-gray-500 text-[10px]">
+                  {error.details}
+                </pre>
+              )}
+            </div>
+          </details>
         )}
 
         {/* Action buttons */}
@@ -184,10 +165,19 @@ export function ErrorScreen({
             </button>
           )}
 
+          {/* Contact Support button (opens SupportWidget) */}
+          <button
+            onClick={handleContactSupport}
+            className="w-full px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition-colors text-sm"
+            type="button"
+          >
+            Contact Support
+          </button>
+
           {/* Reset App Data button */}
           <button
             onClick={() => setShowResetDialog(true)}
-            className="w-full px-6 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors text-sm"
+            className="w-full px-6 py-2 border border-red-300 text-red-600 rounded-lg hover:bg-red-50 transition-colors text-sm"
             type="button"
           >
             Reset App Data
@@ -197,57 +187,42 @@ export function ErrorScreen({
 
       {/* Reset Confirmation Dialog */}
       {showResetDialog && (
-        <ResponsiveModal onClose={() => setShowResetDialog(false)} overlayClassName="bg-black bg-opacity-50" panelClassName="max-w-md p-6">
+        <ResponsiveModal onClose={handleCloseResetDialog} overlayClassName="bg-black bg-opacity-50" panelClassName="max-w-md p-6">
             <h2 className="text-xl font-bold text-red-600 mb-4">
               Reset App Data
             </h2>
             <p className="text-gray-600 mb-4">
-              This will permanently delete all local data:
+              This will delete your local database. You will need to sign in
+              again and run an initial sync to restore your data.
             </p>
-            <ul className="list-disc list-inside text-gray-600 mb-4 text-sm space-y-1">
-              <li>All imported transactions</li>
-              <li>All imported messages and emails</li>
-              <li>Email account connections</li>
-              <li>App preferences and settings</li>
-              <li>Local database and cached data</li>
-            </ul>
-            <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 mb-4">
-              <p className="text-blue-800 text-sm">
-                <strong>Your Supabase account and cloud data will NOT be affected.</strong>
-                {" "}You will need to reconnect your email accounts after reset.
+            <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 mb-4">
+              <p className="text-amber-800 text-sm">
+                We recommend only using this option if instructed by Keepr
+                Support.
               </p>
             </div>
-            <p className="text-gray-800 font-medium mb-2">
-              Type <span className="font-mono bg-gray-100 px-1">RESET</span> to confirm:
-            </p>
-            <input
-              type="text"
-              value={resetConfirmation}
-              onChange={(e) => setResetConfirmation(e.target.value.toUpperCase())}
-              className="w-full border border-gray-300 rounded-lg px-3 py-2 mb-4 focus:ring-2 focus:ring-red-500 focus:border-red-500"
-              placeholder="Type RESET"
-              disabled={isResetting}
-              autoComplete="off"
-            />
             {resetError && (
               <p className="text-red-500 text-sm mb-4">{resetError}</p>
             )}
-            <div className="flex justify-end space-x-3">
+            <div className="flex flex-col space-y-3">
               <button
-                onClick={handleCloseResetDialog}
-                className="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+                onClick={() => {
+                  handleCloseResetDialog();
+                  handleContactSupport();
+                }}
+                className="w-full px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm"
                 disabled={isResetting}
                 type="button"
               >
-                Cancel
+                Contact Support
               </button>
               <button
                 onClick={handleReset}
-                disabled={resetConfirmation !== "RESET" || isResetting}
-                className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                disabled={isResetting}
+                className="w-full px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed text-sm"
                 type="button"
               >
-                {isResetting ? "Resetting..." : "Confirm Reset"}
+                {isResetting ? "Resetting..." : "Delete My Data"}
               </button>
             </div>
         </ResponsiveModal>
