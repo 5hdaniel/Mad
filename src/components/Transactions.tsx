@@ -470,9 +470,10 @@ function Transactions({
           userId={userId}
           provider={provider}
           onClose={closeAuditCreate}
-          onSuccess={() => {
+          onSuccess={(transaction) => {
             closeAuditCreate();
             refetch();
+            setSelectedTransaction(transaction);
           }}
         />
       )}
