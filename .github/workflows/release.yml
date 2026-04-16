@@ -378,7 +378,7 @@ jobs:
             |----------|----------|
             | macOS (Apple Silicon) | `Keepr-${{ steps.version.outputs.version }}-arm64.dmg` |
             | macOS (Intel) | `Keepr-${{ steps.version.outputs.version }}-x64.dmg` |
-            | Windows | `Keepr Setup ${{ steps.version.outputs.version }}.exe` |
+            | Windows | `Keepr-Setup-${{ steps.version.outputs.version }}.exe` |
 
             ### What's New
 
