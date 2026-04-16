@@ -381,6 +381,11 @@ export class BackupService extends EventEmitter {
       this.currentProcess.stderr?.on("data", (data: Buffer) => {
         const output = data.toString();
         stderrBuffer += output;
+        // BACKLOG-1628: Cap stderrBuffer to prevent unbounded memory growth.
+        // With -d flag, stderr can exceed 50 MB during a long backup.
+        if (stderrBuffer.length > 65536) {
+          stderrBuffer = stderrBuffer.slice(-65536);
+        }
 
         // BACKLOG-1628: Track stderr activity for watchdog
         this.lastStderrTimestamp = Date.now();
@@ -389,7 +394,7 @@ export class BackupService extends EventEmitter {
         // The -d flag produces very verbose output (30K+ lines in 20s).
         // We buffer and parse line-by-line, only acting on specific patterns.
         this.stderrLineBuffer += output;
-        const lines = this.stderrLineBuffer.split("\n");
+        const lines = this.stderrLineBuffer.split(/\r?\n/);
         // Keep the last incomplete line in the buffer
         this.stderrLineBuffer = lines.pop() || "";
 
@@ -416,6 +421,32 @@ export class BackupService extends EventEmitter {
 
         if (isErrorPattern) {
           log.warn("[BackupService] stderr (error pattern):", output.trim().substring(0, 500));
+        } else {
+          // BACKLOG-1628: Restore Sentry breadcrumbs for unrecognized non-debug patterns.
+          // With -d flag, known debug prefixes (SSL_write, service_send, etc.) are very
+          // frequent and should be silently skipped. But genuinely unrecognized lines
+          // may indicate new error patterns we haven't categorized yet.
+          const isDebugLine =
+            output.includes("SSL_write") ||
+            output.includes("service_send") ||
+            output.includes("internal_plist") ||
+            output.includes("idevice_connection") ||
+            output.includes("Sending '") ||
+            output.includes("Negotiated Protocol") ||
+            output.includes("backup mode") ||
+            output.includes("Starting backup") ||
+            output.includes("Requesting backup") ||
+            output.includes("Status.plist") ||
+            output.includes("Manifest.plist") ||
+            output.includes("Manifest.db");
+
+          if (!isDebugLine && output.trim().length > 0) {
+            Sentry.addBreadcrumb({
+              category: "backup",
+              message: output.trim().substring(0, 200),
+              level: "info",
+            });
+          }
         }
       });
 
