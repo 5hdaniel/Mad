@@ -14,6 +14,7 @@ import React, { useState } from "react";
 import { ResponsiveModal } from "../../../../components/common/ResponsiveModal";
 import type { AppError } from "../types";
 import { OfflineNotice } from "../../../../components/common/OfflineNotice";
+import { SupportWidget } from "../../../../components/support/SupportWidget";
 
 interface ErrorScreenProps {
   /** Error details to display */
@@ -98,8 +99,13 @@ export function ErrorScreen({
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-red-50 via-orange-50 to-yellow-50 flex flex-col">
+    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50 flex flex-col">
       <OfflineNotice />
+      {/* BACKLOG-1629: SupportWidget included directly because ErrorScreen replaces
+          the normal App component tree (rendered by LoadingOrchestrator), so the
+          SupportWidget in App.tsx is never mounted when this screen is visible.
+          SupportWidget handles no-DB/unauthenticated states gracefully. */}
+      <SupportWidget />
       <div className="flex-1 flex items-center justify-center p-4">
       <div className="text-center max-w-md w-full">
         {/* Error icon */}

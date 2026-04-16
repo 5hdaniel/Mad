@@ -27,6 +27,12 @@ jest.mock("@sentry/electron/renderer", () => ({
   captureMessage: jest.fn(),
 }));
 
+// BACKLOG-1629: Mock SupportWidget since ErrorScreen now includes it
+// and PlatformProvider is not available in the test wrapper
+jest.mock("../../../components/support/SupportWidget", () => ({
+  SupportWidget: () => null,
+}));
+
 jest.mock("../../../contexts/NetworkContext", () => ({
   useNetwork: () => ({
     isOnline: true,
