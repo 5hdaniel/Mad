@@ -33,6 +33,12 @@ export interface BackupProgress {
   totalBytes: number | null;
   /** Estimated time remaining in seconds, if calculable */
   estimatedTimeRemaining: number | null;
+  /**
+   * BACKLOG-1628: Optional user-facing message for sub-phase detail.
+   * During the preparing phase, this carries context about what the process
+   * is doing (e.g., "Uploading backup index (563 MB)...").
+   */
+  message?: string;
 }
 
 /**

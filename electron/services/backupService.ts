@@ -64,12 +64,19 @@ export class BackupService extends EventEmitter {
   private static readonly PASSCODE_WAIT_DETECTION_MS = 5000; // 5 seconds without progress = waiting for passcode
 
   // BACKLOG-1582: Watchdog timer to detect zombie idevicebackup2 processes
+  // BACKLOG-1628: Track both stdout and stderr activity for watchdog
   private lastStdoutTimestamp: number = 0;
+  private lastStderrTimestamp: number = 0;
   private watchdogInterval: NodeJS.Timeout | null = null;
   private watchdogFired: boolean = false;
   private static readonly WATCHDOG_CHECK_INTERVAL_MS = 30_000; // Check every 30s
   private static readonly WATCHDOG_PREPARING_TIMEOUT_MS = 180_000; // 3 min during preparation
   private static readonly WATCHDOG_TRANSFER_TIMEOUT_MS = 120_000; // 2 min during active transfer
+
+  // BACKLOG-1628: Stderr debug parsing state
+  private stderrLineBuffer: string = "";
+  private manifestUploadPhase: boolean = false;
+  private manifestUploadSize: string | null = null;
 
   constructor() {
     super();
@@ -302,9 +309,16 @@ export class BackupService extends EventEmitter {
       this.emit("progress", this.lastProgress);
 
       // BACKLOG-1582: Reset watchdog state
+      // BACKLOG-1628: Reset both stdout and stderr timestamps
       this.watchdogFired = false;
       this.lastStdoutTimestamp = Date.now();
+      this.lastStderrTimestamp = Date.now();
       this.clearWatchdog();
+
+      // BACKLOG-1628: Reset stderr parsing state
+      this.stderrLineBuffer = "";
+      this.manifestUploadPhase = false;
+      this.manifestUploadSize = null;
 
       this.currentProcess = spawn(idevicebackup2, args, {
         stdio: ["pipe", "pipe", "pipe"],
@@ -367,37 +381,70 @@ export class BackupService extends EventEmitter {
       this.currentProcess.stderr?.on("data", (data: Buffer) => {
         const output = data.toString();
         stderrBuffer += output;
+        // BACKLOG-1628: Cap stderrBuffer to prevent unbounded memory growth.
+        // With -d flag, stderr can exceed 50 MB during a long backup.
+        if (stderrBuffer.length > 65536) {
+          stderrBuffer = stderrBuffer.slice(-65536);
+        }
 
-        // Only log non-progress-bar output (progress bars are very spammy)
-        const isProgressBar = /\[=*\s*\]\s*\d+%/.test(output);
-        if (!isProgressBar && output.trim()) {
-          log.warn("[BackupService] stderr:", output.trim());
+        // BACKLOG-1628: Track stderr activity for watchdog
+        this.lastStderrTimestamp = Date.now();
 
-          // BACKLOG-1354: Log unrecognized stderr patterns to Sentry breadcrumb
-          // Known patterns: trust, password, locked, passcode, no device, not found, disk, space, storage
-          const outputLower = output.toLowerCase();
-          const isKnownPattern =
-            outputLower.includes("trust") ||
-            outputLower.includes("pair") ||
-            outputLower.includes("password") ||
-            outputLower.includes("incorrect") ||
-            outputLower.includes("locked") ||
-            outputLower.includes("passcode") ||
-            outputLower.includes("no device") ||
-            outputLower.includes("not found") ||
-            outputLower.includes("disk") ||
-            outputLower.includes("space") ||
-            outputLower.includes("storage");
+        // BACKLOG-1628: Parse stderr line-by-line for debug signals
+        // The -d flag produces very verbose output (30K+ lines in 20s).
+        // We buffer and parse line-by-line, only acting on specific patterns.
+        this.stderrLineBuffer += output;
+        const lines = this.stderrLineBuffer.split(/\r?\n/);
+        // Keep the last incomplete line in the buffer
+        this.stderrLineBuffer = lines.pop() || "";
 
-          if (!isKnownPattern) {
+        for (const line of lines) {
+          this.parseStderrLine(line, options.udid);
+        }
+
+        // Original: log non-progress, non-debug lines for error detection
+        // With -d flag, only log lines that match known error patterns
+        // (the debug output is far too verbose to log in full)
+        const outputLower = output.toLowerCase();
+        const isErrorPattern =
+          outputLower.includes("trust") ||
+          outputLower.includes("pair") ||
+          outputLower.includes("password") ||
+          outputLower.includes("incorrect") ||
+          outputLower.includes("locked") ||
+          outputLower.includes("passcode") ||
+          outputLower.includes("no device") ||
+          outputLower.includes("not found") ||
+          outputLower.includes("disk") ||
+          outputLower.includes("space") ||
+          outputLower.includes("storage");
+
+        if (isErrorPattern) {
+          log.warn("[BackupService] stderr (error pattern):", output.trim().substring(0, 500));
+        } else {
+          // BACKLOG-1628: Restore Sentry breadcrumbs for unrecognized non-debug patterns.
+          // With -d flag, known debug prefixes (SSL_write, service_send, etc.) are very
+          // frequent and should be silently skipped. But genuinely unrecognized lines
+          // may indicate new error patterns we haven't categorized yet.
+          const isDebugLine =
+            output.includes("SSL_write") ||
+            output.includes("service_send") ||
+            output.includes("internal_plist") ||
+            output.includes("idevice_connection") ||
+            output.includes("Sending '") ||
+            output.includes("Negotiated Protocol") ||
+            output.includes("backup mode") ||
+            output.includes("Starting backup") ||
+            output.includes("Requesting backup") ||
+            output.includes("Status.plist") ||
+            output.includes("Manifest.plist") ||
+            output.includes("Manifest.db");
+
+          if (!isDebugLine && output.trim().length > 0) {
             Sentry.addBreadcrumb({
-              category: "iphone.sync",
-              message: "Backup stderr: unrecognized pattern",
-              level: "warning",
-              data: {
-                stderr: output.trim().substring(0, 500),
-                udid: options.udid.substring(0, 8) + "...",
-              },
+              category: "backup",
+              message: output.trim().substring(0, 200),
+              level: "info",
             });
           }
         }
@@ -623,9 +670,12 @@ export class BackupService extends EventEmitter {
         return;
       }
 
-      const elapsed = Date.now() - this.lastStdoutTimestamp;
+      // BACKLOG-1628: Watchdog fires only when BOTH stdout AND stderr are silent.
+      // During manifest upload, stdout is silent but stderr shows SSL_write activity.
+      const lastActivityTimestamp = Math.max(this.lastStdoutTimestamp, this.lastStderrTimestamp);
+      const elapsed = Date.now() - lastActivityTimestamp;
       if (elapsed >= timeoutMs) {
-        log.error(`[BackupService] Watchdog: no stdout for ${Math.round(elapsed / 1000)}s — killing zombie process`);
+        log.error(`[BackupService] Watchdog: no stdout/stderr for ${Math.round(elapsed / 1000)}s — killing zombie process`);
         this.killZombieProcess();
       }
     }, BackupService.WATCHDOG_CHECK_INTERVAL_MS);
@@ -698,6 +748,106 @@ export class BackupService extends EventEmitter {
   }
 
   /**
+   * BACKLOG-1628: Parse a single stderr line from debug output for progress signals.
+   *
+   * With the -d flag, idevicebackup2 emits detailed debug output on stderr.
+   * We parse for specific patterns to:
+   * 1. Detect manifest upload phase and surface progress to UI
+   * 2. Reset watchdog on SSL_write/service_send activity
+   * 3. Log significant phase transitions (protocol version, backup mode)
+   *
+   * This method is designed to be lightweight — it's called for every stderr line
+   * (potentially 30K+ lines in 20 seconds during manifest upload).
+   */
+  private parseStderrLine(line: string, _udid: string): void {
+    // Fast path: skip empty lines
+    if (!line || line.length < 5) return;
+
+    // Pattern 1: Manifest.db upload — "Sending '<udid>/Manifest.db' (563.0 MB)"
+    // This signals the start of the long preparing phase where stdout is silent.
+    const manifestMatch = line.match(/Sending\s+'[^']*\/Manifest\.db'\s+\(([^)]+)\)/);
+    if (manifestMatch) {
+      this.manifestUploadPhase = true;
+      this.manifestUploadSize = manifestMatch[1]; // e.g., "563.0 MB"
+      log.info(`[BackupService] Manifest upload started (${this.manifestUploadSize})`);
+
+      this.lastProgress = {
+        phase: "preparing",
+        percentComplete: 0,
+        currentFile: null,
+        filesTransferred: 0,
+        totalFiles: null,
+        bytesTransferred: 0,
+        totalBytes: null,
+        estimatedTimeRemaining: null,
+        message: `Preparing incremental backup \u2014 uploading backup index (${this.manifestUploadSize})...`,
+      };
+      this.emit("progress", this.lastProgress);
+      return;
+    }
+
+    // Pattern 2: SSL_write or service_send — activity signals (hot path)
+    // These repeat thousands of times; do NOT log. Just confirm the process is alive.
+    // The lastStderrTimestamp is already updated by the data handler.
+    if (line.includes("SSL_write") || line.includes("service_send")) {
+      // Already tracked via lastStderrTimestamp in the data handler.
+      return;
+    }
+
+    // Pattern 3: Status.plist upload — initial negotiation
+    if (line.includes("Sending") && line.includes("Status.plist")) {
+      log.info("[BackupService] Sending Status.plist (initial negotiation)");
+      return;
+    }
+
+    // Pattern 4: Manifest.plist upload
+    if (line.includes("Sending") && line.includes("Manifest.plist")) {
+      log.info("[BackupService] Sending Manifest.plist");
+      return;
+    }
+
+    // Pattern 5: Negotiated Protocol Version
+    if (line.includes("Negotiated Protocol Version")) {
+      log.info("[BackupService] " + line.trim());
+      return;
+    }
+
+    // Pattern 6: "Requesting backup from device..."
+    if (line.includes("Requesting backup from device")) {
+      log.info("[BackupService] Requesting backup from device");
+      // The manifest upload phase is ending, device is processing
+      if (this.manifestUploadPhase) {
+        this.manifestUploadPhase = false;
+        this.lastProgress = {
+          phase: "preparing",
+          percentComplete: 0,
+          currentFile: null,
+          filesTransferred: 0,
+          totalFiles: null,
+          bytesTransferred: 0,
+          totalBytes: null,
+          estimatedTimeRemaining: null,
+          message: "Waiting for iPhone to process backup index...",
+        };
+        this.emit("progress", this.lastProgress);
+      }
+      return;
+    }
+
+    // Pattern 7: "Starting backup..."
+    if (line.includes("Starting backup")) {
+      log.info("[BackupService] Starting backup...");
+      return;
+    }
+
+    // Pattern 8: Backup mode — "Incremental backup mode" or "Full backup mode"
+    if (line.includes("backup mode")) {
+      log.info("[BackupService] " + line.trim());
+      return;
+    }
+  }
+
+  /**
    * Build backup command arguments
    *
    * Note: We use --skip-apps to reduce backup size since we only need
@@ -717,6 +867,10 @@ export class BackupService extends EventEmitter {
     validatedUdid: string,
   ): string[] {
     const args: string[] = [];
+
+    // BACKLOG-1628: Enable debug output on stderr for watchdog and progress signals.
+    // The -d flag must come before other arguments.
+    args.push("-d");
 
     // Target device by UDID
     // SECURITY: validatedUdid must be validated before this call

@@ -149,10 +149,26 @@ export function registerDeviceHandlers(mainWindow: BrowserWindow): void {
   });
 
   // Forward device-needs-trust events to renderer
-  deviceDetectionService.on("device-needs-trust", (data: { udid: string }) => {
+  deviceDetectionService.on("device-needs-trust", (data: { udid: string; reason?: "locked" | "trust_pending" | "unknown" }) => {
     log.info(`[DeviceHandlers] Device needs trust: ${data.udid}`);
     if (mainWindow && !mainWindow.isDestroyed()) {
       mainWindow.webContents.send("device:needs-trust", data);
+    }
+  });
+
+  // BACKLOG-1620/1621: Forward tools-missing event to renderer
+  deviceDetectionService.on("tools-missing", () => {
+    log.warn("[DeviceHandlers] Forwarding tools-missing event to renderer");
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.webContents.send("device:tools-missing");
+    }
+  });
+
+  // BACKLOG-1621: Forward tools-available event when tools are installed mid-session
+  deviceDetectionService.on("tools-available", () => {
+    log.info("[DeviceHandlers] Forwarding tools-available event to renderer");
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.webContents.send("device:tools-available");
     }
   });
 
