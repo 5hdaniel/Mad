@@ -1022,6 +1022,11 @@ app.whenReady().then(async () => {
       clearTimeout(downloadStallTimer);
       downloadStallTimer = null;
     }
+    // BACKLOG-1641: Forward error to renderer so UI can show error state
+    // instead of staying stuck at 100% progress forever
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.webContents.send("update-error", sanitizedMessage);
+    }
   });
 
   autoUpdater.on("download-progress", (progressObj) => {

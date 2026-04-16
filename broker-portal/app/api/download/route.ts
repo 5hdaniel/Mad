@@ -16,7 +16,7 @@ const RELEASE_PAGE = `https://github.com/${REPO}/releases/latest`;
 const FILE_PATTERNS: Record<string, string> = {
   'mac-arm': 'Keepr-VERSION-arm64.dmg',
   'mac-intel': 'Keepr-VERSION.dmg',
-  'windows': 'Keepr.Setup.VERSION.exe',
+  'windows': 'Keepr-Setup-VERSION.exe',
 };
 
 function detectPlatformFromUA(ua: string): string {
