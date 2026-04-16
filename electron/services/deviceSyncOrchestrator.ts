@@ -945,6 +945,12 @@ export class DeviceSyncOrchestrator extends EventEmitter {
    * (each file goes 0-100%, not overall progress)
    */
   private getBackupProgressMessage(progress: BackupProgress): string {
+    // BACKLOG-1628: If the backup service provides a specific message
+    // (e.g., from stderr debug parsing), use it directly.
+    if (progress.message) {
+      return progress.message;
+    }
+
     switch (progress.phase) {
       case "preparing":
         // This phase can take several minutes while device:
