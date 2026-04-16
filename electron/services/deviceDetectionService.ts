@@ -517,6 +517,15 @@ export class DeviceDetectionService extends EventEmitter {
               // BACKLOG-1627: Record timestamp for back-off
               this.trustPendingDevices.set(udid, Date.now());
 
+              // BACKLOG-1631: Breadcrumb for trust-related errors
+              const truncatedUdid = udid.substring(0, 8) + "...";
+              Sentry.addBreadcrumb({
+                category: "iphone.sync",
+                message: "Device needs trust",
+                level: "info",
+                data: { reason: trustReason, udid: truncatedUdid },
+              });
+
               log.warn(
                 `[DeviceDetection] Device ${udid} trust issue: ${trustReason} (${errorMessage})`,
               );
@@ -689,6 +698,11 @@ export class DeviceDetectionService extends EventEmitter {
               "[DeviceDetection] libimobiledevice tools not found (ENOENT). " +
               "Emitting tools-missing and backing off to 60s polling.",
             );
+            // BACKLOG-1631: Alert Sentry when tools are missing
+            Sentry.captureMessage("libimobiledevice tools not found (ENOENT)", {
+              level: "warning",
+              tags: { category: "iphone.sync", operation: "tools-detection" },
+            });
             this.emit("tools-missing");
             this.backOffPolling();
           }
