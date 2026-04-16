@@ -46,10 +46,30 @@ export const deviceBridge = {
    * BACKLOG-1582: Subscribe to device-needs-trust events.
    * Fires when a device is visible but not yet trusted.
    */
-  onNeedsTrust: (callback: (data: { udid: string }) => void) => {
-    const listener = (_: IpcRendererEvent, data: { udid: string }) => callback(data);
+  onNeedsTrust: (callback: (data: { udid: string; reason?: string }) => void) => {
+    const listener = (_: IpcRendererEvent, data: { udid: string; reason?: string }) => callback(data);
     ipcRenderer.on("device:needs-trust", listener);
     return () => ipcRenderer.removeListener("device:needs-trust", listener);
+  },
+
+  /**
+   * BACKLOG-1620/1621: Subscribe to tools-missing events.
+   * Fires when libimobiledevice executables are not found (ENOENT).
+   */
+  onToolsMissing: (callback: () => void) => {
+    const listener = () => callback();
+    ipcRenderer.on("device:tools-missing", listener);
+    return () => ipcRenderer.removeListener("device:tools-missing", listener);
+  },
+
+  /**
+   * BACKLOG-1621: Subscribe to tools-available events.
+   * Fires when tools become available after previously being missing.
+   */
+  onToolsAvailable: (callback: () => void) => {
+    const listener = () => callback();
+    ipcRenderer.on("device:tools-available", listener);
+    return () => ipcRenderer.removeListener("device:tools-available", listener);
   },
 
   /**

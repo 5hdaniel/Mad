@@ -64,6 +64,8 @@ export function useIPhoneSync(): UseIPhoneSyncReturn {
   // BACKLOG-1582: Trust state — device visible but not yet trusted
   const [needsTrust, setNeedsTrust] = useState(false);
   const [needsTrustUdid, setNeedsTrustUdid] = useState<string | null>(null);
+  // BACKLOG-1620/1621: Tools missing state — libimobiledevice not installed
+  const [toolsMissing, setToolsMissing] = useState(false);
 
   // Track cleanup functions
   const cleanupRef = useRef<(() => void)[]>([]);
@@ -483,14 +485,45 @@ export function useIPhoneSync(): UseIPhoneSyncReturn {
     });
 
     // BACKLOG-1582: Listen for device-needs-trust events
+    // BACKLOG-1627: Enhanced with trust reason for differentiated UI guidance
     if (deviceApi) {
-      type DeviceApiWithTrust = { onNeedsTrust?: (cb: (data: { udid: string }) => void) => () => void };
+      type TrustEventData = { udid: string; reason?: "locked" | "trust_pending" | "unknown" };
+      type DeviceApiWithTrust = { onNeedsTrust?: (cb: (data: TrustEventData) => void) => () => void };
       const deviceApiTyped = deviceApi as DeviceApiWithTrust;
       if (deviceApiTyped.onNeedsTrust) {
         const unsub = deviceApiTyped.onNeedsTrust((data) => {
-          logger.info("[useIPhoneSync] Device needs trust:", data.udid);
+          logger.info("[useIPhoneSync] Device needs trust:", data.udid, "reason:", data.reason);
           setNeedsTrust(true);
           setNeedsTrustUdid(data.udid);
+
+          // BACKLOG-1627: Show differentiated user guidance based on trust error reason
+          const guidance = mapTrustReasonToGuidance(data.reason);
+          setUserError(guidance);
+        });
+        cleanups.push(unsub);
+      }
+    }
+
+    // BACKLOG-1620/1621: Listen for tools-missing and tools-available events
+    if (deviceApi) {
+      if (deviceApi.onToolsMissing) {
+        const unsub = deviceApi.onToolsMissing(() => {
+          logger.warn("[useIPhoneSync] Tools missing — libimobiledevice not found");
+          setToolsMissing(true);
+          setUserError({
+            code: "MISSING_DRIVERS",
+            title: "Apple drivers not installed",
+            description: "Your computer needs Apple\u2019s tools to communicate with your iPhone.",
+            actionSuggestion: "Install iTunes from the Microsoft Store, then reconnect your iPhone and try again.",
+          });
+        });
+        cleanups.push(unsub);
+      }
+      if (deviceApi.onToolsAvailable) {
+        const unsub = deviceApi.onToolsAvailable(() => {
+          logger.info("[useIPhoneSync] Tools now available — clearing missing state");
+          setToolsMissing(false);
+          setUserError(null);
         });
         cleanups.push(unsub);
       }
@@ -825,6 +858,8 @@ export function useIPhoneSync(): UseIPhoneSyncReturn {
     // BACKLOG-1582: Trust state
     needsTrust,
     needsTrustUdid,
+    // BACKLOG-1620/1621: Tools missing state
+    toolsMissing,
     startSync,
     submitPassword,
     cancelSync,
@@ -832,6 +867,38 @@ export function useIPhoneSync(): UseIPhoneSyncReturn {
     checkSyncStatus,
     requestTrust,
   };
+}
+
+/**
+ * BACKLOG-1627: Map a trust error reason to user-facing guidance.
+ * Called when the main process detects a trust-related error from getDeviceInfo.
+ */
+function mapTrustReasonToGuidance(
+  reason?: "locked" | "trust_pending" | "unknown",
+): UserFacingError {
+  switch (reason) {
+    case "locked":
+      return {
+        code: "DEVICE_LOCKED",
+        title: "iPhone is locked",
+        description: "Your iPhone needs to be unlocked before it can connect.",
+        actionSuggestion: "Unlock your iPhone and tap Trust when prompted.",
+      };
+    case "trust_pending":
+      return {
+        code: "TRUST_PENDING",
+        title: "Check your iPhone",
+        description: "A \"Trust This Computer?\" dialog is waiting on your iPhone.",
+        actionSuggestion: "Tap Trust on your iPhone to allow syncing.",
+      };
+    default:
+      return {
+        code: "TRUST_NEEDED",
+        title: "Tap Trust on your iPhone",
+        description: "Your iPhone was detected but needs to trust this computer before syncing.",
+        actionSuggestion: "Unlock your iPhone and tap Trust when prompted. If no prompt appears, try disconnecting and reconnecting.",
+      };
+  }
 }
 
 /**

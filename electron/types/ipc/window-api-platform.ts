@@ -46,6 +46,8 @@ export interface WindowApiDevice {
       isConnected: boolean;
     }) => void,
   ) => () => void;
+  onToolsMissing?: (cb: () => void) => () => void;
+  onToolsAvailable?: (cb: () => void) => () => void;
 }
 
 /**

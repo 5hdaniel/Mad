@@ -5,6 +5,7 @@
 
 import { ipcMain, BrowserWindow } from "electron";
 import log from "electron-log";
+import * as Sentry from "@sentry/electron/main";
 import { deviceDetectionService } from "../services/deviceDetectionService";
 import type { iOSDevice } from "../types/device";
 
@@ -65,6 +66,12 @@ export function registerDeviceHandlers(mainWindow: BrowserWindow): void {
       };
     } catch (error) {
       log.error("[DeviceHandlers] Error listing devices:", error);
+      // BACKLOG-1631: Breadcrumb for IPC handler errors
+      Sentry.addBreadcrumb({
+        category: "iphone.ipc",
+        message: "Device handler error",
+        data: { handler: "device:list", error: (error as Error).message },
+      });
       return {
         success: false,
         error: (error as Error).message,
@@ -84,6 +91,12 @@ export function registerDeviceHandlers(mainWindow: BrowserWindow): void {
         return { success: true };
       } catch (error) {
         log.error("[DeviceHandlers] Error starting device detection:", error);
+        // BACKLOG-1631: Breadcrumb for IPC handler errors
+        Sentry.addBreadcrumb({
+          category: "iphone.ipc",
+          message: "Device handler error",
+          data: { handler: "device:start-detection", error: (error as Error).message },
+        });
         return {
           success: false,
           error: (error as Error).message,
@@ -102,6 +115,12 @@ export function registerDeviceHandlers(mainWindow: BrowserWindow): void {
       return { success: true };
     } catch (error) {
       log.error("[DeviceHandlers] Error stopping device detection:", error);
+      // BACKLOG-1631: Breadcrumb for IPC handler errors
+      Sentry.addBreadcrumb({
+        category: "iphone.ipc",
+        message: "Device handler error",
+        data: { handler: "device:stop-detection", error: (error as Error).message },
+      });
       return {
         success: false,
         error: (error as Error).message,
@@ -124,6 +143,12 @@ export function registerDeviceHandlers(mainWindow: BrowserWindow): void {
         };
       } catch (error) {
         log.error("[DeviceHandlers] Error checking availability:", error);
+        // BACKLOG-1631: Breadcrumb for IPC handler errors
+        Sentry.addBreadcrumb({
+          category: "iphone.ipc",
+          message: "Device handler error",
+          data: { handler: "device:check-availability", error: (error as Error).message },
+        });
         return {
           success: false,
           error: (error as Error).message,
@@ -141,6 +166,12 @@ export function registerDeviceHandlers(mainWindow: BrowserWindow): void {
       return await deviceDetectionService.pairDevice(udid);
     } catch (error) {
       log.error("[DeviceHandlers] Error requesting trust:", error);
+      // BACKLOG-1631: Breadcrumb for IPC handler errors
+      Sentry.addBreadcrumb({
+        category: "iphone.ipc",
+        message: "Device handler error",
+        data: { handler: "device:request-trust", error: (error as Error).message },
+      });
       return {
         success: false,
         error: (error as Error).message,
@@ -149,10 +180,26 @@ export function registerDeviceHandlers(mainWindow: BrowserWindow): void {
   });
 
   // Forward device-needs-trust events to renderer
-  deviceDetectionService.on("device-needs-trust", (data: { udid: string }) => {
+  deviceDetectionService.on("device-needs-trust", (data: { udid: string; reason?: "locked" | "trust_pending" | "unknown" }) => {
     log.info(`[DeviceHandlers] Device needs trust: ${data.udid}`);
     if (mainWindow && !mainWindow.isDestroyed()) {
       mainWindow.webContents.send("device:needs-trust", data);
+    }
+  });
+
+  // BACKLOG-1620/1621: Forward tools-missing event to renderer
+  deviceDetectionService.on("tools-missing", () => {
+    log.warn("[DeviceHandlers] Forwarding tools-missing event to renderer");
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.webContents.send("device:tools-missing");
+    }
+  });
+
+  // BACKLOG-1621: Forward tools-available event when tools are installed mid-session
+  deviceDetectionService.on("tools-available", () => {
+    log.info("[DeviceHandlers] Forwarding tools-available event to renderer");
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.webContents.send("device:tools-available");
     }
   });
 
@@ -166,6 +213,12 @@ export function registerDeviceHandlers(mainWindow: BrowserWindow): void {
       return { success: true, ...result };
     } catch (error) {
       log.error("[DeviceHandlers] Error running diagnostics:", error);
+      // BACKLOG-1631: Breadcrumb for IPC handler errors
+      Sentry.addBreadcrumb({
+        category: "iphone.ipc",
+        message: "Device handler error",
+        data: { handler: "device:run-diagnostics", error: (error as Error).message },
+      });
       return {
         success: false,
         error: (error as Error).message,

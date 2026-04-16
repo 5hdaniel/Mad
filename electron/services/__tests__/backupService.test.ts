@@ -438,6 +438,16 @@ describe("BackupService - buildBackupArgs", () => {
     backupService = new BackupService();
   });
 
+  // BACKLOG-1628: Verify -d flag is present as the first argument
+  it("should include -d flag as the first argument", () => {
+    const buildArgs = (backupService as any).buildBackupArgs.bind(
+      backupService,
+    );
+    const args = buildArgs({ udid: TEST_UDID }, "/backup/path", TEST_UDID);
+
+    expect(args[0]).toBe("-d");
+  });
+
   // TASK-601: buildBackupArgs now takes validatedUdid as third parameter
   // The method signature is: buildBackupArgs(options, backupPath, validatedUdid)
   it("should include -u flag with UDID", () => {
@@ -560,5 +570,93 @@ describe("BackupService - parseProgress", () => {
 
     const progress = parseProgress("Some random output");
     expect(progress).toBeNull();
+  });
+});
+
+describe("BackupService - parseStderrLine", () => {
+  let backupService: BackupService;
+
+  beforeEach(() => {
+    backupService = new BackupService();
+  });
+
+  afterEach(() => {
+    backupService.removeAllListeners();
+  });
+
+  it("should detect Manifest.db upload pattern and emit progress with size", () => {
+    const parseStderrLine = (backupService as any).parseStderrLine.bind(
+      backupService,
+    );
+    const progressEvents: any[] = [];
+    backupService.on("progress", (p: any) => progressEvents.push(p));
+
+    parseStderrLine(
+      "Sending '00008140-1234ABCD5678/Manifest.db' (563.0 MB)",
+      TEST_UDID,
+    );
+
+    expect(progressEvents.length).toBe(1);
+    expect(progressEvents[0].phase).toBe("preparing");
+    expect(progressEvents[0].message).toContain("563.0 MB");
+  });
+
+  it("should silently skip SSL_write lines (activity signal, no log)", () => {
+    const parseStderrLine = (backupService as any).parseStderrLine.bind(
+      backupService,
+    );
+    const progressEvents: any[] = [];
+    backupService.on("progress", (p: any) => progressEvents.push(p));
+
+    parseStderrLine("SSL_write 32768, sent 32768", TEST_UDID);
+
+    // SSL_write should not emit any progress events
+    expect(progressEvents.length).toBe(0);
+  });
+
+  it("should silently skip service_send lines (activity signal, no log)", () => {
+    const parseStderrLine = (backupService as any).parseStderrLine.bind(
+      backupService,
+    );
+    const progressEvents: any[] = [];
+    backupService.on("progress", (p: any) => progressEvents.push(p));
+
+    parseStderrLine("service_send(): sending 32768 bytes", TEST_UDID);
+
+    // service_send should not emit any progress events
+    expect(progressEvents.length).toBe(0);
+  });
+
+  it("should detect 'Requesting backup from device...' phase transition", () => {
+    const parseStderrLine = (backupService as any).parseStderrLine.bind(
+      backupService,
+    );
+    // Set manifestUploadPhase to true to test transition
+    (backupService as any).manifestUploadPhase = true;
+
+    const progressEvents: any[] = [];
+    backupService.on("progress", (p: any) => progressEvents.push(p));
+
+    parseStderrLine("Requesting backup from device...", TEST_UDID);
+
+    expect(progressEvents.length).toBe(1);
+    expect(progressEvents[0].phase).toBe("preparing");
+    expect(progressEvents[0].message).toContain("Waiting for iPhone");
+  });
+
+  it("should return early for empty or short lines", () => {
+    const parseStderrLine = (backupService as any).parseStderrLine.bind(
+      backupService,
+    );
+    const progressEvents: any[] = [];
+    backupService.on("progress", (p: any) => progressEvents.push(p));
+
+    // Empty string
+    parseStderrLine("", TEST_UDID);
+    // Short string (< 5 chars)
+    parseStderrLine("abc", TEST_UDID);
+
+    // Neither should emit progress events
+    expect(progressEvents.length).toBe(0);
   });
 });
