@@ -12,7 +12,7 @@
 
 import { useState, useMemo } from 'react';
 import type { ItemStatus } from '@/lib/pm-types';
-import { STATUS_LABELS, SEGMENT_COLORS, SEGMENT_DOT_COLORS } from '@/lib/pm-types';
+import { STATUS_LABELS, SEGMENT_COLORS } from '@/lib/pm-types';
 import { formatTokens } from '@/lib/pm-utils';
 
 // Render order for segments (left → right)
@@ -183,7 +183,7 @@ export function DualProgressBar({
                 } ${activeFilter && activeFilter !== status ? 'opacity-50' : ''}`}
               >
                 <span
-                  className={`inline-block w-2 h-2 rounded-full ${SEGMENT_DOT_COLORS[status]}`}
+                  className={`inline-block w-2 h-2 rounded-full ${SEGMENT_COLORS[status]}`}
                 />
                 {STATUS_LABELS[status]}: {count}
               </button>

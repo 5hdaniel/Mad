@@ -426,19 +426,6 @@ export const SEGMENT_COLORS: Record<ItemStatus, string> = {
   waiting_for_user: 'bg-amber-400',
 };
 
-/** Dot colors for legend indicators (matching segment colors). */
-export const SEGMENT_DOT_COLORS: Record<ItemStatus, string> = {
-  pending: 'bg-gray-300',
-  in_progress: 'bg-blue-500',
-  testing: 'bg-yellow-400',
-  completed: 'bg-green-500',
-  blocked: 'bg-red-500',
-  deferred: 'bg-orange-400',
-  obsolete: 'bg-gray-400',
-  reopened: 'bg-purple-500',
-  waiting_for_user: 'bg-amber-400',
-};
-
 export const PRIORITY_LABELS: Record<ItemPriority, string> = {
   low: 'Low',
   medium: 'Medium',
