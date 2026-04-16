@@ -16,6 +16,12 @@ export interface iOSDevice {
   isConnected: boolean;
 }
 
+/**
+ * BACKLOG-1627: Reason why a device needs trust.
+ * Used across IPC boundaries for typed trust error handling.
+ */
+export type TrustErrorReason = "locked" | "trust_pending" | "unknown";
+
 // ============================================
 // BACKUP TYPES
 // ============================================

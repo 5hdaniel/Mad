@@ -46,8 +46,8 @@ export const deviceBridge = {
    * BACKLOG-1582: Subscribe to device-needs-trust events.
    * Fires when a device is visible but not yet trusted.
    */
-  onNeedsTrust: (callback: (data: { udid: string }) => void) => {
-    const listener = (_: IpcRendererEvent, data: { udid: string }) => callback(data);
+  onNeedsTrust: (callback: (data: { udid: string; reason?: string }) => void) => {
+    const listener = (_: IpcRendererEvent, data: { udid: string; reason?: string }) => callback(data);
     ipcRenderer.on("device:needs-trust", listener);
     return () => ipcRenderer.removeListener("device:needs-trust", listener);
   },

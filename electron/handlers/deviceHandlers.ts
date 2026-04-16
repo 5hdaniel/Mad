@@ -149,7 +149,7 @@ export function registerDeviceHandlers(mainWindow: BrowserWindow): void {
   });
 
   // Forward device-needs-trust events to renderer
-  deviceDetectionService.on("device-needs-trust", (data: { udid: string }) => {
+  deviceDetectionService.on("device-needs-trust", (data: { udid: string; reason?: "locked" | "trust_pending" | "unknown" }) => {
     log.info(`[DeviceHandlers] Device needs trust: ${data.udid}`);
     if (mainWindow && !mainWindow.isDestroyed()) {
       mainWindow.webContents.send("device:needs-trust", data);
