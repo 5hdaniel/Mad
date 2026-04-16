@@ -500,13 +500,8 @@ export function useIPhoneSync(): UseIPhoneSyncReturn {
 
     // BACKLOG-1620/1621: Listen for tools-missing and tools-available events
     if (deviceApi) {
-      type DeviceApiWithTools = {
-        onToolsMissing?: (cb: () => void) => () => void;
-        onToolsAvailable?: (cb: () => void) => () => void;
-      };
-      const deviceApiTyped = deviceApi as DeviceApiWithTools;
-      if (deviceApiTyped.onToolsMissing) {
-        const unsub = deviceApiTyped.onToolsMissing(() => {
+      if (deviceApi.onToolsMissing) {
+        const unsub = deviceApi.onToolsMissing(() => {
           logger.warn("[useIPhoneSync] Tools missing — libimobiledevice not found");
           setToolsMissing(true);
           setUserError({
@@ -518,8 +513,8 @@ export function useIPhoneSync(): UseIPhoneSyncReturn {
         });
         cleanups.push(unsub);
       }
-      if (deviceApiTyped.onToolsAvailable) {
-        const unsub = deviceApiTyped.onToolsAvailable(() => {
+      if (deviceApi.onToolsAvailable) {
+        const unsub = deviceApi.onToolsAvailable(() => {
           logger.info("[useIPhoneSync] Tools now available — clearing missing state");
           setToolsMissing(false);
           setUserError(null);

@@ -112,6 +112,8 @@ interface ElectronAPI {
       callback: (device: iOSDevice) => void,
     ) => (() => void) | undefined;
     onDisconnected: (callback: () => void) => (() => void) | undefined;
+    onToolsMissing?: (cb: () => void) => () => void;
+    onToolsAvailable?: (cb: () => void) => () => void;
   };
 
   // iOS Backup Management (Windows only)
