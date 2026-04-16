@@ -17,6 +17,12 @@
 import React from "react";
 import { act, waitFor, renderHook, screen } from "@testing-library/react";
 
+// BACKLOG-1629: Mock SupportWidget since ErrorScreen now includes it
+// and PlatformProvider is not available in the test wrapper
+jest.mock("../../../../components/support/SupportWidget", () => ({
+  SupportWidget: () => null,
+}));
+
 // Mock useNetwork to prevent "useNetwork must be used within a NetworkProvider" error
 // (OfflineNotice in LoadingScreen/ErrorScreen calls useNetwork)
 jest.mock("../../../../contexts/NetworkContext", () => ({
