@@ -8,7 +8,7 @@ interface ContactFormModalProps {
   userId: string;
   contact: ExtendedContact | undefined;
   onClose: () => void;
-  onSuccess: () => void;
+  onSuccess: (contact?: { id: string }) => void;
 }
 
 /**
@@ -257,7 +257,7 @@ function ContactFormModal({
           const roleToSave = formData.defaultRole || "";
           await contactService.updateDefaultRole(savedContactId, roleToSave);
         }
-        onSuccess();
+        onSuccess(savedContactId ? { id: savedContactId } : undefined);
       } else {
         setError(result.error || "Failed to save contact");
       }
