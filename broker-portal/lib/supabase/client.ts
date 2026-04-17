@@ -55,9 +55,12 @@ function clearCorruptedCookies(): void {
       if ((name.includes('supabase') || name.startsWith('sb-')) && value.startsWith('base64-')) {
         try {
           const encoded = decodeURIComponent(value.substring(7));
-          // Try the same decode the SDK does: base64url -> string
+          // Replicate the SDK's full decode path: base64url -> bytes -> UTF-8
           const base64 = encoded.replace(/-/g, '+').replace(/_/g, '/');
-          atob(base64); // throws if invalid base64
+          const binary = atob(base64);
+          const bytes = new Uint8Array(binary.length);
+          for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+          new TextDecoder('utf-8', { fatal: true }).decode(bytes);
         } catch {
           const prefix = name.replace(/\.\d+$/, '');
           corruptedPrefixes.add(prefix);
