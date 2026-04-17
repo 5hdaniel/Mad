@@ -5,15 +5,14 @@
  * This is a pure extraction of the routing logic from App.tsx.
  */
 
-import { useState, useCallback, useRef, useEffect, lazy, Suspense } from "react";
+import { useState, useCallback, useRef, lazy, Suspense } from "react";
 import Login from "../components/Login";
 import MicrosoftLogin from "../components/MicrosoftLogin";
 import Dashboard from "../components/Dashboard";
 import OfflineFallback from "../components/OfflineFallback";
 import { UpgradeScreen, type UpgradeReason } from "../components/license/UpgradeScreen";
 import type { AppStateMachine } from "./state/types";
-import { usePlatform } from "../contexts/PlatformContext";
-import type { ImportSource } from "../services/settingsService";
+import { useImportSource } from "../hooks/useImportSource";
 import {
   USE_NEW_ONBOARDING,
   isOnboardingStep,
@@ -81,26 +80,8 @@ export function AppRouter({ app }: AppRouterProps) {
     await handleLogout();
   }, [handleLogout]);
 
-  // BACKLOG-1653: Read import source preference to gate iPhone sync card.
-  // Re-reads when settings modal closes (showSettings transitions to false)
-  // so the card visibility updates immediately after toggling import source.
-  const { isMacOS } = usePlatform();
-  const [importSource, setImportSource] = useState<ImportSource>(
-    isMacOS ? "macos-native" : "iphone-sync"
-  );
-  useEffect(() => {
-    if (!currentUser?.id) return;
-    window.api.preferences.get(currentUser.id).then((result) => {
-      if (result.success) {
-        const prefs = result.preferences as { messages?: { source?: ImportSource } } | undefined;
-        if (prefs?.messages?.source) {
-          setImportSource(prefs.messages.source);
-        }
-      }
-    }).catch(() => {
-      // Silently ignore — keep platform default
-    });
-  }, [currentUser?.id, app.modalState.showSettings]);
+  // BACKLOG-1653: Import source preference to gate iPhone sync card.
+  const importSource = useImportSource(currentUser?.id, app.modalState.showSettings);
 
   // New onboarding architecture (when enabled)
   if (USE_NEW_ONBOARDING && isOnboardingStep(currentStep)) {
