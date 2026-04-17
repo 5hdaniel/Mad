@@ -190,15 +190,19 @@ export default function TokenMetricsBreakdown({
         </span>
       </button>
 
-      {/* Summary always visible */}
-      <div className="mt-2 ml-6">
-        {summary.map((s) => (
-          <SummaryRow key={s.agent_type} summary={s} />
-        ))}
-      </div>
-
-      {/* Detail table when expanded */}
-      {expanded && <div className="ml-6"><DetailTable rows={rows} /></div>}
+      {/* Summary and detail both only render when expanded */}
+      {expanded && (
+        <>
+          <div className="mt-2 ml-6">
+            {summary.map((s) => (
+              <SummaryRow key={s.agent_type} summary={s} />
+            ))}
+          </div>
+          <div className="ml-6">
+            <DetailTable rows={rows} />
+          </div>
+        </>
+      )}
     </div>
   );
 }
