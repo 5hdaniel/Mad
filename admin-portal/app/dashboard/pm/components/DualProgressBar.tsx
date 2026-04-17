@@ -126,27 +126,41 @@ export function DualProgressBar({
             </span>
           </div>
 
-          {/* Segmented bar */}
-          <div className="h-3 bg-gray-100 rounded-full overflow-hidden flex">
-            {segments.map(({ status, count, pct }) => (
-              <div
-                key={status}
-                className={`relative h-full transition-all ${SEGMENT_COLORS[status]} ${
-                  onStatusFilter ? 'cursor-pointer' : ''
-                } ${
-                  activeFilter && activeFilter !== status ? 'opacity-40' : ''
-                } ${
-                  activeFilter === status ? 'ring-2 ring-offset-1 ring-gray-800 z-10 rounded-sm' : ''
-                } group/seg`}
-                style={{ width: `${pct}%`, minWidth: pct > 0 ? '4px' : '0' }}
-                onClick={() => handleSegmentClick(status)}
-              >
-                {/* Tooltip */}
-                <span className="absolute bottom-full left-1/2 -translate-x-1/2 mb-1.5 px-2 py-1 text-xs text-white bg-gray-800 rounded whitespace-nowrap opacity-0 group-hover/seg:opacity-100 transition-opacity pointer-events-none z-20">
-                  {STATUS_LABELS[status]}: {count} item{count !== 1 ? 's' : ''}
-                </span>
-              </div>
-            ))}
+          {/*
+            Segmented bar — note: we deliberately do NOT use overflow-hidden
+            here, because the per-segment hover tooltip is positioned above
+            the bar (bottom-full) and would otherwise be clipped.
+            Rounded corners on the first/last segments preserve the pill shape.
+          */}
+          <div className="h-3 bg-gray-100 rounded-full flex">
+            {segments.length === 0 ? (
+              <div className="h-full w-full rounded-full" />
+            ) : (
+              segments.map(({ status, count, pct }, idx) => {
+                const isFirst = idx === 0;
+                const isLast = idx === segments.length - 1;
+                const cornerClasses = `${isFirst ? 'rounded-l-full' : ''} ${isLast ? 'rounded-r-full' : ''}`;
+                return (
+                  <div
+                    key={status}
+                    className={`relative h-full transition-all ${SEGMENT_COLORS[status]} ${cornerClasses} ${
+                      onStatusFilter ? 'cursor-pointer' : ''
+                    } ${
+                      activeFilter && activeFilter !== status ? 'opacity-40' : ''
+                    } ${
+                      activeFilter === status ? 'ring-2 ring-offset-1 ring-gray-800 z-10' : ''
+                    } group/seg`}
+                    style={{ width: `${pct}%`, minWidth: pct > 0 ? '4px' : '0' }}
+                    onClick={() => handleSegmentClick(status)}
+                  >
+                    {/* Tooltip — rendered above the bar; parent must not clip */}
+                    <span className="absolute bottom-full left-1/2 -translate-x-1/2 mb-1.5 px-2 py-1 text-xs text-white bg-gray-800 rounded whitespace-nowrap opacity-0 group-hover/seg:opacity-100 transition-opacity pointer-events-none z-20">
+                      {STATUS_LABELS[status]}: {count} item{count !== 1 ? 's' : ''}
+                    </span>
+                  </div>
+                );
+              })
+            )}
           </div>
         </>
       ) : (

@@ -112,7 +112,7 @@ export default function SprintDetailPage() {
     loadDetail();
   }, [loadDetail]);
 
-  // Load paginated items
+  // Load paginated items (server-side status filter when statusFilter is set)
   const loadItems = useCallback(async () => {
     if (!sprintId) return;
 
@@ -120,6 +120,7 @@ export default function SprintDetailPage() {
     try {
       const data = await listItems({
         sprint_id: sprintId,
+        status: statusFilter,
         page,
         page_size: pageSize,
       });
@@ -131,11 +132,17 @@ export default function SprintDetailPage() {
     } finally {
       setItemsLoading(false);
     }
-  }, [sprintId, page]);
+  }, [sprintId, page, statusFilter]);
 
   useEffect(() => {
     loadItems();
   }, [loadItems]);
+
+  // Reset to page 1 whenever the status filter changes so we don't
+  // land on an empty page after filtering.
+  useEffect(() => {
+    setPage(1);
+  }, [statusFilter]);
 
   // Sort handler
   function handleSort(column: SortableColumn) {
@@ -148,12 +155,6 @@ export default function SprintDetailPage() {
   }
 
   const sortedItems = useMemo(() => sortItems(items, sortBy, sortDir), [items, sortBy, sortDir]);
-
-  // Apply status filter from progress bar click (bar itself stays unchanged)
-  const filteredItems = useMemo(() => {
-    if (!statusFilter) return sortedItems;
-    return sortedItems.filter(item => item.status === statusFilter);
-  }, [sortedItems, statusFilter]);
 
   // Build task URL with sprint context (must be before early returns for hook rules)
   const buildItemUrl = useMemo(
@@ -508,7 +509,7 @@ export default function SprintDetailPage() {
       <div className="mb-6">
         <div className="flex items-center gap-2 mb-3">
           <h2 className="text-sm font-semibold text-gray-900">
-            Sprint Items ({statusFilter ? filteredItems.length : totalCount})
+            Sprint Items ({totalCount})
           </h2>
           {statusFilter && (
             <span className="inline-flex items-center gap-1 px-2 py-0.5 text-xs rounded-full bg-gray-100 text-gray-700">
@@ -524,11 +525,11 @@ export default function SprintDetailPage() {
           )}
         </div>
         <TaskTable
-          items={filteredItems}
-          totalCount={statusFilter ? filteredItems.length : totalCount}
-          page={statusFilter ? 1 : page}
+          items={sortedItems}
+          totalCount={totalCount}
+          page={page}
           pageSize={pageSize}
-          totalPages={statusFilter ? Math.max(1, Math.ceil(filteredItems.length / pageSize)) : totalPages}
+          totalPages={totalPages}
           onPageChange={setPage}
           loading={itemsLoading}
           buildItemUrl={buildItemUrl}
