@@ -968,11 +968,21 @@ function validateSprintDetailResponse(data: unknown): SprintDetailResponse {
 
 import type { TokenMetricRow, TokenMetricsSummary } from './pm-types';
 
-/** Fetch raw metric rows for a backlog item — looks up child task legacy_ids and queries by those. */
+/** Fetch raw metric rows for a backlog item.
+ *  Queries by: (1) direct backlog_item_id FK, (2) child task legacy_ids, (3) backlog item's own legacy_id.
+ *  Results are deduplicated by metric ID. */
 export async function getTaskMetrics(backlogItemId: string): Promise<TokenMetricRow[]> {
   const supabase = createClient();
+  const cols = 'id, agent_id, agent_type, task_id, description, input_tokens, output_tokens, cache_read_tokens, cache_creation_tokens, total_tokens, billable_tokens, duration_ms, api_calls, model, recorded_at';
 
-  // First get child task legacy_ids for this backlog item
+  // Query 1: Direct backlog_item_id FK (populated by hook via p_backlog_item_id)
+  const directQuery = supabase
+    .from('pm_token_metrics')
+    .select(cols)
+    .eq('backlog_item_id', backlogItemId)
+    .order('recorded_at', { ascending: true });
+
+  // Query 2: Via child task legacy_ids
   const { data: tasks } = await supabase
     .from('pm_tasks')
     .select('legacy_id')
@@ -981,7 +991,7 @@ export async function getTaskMetrics(backlogItemId: string): Promise<TokenMetric
 
   const taskIds = (tasks ?? []).map(t => t.legacy_id).filter(Boolean) as string[];
 
-  // Also try the backlog item's own legacy_id (in case metrics are stored against it)
+  // Also try the backlog item's own legacy_id
   const { data: item } = await supabase
     .from('pm_backlog_items')
     .select('legacy_id')
@@ -990,16 +1000,32 @@ export async function getTaskMetrics(backlogItemId: string): Promise<TokenMetric
 
   if (item?.legacy_id) taskIds.push(item.legacy_id);
 
-  if (taskIds.length === 0) return [];
+  // Execute both queries
+  const { data: directRows, error: directErr } = await directQuery;
+  if (directErr) throw directErr;
 
-  // Query metrics for all related task_ids
-  const { data, error } = await supabase
-    .from('pm_token_metrics')
-    .select('id, agent_id, agent_type, task_id, description, input_tokens, output_tokens, cache_read_tokens, cache_creation_tokens, total_tokens, billable_tokens, duration_ms, api_calls, model, recorded_at')
-    .in('task_id', taskIds)
-    .order('recorded_at', { ascending: true });
-  if (error) throw error;
-  return (data ?? []) as TokenMetricRow[];
+  let legacyRows: TokenMetricRow[] = [];
+  if (taskIds.length > 0) {
+    const { data, error } = await supabase
+      .from('pm_token_metrics')
+      .select(cols)
+      .in('task_id', taskIds)
+      .order('recorded_at', { ascending: true });
+    if (error) throw error;
+    legacyRows = (data ?? []) as TokenMetricRow[];
+  }
+
+  // Deduplicate by id (a metric may match both queries)
+  const seen = new Set<string>();
+  const result: TokenMetricRow[] = [];
+  for (const row of [...(directRows ?? []) as TokenMetricRow[], ...legacyRows]) {
+    if (!seen.has(row.id)) {
+      seen.add(row.id);
+      result.push(row);
+    }
+  }
+  result.sort((a, b) => a.recorded_at.localeCompare(b.recorded_at));
+  return result;
 }
 
 /** Fetch raw metric rows for a sprint (by sprint UUID). */
