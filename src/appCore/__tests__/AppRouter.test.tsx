@@ -73,6 +73,11 @@ jest.mock("../../components/license/UpgradeScreen", () => ({
   ),
 }));
 
+// BACKLOG-1653: Mock useImportSource hook (extracted from AppRouter)
+jest.mock("../../hooks/useImportSource", () => ({
+  useImportSource: () => "macos-native",
+}));
+
 // Mock routing utilities
 jest.mock("../routing", () => ({
   USE_NEW_ONBOARDING: false,

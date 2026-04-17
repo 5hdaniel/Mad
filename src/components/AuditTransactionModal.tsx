@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useState, useCallback } from "react";
 import { ResponsiveModal, MODAL_PANEL } from "./common/ResponsiveModal";
 import AddressVerificationStep from "./audit/AddressVerificationStep";
 import ContactAssignmentStep from "./audit/ContactAssignmentStep";
@@ -33,6 +33,12 @@ function AuditTransactionModal({
 }: AuditTransactionModalProps): React.ReactElement {
   // Database initialization guard (belt-and-suspenders defense)
   const { isDatabaseInitialized } = useAppStateMachine();
+
+  // BACKLOG-1654: Track when ContactFormModal is open to hide nav buttons
+  const [isContactFormOpen, setIsContactFormOpen] = useState(false);
+  const handleModalStateChange = useCallback((isOpen: boolean) => {
+    setIsContactFormOpen(isOpen);
+  }, []);
 
   // Use the extracted hook for all state and handlers
   const {
@@ -226,13 +232,16 @@ function AuditTransactionModal({
               // External contacts (from macOS Contacts app, etc.)
               externalContacts={externalContacts}
               externalContactsLoading={externalContactsLoading}
+              // BACKLOG-1654: Hide parent nav buttons when contact form is open
+              onModalStateChange={handleModalStateChange}
             />
           )}
         </div>
 
         {/* Footer — desktop: sticky bar, mobile: floating button */}
+        {/* BACKLOG-1654: Hide nav buttons when contact form modal is open to prevent overlap */}
         {/* Desktop footer */}
-        <div className="hidden sm:flex flex-shrink-0 px-6 py-4 bg-gray-50 rounded-b-xl items-center gap-3 justify-between">
+        {!isContactFormOpen && <div className="hidden sm:flex flex-shrink-0 px-6 py-4 bg-gray-50 rounded-b-xl items-center gap-3 justify-between">
           <button
             onClick={onClose}
             className="px-4 py-2 text-gray-700 hover:bg-gray-200 rounded-lg font-medium transition-all"
@@ -272,9 +281,9 @@ function AuditTransactionModal({
               )}
             </button>
           </div>
-        </div>
+        </div>}
         {/* Mobile floating button */}
-        <div className="sm:hidden fixed bottom-4 right-4 z-[71] flex items-center gap-2">
+        {!isContactFormOpen && <div className="sm:hidden fixed bottom-4 right-4 z-[71] flex items-center gap-2">
           {step > 1 && (
             <button
               onClick={handlePreviousStep}
@@ -306,7 +315,7 @@ function AuditTransactionModal({
               "Continue →"
             )}
           </button>
-        </div>
+        </div>}
     </ResponsiveModal>
   );
 }
