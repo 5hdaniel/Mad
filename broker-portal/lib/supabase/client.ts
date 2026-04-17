@@ -81,11 +81,29 @@ function clearCorruptedCookies(): void {
           clearedNames.push(name);
         }
       }
+      // Try to identify the affected user from localStorage before reporting
+      let affectedUser: string | null = null;
+      try {
+        for (let i = 0; i < localStorage.length; i++) {
+          const key = localStorage.key(i);
+          if (key && key.includes('sb-') && key.includes('auth-token')) {
+            const raw = localStorage.getItem(key);
+            if (raw) {
+              const parsed = JSON.parse(raw);
+              affectedUser = parsed?.user?.email || parsed?.user?.id || null;
+              if (affectedUser) break;
+            }
+          }
+        }
+      } catch {
+        // Can't read user info — report without it
+      }
+
       // Report to Sentry so we can track frequency in production
       Sentry.captureMessage('Corrupted Supabase auth cookies detected and cleared', {
         level: 'warning',
         tags: { component: 'supabase-client', operation: 'cookie-cleanup' },
-        extra: { clearedCookies: clearedNames, prefixes: [...corruptedPrefixes] },
+        extra: { clearedCookies: clearedNames, prefixes: [...corruptedPrefixes], affectedUser },
       });
     }
   } catch {
