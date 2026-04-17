@@ -10,6 +10,7 @@
  */
 
 import { createBrowserClient } from '@supabase/ssr';
+import * as Sentry from '@sentry/nextjs';
 
 /**
  * Clear corrupted Supabase auth data from localStorage.
@@ -70,14 +71,22 @@ function clearCorruptedCookies(): void {
 
     // Second pass: expire ALL chunks of corrupted tokens
     if (corruptedPrefixes.size > 0) {
+      const clearedNames: string[] = [];
       for (const cookie of cookies) {
         const name = cookie.split('=')[0];
         const prefix = name.replace(/\.\d+$/, '');
         if (corruptedPrefixes.has(prefix) || corruptedPrefixes.has(name)) {
           console.warn(`[Supabase] Clearing corrupted cookie: ${name}`);
           document.cookie = `${name}=; expires=Thu, 01 Jan 1970 00:00:00 GMT; path=/`;
+          clearedNames.push(name);
         }
       }
+      // Report to Sentry so we can track frequency in production
+      Sentry.captureMessage('Corrupted Supabase auth cookies detected and cleared', {
+        level: 'warning',
+        tags: { component: 'supabase-client', operation: 'cookie-cleanup' },
+        extra: { clearedCookies: clearedNames, prefixes: [...corruptedPrefixes] },
+      });
     }
   } catch {
     // document.cookie unavailable
