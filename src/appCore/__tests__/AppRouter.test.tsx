@@ -73,9 +73,9 @@ jest.mock("../../components/license/UpgradeScreen", () => ({
   ),
 }));
 
-// BACKLOG-1653: Mock PlatformContext for usePlatform hook used by import source logic
-jest.mock("../../contexts/PlatformContext", () => ({
-  usePlatform: () => ({ isMacOS: true, isWindows: false }),
+// BACKLOG-1653: Mock useImportSource hook (extracted from AppRouter)
+jest.mock("../../hooks/useImportSource", () => ({
+  useImportSource: () => "macos-native",
 }));
 
 // Mock routing utilities
@@ -275,11 +275,6 @@ const createAppStateMock = (
 describe("AppRouter", () => {
   beforeEach(() => {
     jest.clearAllMocks();
-    // BACKLOG-1653: Mock preferences.get to return resolved promise for import source logic
-    (window.api.preferences.get as jest.Mock).mockResolvedValue({
-      success: true,
-      preferences: {},
-    });
   });
 
   describe("Loading State", () => {
