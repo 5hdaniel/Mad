@@ -31,14 +31,16 @@ CURRENT_TASK_FILE="${CLAUDE_PROJECT_DIR:-.}/.claude/.current-task"
 TASK_ID=""
 AGENT_TYPE=""
 SPRINT_ID=""
+BACKLOG_ITEM_ID=""
 DESCRIPTION=""
 
 if [ -f "$CURRENT_TASK_FILE" ]; then
   TASK_ID=$(jq -r '.task_id // ""' "$CURRENT_TASK_FILE" 2>/dev/null)
   AGENT_TYPE=$(jq -r '.agent_type // ""' "$CURRENT_TASK_FILE" 2>/dev/null)
   SPRINT_ID=$(jq -r '.sprint_id // ""' "$CURRENT_TASK_FILE" 2>/dev/null)
+  BACKLOG_ITEM_ID=$(jq -r '.backlog_item_id // ""' "$CURRENT_TASK_FILE" 2>/dev/null)
   DESCRIPTION=$(jq -r '.description // ""' "$CURRENT_TASK_FILE" 2>/dev/null)
-  echo "[HOOK] Read task context: task=$TASK_ID type=$AGENT_TYPE sprint=$SPRINT_ID desc=$DESCRIPTION" >> "$DEBUG_LOG"
+  echo "[HOOK] Read task context: task=$TASK_ID type=$AGENT_TYPE sprint=$SPRINT_ID backlog=$BACKLOG_ITEM_ID desc=$DESCRIPTION" >> "$DEBUG_LOG"
 else
   echo "[HOOK] WARNING: No .current-task file at $CURRENT_TASK_FILE — metrics will have no task linkage" >> "$DEBUG_LOG"
 fi
@@ -138,6 +140,7 @@ if [ -n "$SUPABASE_URL" ] && [ -n "$SUPABASE_KEY" ]; then
     --arg task_id "$TASK_ID" \
     --arg description "$DESCRIPTION" \
     --arg sprint_id "$SPRINT_ID" \
+    --arg backlog_item_id "$BACKLOG_ITEM_ID" \
     --argjson input "$TOTAL_INPUT" \
     --argjson output "$TOTAL_OUTPUT" \
     --argjson cache_read "$TOTAL_CACHE_READ" \
@@ -153,6 +156,7 @@ if [ -n "$SUPABASE_URL" ] && [ -n "$SUPABASE_KEY" ]; then
       p_task_id: (if $task_id == "" then null else $task_id end),
       p_description: (if $description == "" then null else $description end),
       p_sprint_id: (if $sprint_id == "" then null else $sprint_id end),
+      p_backlog_item_id: (if $backlog_item_id == "" then null else $backlog_item_id end),
       p_input_tokens: $input,
       p_output_tokens: $output,
       p_cache_read: $cache_read,

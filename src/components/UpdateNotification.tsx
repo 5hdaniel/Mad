@@ -7,29 +7,54 @@ interface UpdateInfo {
 export default function UpdateNotification() {
   const [updateAvailable, setUpdateAvailable] = useState(false);
   const [updateDownloaded, setUpdateDownloaded] = useState(false);
+  const [updateError, setUpdateError] = useState<string | null>(null);
   const [downloadProgress, setDownloadProgress] = useState(0);
   const [updateInfo, setUpdateInfo] = useState<UpdateInfo | null>(null);
+  const [retrying, setRetrying] = useState(false);
 
   useEffect(() => {
+    const cleanups: (() => void)[] = [];
+
     // Listen for update events
     if (window.api?.update?.onAvailable) {
-      window.api.update.onAvailable((info) => {
+      const cleanup = window.api.update.onAvailable((info) => {
         setUpdateAvailable(true);
+        setUpdateError(null);
         setUpdateInfo(info as UpdateInfo);
       });
+      if (cleanup) cleanups.push(cleanup);
     }
 
     if (window.api?.update?.onProgress) {
-      window.api.update.onProgress((progress) => {
-        setDownloadProgress(Math.round((progress as { percent: number }).percent));
+      const cleanup = window.api.update.onProgress((progress) => {
+        setDownloadProgress(
+          Math.round((progress as { percent: number }).percent),
+        );
       });
+      if (cleanup) cleanups.push(cleanup);
     }
 
     if (window.api?.update?.onDownloaded) {
-      window.api.update.onDownloaded(() => {
+      const cleanup = window.api.update.onDownloaded(() => {
         setUpdateDownloaded(true);
+        setUpdateError(null);
       });
+      if (cleanup) cleanups.push(cleanup);
     }
+
+    // BACKLOG-1641: Listen for auto-updater errors so the UI does not
+    // stay stuck at 100% when checksum verification (or anything else) fails.
+    if (window.api?.update?.onError) {
+      const cleanup = window.api.update.onError((error: string) => {
+        setUpdateError(error);
+        setRetrying(false);
+      });
+      if (cleanup) cleanups.push(cleanup);
+    }
+
+    return () => {
+      cleanups.forEach((fn) => fn());
+    };
   }, []);
 
   const handleInstall = () => {
@@ -41,9 +66,62 @@ export default function UpdateNotification() {
   const handleDismiss = () => {
     setUpdateDownloaded(false);
     setUpdateAvailable(false);
+    setUpdateError(null);
   };
 
+  const handleRetry = async () => {
+    if (!window.api?.update?.checkForUpdates) return;
+    setRetrying(true);
+    setUpdateError(null);
+    setDownloadProgress(0);
+    try {
+      await window.api.update.checkForUpdates();
+    } catch {
+      // Error will be caught by the onError listener
+    }
+  };
+
+  const handleManualDownload = () => {
+    if (window.api?.shell?.openExternal) {
+      window.api.shell.openExternal("https://keeprcompliance.com");
+    }
+  };
+
+  // BACKLOG-1641: Error state — shown when download/verification fails
   // BACKLOG-610: Use z-[110] to ensure visibility above all modals and toasts (z-[100])
+  if (updateError) {
+    return (
+      <div className="fixed bottom-4 right-4 bg-red-500 text-white p-4 rounded-lg shadow-lg max-w-sm z-[110]">
+        <h3 className="font-bold text-lg mb-2">Update Failed</h3>
+        <p className="text-sm mb-3">
+          Update failed to verify. Please try again or download manually from
+          keeprcompliance.com.
+        </p>
+        <div className="flex gap-2">
+          <button
+            onClick={handleRetry}
+            disabled={retrying}
+            className="flex-1 bg-white text-red-500 px-4 py-2 rounded font-medium hover:bg-red-50 transition-colors disabled:opacity-50"
+          >
+            {retrying ? "Retrying..." : "Retry"}
+          </button>
+          <button
+            onClick={handleManualDownload}
+            className="flex-1 bg-red-600 text-white px-4 py-2 rounded font-medium hover:bg-red-700 transition-colors"
+          >
+            Download
+          </button>
+          <button
+            onClick={handleDismiss}
+            className="px-3 py-2 bg-red-600 text-white rounded hover:bg-red-700 transition-colors text-sm"
+          >
+            Dismiss
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   if (updateDownloaded) {
     return (
       <div className="fixed bottom-4 right-4 bg-green-500 text-white p-4 rounded-lg shadow-lg max-w-sm z-[110]">

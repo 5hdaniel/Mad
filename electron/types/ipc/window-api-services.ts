@@ -201,6 +201,8 @@ export interface WindowApiUpdate {
   onAvailable: (callback: (info: unknown) => void) => () => void;
   onProgress: (callback: (progress: unknown) => void) => () => void;
   onDownloaded: (callback: (info: unknown) => void) => () => void;
+  /** BACKLOG-1641: Listen for auto-updater errors (checksum failure, network, etc.) */
+  onError: (callback: (error: string) => void) => () => void;
   install: () => void;
   checkForUpdates: () => Promise<{
     updateAvailable: boolean;
