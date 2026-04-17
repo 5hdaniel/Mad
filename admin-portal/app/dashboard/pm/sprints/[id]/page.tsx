@@ -138,11 +138,13 @@ export default function SprintDetailPage() {
     loadItems();
   }, [loadItems]);
 
-  // Reset to page 1 whenever the status filter changes so we don't
-  // land on an empty page after filtering.
-  useEffect(() => {
+  // Reset page to 1 alongside the filter change (done synchronously in
+  // handleStatusFilter below) so we only trigger one loadItems fetch per
+  // filter change instead of two.
+  const handleStatusFilter = useCallback((status: ItemStatus | null) => {
     setPage(1);
-  }, [statusFilter]);
+    setStatusFilter(status);
+  }, []);
 
   // Sort handler
   function handleSort(column: SortableColumn) {
@@ -379,7 +381,7 @@ export default function SprintDetailPage() {
           byStatus={byStatus}
           estTokens={metrics.total_est_tokens}
           actualTokens={metrics.total_actual_tokens}
-          onStatusFilter={setStatusFilter}
+          onStatusFilter={handleStatusFilter}
           activeFilter={statusFilter}
         />
         <div className="grid grid-cols-3 gap-4 mt-4 pt-4 border-t border-gray-100">
@@ -527,7 +529,7 @@ export default function SprintDetailPage() {
               Filtered: {STATUS_LABELS[statusFilter]}
               <button
                 type="button"
-                onClick={() => setStatusFilter(null)}
+                onClick={() => handleStatusFilter(null)}
                 className="ml-0.5 text-gray-400 hover:text-gray-700"
               >
                 &times;
