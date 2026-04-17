@@ -152,12 +152,19 @@ interface TokenMetricsBreakdownProps {
   sprintId?: string;
   /** Start expanded */
   defaultExpanded?: boolean;
+  /**
+   * Optional wrapper classes (e.g. card styling). Only applied when the
+   * component has content to render — so when there are no metrics the
+   * whole wrapper is omitted instead of leaving an empty card behind.
+   */
+  wrapperClassName?: string;
 }
 
 export default function TokenMetricsBreakdown({
   taskId,
   sprintId,
   defaultExpanded = false,
+  wrapperClassName,
 }: TokenMetricsBreakdownProps) {
   const [rows, setRows] = useState<TokenMetricRow[]>([]);
   const [summary, setSummary] = useState<TokenMetricsSummary[]>([]);
@@ -202,7 +209,7 @@ export default function TokenMetricsBreakdown({
 
   const totalTokens = rows.reduce((s, r) => s + r.total_tokens, 0);
 
-  return (
+  const inner = (
     <div className="px-4 py-3">
       <button
         onClick={() => setExpanded(!expanded)}
@@ -247,5 +254,11 @@ export default function TokenMetricsBreakdown({
         </>
       )}
     </div>
+  );
+
+  return wrapperClassName ? (
+    <div className={wrapperClassName}>{inner}</div>
+  ) : (
+    inner
   );
 }

@@ -508,10 +508,13 @@ export default function SprintDetailPage() {
         </div>
       </div>
 
-      {/* Token Metrics Breakdown by Agent Type */}
-      <div className="bg-white rounded-lg border border-gray-200 p-6 mb-6">
-        <TokenMetricsBreakdown sprintId={sprint.id} defaultExpanded />
-      </div>
+      {/* Token Metrics Breakdown by Agent Type — wrapper card only renders
+          when there is data to show (component owns the wrapper). */}
+      <TokenMetricsBreakdown
+        sprintId={sprint.id}
+        defaultExpanded
+        wrapperClassName="bg-white rounded-lg border border-gray-200 p-6 mb-6"
+      />
 
       {/* Sprint Items Table */}
       <div className="mb-6">
