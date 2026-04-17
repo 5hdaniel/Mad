@@ -28,7 +28,7 @@ export function safeErrorMessage(
   if (!value) return fallback;
   if (typeof value === "string") return value;
   if (value instanceof Error) return value.message || fallback;
-  if (typeof value === "object" && value !== null) {
+  if (typeof value === "object") {
     const obj = value as Record<string, unknown>;
     // Try common error object shapes (Supabase, IPC, etc.)
     if (typeof obj.message === "string") return obj.message;

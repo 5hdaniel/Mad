@@ -478,17 +478,6 @@ export function getConversationsFromMessages(userId: string): MessagesConversati
     return [];
   }
 
-  // For each conversation group, get the last message body separately
-  // to avoid correlated sub-query performance issues.
-  const lastMessageStmt = db.prepare(`
-    SELECT body_text FROM messages
-    WHERE user_id = ?
-      AND COALESCE(thread_id, participants_flat) = ?
-      AND channel IN ('sms', 'imessage')
-    ORDER BY sent_at DESC
-    LIMIT 1
-  `);
-
   // Build a phone-to-contact lookup for name resolution.
   // Uses contact_phones joined with contacts to resolve display names.
   const contactLookup = db.prepare(`
@@ -547,9 +536,6 @@ export function getConversationsFromMessages(userId: string): MessagesConversati
     // For conversations with no contact match, show the phone number or sender string
     // so the conversation is always visible (never hidden due to missing name).
     const displayName = contactInfo?.display_name || phoneRaw || row.thread_id;
-
-    // Get last message body
-    const lastMsgRow = lastMessageStmt.get(userId, row.thread_id) as { body_text: string | null } | undefined;
 
     conversations.push({
       id: row.thread_id,

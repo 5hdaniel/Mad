@@ -10,7 +10,6 @@
  */
 
 import { useState, useEffect, useRef } from 'react';
-import { Check } from 'lucide-react';
 import type { SprintStatus } from '@/lib/pm-types';
 import { SPRINT_STATUS_LABELS, SPRINT_STATUS_COLORS } from '@/lib/pm-types';
 import { updateSprintStatus } from '@/lib/pm-queries';

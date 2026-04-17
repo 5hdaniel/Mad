@@ -732,7 +732,6 @@ describe("autoLinkService", () => {
 
     it("should process all contact-transaction pairs", async () => {
       // First call returns contact-transaction pairs, subsequent calls return contact/transaction data
-      let callIndex = 0;
       mockDbAll.mockImplementation((sql: string) => {
         if (sql.includes("transaction_contacts") && sql.includes("DISTINCT")) {
           return [

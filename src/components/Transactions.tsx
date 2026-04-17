@@ -287,31 +287,9 @@ function Transactions({
     selectAll(filteredTransactions);
   };
 
-  // Handlers for clicking on communication counts
-  const handleMessagesClick = (transaction: Transaction, e: React.MouseEvent) => {
-    e.stopPropagation();
-    if (!selectionMode) {
-      setInitialTab("messages");
-      setSelectedTransaction(transaction);
-    }
-  };
-
-  const handleEmailsClick = (transaction: Transaction, e: React.MouseEvent) => {
-    e.stopPropagation();
-    if (!selectionMode) {
-      setInitialTab("emails");
-      setSelectedTransaction(transaction);
-    }
-  };
-
   // ============================================
   // EXPORT HANDLERS
   // ============================================
-
-  const handleQuickExport = (transaction: Transaction, e: React.MouseEvent) => {
-    e.stopPropagation();
-    openQuickExport(transaction);
-  };
 
   const handleQuickExportComplete = (result: unknown) => {
     const exportResult = result as { path?: string };

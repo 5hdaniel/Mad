@@ -173,14 +173,6 @@ function TransactionList({
   }
 
 
-  const handleQuickExport = (
-    transaction: Transaction,
-    e: React.MouseEvent<HTMLButtonElement>,
-  ): void => {
-    e.stopPropagation(); // Prevent opening transaction details
-    setQuickExportTransaction(transaction);
-  };
-
   const handleQuickExportComplete = (result: unknown): void => {
     const exportResult = result as { path?: string };
     setQuickExportTransaction(null);
@@ -214,33 +206,6 @@ function TransactionList({
     } else {
       setInitialTab("overview");
       setSelectedTransaction(transaction);
-    }
-  };
-
-  // Create handlers that include the transaction context for communication count clicks
-  const createMessagesClickHandler = (transaction: Transaction) => (e: React.MouseEvent): void => {
-    e.stopPropagation();
-    if (!selectionMode) {
-      if (transaction.detection_status === "pending" || transaction.status === "pending") {
-        setInitialTab("messages");
-        setPendingReviewTransaction(transaction);
-      } else {
-        setInitialTab("messages");
-        setSelectedTransaction(transaction);
-      }
-    }
-  };
-
-  const createEmailsClickHandler = (transaction: Transaction) => (e: React.MouseEvent): void => {
-    e.stopPropagation();
-    if (!selectionMode) {
-      if (transaction.detection_status === "pending" || transaction.status === "pending") {
-        setInitialTab("emails");
-        setPendingReviewTransaction(transaction);
-      } else {
-        setInitialTab("emails");
-        setSelectedTransaction(transaction);
-      }
     }
   };
 
