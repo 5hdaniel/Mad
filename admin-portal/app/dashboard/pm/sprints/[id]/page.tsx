@@ -218,6 +218,14 @@ export default function SprintDetailPage() {
 
   const { sprint, metrics } = detail;
 
+  // Build byStatus counts from the full (unpaginated) sprint items returned
+  // by pm_get_sprint_detail. We can't rely on sprint.item_counts because the
+  // detail RPC doesn't populate it (only pm_list_sprints does).
+  const byStatus: Record<string, number> = {};
+  for (const it of detail.items) {
+    byStatus[it.status] = (byStatus[it.status] ?? 0) + 1;
+  }
+
   // Status breakdown for the progress section
   const statusBreakdown: {
     label: string;
@@ -368,7 +376,7 @@ export default function SprintDetailPage() {
         <DualProgressBar
           completed={metrics.completed_items}
           total={metrics.total_items}
-          byStatus={sprint.item_counts}
+          byStatus={byStatus}
           estTokens={metrics.total_est_tokens}
           actualTokens={metrics.total_actual_tokens}
           onStatusFilter={setStatusFilter}
