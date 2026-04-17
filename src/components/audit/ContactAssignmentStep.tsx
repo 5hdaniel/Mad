@@ -56,6 +56,8 @@ interface ContactAssignmentStepProps {
   // External contacts (from macOS Contacts app, etc.)
   externalContacts: Contact[];
   externalContactsLoading: boolean;
+  /** Callback when contact form modal opens/closes (BACKLOG-1654: hide parent nav buttons) */
+  onModalStateChange?: (isOpen: boolean) => void;
 }
 
 /**
@@ -110,6 +112,8 @@ function ContactAssignmentStep({
   // External contacts (from macOS Contacts app, etc.)
   externalContacts,
   externalContactsLoading,
+  // BACKLOG-1654: Notify parent when contact form modal opens/closes
+  onModalStateChange,
 }: ContactAssignmentStepProps): React.ReactElement {
   // Contact preview/edit modal state
   const [previewContact, setPreviewContact] = useState<ExtendedContact | null>(null);
@@ -126,6 +130,12 @@ function ContactAssignmentStep({
   const [autoRoleEnabled, setAutoRoleEnabled] = useState(false);
   const [autoFilledContactIds, setAutoFilledContactIds] = useState<Set<string>>(new Set());
   const autoFillAppliedRef = useRef(false);
+
+  // BACKLOG-1654: Notify parent when contact form modal opens/closes
+  // so parent can hide navigation buttons that overlap the form
+  useEffect(() => {
+    onModalStateChange?.(showEditModal);
+  }, [showEditModal, onModalStateChange]);
 
   // Load auto-role setting on mount
   useEffect(() => {
