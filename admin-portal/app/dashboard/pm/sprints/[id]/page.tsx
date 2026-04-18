@@ -36,6 +36,7 @@ import type {
   SortableColumn,
   SortDirection,
 } from '@/lib/pm-types';
+import { STATUS_LABELS } from '@/lib/pm-types';
 import { TaskTable } from '../../components/TaskTable';
 import { InlineSprintStatusPicker } from '../../components/InlineSprintStatusPicker';
 import { DualProgressBar } from '../../components/DualProgressBar';
@@ -87,6 +88,7 @@ export default function SprintDetailPage() {
   const [deleting, setDeleting] = useState(false);
   const [sortBy, setSortBy] = useState<SortableColumn | null>(null);
   const [sortDir, setSortDir] = useState<SortDirection>('asc');
+  const [statusFilter, setStatusFilter] = useState<ItemStatus | null>(null);
 
   const pageSize = 50;
 
@@ -110,7 +112,7 @@ export default function SprintDetailPage() {
     loadDetail();
   }, [loadDetail]);
 
-  // Load paginated items
+  // Load paginated items (server-side status filter when statusFilter is set)
   const loadItems = useCallback(async () => {
     if (!sprintId) return;
 
@@ -118,6 +120,7 @@ export default function SprintDetailPage() {
     try {
       const data = await listItems({
         sprint_id: sprintId,
+        status: statusFilter,
         page,
         page_size: pageSize,
       });
@@ -129,11 +132,19 @@ export default function SprintDetailPage() {
     } finally {
       setItemsLoading(false);
     }
-  }, [sprintId, page]);
+  }, [sprintId, page, statusFilter]);
 
   useEffect(() => {
     loadItems();
   }, [loadItems]);
+
+  // Reset page to 1 alongside the filter change (done synchronously in
+  // handleStatusFilter below) so we only trigger one loadItems fetch per
+  // filter change instead of two.
+  const handleStatusFilter = useCallback((status: ItemStatus | null) => {
+    setPage(1);
+    setStatusFilter(status);
+  }, []);
 
   // Sort handler
   function handleSort(column: SortableColumn) {
@@ -208,6 +219,14 @@ export default function SprintDetailPage() {
   }
 
   const { sprint, metrics } = detail;
+
+  // Build byStatus counts from the full (unpaginated) sprint items returned
+  // by pm_get_sprint_detail. We can't rely on sprint.item_counts because the
+  // detail RPC doesn't populate it (only pm_list_sprints does).
+  const byStatus: Record<string, number> = {};
+  for (const it of detail.items) {
+    byStatus[it.status] = (byStatus[it.status] ?? 0) + 1;
+  }
 
   // Status breakdown for the progress section
   const statusBreakdown: {
@@ -359,9 +378,11 @@ export default function SprintDetailPage() {
         <DualProgressBar
           completed={metrics.completed_items}
           total={metrics.total_items}
-          byStatus={sprint.item_counts}
+          byStatus={byStatus}
           estTokens={metrics.total_est_tokens}
           actualTokens={metrics.total_actual_tokens}
+          onStatusFilter={handleStatusFilter}
+          activeFilter={statusFilter}
         />
         <div className="grid grid-cols-3 gap-4 mt-4 pt-4 border-t border-gray-100">
           {statusBreakdown.map((item) => {
@@ -489,16 +510,33 @@ export default function SprintDetailPage() {
         </div>
       </div>
 
-      {/* Token Metrics Breakdown by Agent Type */}
-      <div className="bg-white rounded-lg border border-gray-200 p-6 mb-6">
-        <TokenMetricsBreakdown sprintId={sprint.id} defaultExpanded />
-      </div>
+      {/* Token Metrics Breakdown by Agent Type — wrapper card only renders
+          when there is data to show (component owns the wrapper). */}
+      <TokenMetricsBreakdown
+        sprintId={sprint.id}
+        defaultExpanded
+        wrapperClassName="bg-white rounded-lg border border-gray-200 p-6 mb-6"
+      />
 
       {/* Sprint Items Table */}
       <div className="mb-6">
-        <h2 className="text-sm font-semibold text-gray-900 mb-3">
-          Sprint Items ({totalCount})
-        </h2>
+        <div className="flex items-center gap-2 mb-3">
+          <h2 className="text-sm font-semibold text-gray-900">
+            Sprint Items ({totalCount})
+          </h2>
+          {statusFilter && (
+            <span className="inline-flex items-center gap-1 px-2 py-0.5 text-xs rounded-full bg-gray-100 text-gray-700">
+              Filtered: {STATUS_LABELS[statusFilter]}
+              <button
+                type="button"
+                onClick={() => handleStatusFilter(null)}
+                className="ml-0.5 text-gray-400 hover:text-gray-700"
+              >
+                &times;
+              </button>
+            </span>
+          )}
+        </div>
         <TaskTable
           items={sortedItems}
           totalCount={totalCount}
