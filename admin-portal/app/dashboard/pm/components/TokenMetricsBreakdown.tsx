@@ -152,12 +152,19 @@ interface TokenMetricsBreakdownProps {
   sprintId?: string;
   /** Start expanded */
   defaultExpanded?: boolean;
+  /**
+   * Optional wrapper classes (e.g. card styling). Only applied when the
+   * component has content to render — so when there are no metrics the
+   * whole wrapper is omitted instead of leaving an empty card behind.
+   */
+  wrapperClassName?: string;
 }
 
 export default function TokenMetricsBreakdown({
   taskId,
   sprintId,
   defaultExpanded = false,
+  wrapperClassName,
 }: TokenMetricsBreakdownProps) {
   const [rows, setRows] = useState<TokenMetricRow[]>([]);
   const [summary, setSummary] = useState<TokenMetricsSummary[]>([]);
@@ -202,7 +209,7 @@ export default function TokenMetricsBreakdown({
 
   const totalTokens = rows.reduce((s, r) => s + r.total_tokens, 0);
 
-  return (
+  const inner = (
     <div className="px-4 py-3">
       <button
         onClick={() => setExpanded(!expanded)}
@@ -224,20 +231,34 @@ export default function TokenMetricsBreakdown({
         </span>
       </button>
 
-      {/* Stacked effort bar */}
-      <div className="mt-2 ml-6">
-        <EffortBar summary={summary} />
-      </div>
+      {/* Everything below the header is gated by expanded — including the
+          stacked effort bar added in develop. */}
+      {expanded && (
+        <>
+          {/* Stacked effort bar */}
+          <div className="mt-2 ml-6">
+            <EffortBar summary={summary} />
+          </div>
 
-      {/* Per-agent-type summary rows */}
-      <div className="mt-2 ml-6">
-        {summary.map((s) => (
-          <SummaryRow key={s.agent_type} summary={s} />
-        ))}
-      </div>
+          {/* Per-agent-type summary rows */}
+          <div className="mt-2 ml-6">
+            {summary.map((s) => (
+              <SummaryRow key={s.agent_type} summary={s} />
+            ))}
+          </div>
 
-      {/* Detail table when expanded */}
-      {expanded && <div className="ml-6"><DetailTable rows={rows} /></div>}
+          {/* Detail table */}
+          <div className="ml-6">
+            <DetailTable rows={rows} />
+          </div>
+        </>
+      )}
     </div>
+  );
+
+  return wrapperClassName ? (
+    <div className={wrapperClassName}>{inner}</div>
+  ) : (
+    inner
   );
 }
