@@ -19,14 +19,6 @@ interface ContactInfoModalProps {
 export function ContactInfoModal({ contact, onClose }: ContactInfoModalProps) {
   if (!contact) return null;
 
-  const handleOverlayClick = (): void => {
-    onClose();
-  };
-
-  const handleModalClick = (e: React.MouseEvent<HTMLDivElement>): void => {
-    e.stopPropagation();
-  };
-
   return (
     <ResponsiveModal onClose={onClose} overlayClassName="bg-black bg-opacity-50" panelClassName="max-w-md p-6">
         <div className="flex items-center justify-between mb-4">
