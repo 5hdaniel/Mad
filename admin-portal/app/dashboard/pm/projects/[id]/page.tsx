@@ -25,6 +25,7 @@ import type {
   PmSprint,
   SprintStatus,
   ProjectField,
+  ItemStatus,
 } from '@/lib/pm-types';
 import { ProjectHeader, DeleteConfirmation, ProjectLoadingSkeleton, ProjectNotFound } from './components/ProjectHeader';
 import { StatusSummary, TokenMetricCards, InlineSprintCreate } from './components/ProjectSprints';
@@ -55,6 +56,14 @@ export default function ProjectDetailPage() {
   // All items for backlog + token sums
   const [allItems, setAllItems] = useState<PmBacklogItem[]>([]);
   const [loadingItems, setLoadingItems] = useState(true);
+
+  // Status filter — clicking a segment/badge in StatusSummary narrows
+  // the visible items in both the backlog panel and sprint sections.
+  const [statusFilter, setStatusFilter] = useState<ItemStatus | null>(null);
+
+  const handleStatusFilter = useCallback((status: ItemStatus | null) => {
+    setStatusFilter(status);
+  }, []);
 
   // Load project detail
   const loadDetail = useCallback(async () => {
@@ -88,10 +97,14 @@ export default function ProjectDetailPage() {
 
   useEffect(() => { loadItems(); }, [loadItems]);
 
-  // Filter to unassigned items (no sprint_id)
+  // Filter to unassigned items (no sprint_id); further narrow by statusFilter
   const backlogItems = useMemo(
-    () => allItems.filter((item) => !item.sprint_id),
-    [allItems]
+    () =>
+      allItems.filter(
+        (item) =>
+          !item.sprint_id && (!statusFilter || item.status === statusFilter)
+      ),
+    [allItems, statusFilter]
   );
 
   // Token sums
@@ -182,7 +195,12 @@ export default function ProjectDetailPage() {
         </div>
       )}
 
-      <StatusSummary itemsByStatus={itemsByStatus} tokenSums={tokenSums} />
+      <StatusSummary
+        itemsByStatus={itemsByStatus}
+        tokenSums={tokenSums}
+        activeFilter={statusFilter}
+        onStatusFilter={handleStatusFilter}
+      />
 
       <TokenMetricCards tokenSums={tokenSums} project={project} />
 
@@ -225,7 +243,11 @@ export default function ProjectDetailPage() {
                   key={sprint.id}
                   sprint={sprint}
                   projectId={projectId}
-                  items={allItems.filter((i) => i.sprint_id === sprint.id)}
+                  items={allItems.filter(
+                    (i) =>
+                      i.sprint_id === sprint.id &&
+                      (!statusFilter || i.status === statusFilter)
+                  )}
                   onRefresh={refreshAll}
                 />
               ))
