@@ -92,9 +92,15 @@ DROP INDEX CONCURRENTLY IF EXISTS public.idx_scim_sync_log_operation;
 DROP INDEX CONCURRENTLY IF EXISTS public.idx_scim_sync_log_resource;
 
 -- ============================================================
--- support_ticket_messages (1 index, 56 kB)
+-- support_ticket_messages (1 index, 56 kB) — KEPT
 -- ============================================================
-DROP INDEX CONCURRENTLY IF EXISTS public.idx_support_ticket_messages_search;
+-- idx_support_ticket_messages_search is NOT dropped despite idx_scan=0
+-- because support_list_tickets() RPC queries
+-- `support_ticket_messages.search_vector @@ v_query` when p_search is passed.
+-- The zero-scan stat is misleading: the support search feature was added
+-- recently (2026-03-15) and pg_stat_user_indexes stats reset on restart.
+-- Dropping this GIN index would cause full scans on every support admin search.
+-- DROP INDEX CONCURRENTLY IF EXISTS public.idx_support_ticket_messages_search;
 
 -- ============================================================
 -- support_tickets (1 index, 16 kB)
@@ -151,7 +157,6 @@ DROP INDEX CONCURRENTLY IF EXISTS public.idx_pm_tasks_status;
 -- CREATE INDEX idx_scim_sync_log_created_at ON public.scim_sync_log USING btree (created_at DESC);
 -- CREATE INDEX idx_scim_sync_log_operation ON public.scim_sync_log USING btree (operation);
 -- CREATE INDEX idx_scim_sync_log_resource ON public.scim_sync_log USING btree (resource_type, resource_id);
--- CREATE INDEX idx_support_ticket_messages_search ON public.support_ticket_messages USING gin (search_vector);
 -- CREATE INDEX idx_support_tickets_priority ON public.support_tickets USING btree (priority);
 -- CREATE INDEX idx_token_claims_user_expires ON public.token_claims USING btree (user_id, expires_at);
 -- CREATE INDEX idx_users_email_onboarding ON public.users USING btree (email_onboarding_completed_at);
