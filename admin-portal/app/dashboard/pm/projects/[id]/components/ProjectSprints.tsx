@@ -128,17 +128,40 @@ export function InlineSprintCreate({ projectId, onCreated }: InlineSprintCreateP
 interface StatusSummaryProps {
   itemsByStatus: Record<string, number>;
   tokenSums: { estTotal: number; actualTotal: number; variance: number };
+  /** Active status filter (null = all). */
+  activeFilter?: ItemStatus | null;
+  /** Called when user clicks a segment / legend item. */
+  onStatusFilter?: (status: ItemStatus | null) => void;
 }
 
-export function StatusSummary({ itemsByStatus, tokenSums }: StatusSummaryProps) {
+export function StatusSummary({
+  itemsByStatus,
+  tokenSums,
+  activeFilter,
+  onStatusFilter,
+}: StatusSummaryProps) {
   const totalItems = Object.values(itemsByStatus).reduce((a, b) => a + b, 0);
   const completedItems = itemsByStatus['completed'] ?? 0;
 
+  const handleBadgeClick = (status: ItemStatus) => {
+    if (!onStatusFilter) return;
+    onStatusFilter(activeFilter === status ? null : status);
+  };
+
   return (
     <div className="bg-white border border-gray-200 rounded-lg p-4 mb-6">
-      <h2 className="text-sm font-semibold text-gray-900 mb-3">
-        Status Summary
-      </h2>
+      <div className="flex items-center justify-between mb-3">
+        <h2 className="text-sm font-semibold text-gray-900">Status Summary</h2>
+        {activeFilter && onStatusFilter && (
+          <button
+            type="button"
+            onClick={() => onStatusFilter(null)}
+            className="text-xs text-blue-600 hover:text-blue-700"
+          >
+            Clear filter
+          </button>
+        )}
+      </div>
 
       <DualProgressBar
         completed={completedItems}
@@ -147,23 +170,41 @@ export function StatusSummary({ itemsByStatus, tokenSums }: StatusSummaryProps) 
         estTokens={tokenSums.estTotal}
         actualTokens={tokenSums.actualTotal}
         showLegend={false}
+        onStatusFilter={onStatusFilter}
+        activeFilter={activeFilter}
       />
 
       {totalItems > 0 ? (
         <div className="flex flex-wrap gap-3 mt-4">
           {STATUS_ORDER.filter((s) => (itemsByStatus[s] ?? 0) > 0).map(
-            (status) => (
-              <div key={status} className="flex items-center gap-1.5">
-                <span
-                  className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${STATUS_COLORS[status]}`}
+            (status) => {
+              const isActive = activeFilter === status;
+              const isDimmed = activeFilter && !isActive;
+              const clickable = !!onStatusFilter;
+              return (
+                <button
+                  key={status}
+                  type="button"
+                  onClick={() => handleBadgeClick(status)}
+                  disabled={!clickable}
+                  className={`flex items-center gap-1.5 transition-opacity ${
+                    clickable ? 'cursor-pointer hover:opacity-80' : 'cursor-default'
+                  } ${isDimmed ? 'opacity-40' : ''} ${
+                    isActive ? 'ring-2 ring-offset-1 ring-gray-800 rounded-full' : ''
+                  }`}
+                  aria-pressed={isActive}
                 >
-                  {STATUS_LABELS[status]}
-                </span>
-                <span className="text-sm font-medium text-gray-700">
-                  {itemsByStatus[status]}
-                </span>
-              </div>
-            )
+                  <span
+                    className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${STATUS_COLORS[status]}`}
+                  >
+                    {STATUS_LABELS[status]}
+                  </span>
+                  <span className="text-sm font-medium text-gray-700">
+                    {itemsByStatus[status]}
+                  </span>
+                </button>
+              );
+            }
           )}
         </div>
       ) : (
