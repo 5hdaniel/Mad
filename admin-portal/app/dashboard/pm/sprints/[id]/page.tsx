@@ -421,6 +421,11 @@ export default function SprintDetailPage() {
                   displayClassName="text-2xl font-bold text-gray-900"
                 />
               </h1>
+              {sprint.legacy_id && (
+                <span className="text-xs text-gray-400 font-mono">
+                  {sprint.legacy_id}
+                </span>
+              )}
               <InlineSprintStatusPicker
                 sprintId={sprintId}
                 status={sprint.status}

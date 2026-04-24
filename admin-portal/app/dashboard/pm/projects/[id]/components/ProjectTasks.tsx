@@ -211,6 +211,11 @@ export function SprintSection({
           >
             {sprint.name}
           </Link>
+          {sprint.legacy_id && (
+            <span className="text-xs text-gray-400 font-mono shrink-0">
+              {sprint.legacy_id}
+            </span>
+          )}
           <span
             className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium shrink-0 ${SPRINT_STATUS_COLORS[sprint.status]}`}
           >
