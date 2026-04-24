@@ -8,14 +8,19 @@ const nextConfig = {
   },
 
   async headers() {
+    // Vercel Live feedback widget (preview/dev only) loads scripts from
+    // vercel.live and opens a real-time channel via Pusher. The widget pulls
+    // its JS, styles, and iframe from vercel.live and uses Pusher for the
+    // comments channel. Allowing these in prod too is a tiny surface
+    // expansion (one CDN + Pusher) and avoids an env-branched CSP.
     const cspDirectives = [
       "default-src 'self'",
-      "script-src 'self' 'unsafe-eval' 'unsafe-inline'",
-      "style-src 'self' 'unsafe-inline'",
+      "script-src 'self' 'unsafe-eval' 'unsafe-inline' https://vercel.live",
+      "style-src 'self' 'unsafe-inline' https://vercel.live",
       "img-src 'self' data: https:",
-      "font-src 'self'",
-      "connect-src 'self' https://*.supabase.co wss://*.supabase.co https://*.sentry.io",
-      "frame-src 'self'",
+      "font-src 'self' data: https://vercel.live",
+      "connect-src 'self' https://*.supabase.co wss://*.supabase.co https://*.sentry.io https://vercel.live https://*.pusher.com wss://*.pusher.com",
+      "frame-src 'self' https://vercel.live",
       "worker-src 'self' blob:",
       "frame-ancestors 'none'",
       "base-uri 'self'",

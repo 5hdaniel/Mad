@@ -127,7 +127,12 @@ export default function SprintDetailPage() {
   const [statusFilter, setStatusFilter] = useState<ItemStatus | null>(null);
 
   // Backlog side panel state (drag-drop to add items to this sprint).
-  const [backlogOpen, setBacklogOpen] = useState<boolean>(readPersistedBacklogOpen);
+  // State init must NOT read localStorage — causes React hydration error
+  // #418. We restore from localStorage in a mount-only useEffect below.
+  // The `hydrated` flag gates the write-effect so the default `false`
+  // doesn't clobber the persisted value before it's restored.
+  const [hydrated, setHydrated] = useState(false);
+  const [backlogOpen, setBacklogOpen] = useState<boolean>(false);
   const [backlogItems, setBacklogItems] = useState<PmBacklogItem[]>([]);
   const [backlogLoading, setBacklogLoading] = useState(false);
   // Drag state: item being dragged + whether it came from the backlog panel
@@ -183,15 +188,25 @@ export default function SprintDetailPage() {
     loadItems();
   }, [loadItems]);
 
-  // Persist backlog panel open/closed state to localStorage so it survives
-  // page reloads (matches the board's pm-board-state pattern).
+  // Restore backlog panel state from localStorage on mount. Must be in an
+  // effect (not state init) to avoid React hydration error #418.
   useEffect(() => {
+    const saved = readPersistedBacklogOpen();
+    if (saved) setBacklogOpen(true);
+    setHydrated(true);
+  }, []);
+
+  // Persist backlog panel open/closed state to localStorage so it survives
+  // page reloads (matches the board's pm-board-state pattern). Gated on
+  // `hydrated` so the default `false` doesn't clobber the persisted value.
+  useEffect(() => {
+    if (!hydrated) return;
     try {
       localStorage.setItem(BACKLOG_OPEN_STORAGE_KEY, String(backlogOpen));
     } catch (err) {
       console.error('Failed to persist backlog panel state:', err);
     }
-  }, [backlogOpen]);
+  }, [hydrated, backlogOpen]);
 
   // Load unassigned backlog items (sprint_id IS NULL). Mirrors the board's
   // loadBacklogItems in useBoardData.ts so the panel feels identical.

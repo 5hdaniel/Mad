@@ -70,15 +70,15 @@ function readPersistedBoardState(): BoardPersistedState | null {
 
 export function useBoardData() {
   // -- State ---------------------------------------------------------------
+  // NOTE: state initializers must NOT read localStorage — that causes a
+  // server/client mismatch and triggers React hydration error #418. The
+  // persisted values are loaded in a mount-only useEffect below. The
+  // `hydrated` flag gates the write-effect so we don't clobber persisted
+  // state with defaults before it has a chance to be restored.
+  const [hydrated, setHydrated] = useState(false);
   const [sprints, setSprints] = useState<PmSprint[]>([]);
-  const [selectedSprintId, setSelectedSprintId] = useState<string>(() => {
-    const persisted = readPersistedBoardState();
-    return persisted?.selectedSprintId || '';
-  });
-  const [swimLane, setSwimLane] = useState<SwimLaneMode>(() => {
-    const persisted = readPersistedBoardState();
-    return persisted?.swimLane || 'project';
-  });
+  const [selectedSprintId, setSelectedSprintId] = useState<string>('');
+  const [swimLane, setSwimLane] = useState<SwimLaneMode>('project');
   const [backlogOpen, setBacklogOpen] = useState(false);
   const [columns, setColumns] = useState<BoardColumns>({
     pending: [], in_progress: [], testing: [], completed: [],
@@ -89,14 +89,8 @@ export function useBoardData() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
-  const [collapsedLanes, setCollapsedLanes] = useState<Set<string>>(() => {
-    const persisted = readPersistedBoardState();
-    return persisted?.collapsedLanes ? new Set(persisted.collapsedLanes) : new Set();
-  });
-  const [compactCards, setCompactCards] = useState<boolean>(() => {
-    const persisted = readPersistedBoardState();
-    return persisted?.compactCards ?? false;
-  });
+  const [collapsedLanes, setCollapsedLanes] = useState<Set<string>>(() => new Set());
+  const [compactCards, setCompactCards] = useState<boolean>(false);
   const [nameMap, setNameMap] = useState<Map<string, string>>(new Map());
   const [boardUsers, setBoardUsers] = useState<AssignableUser[]>([]);
   const [boardLabels, setBoardLabels] = useState<PmLabel[]>([]);
@@ -113,8 +107,24 @@ export function useBoardData() {
     });
   }, []);
 
+  // -- Restore persisted UI state (mount-only, client-only) ----------------
+  // Reading localStorage must happen after hydration to avoid React error
+  // #418. The `hydrated` flag below prevents the write-effect from clobbering
+  // the persisted state with defaults before this effect can run.
+  useEffect(() => {
+    const persisted = readPersistedBoardState();
+    if (persisted) {
+      if (persisted.selectedSprintId) setSelectedSprintId(persisted.selectedSprintId);
+      if (persisted.swimLane) setSwimLane(persisted.swimLane);
+      if (persisted.collapsedLanes) setCollapsedLanes(new Set(persisted.collapsedLanes));
+      if (typeof persisted.compactCards === 'boolean') setCompactCards(persisted.compactCards);
+    }
+    setHydrated(true);
+  }, []);
+
   // -- Persist board UI state to localStorage ------------------------------
   useEffect(() => {
+    if (!hydrated) return; // Wait for restore before writing to avoid clobbering.
     try {
       const state: BoardPersistedState = {
         selectedSprintId, swimLane,
@@ -124,7 +134,7 @@ export function useBoardData() {
     } catch (err) {
       console.error('Failed to persist board state to localStorage:', err);
     }
-  }, [selectedSprintId, swimLane, collapsedLanes, compactCards]);
+  }, [hydrated, selectedSprintId, swimLane, collapsedLanes, compactCards]);
 
   // -- Data fetching -------------------------------------------------------
 
