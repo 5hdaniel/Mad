@@ -19,6 +19,10 @@ import {
 import { KanbanCard } from '../../components/KanbanCard';
 import { KanbanQuickAdd } from '../../components/KanbanQuickAdd';
 import { COLUMN_ORDER } from '../../components/KanbanBoard';
+import {
+  SWIM_LANE_NEW_PROJECT_ID,
+  buildSwimLaneCellId,
+} from '../lib/swim-lane-ids';
 import type { PmBacklogItem, PmLabel, BoardColumns, ItemStatus } from '@/lib/pm-types';
 import { STATUS_LABELS, STATUS_COLORS } from '@/lib/pm-types';
 import type { AssignableUser } from '../../components/KanbanCard';
@@ -246,7 +250,7 @@ export function SwimLaneGrid({
               ) : (
                 COLUMN_ORDER.map((status) => {
                   const items = (groupColumns[status] || []) as PmBacklogItem[];
-                  const droppableId = `${groupKey}::${status}`;
+                  const droppableId = buildSwimLaneCellId(swimLane, groupKey, status);
                   return (
                     <SwimLaneCell
                       key={status}
@@ -272,6 +276,50 @@ export function SwimLaneGrid({
           <p className="text-sm">No items in this sprint</p>
         </div>
       )}
+      {/* Ghost "new project" drop row — only in project swim-lane mode.
+          Drop here to assign a backlog item whose project isn't yet represented. */}
+      {swimLane === 'project' && <GhostNewProjectRow />}
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// GhostNewProjectRow -- Persistent "drop here to add a new project" drop target
+// ---------------------------------------------------------------------------
+
+function GhostNewProjectRow() {
+  const { setNodeRef, isOver } = useDroppable({ id: SWIM_LANE_NEW_PROJECT_ID });
+  return (
+    <div
+      ref={setNodeRef}
+      className={`flex gap-0 border-b border-dashed ${
+        isOver
+          ? 'border-blue-400 bg-blue-50'
+          : 'border-gray-300 bg-gray-50/60'
+      }`}
+    >
+      <div
+        className={`w-[180px] min-w-[180px] px-3 py-4 sticky left-0 z-10 border-r border-dashed ${
+          isOver ? 'border-blue-400' : 'border-gray-300'
+        }`}
+      >
+        <span
+          className={`text-xs font-medium uppercase tracking-wide ${
+            isOver ? 'text-blue-600' : 'text-gray-400'
+          }`}
+        >
+          New project
+        </span>
+      </div>
+      <div
+        className={`flex-1 px-4 py-4 italic ${
+          isOver ? 'text-blue-600' : 'text-gray-400'
+        }`}
+      >
+        <span className="text-sm">
+          Drop tasks here to add a new project to this sprint
+        </span>
+      </div>
     </div>
   );
 }

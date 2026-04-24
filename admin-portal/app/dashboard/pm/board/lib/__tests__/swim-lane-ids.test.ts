@@ -1,0 +1,124 @@
+/**
+ * Tests for swim-lane droppable id encode / decode helpers.
+ *
+ * These helpers drive the board drag-and-drop target resolution:
+ * structured "cell:dim=...:key=...:status=..." ids let handleDragEnd derive
+ * BOTH the target project row and the target status from one over-target.
+ */
+
+import { describe, it, expect } from 'vitest';
+import {
+  buildSwimLaneCellId,
+  parseSwimLaneCellId,
+  SWIM_LANE_NEW_PROJECT_ID,
+} from '../swim-lane-ids';
+
+describe('SWIM_LANE_NEW_PROJECT_ID', () => {
+  it('is a stable sentinel string', () => {
+    expect(SWIM_LANE_NEW_PROJECT_ID).toBe('swimlane-new-project');
+  });
+});
+
+describe('buildSwimLaneCellId', () => {
+  it('encodes project dimension with uuid-like key', () => {
+    const id = buildSwimLaneCellId(
+      'project',
+      'abc-123-def',
+      'in_progress'
+    );
+    expect(id).toBe('cell:dim=project:key=abc-123-def:status=in_progress');
+  });
+
+  it('encodes area dimension', () => {
+    const id = buildSwimLaneCellId('area', 'Frontend', 'pending');
+    expect(id).toBe('cell:dim=area:key=Frontend:status=pending');
+  });
+
+  it('encodes assignee dimension', () => {
+    const id = buildSwimLaneCellId('assignee', 'user-42', 'completed');
+    expect(id).toBe('cell:dim=assignee:key=user-42:status=completed');
+  });
+
+  it('encodes the "No Project" sentinel groupKey', () => {
+    const id = buildSwimLaneCellId('project', 'No Project', 'pending');
+    expect(id).toBe('cell:dim=project:key=No Project:status=pending');
+  });
+});
+
+describe('parseSwimLaneCellId', () => {
+  it('round-trips a project cell id', () => {
+    const id = buildSwimLaneCellId(
+      'project',
+      'abc-123-def',
+      'in_progress'
+    );
+    expect(parseSwimLaneCellId(id)).toEqual({
+      dimension: 'project',
+      groupKey: 'abc-123-def',
+      status: 'in_progress',
+    });
+  });
+
+  it('round-trips an area cell id', () => {
+    const id = buildSwimLaneCellId('area', 'Frontend', 'pending');
+    expect(parseSwimLaneCellId(id)).toEqual({
+      dimension: 'area',
+      groupKey: 'Frontend',
+      status: 'pending',
+    });
+  });
+
+  it('round-trips an assignee cell id', () => {
+    const id = buildSwimLaneCellId('assignee', 'user-42', 'completed');
+    expect(parseSwimLaneCellId(id)).toEqual({
+      dimension: 'assignee',
+      groupKey: 'user-42',
+      status: 'completed',
+    });
+  });
+
+  it('round-trips "No Project" sentinel', () => {
+    const id = buildSwimLaneCellId('project', 'No Project', 'pending');
+    expect(parseSwimLaneCellId(id)).toEqual({
+      dimension: 'project',
+      groupKey: 'No Project',
+      status: 'pending',
+    });
+  });
+
+  it('returns null for plain status ids (non-swim-lane droppables)', () => {
+    expect(parseSwimLaneCellId('pending')).toBeNull();
+    expect(parseSwimLaneCellId('in_progress')).toBeNull();
+  });
+
+  it('returns null for legacy "groupKey::status" ids', () => {
+    expect(parseSwimLaneCellId('some-project::pending')).toBeNull();
+  });
+
+  it('returns null for the ghost new-project sentinel', () => {
+    expect(parseSwimLaneCellId(SWIM_LANE_NEW_PROJECT_ID)).toBeNull();
+  });
+
+  it('returns null for backlog-panel', () => {
+    expect(parseSwimLaneCellId('backlog-panel')).toBeNull();
+  });
+
+  it('returns null when dimension is unknown', () => {
+    expect(
+      parseSwimLaneCellId('cell:dim=cohort:key=x:status=pending')
+    ).toBeNull();
+  });
+
+  it('returns null when status is unknown', () => {
+    expect(
+      parseSwimLaneCellId('cell:dim=project:key=x:status=frobnicated')
+    ).toBeNull();
+  });
+
+  it('returns null for malformed cell: ids', () => {
+    expect(parseSwimLaneCellId('cell:')).toBeNull();
+    expect(parseSwimLaneCellId('cell:garbage')).toBeNull();
+    expect(parseSwimLaneCellId('cell:dim=project')).toBeNull();
+    expect(parseSwimLaneCellId('cell:dim=project:status=pending')).toBeNull();
+  });
+});
