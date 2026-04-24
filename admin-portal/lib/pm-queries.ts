@@ -461,7 +461,14 @@ export async function getSprintDetail(sprintId: string): Promise<SprintDetailRes
 // 23. pm_create_sprint
 // ---------------------------------------------------------------------------
 
-/** Create a new sprint. */
+/**
+ * Create a new sprint.
+ *
+ * @param projectId Deprecated (BACKLOG-1664). Sprints are standalone and may
+ *   hold tasks from multiple projects; always pass `null`. The parameter
+ *   remains on the RPC signature for back-compat; the column is preserved in
+ *   `pm_sprints` but is no longer used for project-scoped sprint lookups.
+ */
 export async function createSprint(
   name: string,
   goal?: string | null,

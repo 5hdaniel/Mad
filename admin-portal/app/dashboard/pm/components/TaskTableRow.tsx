@@ -12,7 +12,8 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { Check } from 'lucide-react';
+import { Check, GripVertical } from 'lucide-react';
+import { useDraggable } from '@dnd-kit/core';
 import type { PmBacklogItem, ItemType } from '@/lib/pm-types';
 import { TYPE_LABELS, TYPE_COLORS } from '@/lib/pm-types';
 import { updateItemField } from '@/lib/pm-queries';
@@ -184,6 +185,8 @@ interface TaskTableRowProps {
   onItemUpdated?: () => void;
   users?: AssignableUser[];
   userMap?: Map<string, { display_name: string | null; email: string }>;
+  /** When true, row exposes a drag handle that emits {type:'sprint-item',item}. */
+  draggable?: boolean;
 }
 
 export function TaskTableRow({
@@ -196,8 +199,18 @@ export function TaskTableRow({
   onItemUpdated,
   users,
   userMap,
+  draggable = false,
 }: TaskTableRowProps) {
   const router = useRouter();
+
+  // useDraggable is always called to satisfy Rules of Hooks. When `draggable`
+  // is false, we simply don't render the grip handle or attach the node ref,
+  // so the draggable instance is inert (no UI, no listeners wired).
+  const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
+    id: item.id,
+    data: { type: 'sprint-item', item },
+    disabled: !draggable,
+  });
 
   function toggleItem(id: string) {
     if (!onSelectionChange || !selectedIds) return;
@@ -208,13 +221,31 @@ export function TaskTableRow({
 
   return (
     <tr
+      ref={draggable ? setNodeRef : undefined}
       onClick={(e: React.MouseEvent<HTMLTableRowElement>) => {
         const target = e.target as HTMLElement;
-        if (target.closest('a') || target.closest('input') || target.closest('button') || target.closest('[data-inline-edit]')) return;
+        if (target.closest('a') || target.closest('input') || target.closest('button') || target.closest('[data-inline-edit]') || target.closest('[data-drag-handle]')) return;
         router.push(itemUrl);
       }}
-      className="hover:bg-gray-50 cursor-pointer transition-colors"
+      className={`hover:bg-gray-50 cursor-pointer transition-colors ${isDragging ? 'opacity-50' : ''}`}
     >
+      {draggable && (
+        <td
+          className="pl-2 pr-1 py-3 w-8"
+          onClick={(e) => e.stopPropagation()}
+          data-drag-handle
+        >
+          <button
+            type="button"
+            {...attributes}
+            {...listeners}
+            className="cursor-grab active:cursor-grabbing text-gray-300 hover:text-gray-600 focus:outline-none focus:ring-1 focus:ring-blue-400 rounded"
+            aria-label={`Drag ${item.title}`}
+          >
+            <GripVertical className="h-4 w-4" />
+          </button>
+        </td>
+      )}
       {onSelectionChange && (
         <td className="px-4 py-3 w-10" onClick={(e) => e.stopPropagation()}>
           <input
