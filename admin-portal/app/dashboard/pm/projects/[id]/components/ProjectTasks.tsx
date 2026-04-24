@@ -112,9 +112,19 @@ interface ItemCardListProps {
   projectId: string;
   /** Container id for drag source tracking (sprint id or 'backlog-panel') */
   containerId: string;
+  /** BACKLOG-1664: selected item ids for bulk operations */
+  selectedIds?: Set<string>;
+  /** BACKLOG-1664: toggle an item's selection */
+  onToggleSelect?: (itemId: string) => void;
 }
 
-export function ItemCardList({ items, projectId, containerId }: ItemCardListProps) {
+export function ItemCardList({
+  items,
+  projectId,
+  containerId,
+  selectedIds,
+  onToggleSelect,
+}: ItemCardListProps) {
   if (items.length === 0) {
     return (
       <p className="text-xs text-gray-400 py-2">No items in this section.</p>
@@ -129,6 +139,8 @@ export function ItemCardList({ items, projectId, containerId }: ItemCardListProp
           item={item}
           projectId={projectId}
           containerId={containerId}
+          selected={selectedIds?.has(item.id)}
+          onToggleSelect={onToggleSelect}
         />
       ))}
     </div>
@@ -145,16 +157,40 @@ interface SprintSectionProps {
   /** Items for this sprint, filtered by the parent from the allItems array */
   items: PmBacklogItem[];
   onRefresh: () => void;
+  /** BACKLOG-1664: selected item ids for bulk operations */
+  selectedIds?: Set<string>;
+  /** BACKLOG-1664: toggle an item's selection */
+  onToggleSelect?: (itemId: string) => void;
 }
 
-export function SprintSection({ sprint, projectId, items, onRefresh }: SprintSectionProps) {
+export function SprintSection({
+  sprint,
+  projectId,
+  items,
+  onRefresh,
+  selectedIds,
+  onToggleSelect,
+}: SprintSectionProps) {
   const defaultExpanded =
     sprint.status === 'active' || sprint.status === 'planned';
   const [expanded, setExpanded] = useState(defaultExpanded);
 
-  const completed = sprint.item_counts?.completed ?? 0;
-  const total = sprint.total_items ?? 0;
-  const pct = total > 0 ? Math.round((completed / total) * 100) : 0;
+  // Sprint-wide counts (legacy — shown as secondary label for context on
+  // cross-project sprints).
+  const sprintCompleted = sprint.item_counts?.completed ?? 0;
+  const sprintTotal = sprint.total_items ?? 0;
+
+  // BACKLOG-1664: project-scoped counts. Populated by pm_get_project_detail.
+  // Fallback to sprint-wide when absent so this component still works when
+  // fed by sprint-centric RPCs that don't provide the per-project fields.
+  const projectTotal = sprint.project_total ?? sprintTotal;
+  const projectCompleted = sprint.project_completed ?? sprintCompleted;
+  const projectPct =
+    projectTotal > 0 ? Math.round((projectCompleted / projectTotal) * 100) : 0;
+
+  // Show the sprint-wide count as secondary context only when the sprint
+  // contains items from other projects too (i.e. sprintTotal > projectTotal).
+  const hasCrossProjectItems = sprintTotal > projectTotal;
 
   return (
     <DroppableContainer droppableId={sprint.id}>
@@ -182,21 +218,38 @@ export function SprintSection({ sprint, projectId, items, onRefresh }: SprintSec
           </span>
           <div className="flex-1" />
           <div className="flex items-center gap-2 shrink-0">
-            <div className="w-20 h-1.5 bg-gray-200 rounded-full overflow-hidden hidden sm:block">
+            <div
+              className="w-20 h-1.5 bg-gray-200 rounded-full overflow-hidden hidden sm:block"
+              title={`${projectCompleted} of ${projectTotal} in this project done`}
+            >
               <div
                 className="h-full bg-green-500 rounded-full transition-all"
-                style={{ width: `${pct}%` }}
+                style={{ width: `${projectPct}%` }}
               />
             </div>
-            <span className="text-xs text-gray-500 whitespace-nowrap">
-              {completed}/{total}
+            <span className="text-xs text-gray-700 whitespace-nowrap font-medium">
+              {projectCompleted}/{projectTotal}
             </span>
+            {hasCrossProjectItems && (
+              <span
+                className="text-xs text-gray-400 whitespace-nowrap"
+                title={`Sprint has ${sprintTotal} items across all projects (${sprintCompleted} completed)`}
+              >
+                ({sprintTotal} all)
+              </span>
+            )}
           </div>
         </button>
 
         {expanded && (
           <div className="px-4 py-2 border-t border-gray-100">
-            <ItemCardList items={items} projectId={projectId} containerId={sprint.id} />
+            <ItemCardList
+              items={items}
+              projectId={projectId}
+              containerId={sprint.id}
+              selectedIds={selectedIds}
+              onToggleSelect={onToggleSelect}
+            />
             <InlineItemCreate
               projectId={projectId}
               sprintId={sprint.id}
@@ -218,9 +271,20 @@ interface BacklogPanelProps {
   projectId: string;
   loading: boolean;
   onRefresh: () => void;
+  /** BACKLOG-1664: selected item ids for bulk operations */
+  selectedIds?: Set<string>;
+  /** BACKLOG-1664: toggle an item's selection */
+  onToggleSelect?: (itemId: string) => void;
 }
 
-export function BacklogPanel({ items, projectId, loading, onRefresh }: BacklogPanelProps) {
+export function BacklogPanel({
+  items,
+  projectId,
+  loading,
+  onRefresh,
+  selectedIds,
+  onToggleSelect,
+}: BacklogPanelProps) {
   return (
     <DroppableContainer droppableId="backlog-panel">
       <div className="border border-gray-200 rounded-lg overflow-hidden">
@@ -241,7 +305,13 @@ export function BacklogPanel({ items, projectId, loading, onRefresh }: BacklogPa
               <span className="text-xs">Loading...</span>
             </div>
           ) : (
-            <ItemCardList items={items} projectId={projectId} containerId="backlog-panel" />
+            <ItemCardList
+              items={items}
+              projectId={projectId}
+              containerId="backlog-panel"
+              selectedIds={selectedIds}
+              onToggleSelect={onToggleSelect}
+            />
           )}
           <InlineItemCreate
             projectId={projectId}
