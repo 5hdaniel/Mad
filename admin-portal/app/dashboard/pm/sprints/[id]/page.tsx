@@ -42,6 +42,7 @@ import {
   deleteSprint,
   updateSprintField,
   assignToSprint,
+  updateItemField,
 } from '@/lib/pm-queries';
 import TokenMetricsBreakdown from '../../components/TokenMetricsBreakdown';
 import { usePermissions } from '@/components/providers/PermissionsProvider';
@@ -129,7 +130,10 @@ export default function SprintDetailPage() {
   const [backlogOpen, setBacklogOpen] = useState<boolean>(readPersistedBacklogOpen);
   const [backlogItems, setBacklogItems] = useState<PmBacklogItem[]>([]);
   const [backlogLoading, setBacklogLoading] = useState(false);
+  // Drag state: item being dragged + whether it came from the backlog panel
+  // (backlog-item) or an existing sprint row (sprint-item). Drives DragOverlay.
   const [activeDragItem, setActiveDragItem] = useState<PmBacklogItem | null>(null);
+  const [activeDragType, setActiveDragType] = useState<'backlog-item' | 'sprint-item' | null>(null);
 
   const pageSize = 50;
 
@@ -219,12 +223,16 @@ export default function SprintDetailPage() {
   );
 
   // --- Drag and drop --------------------------------------------------------
-  // Only one drop target exists on this page (`sprint-items`), so the handler
-  // is much simpler than the board's useBoardDragDrop. We assign the dragged
-  // backlog item to this sprint, then refresh both the sprint detail (for
-  // counts/progress) and the backlog panel (so the item disappears).
+  // Two flows are supported here:
+  //   1) backlog-item  -> drop on `sprint-items`   => assign to this sprint
+  //   2) sprint-item   -> drop on `backlog-panel`  => unassign from sprint
+  // Other combinations are no-ops (e.g. sprint-item dropped back on
+  // `sprint-items` -- it's already in this sprint).
+  // Mirrors the Kanban board's `useBoardDragDrop` pattern.
   const sensors = useSensors(
     useSensor(PointerSensor, {
+      // 8px activation threshold keeps accidental clicks from starting a drag,
+      // so clicking a row still navigates to the task detail.
       activationConstraint: { distance: 8 },
     }),
     useSensor(KeyboardSensor)
@@ -234,6 +242,10 @@ export default function SprintDetailPage() {
     const data = event.active.data.current;
     if (data?.type === 'backlog-item') {
       setActiveDragItem(data.item as PmBacklogItem);
+      setActiveDragType('backlog-item');
+    } else if (data?.type === 'sprint-item') {
+      setActiveDragItem(data.item as PmBacklogItem);
+      setActiveDragType('sprint-item');
     }
   }, []);
 
@@ -241,25 +253,49 @@ export default function SprintDetailPage() {
     async (event: DragEndEvent) => {
       const { active, over } = event;
       setActiveDragItem(null);
+      setActiveDragType(null);
 
-      if (!over || over.id !== 'sprint-items') return;
+      if (!over) return;
 
       const data = active.data.current;
-      if (data?.type !== 'backlog-item') return;
+      const overId = over.id as string;
 
-      const item = data.item as PmBacklogItem;
-      try {
-        await assignToSprint([item.id], sprintId);
-        // Refresh in parallel: detail (metrics, progress bar), items table,
-        // and backlog panel (so the item disappears).
-        await Promise.all([
-          loadDetail(false),
-          loadItems(),
-          loadBacklogItems(),
-        ]);
-      } catch (err) {
-        console.error('Failed to assign backlog item to sprint:', err);
+      // Flow 2: sprint row dragged back onto the backlog panel -> unassign.
+      if (overId === 'backlog-panel' && data?.type === 'sprint-item') {
+        const item = data.item as PmBacklogItem;
+        try {
+          await updateItemField(item.id, 'sprint_id', null);
+          await Promise.all([
+            loadDetail(false),
+            loadItems(),
+            loadBacklogItems(),
+          ]);
+        } catch (err) {
+          console.error('Failed to unassign item from sprint:', err);
+          // Refresh to revert any optimistic UI state.
+          await Promise.all([loadDetail(false), loadItems()]);
+        }
+        return;
       }
+
+      // Flow 1: backlog item dragged onto the sprint items table -> assign.
+      if (overId === 'sprint-items' && data?.type === 'backlog-item') {
+        const item = data.item as PmBacklogItem;
+        try {
+          await assignToSprint([item.id], sprintId);
+          await Promise.all([
+            loadDetail(false),
+            loadItems(),
+            loadBacklogItems(),
+          ]);
+        } catch (err) {
+          console.error('Failed to assign backlog item to sprint:', err);
+        }
+        return;
+      }
+
+      // Any other combination (e.g. sprint-item dropped back on sprint-items)
+      // is a no-op -- nothing to update.
     },
     [sprintId, loadDetail, loadItems, loadBacklogItems]
   );
@@ -674,6 +710,7 @@ export default function SprintDetailPage() {
           sortBy={sortBy}
           sortDir={sortDir}
           onSort={handleSort}
+          enableDrag
         />
       </SprintItemsDropZone>
         </div>
@@ -688,16 +725,22 @@ export default function SprintDetailPage() {
         />
       </div>
 
-      {/* Floating preview card while dragging from the backlog panel */}
+      {/* Floating preview card while dragging.
+          - backlog-item (from side panel): compact card, matches BacklogPanelItem.
+          - sprint-item (from the items table): same compact ghost so the user
+            sees what they're dragging without the table row lifting out. */}
       <DragOverlay>
-        {activeDragItem ? (
-          <div className="bg-white border border-blue-300 rounded p-2 shadow-lg rotate-2 max-w-[200px]">
+        {activeDragItem && activeDragType ? (
+          <div className="bg-white border border-blue-300 rounded p-2 shadow-lg rotate-2 max-w-[240px]">
             <span className="text-xs text-gray-400 font-mono">
               #{activeDragItem.item_number}
             </span>
             <p className="text-xs text-gray-900 font-medium line-clamp-2 mt-0.5">
               {activeDragItem.title}
             </p>
+            {activeDragType === 'sprint-item' && (
+              <p className="text-[10px] text-gray-400 mt-1">Drop on backlog to unassign</p>
+            )}
           </div>
         ) : null}
       </DragOverlay>
