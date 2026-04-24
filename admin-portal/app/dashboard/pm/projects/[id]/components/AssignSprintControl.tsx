@@ -15,7 +15,7 @@
  *   to deprecate `pm_sprints.project_id`).
  */
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { X, Search, Plus } from 'lucide-react';
 import { assignToSprint, listSprints } from '@/lib/pm-queries';
 import type { PmSprint } from '@/lib/pm-types';
@@ -23,6 +23,7 @@ import {
   SPRINT_STATUS_LABELS,
   SPRINT_STATUS_COLORS,
 } from '@/lib/pm-types';
+import { useFocusTrap } from '@/hooks/useFocusTrap';
 import { CreateSprintDialog } from '../../../components/CreateSprintDialog';
 
 interface AssignSprintControlProps {
@@ -50,6 +51,12 @@ export function AssignSprintControl({
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [createOpen, setCreateOpen] = useState(false);
+  const dialogRef = useRef<HTMLDivElement>(null);
+
+  // a11y: keep keyboard focus inside the modal while it's open. Disable the
+  // trap whenever a nested dialog (CreateSprintDialog) is showing so the
+  // child modal can manage its own focus.
+  useFocusTrap(dialogRef, open && !createOpen);
 
   useEffect(() => {
     if (!open) return;
@@ -125,7 +132,13 @@ export function AssignSprintControl({
         <div className="fixed inset-0 bg-black/50" onClick={onClose} />
 
         {/* Dialog */}
-        <div className="relative bg-white rounded-lg shadow-xl w-full max-w-md mx-4 max-h-[80vh] flex flex-col">
+        <div
+          ref={dialogRef}
+          role="dialog"
+          aria-modal="true"
+          aria-label="Assign to Sprint"
+          className="relative bg-white rounded-lg shadow-xl w-full max-w-md mx-4 max-h-[80vh] flex flex-col"
+        >
           {/* Header */}
           <div className="flex items-center justify-between px-5 py-3 border-b border-gray-200">
             <div>
@@ -155,7 +168,10 @@ export function AssignSprintControl({
                 onChange={(e) => setSearch(e.target.value)}
                 placeholder="Search sprints..."
                 className="w-full pl-8 pr-3 py-1.5 text-sm border border-gray-300 rounded-md text-gray-900 bg-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                autoFocus
+                // Initial focus target for the focus trap; mirrors the
+                // previous autoFocus behavior while letting useFocusTrap own
+                // the focus lifecycle.
+                data-autofocus
               />
             </div>
           </div>
