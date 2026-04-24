@@ -10,7 +10,8 @@
  */
 
 import { useCallback, useMemo } from 'react';
-import { ChevronDown, ChevronRight } from 'lucide-react';
+import Link from 'next/link';
+import { ArrowUpRight, ChevronDown, ChevronRight } from 'lucide-react';
 import { useDroppable } from '@dnd-kit/core';
 import {
   SortableContext,
@@ -76,6 +77,10 @@ export function groupItemsByDimension(
 
   return groups;
 }
+
+/** UUID v1-v5 matcher used to guard the project detail link. */
+const UUID_RE =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 // ---------------------------------------------------------------------------
 // SwimLaneCell -- A single droppable cell in the swim lane grid
@@ -219,28 +224,63 @@ export function SwimLaneGrid({
             0
           );
           const isCollapsed = collapsedLanes.has(groupKey);
+          const displayName = nameMap.get(groupKey) || groupKey;
+          const isLinkableProject =
+            swimLane === 'project' && UUID_RE.test(groupKey);
           return (
             <div key={groupKey} className="flex gap-0 border-b border-gray-200">
               {/* Project name column */}
               <div className="w-[180px] min-w-[180px] bg-gray-50 px-3 py-3 sticky left-0 z-10 border-r border-gray-200">
-                <button
-                  onClick={() => onToggleLane(groupKey)}
-                  className="flex items-center gap-1.5 text-left w-full"
-                >
-                  {isCollapsed ? (
-                    <ChevronRight className="h-3.5 w-3.5 text-gray-400 flex-shrink-0" />
-                  ) : (
-                    <ChevronDown className="h-3.5 w-3.5 text-gray-400 flex-shrink-0" />
-                  )}
-                  <div>
-                    <span className="text-sm font-semibold text-gray-700 block">
-                      {nameMap.get(groupKey) || groupKey}
-                    </span>
-                    <span className="text-xs text-gray-400">
+                <div className="flex items-start gap-1.5">
+                  <button
+                    type="button"
+                    onClick={() => onToggleLane(groupKey)}
+                    aria-label={isCollapsed ? 'Expand row' : 'Collapse row'}
+                    className="flex-shrink-0 mt-0.5"
+                  >
+                    {isCollapsed ? (
+                      <ChevronRight className="h-3.5 w-3.5 text-gray-400" />
+                    ) : (
+                      <ChevronDown className="h-3.5 w-3.5 text-gray-400" />
+                    )}
+                  </button>
+                  <div className="min-w-0 flex-1">
+                    {isLinkableProject ? (
+                      <div className="flex items-center gap-1 min-w-0">
+                        <Link
+                          href={`/dashboard/pm/projects/${groupKey}`}
+                          title="Open project page"
+                          className="text-sm font-semibold text-gray-700 hover:text-blue-600 hover:underline truncate"
+                        >
+                          {displayName}
+                        </Link>
+                        <Link
+                          href={`/dashboard/pm/projects/${groupKey}`}
+                          title="Open project page"
+                          aria-label={`Open ${displayName}`}
+                          className="text-gray-400 hover:text-blue-600 flex-shrink-0"
+                        >
+                          <ArrowUpRight className="h-3.5 w-3.5" />
+                        </Link>
+                      </div>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => onToggleLane(groupKey)}
+                        className="text-sm font-semibold text-gray-700 text-left block truncate w-full"
+                      >
+                        {displayName}
+                      </button>
+                    )}
+                    <button
+                      type="button"
+                      onClick={() => onToggleLane(groupKey)}
+                      className="text-xs text-gray-400 text-left block w-full"
+                    >
                       {itemCount} {itemCount === 1 ? 'item' : 'items'}
-                    </span>
+                    </button>
                   </div>
-                </button>
+                </div>
               </div>
               {/* Status columns -- hidden when collapsed */}
               {isCollapsed ? (
