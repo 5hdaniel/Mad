@@ -25,7 +25,24 @@ import {
   TrendingDown,
   Info,
 } from 'lucide-react';
-import { getSprintDetail, listItems, deleteSprint, updateSprintField } from '@/lib/pm-queries';
+import {
+  DndContext,
+  DragOverlay,
+  KeyboardSensor,
+  PointerSensor,
+  useDroppable,
+  useSensor,
+  useSensors,
+  type DragEndEvent,
+  type DragStartEvent,
+} from '@dnd-kit/core';
+import {
+  getSprintDetail,
+  listItems,
+  deleteSprint,
+  updateSprintField,
+  assignToSprint,
+} from '@/lib/pm-queries';
 import TokenMetricsBreakdown from '../../components/TokenMetricsBreakdown';
 import { usePermissions } from '@/components/providers/PermissionsProvider';
 import { PERMISSIONS } from '@/lib/permissions';
@@ -41,7 +58,25 @@ import { TaskTable } from '../../components/TaskTable';
 import { InlineSprintStatusPicker } from '../../components/InlineSprintStatusPicker';
 import { DualProgressBar } from '../../components/DualProgressBar';
 import { InlineEditText } from '../../components/InlineEditText';
+import { BacklogSidePanel } from '../../components/BacklogSidePanel';
 import { formatTokens } from '@/lib/pm-utils';
+
+// ---------------------------------------------------------------------------
+// localStorage key for backlog panel visibility
+// ---------------------------------------------------------------------------
+
+const BACKLOG_OPEN_STORAGE_KEY = 'pm-sprint-detail-backlog-open';
+
+function readPersistedBacklogOpen(): boolean {
+  if (typeof window === 'undefined') return false;
+  try {
+    const saved = localStorage.getItem(BACKLOG_OPEN_STORAGE_KEY);
+    if (saved !== null) return saved === 'true';
+  } catch (err) {
+    console.error('Failed to read backlog panel state:', err);
+  }
+  return false;
+}
 
 // ---------------------------------------------------------------------------
 // Client-side sorting (same as backlog page)
@@ -90,6 +125,12 @@ export default function SprintDetailPage() {
   const [sortDir, setSortDir] = useState<SortDirection>('asc');
   const [statusFilter, setStatusFilter] = useState<ItemStatus | null>(null);
 
+  // Backlog side panel state (drag-drop to add items to this sprint).
+  const [backlogOpen, setBacklogOpen] = useState<boolean>(readPersistedBacklogOpen);
+  const [backlogItems, setBacklogItems] = useState<PmBacklogItem[]>([]);
+  const [backlogLoading, setBacklogLoading] = useState(false);
+  const [activeDragItem, setActiveDragItem] = useState<PmBacklogItem | null>(null);
+
   const pageSize = 50;
 
   // Load sprint detail (showSpinner=true for initial load, false for inline refreshes)
@@ -137,6 +178,91 @@ export default function SprintDetailPage() {
   useEffect(() => {
     loadItems();
   }, [loadItems]);
+
+  // Persist backlog panel open/closed state to localStorage so it survives
+  // page reloads (matches the board's pm-board-state pattern).
+  useEffect(() => {
+    try {
+      localStorage.setItem(BACKLOG_OPEN_STORAGE_KEY, String(backlogOpen));
+    } catch (err) {
+      console.error('Failed to persist backlog panel state:', err);
+    }
+  }, [backlogOpen]);
+
+  // Load unassigned backlog items (sprint_id IS NULL). Mirrors the board's
+  // loadBacklogItems in useBoardData.ts so the panel feels identical.
+  const loadBacklogItems = useCallback(async (search?: string) => {
+    setBacklogLoading(true);
+    try {
+      const result = await listItems({
+        unassigned_only: true,
+        search: search || undefined,
+        page_size: 100,
+      });
+      setBacklogItems(result.items || []);
+    } catch (err) {
+      console.error('Failed to load backlog items:', err);
+    } finally {
+      setBacklogLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (backlogOpen) loadBacklogItems();
+  }, [backlogOpen, loadBacklogItems]);
+
+  const handleBacklogSearch = useCallback(
+    (query: string) => {
+      loadBacklogItems(query);
+    },
+    [loadBacklogItems]
+  );
+
+  // --- Drag and drop --------------------------------------------------------
+  // Only one drop target exists on this page (`sprint-items`), so the handler
+  // is much simpler than the board's useBoardDragDrop. We assign the dragged
+  // backlog item to this sprint, then refresh both the sprint detail (for
+  // counts/progress) and the backlog panel (so the item disappears).
+  const sensors = useSensors(
+    useSensor(PointerSensor, {
+      activationConstraint: { distance: 8 },
+    }),
+    useSensor(KeyboardSensor)
+  );
+
+  const handleDragStart = useCallback((event: DragStartEvent) => {
+    const data = event.active.data.current;
+    if (data?.type === 'backlog-item') {
+      setActiveDragItem(data.item as PmBacklogItem);
+    }
+  }, []);
+
+  const handleDragEnd = useCallback(
+    async (event: DragEndEvent) => {
+      const { active, over } = event;
+      setActiveDragItem(null);
+
+      if (!over || over.id !== 'sprint-items') return;
+
+      const data = active.data.current;
+      if (data?.type !== 'backlog-item') return;
+
+      const item = data.item as PmBacklogItem;
+      try {
+        await assignToSprint([item.id], sprintId);
+        // Refresh in parallel: detail (metrics, progress bar), items table,
+        // and backlog panel (so the item disappears).
+        await Promise.all([
+          loadDetail(false),
+          loadItems(),
+          loadBacklogItems(),
+        ]);
+      } catch (err) {
+        console.error('Failed to assign backlog item to sprint:', err);
+      }
+    },
+    [sprintId, loadDetail, loadItems, loadBacklogItems]
+  );
 
   // Reset page to 1 alongside the filter change (done synchronously in
   // handleStatusFilter below) so we only trigger one loadItems fetch per
@@ -261,7 +387,14 @@ export default function SprintDetailPage() {
   ];
 
   return (
-    <div className="max-w-7xl mx-auto">
+    <DndContext
+      sensors={sensors}
+      onDragStart={handleDragStart}
+      onDragEnd={handleDragEnd}
+    >
+      <div className="flex gap-0 -mr-6">
+        {/* Main content column */}
+        <div className="flex-1 min-w-0 max-w-7xl mx-auto pr-6">
       {/* Navigation */}
       <div className="mb-6">
         <Link
@@ -518,25 +651,12 @@ export default function SprintDetailPage() {
         wrapperClassName="bg-white rounded-lg border border-gray-200 p-6 mb-6"
       />
 
-      {/* Sprint Items Table */}
-      <div className="mb-6">
-        <div className="flex items-center gap-2 mb-3">
-          <h2 className="text-sm font-semibold text-gray-900">
-            Sprint Items ({totalCount})
-          </h2>
-          {statusFilter && (
-            <span className="inline-flex items-center gap-1 px-2 py-0.5 text-xs rounded-full bg-gray-100 text-gray-700">
-              Filtered: {STATUS_LABELS[statusFilter]}
-              <button
-                type="button"
-                onClick={() => handleStatusFilter(null)}
-                className="ml-0.5 text-gray-400 hover:text-gray-700"
-              >
-                &times;
-              </button>
-            </span>
-          )}
-        </div>
+      {/* Sprint Items Table (droppable target for backlog items) */}
+      <SprintItemsDropZone
+        totalCount={totalCount}
+        statusFilter={statusFilter}
+        onClearStatusFilter={() => handleStatusFilter(null)}
+      >
         <TaskTable
           items={sortedItems}
           totalCount={totalCount}
@@ -550,6 +670,86 @@ export default function SprintDetailPage() {
           sortDir={sortDir}
           onSort={handleSort}
         />
+      </SprintItemsDropZone>
+        </div>
+
+        {/* Backlog side panel (collapsible, drag-to-assign source) */}
+        <BacklogSidePanel
+          isOpen={backlogOpen}
+          onToggle={() => setBacklogOpen((prev) => !prev)}
+          items={backlogItems}
+          loading={backlogLoading}
+          onSearch={handleBacklogSearch}
+        />
+      </div>
+
+      {/* Floating preview card while dragging from the backlog panel */}
+      <DragOverlay>
+        {activeDragItem ? (
+          <div className="bg-white border border-blue-300 rounded p-2 shadow-lg rotate-2 max-w-[200px]">
+            <span className="text-xs text-gray-400 font-mono">
+              #{activeDragItem.item_number}
+            </span>
+            <p className="text-xs text-gray-900 font-medium line-clamp-2 mt-0.5">
+              {activeDragItem.title}
+            </p>
+          </div>
+        ) : null}
+      </DragOverlay>
+    </DndContext>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// SprintItemsDropZone -- droppable wrapper around the sprint items table.
+// Extracted so useDroppable can be called from a child (keeping SprintDetailPage
+// free of the extra hook). Renders the section header + filter chip and a
+// drop-highlight ring when a backlog item is hovered over it.
+// ---------------------------------------------------------------------------
+
+interface SprintItemsDropZoneProps {
+  totalCount: number;
+  statusFilter: ItemStatus | null;
+  onClearStatusFilter: () => void;
+  children: React.ReactNode;
+}
+
+function SprintItemsDropZone({
+  totalCount,
+  statusFilter,
+  onClearStatusFilter,
+  children,
+}: SprintItemsDropZoneProps) {
+  const { setNodeRef, isOver } = useDroppable({ id: 'sprint-items' });
+
+  return (
+    <div className="mb-6">
+      <div className="flex items-center gap-2 mb-3">
+        <h2 className="text-sm font-semibold text-gray-900">
+          Sprint Items ({totalCount})
+        </h2>
+        {statusFilter && (
+          <span className="inline-flex items-center gap-1 px-2 py-0.5 text-xs rounded-full bg-gray-100 text-gray-700">
+            Filtered: {STATUS_LABELS[statusFilter]}
+            <button
+              type="button"
+              onClick={onClearStatusFilter}
+              className="ml-0.5 text-gray-400 hover:text-gray-700"
+            >
+              &times;
+            </button>
+          </span>
+        )}
+      </div>
+      <div
+        ref={setNodeRef}
+        className={`transition-all rounded-lg ${
+          isOver
+            ? 'ring-2 ring-blue-400 ring-offset-2 ring-offset-white bg-blue-50/30'
+            : ''
+        }`}
+      >
+        {children}
       </div>
     </div>
   );
