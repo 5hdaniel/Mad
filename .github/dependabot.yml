@@ -1,66 +1,149 @@
 # Dependabot configuration
 # BACKLOG-1108: Automated dependency updates
+# BACKLOG-1675: Tightened config — group aggressively, ignore framework majors,
+#               schedule overnight Sunday so auto-merge clears patch/minor by Monday.
+#
+# Major-version upgrades for framework-level packages are tracked separately:
+#   - BACKLOG-1667/1668: React 19 + Next 16 migration
+#   - BACKLOG-1669: Tailwind CSS 4 migration
+#   - BACKLOG-1670: ESLint 10 (flat config)
+#   - BACKLOG-1671: TypeScript 6
+#   - BACKLOG-1672: Electron 41 + electron-builder 26
+#
 # Docs: https://docs.github.com/en/code-security/dependabot/dependabot-version-updates/configuration-options-for-the-dependabot.yml-file
 
 version: 2
 updates:
-  # Root package (Electron app)
+  # ─── Root package (Electron desktop app) ────────────────────────────────
   - package-ecosystem: "npm"
     directory: "/"
     schedule:
       interval: "weekly"
-      day: "monday"
-    open-pull-requests-limit: 10
+      day: "sunday"
+      time: "23:00"
+      timezone: "America/New_York"
+    open-pull-requests-limit: 5
     groups:
       minor-and-patch:
         update-types:
           - "minor"
           - "patch"
+    ignore:
+      # Framework majors — tracked as planned migrations
+      - dependency-name: "electron"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "electron-builder"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "react"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "react-dom"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "@types/react"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "@types/react-dom"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "typescript"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "@testing-library/react"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "@types/node"
+        update-types: ["version-update:semver-major"]
     labels:
       - "dependencies"
 
-  # Admin Portal (Next.js)
+  # ─── Admin Portal (Next.js) ────────────────────────────────────────────
   - package-ecosystem: "npm"
     directory: "/admin-portal"
     schedule:
       interval: "weekly"
-      day: "monday"
-    open-pull-requests-limit: 10
+      day: "sunday"
+      time: "23:00"
+      timezone: "America/New_York"
+    open-pull-requests-limit: 5
     groups:
       minor-and-patch:
         update-types:
           - "minor"
           - "patch"
+    ignore:
+      - dependency-name: "next"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "react"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "react-dom"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "@types/react"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "@types/react-dom"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "eslint"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "eslint-config-next"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "tailwindcss"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "typescript"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "@types/node"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "lucide-react"
+        update-types: ["version-update:semver-major"]
     labels:
       - "dependencies"
+      - "admin-portal"
 
-  # Broker Portal (Next.js)
+  # ─── Broker Portal (Next.js) ────────────────────────────────────────────
   - package-ecosystem: "npm"
     directory: "/broker-portal"
     schedule:
       interval: "weekly"
-      day: "monday"
-    open-pull-requests-limit: 10
+      day: "sunday"
+      time: "23:00"
+      timezone: "America/New_York"
+    open-pull-requests-limit: 5
     groups:
       minor-and-patch:
         update-types:
           - "minor"
           - "patch"
+    ignore:
+      - dependency-name: "next"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "react"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "react-dom"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "@types/react"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "@types/react-dom"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "eslint"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "eslint-config-next"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "tailwindcss"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "typescript"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "@types/node"
+        update-types: ["version-update:semver-major"]
     labels:
       - "dependencies"
+      - "broker-portal"
 
-  # GitHub Actions
+  # ─── GitHub Actions ─────────────────────────────────────────────────────
   - package-ecosystem: "github-actions"
     directory: "/"
     schedule:
       interval: "weekly"
-      day: "monday"
-    open-pull-requests-limit: 5
+      day: "sunday"
+      time: "23:00"
+      timezone: "America/New_York"
+    open-pull-requests-limit: 3
     groups:
-      actions-minor-and-patch:
-        update-types:
-          - "minor"
-          - "patch"
+      actions-all:
+        patterns:
+          - "*"
     labels:
       - "dependencies"
       - "ci"
