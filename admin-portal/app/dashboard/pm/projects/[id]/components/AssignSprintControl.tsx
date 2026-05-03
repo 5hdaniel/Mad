@@ -97,27 +97,23 @@ export function AssignSprintControl({
   }
 
   // After a new sprint is created via the dialog, the onCreated callback
-  // fires. We can't know the new sprint's id from CreateSprintDialog today
-  // (it returns void to its parent), so we re-fetch and pick the newest
-  // non-deleted sprint not already in our list — that's the created one.
-  async function handleAfterCreate() {
+  // fires with the new sprint's id (BACKLOG-1668). Previously we had to
+  // re-fetch the list and diff to find the new row, which raced with
+  // concurrent creates; now we use the id directly and refresh the local
+  // list so the UI reflects the new sprint if the user cancels out.
+  async function handleAfterCreate(newSprintId: string) {
+    if (itemIds.length > 0) {
+      await handleAssign(newSprintId);
+      return;
+    }
+    // No items to assign — just refresh the list so the new sprint shows up.
     try {
       const fresh = await listSprints();
-      const freshArr = Array.isArray(fresh) ? fresh : [];
-      // Find the sprint that's new (wasn't in our previous list).
-      const known = new Set(sprints.map((s) => s.id));
-      const newlyCreated = freshArr.find((s) => !known.has(s.id));
-      setSprints(freshArr);
-      if (newlyCreated && itemIds.length > 0) {
-        await handleAssign(newlyCreated.id);
-      } else {
-        onAssigned();
-      }
+      setSprints(Array.isArray(fresh) ? fresh : []);
     } catch (err) {
       console.error('Failed to refresh sprints after create:', err);
-      // Still notify caller so the project page refreshes.
-      onAssigned();
     }
+    onAssigned();
   }
 
   if (!open) return null;
