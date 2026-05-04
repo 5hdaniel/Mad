@@ -18,6 +18,8 @@ import {
   listItems,
   updateProjectField,
   deleteProject,
+  bulkUpdate,
+  bulkDelete,
 } from '@/lib/pm-queries';
 import type {
   PmProject,
@@ -32,6 +34,8 @@ import { StatusSummary, TokenMetricCards, InlineSprintCreate } from './component
 import { BacklogPanel, SprintSection } from './components/ProjectTasks';
 import { DraggableItemRow } from './components/DraggableItemRow';
 import { useProjectDragDrop } from './hooks/useProjectDragDrop';
+import { AssignSprintControl } from './components/AssignSprintControl';
+import { BulkActionBar } from '../../components/BulkActionBar';
 
 // ---------------------------------------------------------------------------
 // Main page component
@@ -64,6 +68,25 @@ export default function ProjectDetailPage() {
   const handleStatusFilter = useCallback((status: ItemStatus | null) => {
     setStatusFilter(status);
   }, []);
+
+  // BACKLOG-1664: multi-select state for bulk actions (assign to sprint,
+  // bulk status change, bulk delete). Mirrors the board's selection pattern
+  // in useBoardData.
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [assignSprintOpen, setAssignSprintOpen] = useState(false);
+  const [bulkError, setBulkError] = useState<string | null>(null);
+  const [bulkDeleteConfirmOpen, setBulkDeleteConfirmOpen] = useState(false);
+
+  const handleToggleSelect = useCallback((itemId: string) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(itemId)) next.delete(itemId);
+      else next.add(itemId);
+      return next;
+    });
+  }, []);
+
+  const clearSelection = useCallback(() => setSelectedIds(new Set()), []);
 
   // Load project detail
   const loadDetail = useCallback(async () => {
@@ -133,6 +156,59 @@ export default function ProjectDetailPage() {
     loadDetail();
     loadItems();
   }, [loadDetail, loadItems]);
+
+  // BACKLOG-1664: bulk action handlers for selected project tasks.
+  const handleBulkStatusChange = useCallback(async (status: ItemStatus) => {
+    if (selectedIds.size === 0) return;
+    setBulkError(null);
+    try {
+      await bulkUpdate(Array.from(selectedIds), { status });
+      clearSelection();
+      refreshAll();
+    } catch (err) {
+      console.error('Failed to bulk update status:', err);
+      setBulkError('Failed to update status. Please try again.');
+    }
+  }, [selectedIds, clearSelection, refreshAll]);
+
+  const handleBulkAssignUser = useCallback(async (assigneeId: string | null) => {
+    if (selectedIds.size === 0) return;
+    setBulkError(null);
+    try {
+      await bulkUpdate(Array.from(selectedIds), { assignee_id: assigneeId });
+      clearSelection();
+      refreshAll();
+    } catch (err) {
+      console.error('Failed to bulk assign user:', err);
+      setBulkError('Failed to assign user. Please try again.');
+    }
+  }, [selectedIds, clearSelection, refreshAll]);
+
+  const handleBulkDeleteRequest = useCallback(() => {
+    if (selectedIds.size === 0) return;
+    setBulkError(null);
+    setBulkDeleteConfirmOpen(true);
+  }, [selectedIds]);
+
+  const handleBulkDeleteConfirm = useCallback(async () => {
+    if (selectedIds.size === 0) return;
+    try {
+      await bulkDelete(Array.from(selectedIds));
+      clearSelection();
+      setBulkDeleteConfirmOpen(false);
+      refreshAll();
+    } catch (err) {
+      console.error('Failed to bulk delete:', err);
+      setBulkError('Failed to delete items. Please try again.');
+    }
+  }, [selectedIds, clearSelection, refreshAll]);
+
+  // Required by BulkActionBar but not a first-class action on the project
+  // page. We leave this as a no-op with a dev warning — priority changes
+  // still happen via item detail.
+  const handleBulkPriorityChange = useCallback(() => {
+    console.warn('Bulk priority change not supported on project page yet');
+  }, []);
 
   // Optimistic move: update allItems locally by changing an item's sprint_id
   const moveItem = useCallback((itemId: string, targetSprintId: string | null) => {
@@ -222,6 +298,8 @@ export default function ProjectDetailPage() {
               projectId={projectId}
               loading={loadingItems}
               onRefresh={refreshAll}
+              selectedIds={selectedIds}
+              onToggleSelect={handleToggleSelect}
             />
           </div>
 
@@ -249,11 +327,18 @@ export default function ProjectDetailPage() {
                       (!statusFilter || i.status === statusFilter)
                   )}
                   onRefresh={refreshAll}
+                  selectedIds={selectedIds}
+                  onToggleSelect={handleToggleSelect}
                 />
               ))
             )}
 
-            <InlineSprintCreate projectId={projectId} onCreated={refreshAll} />
+            <InlineSprintCreate
+              projectId={projectId}
+              onCreated={refreshAll}
+              selectedItemIds={Array.from(selectedIds)}
+              onAutoAssigned={clearSelection}
+            />
           </div>
         </div>
 
@@ -269,6 +354,68 @@ export default function ProjectDetailPage() {
           ) : null}
         </DragOverlay>
       </DndContext>
+
+      {/* BACKLOG-1664: Bulk action bar for selected project tasks. */}
+      <BulkActionBar
+        selectedCount={selectedIds.size}
+        onClearSelection={clearSelection}
+        onChangeStatus={handleBulkStatusChange}
+        onChangePriority={handleBulkPriorityChange}
+        onAssignToSprint={() => setAssignSprintOpen(true)}
+        onAssignUser={handleBulkAssignUser}
+        onDelete={handleBulkDeleteRequest}
+        error={bulkError}
+      />
+
+      {/* BACKLOG-1664: Sprint picker modal (opens from BulkActionBar). */}
+      <AssignSprintControl
+        open={assignSprintOpen}
+        onClose={() => setAssignSprintOpen(false)}
+        itemIds={Array.from(selectedIds)}
+        onAssigned={() => {
+          clearSelection();
+          refreshAll();
+        }}
+      />
+
+      {/* BACKLOG-1664: Bulk delete confirmation. Kept inline (not extracted)
+          because it shares no state with the DeleteConfirmation above. */}
+      {bulkDeleteConfirmOpen && (
+        <div
+          className="fixed inset-0 z-[60] flex items-center justify-center"
+          onKeyDown={(e) => { if (e.key === 'Escape') setBulkDeleteConfirmOpen(false); }}
+        >
+          <div
+            className="fixed inset-0 bg-black/50"
+            onClick={() => setBulkDeleteConfirmOpen(false)}
+          />
+          <div className="relative bg-white rounded-lg shadow-xl w-full max-w-sm mx-4 p-5">
+            <h3 className="text-base font-semibold text-gray-900 mb-2">
+              Delete {selectedIds.size} {selectedIds.size === 1 ? 'task' : 'tasks'}?
+            </h3>
+            <p className="text-sm text-gray-600 mb-4">
+              This action is a soft-delete and can be undone by an admin, but
+              the items will disappear from all project and sprint views.
+            </p>
+            <div className="flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => setBulkDeleteConfirmOpen(false)}
+                className="px-3 py-1.5 text-sm text-gray-700 bg-white border border-gray-300 rounded hover:bg-gray-50"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleBulkDeleteConfirm}
+                className="px-3 py-1.5 text-sm text-white bg-red-600 rounded hover:bg-red-700"
+              >
+                Delete
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

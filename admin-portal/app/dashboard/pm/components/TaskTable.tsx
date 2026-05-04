@@ -42,6 +42,12 @@ interface TaskTableProps {
   onItemUpdated?: () => void;
   /** List of assignable users for the assignee dropdown. */
   users?: AssignableUser[];
+  /**
+   * When true, each row exposes a grip handle that emits a dnd-kit draggable
+   * with `data = { type: 'sprint-item', item }`. Off by default so other
+   * callsites (backlog, my-tasks, search) remain unaffected.
+   */
+  enableDrag?: boolean;
 }
 
 export function TaskTable({
@@ -62,6 +68,7 @@ export function TaskTable({
   userMap,
   onItemUpdated,
   users,
+  enableDrag = false,
 }: TaskTableProps) {
   const editable = !!onItemUpdated;
 
@@ -144,6 +151,7 @@ export function TaskTable({
         <table className="min-w-full divide-y divide-gray-200">
           <thead className="bg-gray-50">
             <tr>
+              {enableDrag && <th className="w-8 pl-2 pr-1" aria-hidden />}
               {onSelectionChange && (
                 <th className="px-4 py-3 w-10">
                   <input
@@ -180,6 +188,7 @@ export function TaskTable({
                 onItemUpdated={onItemUpdated}
                 users={users}
                 userMap={userMap}
+                draggable={enableDrag}
               />
             ))}
           </tbody>
