@@ -33,6 +33,8 @@ jest.mock("electron", () => ({
 const mockCaptureException = jest.fn();
 jest.mock("@sentry/electron/main", () => ({
   captureException: mockCaptureException,
+  setUser: jest.fn(),
+  addBreadcrumb: jest.fn(),
 }));
 
 // Mock better-sqlite3-multiple-ciphers

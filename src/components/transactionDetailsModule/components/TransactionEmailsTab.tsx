@@ -13,6 +13,7 @@ import {
   processEmailThreads,
   type EmailThread,
 } from "./EmailThreadCard";
+import { RemovedEmailsSection } from "./RemovedEmailsSection";
 
 interface TransactionEmailsTabProps {
   communications: Communication[];
@@ -40,6 +41,8 @@ interface TransactionEmailsTabProps {
   onEmailsChanged?: () => void;
   /** Toast handler for success messages */
   onShowSuccess?: (message: string) => void;
+  /** Toast handler for error messages */
+  onShowError?: (message: string) => void;
   /** Audit period start date (ISO string) for email date filtering */
   auditStartDate?: string;
   /** Audit period end date (ISO string) for email date filtering */
@@ -68,6 +71,7 @@ export function TransactionEmailsTab({
   propertyAddress,
   onEmailsChanged,
   onShowSuccess,
+  onShowError,
   auditStartDate,
   auditEndDate,
   skipAddressFilter = false,
@@ -254,6 +258,17 @@ export function TransactionEmailsTab({
 
         </div>
 
+        {/* BACKLOG-1578: Show removed emails even when no active emails */}
+        {transactionId && (
+          <RemovedEmailsSection
+            transactionId={transactionId}
+            onEmailsChanged={onEmailsChanged}
+            onShowSuccess={onShowSuccess}
+            onShowError={onShowError}
+            userEmail={currentUser?.email}
+          />
+        )}
+
         {/* Attach Emails Modal */}
         {showAttachModal && userId && transactionId && (
           <AttachEmailsModal
@@ -403,6 +418,17 @@ export function TransactionEmailsTab({
           />
         ))}
       </div>
+
+      {/* BACKLOG-1578: Show removed/unlinked emails */}
+      {transactionId && (
+        <RemovedEmailsSection
+          transactionId={transactionId}
+          onEmailsChanged={onEmailsChanged}
+          onShowSuccess={onShowSuccess}
+          onShowError={onShowError}
+          userEmail={currentUser?.email}
+        />
+      )}
 
       {/* Attach Emails Modal */}
       {showAttachModal && userId && transactionId && (

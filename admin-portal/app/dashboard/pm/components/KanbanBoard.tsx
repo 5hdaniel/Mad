@@ -17,6 +17,12 @@ import {
 import type { PmBacklogItem, ItemStatus, BoardColumns, PmLabel } from '@/lib/pm-types';
 import { KanbanColumn } from './KanbanColumn';
 import type { AssignableUser } from './KanbanCard';
+import {
+  SWIM_LANE_NEW_PROJECT_ID as SWIM_LANE_NEW_PROJECT_ID_INTERNAL,
+  buildSwimLaneCellId as buildSwimLaneCellIdInternal,
+  parseSwimLaneCellId as parseSwimLaneCellIdInternal,
+  type ParsedSwimLaneCell as ParsedSwimLaneCellInternal,
+} from '../board/lib/swim-lane-ids';
 
 /** Statuses that appear as board columns (subset of ItemStatus). */
 type BoardStatus = keyof BoardColumns;
@@ -44,16 +50,38 @@ export const columnCollision: CollisionDetection = (args) => {
   return closestCenter(args);
 };
 
+/**
+ * Swim lane droppable IDs.
+ *
+ * Structured format (emitted by new droppables):
+ *   cell:dim=<project|area|assignee>:key=<groupKey>:status=<status>
+ *
+ * Legacy format ("groupKey::status") is still parsed by resolveColumnStatus
+ * for backward compatibility, but new droppables emit the structured format.
+ *
+ * The pure encode / decode helpers live in ./board/lib/swim-lane-ids so they
+ * can be unit-tested without pulling JSX. Re-exported here for existing
+ * consumers.
+ */
+export const SWIM_LANE_NEW_PROJECT_ID = SWIM_LANE_NEW_PROJECT_ID_INTERNAL;
+export const buildSwimLaneCellId = buildSwimLaneCellIdInternal;
+export const parseSwimLaneCellId = parseSwimLaneCellIdInternal;
+export type ParsedSwimLaneCell = ParsedSwimLaneCellInternal;
+
 /** Resolve an over-target ID to its column status.
  *  If the ID is a column status directly, return it.
- *  If the ID is a swim lane cell ("groupKey::status"), extract the status part.
+ *  If the ID is a structured swim lane cell ("cell:dim=...:key=...:status=..."),
+ *  extract the status.
+ *  If the ID is a legacy swim lane cell ("groupKey::status"), extract the status.
  *  Otherwise, find which column contains the item with that ID. */
 export function resolveColumnStatus(
   overId: string,
   columns: BoardColumns
 ): ItemStatus | null {
   if (COLUMN_IDS.has(overId)) return overId as ItemStatus;
-  // Handle swim lane droppable IDs formatted as "groupKey::status"
+  const parsed = parseSwimLaneCellId(overId);
+  if (parsed) return parsed.status;
+  // Legacy swim lane droppable IDs formatted as "groupKey::status"
   if (overId.includes('::')) {
     const status = overId.split('::')[1];
     if (status && COLUMN_IDS.has(status)) return status as ItemStatus;

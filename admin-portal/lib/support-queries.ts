@@ -106,6 +106,54 @@ function notifyCustomerOfReply(
 }
 
 /**
+ * Notify customer that a support ticket has been created on their behalf.
+ * Called after successful createTicket from the admin portal.
+ */
+export function notifyTicketCreated(
+  ticketId: string,
+  ticket: { subject: string; ticket_number: number; requester_email: string },
+  brokerPortalUrl: string
+): void {
+  const ticketNumber = `TKT-${String(ticket.ticket_number).padStart(4, '0')}`;
+
+  sendTicketNotification({
+    type: 'confirmation',
+    ticketId,
+    ticketNumber,
+    ticketSubject: ticket.subject,
+    requesterEmail: ticket.requester_email,
+    ticketLink: `${brokerPortalUrl}/dashboard/support/${ticketId}`,
+  });
+}
+
+/**
+ * Notify requester that their ticket has been resolved or closed.
+ * Called after successful updateTicketStatus to 'resolved' or 'closed'.
+ *
+ * BACKLOG-1574: Ticket Lifecycle Emails
+ */
+function notifyTicketResolved(
+  ticketId: string,
+  ticket: { subject: string; ticket_number: number; requester_email: string },
+  newStatus: 'resolved' | 'closed',
+  resolutionSummary: string | undefined,
+  brokerPortalUrl: string
+): void {
+  const ticketNumber = `TKT-${String(ticket.ticket_number).padStart(4, '0')}`;
+
+  sendTicketNotification({
+    type: 'ticket_resolved',
+    ticketId,
+    ticketNumber,
+    ticketSubject: ticket.subject,
+    customerEmail: ticket.requester_email,
+    resolutionSummary,
+    ticketUrl: `${brokerPortalUrl}/support/${ticketId}`,
+    newStatus,
+  });
+}
+
+/**
  * Notify agent that a ticket has been assigned to them.
  * Called after successful assignTicket.
  */
@@ -201,7 +249,49 @@ export async function updateTicketStatus(
     p_pending_reason: pendingReason || null,
   });
   if (error) throw error;
-  return data as unknown as { id: string; status: string; changed: boolean };
+
+  const result = data as unknown as { id: string; status: string; changed: boolean };
+
+  // Fire-and-forget: notify requester when ticket is resolved or closed.
+  // BACKLOG-1574: Ticket Lifecycle Emails
+  if (result.changed && (newStatus === 'resolved' || newStatus === 'closed')) {
+    const brokerPortalUrl =
+      process.env.NEXT_PUBLIC_BROKER_PORTAL_URL || 'https://app.keeprcompliance.com';
+
+    Promise.all([
+      supabase
+        .from('support_tickets')
+        .select('subject, ticket_number, requester_email')
+        .eq('id', ticketId)
+        .single(),
+      supabase
+        .from('support_messages')
+        .select('body')
+        .eq('ticket_id', ticketId)
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .single(),
+    ])
+      .then(([ticketResult, msgResult]) => {
+        if (ticketResult.data) {
+          const summary = msgResult.data?.body
+            ? stripHtmlAndMarkdown(msgResult.data.body).substring(0, 300)
+            : undefined;
+          notifyTicketResolved(
+            ticketId,
+            ticketResult.data,
+            newStatus as 'resolved' | 'closed',
+            summary,
+            brokerPortalUrl
+          );
+        }
+      })
+      .catch((notifyErr: unknown) => {
+        console.error('[Support] Failed to prepare resolved notification:', notifyErr);
+      });
+  }
+
+  return result;
 }
 
 export async function updateTicketPriority(
@@ -953,4 +1043,34 @@ export async function getBacklogLinks(ticketId: string): Promise<BacklogLinkRow[
     status: row.pm_backlog_items.status,
     priority: row.pm_backlog_items.priority,
   }));
+}
+
+// ---------------------------------------------------------------------------
+// Email delivery logs (BACKLOG-1567)
+// ---------------------------------------------------------------------------
+
+export interface EmailDeliveryLogRow {
+  id: string;
+  email_type: string;
+  recipient_email: string;
+  status: string;
+  error_message: string | null;
+  metadata: Record<string, unknown>;
+  created_at: string;
+}
+
+/**
+ * Fetch email delivery logs for a given recipient email.
+ * Used by the EmailLogPanel in ticket detail sidebar.
+ */
+export async function getEmailDeliveryLogs(recipientEmail: string): Promise<EmailDeliveryLogRow[]> {
+  const supabase = createClient();
+  const { data, error } = await supabase
+    .from('email_delivery_log')
+    .select('*')
+    .eq('recipient_email', recipientEmail)
+    .order('created_at', { ascending: false })
+    .limit(50);
+  if (error) throw error;
+  return (data ?? []) as EmailDeliveryLogRow[];
 }

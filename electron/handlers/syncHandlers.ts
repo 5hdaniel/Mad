@@ -7,6 +7,7 @@
 
 import { ipcMain, BrowserWindow } from "electron";
 import log from "electron-log";
+import * as Sentry from "@sentry/electron/main";
 import { redactId } from "../utils/redactSensitive";
 import {
   DeviceSyncOrchestrator,
@@ -46,6 +47,10 @@ function sendToRenderer(channel: string, data: unknown): void {
  * Get the current user ID, trying multiple sources
  * 1. Use currentUserId if already set via setSyncUserId
  * 2. Fall back to loading from session file
+ * 3. Fall back to Supabase auth session (SDK may have a valid session even if local file is missing)
+ *
+ * BACKLOG-1630: Enhanced with Supabase fallback and Sentry alerting.
+ * Without a user ID the entire sync runs but saves nothing — a data loss scenario.
  */
 async function getCurrentUserIdForSync(): Promise<string | null> {
   // First try the cached currentUserId
@@ -53,7 +58,7 @@ async function getCurrentUserIdForSync(): Promise<string | null> {
     return currentUserId;
   }
 
-  // Fall back to loading from session
+  // Fall back to loading from session file
   log.info("[SyncHandlers] currentUserId not set, attempting to load from session...");
   try {
     const session = await sessionService.loadSession();
@@ -65,6 +70,34 @@ async function getCurrentUserIdForSync(): Promise<string | null> {
     }
   } catch (error) {
     log.error("[SyncHandlers] Failed to load session for user ID", { error });
+  }
+
+  // BACKLOG-1630: Fall back to Supabase auth session
+  // The Supabase SDK may have a valid session even when the local session file is missing
+  // (e.g., after deep-link login where the session was set on the SDK but file write failed)
+  log.info("[SyncHandlers] Session file fallback failed, trying Supabase auth session...");
+  try {
+    const supabaseUserId = supabaseService.getAuthUserId();
+    if (supabaseUserId) {
+      log.info("[SyncHandlers] Loaded user ID from Supabase auth session", { userId: redactId(supabaseUserId) });
+      currentUserId = supabaseUserId;
+      return supabaseUserId;
+    }
+  } catch (error) {
+    log.error("[SyncHandlers] Failed to get user ID from Supabase auth", { error });
+  }
+
+  // BACKLOG-1630: Last resort — try Supabase SDK getSession() which may have tokens even if
+  // getAuthUserId() (which uses a cached field) is empty
+  try {
+    const { data: { session: supaSession } } = await supabaseService.getClient().auth.getSession();
+    if (supaSession?.user?.id) {
+      log.info("[SyncHandlers] Loaded user ID from Supabase SDK session", { userId: redactId(supaSession.user.id) });
+      currentUserId = supaSession.user.id;
+      return supaSession.user.id;
+    }
+  } catch (error) {
+    log.error("[SyncHandlers] Failed to get user ID from Supabase SDK session", { error });
   }
 
   log.warn("[SyncHandlers] Could not determine user ID from any source");
@@ -123,10 +156,25 @@ export function registerSyncHandlers(mainWindow: BrowserWindow, userId?: string)
       // This ensures data is saved to the correct user even if login state changes during sync
       syncSessionUserId = await getCurrentUserIdForSync();
       if (!syncSessionUserId) {
-        log.warn("[SyncHandlers] No user ID available at sync start - data will not be persisted");
-      } else {
-        log.info("[SyncHandlers] User ID captured for sync persistence", { userId: redactId(syncSessionUserId) });
+        // BACKLOG-1630: Block sync when no user ID is available.
+        // Without a user ID the entire sync runs (potentially hours) but saves nothing.
+        // This is a data loss scenario — alert via Sentry and return an error immediately.
+        const errorMsg = "Cannot start sync: no authenticated user found. Please sign out and sign back in.";
+        log.error("[SyncHandlers] No user ID available at sync start - blocking sync to prevent data loss");
+        Sentry.captureMessage("Sync blocked: no user ID available at sync start", {
+          level: "error",
+          tags: { component: "sync", operation: "sync:start", severity: "data_loss_prevention" },
+        });
+        return {
+          success: false,
+          messages: [],
+          contacts: [],
+          conversations: [],
+          error: errorMsg,
+          duration: 0,
+        };
       }
+      log.info("[SyncHandlers] User ID captured for sync persistence", { userId: redactId(syncSessionUserId) });
 
       // TASK-2121: Capture device UDID for Supabase lastSyncTime persistence
       syncSessionDeviceUdid = options.udid;
@@ -196,10 +244,23 @@ export function registerSyncHandlers(mainWindow: BrowserWindow, userId?: string)
       // Capture user ID at sync start to prevent race conditions
       syncSessionUserId = await getCurrentUserIdForSync();
       if (!syncSessionUserId) {
-        log.warn("[SyncHandlers] No user ID available at sync start - data will not be persisted");
-      } else {
-        log.info("[SyncHandlers] User ID captured for sync persistence", { userId: redactId(syncSessionUserId) });
+        // BACKLOG-1630: Block sync when no user ID is available
+        const errorMsg = "Cannot start sync: no authenticated user found. Please sign out and sign back in.";
+        log.error("[SyncHandlers] No user ID available at sync start - blocking sync to prevent data loss");
+        Sentry.captureMessage("Sync blocked: no user ID available at sync start", {
+          level: "error",
+          tags: { component: "sync", operation: "sync:process-existing", severity: "data_loss_prevention" },
+        });
+        return {
+          success: false,
+          messages: [],
+          contacts: [],
+          conversations: [],
+          error: errorMsg,
+          duration: 0,
+        };
       }
+      log.info("[SyncHandlers] User ID captured for sync persistence", { userId: redactId(syncSessionUserId) });
 
       // Check if sync is stuck and force reset if needed
       const status = orchestrator?.getStatus();
@@ -497,7 +558,18 @@ function setupEventForwarding(): void {
         }
       }
     } else if (!userIdForPersistence) {
-      log.warn("[SyncHandlers] No user ID available (was not set at sync start), skipping database persistence");
+      // BACKLOG-1630: This should never be reached now that sync:start blocks without a user ID,
+      // but kept as a safety net. Alert via Sentry if it somehow fires.
+      log.error("[SyncHandlers] No user ID available (was not set at sync start), skipping database persistence");
+      Sentry.captureMessage("Sync completed but no user ID for persistence (data loss)", {
+        level: "error",
+        tags: { component: "sync", operation: "sync:complete", severity: "data_loss" },
+        extra: {
+          messageCount: result.messages.length,
+          contactCount: result.contacts.length,
+          conversationCount: result.conversations.length,
+        },
+      });
     }
   });
 }

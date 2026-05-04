@@ -369,7 +369,8 @@ class GoogleAuthService {
           if (returnBtn) {
             returnBtn.style.display = 'inline-block';
             returnBtn.onclick = function() {
-              window.close();
+              window.location.href = 'keepr://focus';
+              setTimeout(function() { window.close(); }, 300);
             };
           }
         }, 500);

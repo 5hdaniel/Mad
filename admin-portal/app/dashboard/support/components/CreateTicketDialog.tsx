@@ -12,6 +12,7 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { X, Search, Loader2, AlertTriangle, ExternalLink, Info } from 'lucide-react';
 import {
   createTicket,
+  notifyTicketCreated,
   getCategories,
   buildCategoryTree,
   searchRequesters,
@@ -191,7 +192,7 @@ export function CreateTicketDialog({ open, onClose, onCreated }: CreateTicketDia
     setError(null);
 
     try {
-      await createTicket({
+      const ticket = await createTicket({
         subject,
         description,
         priority,
@@ -203,6 +204,18 @@ export function CreateTicketDialog({ open, onClose, onCreated }: CreateTicketDia
         subcategory_id: subcategoryId || undefined,
         source_channel: 'admin_created',
       });
+
+      // Fire-and-forget: send confirmation email to requester.
+      // NOTE: Server-side trigger also sends this via send-ticket-confirmation
+      // edge function (BACKLOG-1573). This client call is kept as a fallback.
+      const brokerPortalUrl =
+        process.env.NEXT_PUBLIC_BROKER_PORTAL_URL || 'https://app.keeprcompliance.com';
+      notifyTicketCreated(
+        ticket.id,
+        { subject, ticket_number: ticket.ticket_number, requester_email: requesterEmail },
+        brokerPortalUrl
+      );
+
       resetForm();
       onCreated();
       onClose();

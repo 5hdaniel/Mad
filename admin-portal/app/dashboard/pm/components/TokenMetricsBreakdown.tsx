@@ -40,12 +40,46 @@ const AGENT_TYPE_COLORS: Record<string, string> = {
   unknown: 'bg-gray-100 text-gray-500',
 };
 
+// Solid bar colors for the stacked effort bar
+const AGENT_TYPE_BAR_COLORS: Record<string, string> = {
+  engineer: 'bg-blue-500',
+  'sr-engineer': 'bg-purple-500',
+  pm: 'bg-amber-500',
+  qa: 'bg-green-500',
+  fix: 'bg-red-500',
+  explore: 'bg-gray-400',
+  unknown: 'bg-gray-300',
+};
+
 function AgentTypeBadge({ type }: { type: string }) {
   const colors = AGENT_TYPE_COLORS[type] ?? AGENT_TYPE_COLORS.unknown;
   return (
     <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${colors}`}>
       {type}
     </span>
+  );
+}
+
+// --- Stacked Effort Bar ---
+function EffortBar({ summary }: { summary: TokenMetricsSummary[] }) {
+  const total = summary.reduce((s, r) => s + r.total_tokens, 0);
+  if (total === 0) return null;
+  return (
+    <div className="flex h-3 rounded-full overflow-hidden bg-gray-100" title="Token distribution by agent type">
+      {summary.map((s) => {
+        const pct = (s.total_tokens / total) * 100;
+        if (pct < 0.5) return null;
+        const barColor = AGENT_TYPE_BAR_COLORS[s.agent_type] ?? AGENT_TYPE_BAR_COLORS.unknown;
+        return (
+          <div
+            key={s.agent_type}
+            className={`${barColor} transition-all`}
+            style={{ width: `${pct}%` }}
+            title={`${s.agent_type}: ${formatTokens(s.total_tokens)} (${pct.toFixed(0)}%)`}
+          />
+        );
+      })}
+    </div>
   );
 }
 
@@ -118,12 +152,19 @@ interface TokenMetricsBreakdownProps {
   sprintId?: string;
   /** Start expanded */
   defaultExpanded?: boolean;
+  /**
+   * Optional wrapper classes (e.g. card styling). Only applied when the
+   * component has content to render — so when there are no metrics the
+   * whole wrapper is omitted instead of leaving an empty card behind.
+   */
+  wrapperClassName?: string;
 }
 
 export default function TokenMetricsBreakdown({
   taskId,
   sprintId,
   defaultExpanded = false,
+  wrapperClassName,
 }: TokenMetricsBreakdownProps) {
   const [rows, setRows] = useState<TokenMetricRow[]>([]);
   const [summary, setSummary] = useState<TokenMetricsSummary[]>([]);
@@ -168,7 +209,7 @@ export default function TokenMetricsBreakdown({
 
   const totalTokens = rows.reduce((s, r) => s + r.total_tokens, 0);
 
-  return (
+  const inner = (
     <div className="px-4 py-3">
       <button
         onClick={() => setExpanded(!expanded)}
@@ -190,15 +231,34 @@ export default function TokenMetricsBreakdown({
         </span>
       </button>
 
-      {/* Summary always visible */}
-      <div className="mt-2 ml-6">
-        {summary.map((s) => (
-          <SummaryRow key={s.agent_type} summary={s} />
-        ))}
-      </div>
+      {/* Everything below the header is gated by expanded — including the
+          stacked effort bar added in develop. */}
+      {expanded && (
+        <>
+          {/* Stacked effort bar */}
+          <div className="mt-2 ml-6">
+            <EffortBar summary={summary} />
+          </div>
 
-      {/* Detail table when expanded */}
-      {expanded && <div className="ml-6"><DetailTable rows={rows} /></div>}
+          {/* Per-agent-type summary rows */}
+          <div className="mt-2 ml-6">
+            {summary.map((s) => (
+              <SummaryRow key={s.agent_type} summary={s} />
+            ))}
+          </div>
+
+          {/* Detail table */}
+          <div className="ml-6">
+            <DetailTable rows={rows} />
+          </div>
+        </>
+      )}
     </div>
+  );
+
+  return wrapperClassName ? (
+    <div className={wrapperClassName}>{inner}</div>
+  ) : (
+    inner
   );
 }

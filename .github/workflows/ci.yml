@@ -11,7 +11,7 @@ on:
   push:
     branches: [main, develop, 'feature/**', 'fix/**', 'claude/**', 'docs/**']
   pull_request:
-    branches: [main, develop]
+    branches: [main, develop, 'int/**']
 
 jobs:
   # Fast check to determine if we can skip heavy CI jobs
@@ -20,9 +20,10 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       docs-only: ${{ steps.filter.outputs.docs-only }}
+      os-matrix: ${{ steps.os.outputs.os-matrix }}
     steps:
       - name: Checkout code
-        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
           fetch-depth: 0  # Fetch all history for proper branch comparison
 
@@ -48,8 +49,8 @@ jobs:
           while IFS= read -r file; do
             if [ -n "$file" ]; then
               case "$file" in
-                *.md|.claude/*|docs/*|.github/ISSUE_TEMPLATE/*|.github/PULL_REQUEST_TEMPLATE/*|LICENSE|*.txt)
-                  # Documentation file, continue
+                *.md|.claude/*|docs/*|.github/ISSUE_TEMPLATE/*|.github/PULL_REQUEST_TEMPLATE/*|.github/workflows/*|LICENSE|*.txt)
+                  # Documentation or config file, continue
                   ;;
                 *)
                   # Non-docs file found
@@ -63,6 +64,25 @@ jobs:
           echo "docs-only=$DOCS_ONLY" >> $GITHUB_OUTPUT
           echo "Result: docs-only=$DOCS_ONLY"
 
+      - name: Determine OS matrix
+        id: os
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          GITHUB_REF_NAME: ${{ github.ref_name }}
+        run: |
+          # PRs (to develop/main/int/*) and pushes to develop/main: run both macOS + Windows
+          # Pushes to feature/fix/claude branches: macOS only (Windows runs on the PR)
+          if [ "$EVENT_NAME" = "pull_request" ]; then
+            echo 'os-matrix=["macos-latest","windows-latest"]' >> $GITHUB_OUTPUT
+            echo "OS: both (pull_request)"
+          elif [[ "$GITHUB_REF_NAME" == "main" || "$GITHUB_REF_NAME" == "develop" ]]; then
+            echo 'os-matrix=["macos-latest","windows-latest"]' >> $GITHUB_OUTPUT
+            echo "OS: both (push to $GITHUB_REF_NAME)"
+          else
+            echo 'os-matrix=["macos-latest"]' >> $GITHUB_OUTPUT
+            echo "OS: macOS only (push to feature branch)"
+          fi
+
   # For docs-only changes, provide passing status checks without running heavy tests
   # Matrix must match the real test job to produce identical status check names
   docs-pass:
@@ -72,7 +92,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        os: [macos-latest, windows-latest]
+        os: ${{ fromJson(needs.check-changes.outputs.os-matrix) }}
         node-version: [20.x]
     steps:
       - name: Skip tests (docs-only change)
@@ -88,17 +108,18 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [macos-latest, windows-latest]
+        os: ${{ fromJson(needs.check-changes.outputs.os-matrix) }}
         node-version: [20.x]  # Node 18 dropped - better-sqlite3-multiple-ciphers requires Node 20+
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
 
       - name: Setup Node.js ${{ matrix.node-version }}
         uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version: ${{ matrix.node-version }}
+          cache: 'npm'
 
       - name: Install Python setuptools
         run: pip install setuptools
@@ -135,14 +156,6 @@ jobs:
         env:
           NODE_OPTIONS: "--max-old-space-size=4096"
 
-      - name: Upload coverage to Codecov
-        if: matrix.os == 'macos-latest' && matrix.node-version == '20.x'
-        uses: codecov/codecov-action@ab904c41d6ece82784817410c45d8b8c02684457 # v3
-        with:
-          files: ./coverage/lcov.info
-          flags: unittests
-          name: codecov-umbrella
-
   build:
     name: Build Application
     runs-on: ${{ matrix.os }}
@@ -151,16 +164,17 @@ jobs:
 
     strategy:
       matrix:
-        os: [macos-latest, windows-latest]
+        os: ${{ fromJson(needs.check-changes.outputs.os-matrix) }}
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
 
       - name: Setup Node.js
         uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version: '20.x'
+          cache: 'npm'
 
       - name: Install Python setuptools
         run: pip install setuptools
@@ -196,7 +210,7 @@ jobs:
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
 
       - name: Setup Node.js
         uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
@@ -226,12 +240,13 @@ jobs:
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
 
       - name: Setup Node.js
         uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version: '20.x'
+          cache: 'npm'
 
       - name: Install Python setuptools
         run: pip install setuptools

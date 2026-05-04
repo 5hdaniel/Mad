@@ -414,20 +414,27 @@ export class DeviceSyncOrchestrator extends EventEmitter {
         });
 
         // Check if computer has enough disk space
-        // We need extra headroom (2x estimated) for safety since estimate may be low
-        const requiredSpace = this.estimatedBackupSize * 2;
+        // For existing backups (accurate size), use 1.1x since the old backup is already on disk
+        // For estimates (first-time), use 1.5x to account for estimation variance
+        const headroom = existingBackupSize > 0 ? 1.1 : 1.5;
+        const requiredSpace = this.estimatedBackupSize * headroom;
         const diskSpaceCheck = await this.checkAvailableDiskSpace(requiredSpace);
 
         if (!diskSpaceCheck.hasEnoughSpace) {
           const requiredGB = (requiredSpace / 1024 / 1024 / 1024).toFixed(1);
           const availableGB = (diskSpaceCheck.availableSpace / 1024 / 1024 / 1024).toFixed(1);
-          this.isRunning = false;
-          return this.errorResult(
-            `Not enough disk space. Need approximately ${requiredGB} GB free, but only ${availableGB} GB available. Please free up some space and try again.`
-          );
+          log.warn(`[DeviceSyncOrchestrator] Low disk space warning: ~${requiredGB} GB recommended, ${availableGB} GB available. Proceeding anyway.`);
+          this.emitProgress({
+            phase: "backup",
+            phaseProgress: 0,
+            overallProgress: 0,
+            message: `Low disk space (${availableGB} GB free). Backup may fail — consider freeing up space.`,
+          });
+          // Brief pause so user can see the warning
+          await new Promise(resolve => setTimeout(resolve, 3000));
+        } else {
+          log.info(`[DeviceSyncOrchestrator] Disk space check passed: ${Math.round(diskSpaceCheck.availableSpace / 1024 / 1024 / 1024)} GB available`);
         }
-
-        log.info(`[DeviceSyncOrchestrator] Disk space check passed: ${Math.round(diskSpaceCheck.availableSpace / 1024 / 1024 / 1024)} GB available`);
 
         this.emitProgress({
           phase: "backup",
@@ -445,10 +452,14 @@ export class DeviceSyncOrchestrator extends EventEmitter {
 
         if (!diskSpaceCheck.hasEnoughSpace) {
           const availableGB = (diskSpaceCheck.availableSpace / 1024 / 1024 / 1024).toFixed(1);
-          this.isRunning = false;
-          return this.errorResult(
-            `Not enough disk space. Need at least 10 GB free for backup, but only ${availableGB} GB available. Please free up some space and try again.`
-          );
+          log.warn(`[DeviceSyncOrchestrator] Very low disk space: ${availableGB} GB available (10 GB recommended). Proceeding anyway.`);
+          this.emitProgress({
+            phase: "backup",
+            phaseProgress: 0,
+            overallProgress: 0,
+            message: `Very low disk space (${availableGB} GB free). Backup may fail — consider freeing up space.`,
+          });
+          await new Promise(resolve => setTimeout(resolve, 3000));
         }
       }
 
@@ -467,8 +478,20 @@ export class DeviceSyncOrchestrator extends EventEmitter {
       }
 
       if (!backupResult.success || !backupResult.backupPath) {
+        const error = backupResult.error || "Backup failed";
+        const isDiskSpaceError = /disk space|no space|ENOSPC|not enough space/i.test(error);
+        if (isDiskSpaceError) {
+          Sentry.captureMessage("Backup failed due to insufficient disk space", {
+            level: "error",
+            tags: { service: "sync-orchestrator", failure_reason: "disk_space" },
+            extra: {
+              estimatedBackupSize: this.estimatedBackupSize,
+              error,
+            },
+          });
+        }
         this.isRunning = false;
-        return this.errorResult(backupResult.error || "Backup failed");
+        return this.errorResult(error);
       }
 
       let backupPath = backupResult.backupPath;
@@ -922,6 +945,12 @@ export class DeviceSyncOrchestrator extends EventEmitter {
    * (each file goes 0-100%, not overall progress)
    */
   private getBackupProgressMessage(progress: BackupProgress): string {
+    // BACKLOG-1628: If the backup service provides a specific message
+    // (e.g., from stderr debug parsing), use it directly.
+    if (progress.message) {
+      return progress.message;
+    }
+
     switch (progress.phase) {
       case "preparing":
         // This phase can take several minutes while device:

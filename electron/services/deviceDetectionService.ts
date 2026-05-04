@@ -19,6 +19,37 @@ const execAsync = promisify(exec);
 /** Minimum polling interval in milliseconds */
 const MIN_POLL_INTERVAL_MS = 2000;
 
+/** Slow polling interval when tools are confirmed missing (BACKLOG-1621) */
+const TOOLS_MISSING_POLL_INTERVAL_MS = 60000;
+
+/** BACKLOG-1627: Back-off interval for trust-pending devices (ms) */
+const TRUST_PENDING_BACKOFF_MS = 8000;
+
+/**
+ * BACKLOG-1627: Trust error reason parsed from libimobiledevice stderr.
+ * - "locked": iPhone is locked, needs unlock + trust (error -17)
+ * - "trust_pending": Trust dialog is showing on iPhone, waiting for user (error -19)
+ * - "unknown": getDeviceInfo failed but error doesn't match known trust patterns
+ */
+export type TrustErrorReason = "locked" | "trust_pending" | "unknown";
+
+/**
+ * BACKLOG-1627: Parse libimobiledevice stderr to detect trust-related errors.
+ */
+function parseTrustError(errorMessage: string): TrustErrorReason | null {
+  if (errorMessage.includes("Password protected")) {
+    return "locked";
+  }
+  if (errorMessage.includes("Pairing dialog response pending")) {
+    return "trust_pending";
+  }
+  // Other lockdownd connection failures may also be trust-related
+  if (errorMessage.includes("Could not connect to lockdownd")) {
+    return "unknown";
+  }
+  return null;
+}
+
 /** Mock device for development without Windows/iPhone */
 const MOCK_DEVICE: iOSDevice = {
   udid: "00000000-0000000000000000",
@@ -77,6 +108,14 @@ export class DeviceDetectionService extends EventEmitter {
   /** BACKLOG-1354: Tracks whether we've already sent a Sentry warning for 0 devices found.
    *  Resets when devices are found, so we only fire once per "no devices" period. */
   private sentZeroDevicesWarning: boolean = false;
+  /** BACKLOG-1582: Track UDIDs we've already attempted to auto-pair, to avoid spamming every poll */
+  private autoPairAttempted: Set<string> = new Set();
+  /** BACKLOG-1621: Whether we've already emitted tools-missing and backed off polling */
+  private toolsMissingEmitted: boolean = false;
+  /** BACKLOG-1621: Current polling interval (may be elevated when tools are missing) */
+  private currentPollIntervalMs: number = MIN_POLL_INTERVAL_MS;
+  /** BACKLOG-1627: Track trust-pending devices with last-attempt timestamp for back-off */
+  private trustPendingDevices: Map<string, number> = new Map();
 
   constructor() {
     super();
@@ -92,7 +131,9 @@ export class DeviceDetectionService extends EventEmitter {
    * @returns Promise that resolves to true if available
    */
   async checkLibimobiledeviceAvailable(): Promise<boolean> {
-    if (this.libimobiledeviceAvailable !== null) {
+    // BACKLOG-1621: When tools were previously missing, always re-check
+    // so we detect when the user installs iTunes mid-session.
+    if (this.libimobiledeviceAvailable !== null && !this.toolsMissingEmitted) {
       return this.libimobiledeviceAvailable;
     }
 
@@ -110,6 +151,15 @@ export class DeviceDetectionService extends EventEmitter {
       log.info(`[DeviceDetection] Checking libimobiledevice at: ${ideviceIdCmd}`);
       await execAsync(`"${ideviceIdCmd}" --version`);
       this.libimobiledeviceAvailable = true;
+
+      // BACKLOG-1621: Tools became available after being missing — resume
+      if (this.toolsMissingEmitted) {
+        this.toolsMissingEmitted = false;
+        log.info("[DeviceDetection] Tools now available after previously missing");
+        this.emit("tools-available");
+        this.resumeNormalPolling();
+      }
+
       log.info("[DeviceDetection] libimobiledevice is available");
       return true;
     } catch (err) {
@@ -133,6 +183,7 @@ export class DeviceDetectionService extends EventEmitter {
     }
 
     const actualInterval = Math.max(intervalMs, MIN_POLL_INTERVAL_MS);
+    this.currentPollIntervalMs = actualInterval;
     log.info(
       `[DeviceDetection] Starting device polling (interval: ${actualInterval}ms)`,
     );
@@ -155,6 +206,41 @@ export class DeviceDetectionService extends EventEmitter {
       clearInterval(this.pollInterval);
       this.pollInterval = null;
     }
+  }
+
+  /**
+   * BACKLOG-1621: Switch polling to a slow interval when tools are confirmed missing.
+   * If tools become available later (user installs iTunes), checkLibimobiledeviceAvailable
+   * will detect the change and resume normal polling.
+   */
+  private backOffPolling(): void {
+    if (!this.pollInterval) return; // not currently polling
+    // Already backed off — nothing to do
+    if (this.currentPollIntervalMs === TOOLS_MISSING_POLL_INTERVAL_MS) return;
+
+    clearInterval(this.pollInterval);
+    this.currentPollIntervalMs = TOOLS_MISSING_POLL_INTERVAL_MS;
+    log.info(
+      `[DeviceDetection] Backed off polling to ${TOOLS_MISSING_POLL_INTERVAL_MS}ms`,
+    );
+    this.pollInterval = setInterval(() => {
+      this.pollDevices();
+    }, TOOLS_MISSING_POLL_INTERVAL_MS);
+  }
+
+  /**
+   * BACKLOG-1621: Resume normal-speed polling after tools become available.
+   */
+  private resumeNormalPolling(): void {
+    if (!this.pollInterval) return;
+    if (this.currentPollIntervalMs === MIN_POLL_INTERVAL_MS) return;
+
+    clearInterval(this.pollInterval);
+    this.currentPollIntervalMs = MIN_POLL_INTERVAL_MS;
+    log.info("[DeviceDetection] Resuming normal polling interval");
+    this.pollInterval = setInterval(() => {
+      this.pollDevices();
+    }, MIN_POLL_INTERVAL_MS);
   }
 
   /**
@@ -394,6 +480,14 @@ export class DeviceDetectionService extends EventEmitter {
       // Check for new devices
       for (const udid of currentUdids) {
         if (!previousUdids.has(udid)) {
+          // BACKLOG-1627: If this device is trust-pending, back off instead of
+          // hammering getDeviceInfo every 2s poll cycle
+          const lastTrustAttempt = this.trustPendingDevices.get(udid);
+          if (lastTrustAttempt && (Date.now() - lastTrustAttempt) < TRUST_PENDING_BACKOFF_MS) {
+            // Still within back-off window — skip this device this cycle
+            continue;
+          }
+
           log.info(`[DeviceDetection] New device found: ${udid}, fetching info...`);
           try {
             const deviceInfo = await this.getDeviceInfo(udid);
@@ -409,11 +503,53 @@ export class DeviceDetectionService extends EventEmitter {
               data: { udid: udid.substring(0, 8) + "...", productType: deviceInfo.productType },
             });
             this.emit("device-connected", deviceInfo);
+            // BACKLOG-1582: Clear auto-pair flag on successful connection
+            this.autoPairAttempted.delete(udid);
+            // BACKLOG-1627: Clear trust-pending state on successful connection
+            this.trustPendingDevices.delete(udid);
           } catch (err) {
-            log.error(
-              `[DeviceDetection] Failed to get info for device ${udid}:`,
-              err,
-            );
+            const errorMessage = err instanceof Error ? err.message : String(err);
+
+            // BACKLOG-1627: Parse trust-specific error from libimobiledevice stderr
+            const trustReason = parseTrustError(errorMessage);
+
+            if (trustReason) {
+              // BACKLOG-1627: Record timestamp for back-off
+              this.trustPendingDevices.set(udid, Date.now());
+
+              // BACKLOG-1631: Breadcrumb for trust-related errors
+              const truncatedUdid = udid.substring(0, 8) + "...";
+              Sentry.addBreadcrumb({
+                category: "iphone.sync",
+                message: "Device needs trust",
+                level: "info",
+                data: { reason: trustReason, udid: truncatedUdid },
+              });
+
+              log.warn(
+                `[DeviceDetection] Device ${udid} trust issue: ${trustReason} (${errorMessage})`,
+              );
+            } else {
+              log.error(
+                `[DeviceDetection] Failed to get info for device ${udid}:`,
+                err,
+              );
+            }
+
+            // BACKLOG-1582: Device visible but not trusted — auto-attempt pairing
+            if (!this.autoPairAttempted.has(udid)) {
+              this.autoPairAttempted.add(udid);
+              log.info(`[DeviceDetection] Auto-attempting pair for untrusted device: ${udid}`);
+              // BACKLOG-1627: Include trust reason in event so UI can differentiate
+              this.emit("device-needs-trust", { udid, reason: trustReason || "unknown" });
+              this.pairDevice(udid).catch(() => {
+                // Fire-and-forget — pairDevice logs its own errors
+              });
+            } else if (trustReason) {
+              // BACKLOG-1627: Already attempted pair but reason may have changed
+              // (e.g., locked -> trust_pending), re-emit event with updated reason
+              this.emit("device-needs-trust", { udid, reason: trustReason });
+            }
           }
         }
       }
@@ -436,6 +572,10 @@ export class DeviceDetectionService extends EventEmitter {
               data: { udid: udid.substring(0, 8) + "...", productType: device.productType },
             });
             this.emit("device-disconnected", device);
+            // BACKLOG-1582: Clear auto-pair flag so next plug-in can auto-pair
+            this.autoPairAttempted.delete(udid);
+            // BACKLOG-1627: Clear trust-pending state on disconnect
+            this.trustPendingDevices.delete(udid);
           }
         }
       }
@@ -548,6 +688,26 @@ export class DeviceDetectionService extends EventEmitter {
           level: "error",
           data: { platform: process.platform },
         });
+
+        // BACKLOG-1621: Detect ENOENT (executable not found) and mark tools unavailable
+        if ((err as NodeJS.ErrnoException).code === "ENOENT") {
+          this.libimobiledeviceAvailable = false;
+          if (!this.toolsMissingEmitted) {
+            this.toolsMissingEmitted = true;
+            log.warn(
+              "[DeviceDetection] libimobiledevice tools not found (ENOENT). " +
+              "Emitting tools-missing and backing off to 60s polling.",
+            );
+            // BACKLOG-1631: Alert Sentry when tools are missing
+            Sentry.captureMessage("libimobiledevice tools not found (ENOENT)", {
+              level: "warning",
+              tags: { category: "iphone.sync", operation: "tools-detection" },
+            });
+            this.emit("tools-missing");
+            this.backOffPolling();
+          }
+        }
+
         resolve([]);
       });
     });
@@ -632,6 +792,54 @@ export class DeviceDetectionService extends EventEmitter {
           data: { udid: validatedUdid.substring(0, 8) + "...", platform: process.platform },
         });
         reject(new Error(`Failed to spawn ideviceinfo: ${err.message}`));
+      });
+    });
+  }
+
+  /**
+   * BACKLOG-1582: Send a pairing request to a device.
+   * This triggers the "Trust This Computer?" prompt on the iPhone.
+   * @param udid Device UDID
+   * @returns Promise that resolves with the pair result
+   */
+  async pairDevice(udid: string): Promise<{ success: boolean; needsTrust: boolean; error?: string }> {
+    // SECURITY: Validate UDID before spawning process
+    let validatedUdid: string;
+    try {
+      validatedUdid = validateDeviceUdid(udid);
+    } catch (error) {
+      log.error("[DeviceDetection] Invalid UDID for pairing:", error);
+      return { success: false, needsTrust: false, error: "Invalid device UDID" };
+    }
+
+    return new Promise((resolve) => {
+      const idevicepairCmd = getCommand("idevicepair");
+      log.info(`[DeviceDetection] Requesting pair for device: ${validatedUdid}`);
+
+      const proc = spawn(idevicepairCmd, ["pair", "-u", validatedUdid]);
+      let stdout = "";
+      let stderr = "";
+
+      proc.stdout.on("data", (data) => { stdout += data.toString(); });
+      proc.stderr.on("data", (data) => { stderr += data.toString(); });
+
+      proc.on("close", (code) => {
+        const output = (stdout + stderr).toLowerCase();
+        if (code === 0 && output.includes("success")) {
+          log.info(`[DeviceDetection] Pairing successful for device: ${validatedUdid}`);
+          resolve({ success: true, needsTrust: false });
+        } else if (output.includes("trust") || output.includes("accept")) {
+          log.info(`[DeviceDetection] Trust prompt sent to device: ${validatedUdid}`);
+          resolve({ success: false, needsTrust: true });
+        } else {
+          log.warn(`[DeviceDetection] Pair failed: ${stdout.trim()} ${stderr.trim()}`);
+          resolve({ success: false, needsTrust: false, error: stdout.trim() || stderr.trim() });
+        }
+      });
+
+      proc.on("error", (err) => {
+        log.error("[DeviceDetection] Failed to spawn idevicepair:", err);
+        resolve({ success: false, needsTrust: false, error: err.message });
       });
     });
   }
@@ -843,9 +1051,10 @@ export class DeviceDetectionService extends EventEmitter {
     // - Encrypted backups include much more data than unencrypted
     // - Photos, messages with attachments can be very large
     // - "Used space" from iOS disk_usage may not include all backed-up data
-    // We use a conservative high estimate to avoid underestimating
-    // (Better to overestimate disk space needed than underestimate)
-    const BACKUP_SIZE_RATIO = 1.5; // 150% of "used" space - iOS reports usage conservatively
+    // Since skipApps is always true, apps (often 60-70% of used space) are excluded.
+    // Real backups without apps are typically 15-25% of used space.
+    // 25% is conservative enough to avoid underestimates.
+    const BACKUP_SIZE_RATIO = 0.25; // 25% of "used" space (apps are skipped)
     const estimatedBackupSize = Math.round(usedSpace * BACKUP_SIZE_RATIO);
 
     log.info(`[DeviceDetection] Estimated backup size: ${Math.round(estimatedBackupSize / 1024 / 1024)} MB (${BACKUP_SIZE_RATIO * 100}% of used space)`);

@@ -4,10 +4,16 @@
  * Desktop Auth Callback Page
  *
  * Receives OAuth callback from Supabase, extracts session tokens,
- * and redirects to desktop app via keepr:// deep link.
+ * stores them securely via token_claims (SOC 2), and redirects to
+ * the desktop app via keepr://callback?claim=UUID deep link.
+ *
+ * BACKLOG-1603: Tokens are NO LONGER embedded in the deep link URL.
+ * Instead, a short-lived claim ID (60s TTL, single-use) is passed.
+ * The desktop app claims the tokens over HTTPS.
  */
 
 import { useEffect, useState, useCallback, Suspense } from 'react';
+import { createTokenClaim } from '@/lib/actions/createTokenClaim';
 
 type Status = 'loading' | 'redirecting' | 'success' | 'error';
 
@@ -77,10 +83,41 @@ function DesktopCallbackContent() {
         .limit(1);
       setHasDesktopApp(!!devices && devices.length > 0);
 
-      // Build deep link URL with tokens
+      // BACKLOG-1603: Store tokens in token_claims via server action (SOC 2)
+      // The server action uses the service role client to call create_token_claim() RPC
+      const provider = (user.app_metadata?.provider as string) || 'google';
+      const claimResult = await createTokenClaim(
+        user.id,
+        {
+          access_token: session.access_token,
+          refresh_token: session.refresh_token,
+          provider_token: session.provider_token,
+          provider_refresh_token: session.provider_refresh_token,
+        },
+        provider
+      );
+
+      if (!claimResult.success || !claimResult.claimId) {
+        // Claim creation failed — fall back to direct token passing
+        // This ensures auth still works if the token_claims infrastructure has issues
+        // WARNING: This fallback embeds tokens in the URL, which is less secure.
+        // If this fires in production, investigate why token_claims is failing.
+        console.error('[DesktopCallback] SECURITY: Token claim failed, falling back to direct token in URL. Error:', claimResult.error);
+        const fallbackUrl = new URL('keepr://callback');
+        fallbackUrl.searchParams.set('access_token', session.access_token);
+        fallbackUrl.searchParams.set('refresh_token', session.refresh_token);
+
+        const fallbackLink = fallbackUrl.toString();
+        setDeepLinkUrl(fallbackLink);
+        setStatus('redirecting');
+        window.location.href = fallbackLink;
+        setTimeout(() => { setStatus('success'); }, 2000);
+        return;
+      }
+
+      // Build deep link URL with claim ID only (no tokens in URL!)
       const callbackUrl = new URL('keepr://callback');
-      callbackUrl.searchParams.set('access_token', session.access_token);
-      callbackUrl.searchParams.set('refresh_token', session.refresh_token);
+      callbackUrl.searchParams.set('claim', claimResult.claimId);
 
       const deepLink = callbackUrl.toString();
       setDeepLinkUrl(deepLink);

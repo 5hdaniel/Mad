@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect, useCallback } from "react";
-import { ResponsiveModal } from "./common/ResponsiveModal";
+import { ResponsiveModal, MODAL_PANEL } from "./common/ResponsiveModal";
 import type { ExtendedContact } from "../types/components";
 import { ImportContactsModal, ContactFormModal } from "./contact";
 import { ContactPreview } from "./shared/ContactPreview";
@@ -255,7 +255,7 @@ function ContactSelectModal({
   };
 
   return (
-    <ResponsiveModal onClose={onClose} zIndex="z-[70]" panelClassName="max-w-3xl sm:h-[70vh] sm:max-h-[80vh]">
+    <ResponsiveModal onClose={onClose} zIndex="z-[70]" panelClassName={MODAL_PANEL.lg}>
         {/* Header */}
         <div className="flex-shrink-0 bg-gradient-to-r from-purple-500 to-pink-600 px-6 py-4 flex items-center justify-between rounded-t-xl">
           <div>

@@ -1,5 +1,5 @@
-import React from "react";
-import { ResponsiveModal } from "./common/ResponsiveModal";
+import React, { useState, useCallback } from "react";
+import { ResponsiveModal, MODAL_PANEL } from "./common/ResponsiveModal";
 import AddressVerificationStep from "./audit/AddressVerificationStep";
 import ContactAssignmentStep from "./audit/ContactAssignmentStep";
 import type { Transaction } from "../../electron/types/models";
@@ -33,6 +33,12 @@ function AuditTransactionModal({
 }: AuditTransactionModalProps): React.ReactElement {
   // Database initialization guard (belt-and-suspenders defense)
   const { isDatabaseInitialized } = useAppStateMachine();
+
+  // BACKLOG-1654: Track when ContactFormModal is open to hide nav buttons
+  const [isContactFormOpen, setIsContactFormOpen] = useState(false);
+  const handleModalStateChange = useCallback((isOpen: boolean) => {
+    setIsContactFormOpen(isOpen);
+  }, []);
 
   // Use the extracted hook for all state and handlers
   const {
@@ -89,7 +95,7 @@ function AuditTransactionModal({
   const displayStep = isEditing ? 1 : Math.min(step, 3);
 
   return (
-    <ResponsiveModal onClose={onClose} panelClassName="max-w-4xl sm:max-h-[90vh]">
+    <ResponsiveModal onClose={onClose} panelClassName={MODAL_PANEL.lg}>
         {/* Header */}
         <div className="flex-shrink-0 bg-gradient-to-r from-indigo-500 to-purple-600 px-3 sm:px-6 pt-6 sm:pt-4 pb-3 sm:pb-4 sm:rounded-t-xl shadow-lg">
           {/* Mobile layout */}
@@ -181,7 +187,7 @@ function AuditTransactionModal({
         )}
 
         {/* Content */}
-        <div className={`flex-1 overflow-y-auto ${step === 1 ? "p-6" : "pt-0 px-2 pb-2"}`}>
+        <div className={`flex-1 min-h-0 ${step === 1 ? "overflow-y-auto p-6" : "flex flex-col overflow-hidden pt-0 px-2 pb-2"}`}>
           {step === 1 && (
             <AddressVerificationStep
               addressData={addressData}
@@ -226,13 +232,16 @@ function AuditTransactionModal({
               // External contacts (from macOS Contacts app, etc.)
               externalContacts={externalContacts}
               externalContactsLoading={externalContactsLoading}
+              // BACKLOG-1654: Hide parent nav buttons when contact form is open
+              onModalStateChange={handleModalStateChange}
             />
           )}
         </div>
 
         {/* Footer — desktop: sticky bar, mobile: floating button */}
+        {/* BACKLOG-1654: Hide nav buttons when contact form modal is open to prevent overlap */}
         {/* Desktop footer */}
-        <div className="hidden sm:flex flex-shrink-0 px-6 py-4 bg-gray-50 rounded-b-xl items-center gap-3 justify-between">
+        {!isContactFormOpen && <div className="hidden sm:flex flex-shrink-0 px-6 py-4 bg-gray-50 rounded-b-xl items-center gap-3 justify-between">
           <button
             onClick={onClose}
             className="px-4 py-2 text-gray-700 hover:bg-gray-200 rounded-lg font-medium transition-all"
@@ -272,9 +281,9 @@ function AuditTransactionModal({
               )}
             </button>
           </div>
-        </div>
+        </div>}
         {/* Mobile floating button */}
-        <div className="sm:hidden fixed bottom-4 right-4 z-[71] flex items-center gap-2">
+        {!isContactFormOpen && <div className="sm:hidden fixed bottom-4 right-4 z-[71] flex items-center gap-2">
           {step > 1 && (
             <button
               onClick={handlePreviousStep}
@@ -306,7 +315,7 @@ function AuditTransactionModal({
               "Continue →"
             )}
           </button>
-        </div>
+        </div>}
     </ResponsiveModal>
   );
 }

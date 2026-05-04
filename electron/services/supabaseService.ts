@@ -95,6 +95,8 @@ class SupabaseService {
   private authSession: SupabaseAuthSession | null = null;
   /** TASK-2040: Auth state change subscription for cleanup on logout/quit */
   private authSubscription: { unsubscribe: () => void } | null = null;
+  /** BACKLOG-1632: In-memory storage to replace localStorage and prevent UTF-8 corruption */
+  private _memoryStorage = new Map<string, string>();
 
   /**
    * Initialize Supabase client
@@ -131,6 +133,14 @@ class SupabaseService {
       auth: {
         autoRefreshToken: true,
         persistSession: false,
+        // BACKLOG-1632: Provide an explicit in-memory storage adapter to prevent
+        // the SDK from ever touching localStorage (even with persistSession:false,
+        // some internal SDK paths may still attempt storage access).
+        storage: {
+          getItem: (key: string) => this._memoryStorage.get(key) ?? null,
+          setItem: (key: string, value: string) => { this._memoryStorage.set(key, value); },
+          removeItem: (key: string) => { this._memoryStorage.delete(key); },
+        },
       },
     });
 

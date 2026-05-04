@@ -24,7 +24,7 @@ jobs:
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
 
       - name: Setup Node.js
         uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
@@ -175,7 +175,7 @@ jobs:
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
 
       - name: Setup Node.js
         uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
@@ -260,11 +260,8 @@ jobs:
           echo ".env.production created with $($content.Split("`n").Count) lines"
         shell: pwsh
 
-      - name: Package and Sign Windows App
+      - name: Package Windows App (unsigned)
         env:
-          # Code signing (EV or OV certificate)
-          WIN_CSC_LINK: ${{ secrets.WIN_CSC_LINK }}
-          WIN_CSC_KEY_PASSWORD: ${{ secrets.WIN_CSC_KEY_PASSWORD }}
           # GitHub token for publishing
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           # Sentry source map upload (TASK-1967)
@@ -304,15 +301,24 @@ jobs:
           }
           echo ".env.production verified with real secrets"
 
-          # Package with electron-builder (skip rebuild)
-          if ($env:WIN_CSC_LINK) {
-            echo "Packaging signed Windows app..."
-            npx electron-builder --publish never
-          } else {
-            echo "Packaging unsigned Windows app..."
-            npx electron-builder
-          }
+          # Package unsigned — Azure Trusted Signing signs in the next step
+          npx electron-builder --publish never
         shell: pwsh
+
+      - name: Sign Windows App with Azure Trusted Signing
+        uses: azure/trusted-signing-action@v0.5.0
+        with:
+          azure-tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          azure-client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          azure-client-secret: ${{ secrets.AZURE_CLIENT_SECRET }}
+          endpoint: ${{ secrets.AZURE_ENDPOINT }}
+          trusted-signing-account-name: ${{ secrets.AZURE_CODE_SIGNING_ACCOUNT }}
+          certificate-profile-name: ${{ secrets.AZURE_CERT_PROFILE }}
+          files-folder: ${{ github.workspace }}/dist
+          files-folder-filter: exe
+          file-digest: SHA256
+          timestamp-rfc3161: http://timestamp.acs.microsoft.com
+          timestamp-digest: SHA256
 
       - name: Upload Windows Artifacts
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
@@ -334,7 +340,7 @@ jobs:
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
 
       - name: Get version from package.json
         id: version
@@ -354,7 +360,7 @@ jobs:
           find artifacts -type f -name "*.*" | head -50
 
       - name: Create Release
-        uses: softprops/action-gh-release@de2c0eb89ae2a093876385947365aca7b0e5f844 # v1
+        uses: softprops/action-gh-release@b4309332981a82ec1c5618f44dd2e27cc8bfbfda # v3.0.0
         with:
           tag_name: v${{ steps.version.outputs.version }}
           name: Keepr v${{ steps.version.outputs.version }}
@@ -372,7 +378,7 @@ jobs:
             |----------|----------|
             | macOS (Apple Silicon) | `Keepr-${{ steps.version.outputs.version }}-arm64.dmg` |
             | macOS (Intel) | `Keepr-${{ steps.version.outputs.version }}-x64.dmg` |
-            | Windows | `Keepr Setup ${{ steps.version.outputs.version }}.exe` |
+            | Windows | `Keepr-Setup-${{ steps.version.outputs.version }}.exe` |
 
             ### What's New
 
@@ -382,7 +388,7 @@ jobs:
 
             **macOS**: Download the `.dmg` file, open it, and drag Keepr to your Applications folder.
 
-            **Windows**: Download the `.exe` installer and run it. Windows SmartScreen may show a warning for unsigned builds.
+            **Windows**: Download the `.exe` installer and run it. The installer is signed by Blue Spaces LLC.
 
             ---
 
@@ -424,3 +430,239 @@ jobs:
             artifacts/release-windows/*.exe \
             artifacts/release-windows/*.yml \
             artifacts/release-windows/*.blockmap
+
+      # Verify that the sha512 hashes in latest.yml / latest-mac.yml match
+      # what GitHub actually serves. GitHub may alter binaries during upload,
+      # causing auto-updater checksum failures (see BACKLOG-1642).
+      - name: Verify release asset integrity
+        env:
+          GH_TOKEN: ${{ secrets.PUBLIC_RELEASE_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          VERSION: v${{ steps.version.outputs.version }}
+        run: |
+          set -euo pipefail
+
+          PRIVATE_REPO="${GITHUB_REPOSITORY}"
+          PUBLIC_REPO="5hdaniel/keepr-releases"
+          VERIFY_DIR=$(mktemp -d)
+          MISMATCH_FOUND=false
+
+          echo "=== Verifying release asset integrity for ${VERSION} ==="
+
+          # ── Helper: compute sha512 in base64 (matches electron-builder format) ──
+          compute_hash() {
+            openssl dgst -sha512 -binary "$1" | openssl base64 -A
+          }
+
+          # ── Helper: extract hash for a filename from a yml file ──
+          # electron-builder yml has: top-level sha512/path, and files[].sha512/url
+          extract_hash() {
+            local YML_FILE="$1"
+            local ASSET_NAME="$2"
+            node -e "
+              const fs = require('fs');
+              const content = fs.readFileSync('${YML_FILE}', 'utf8');
+              // Parse the simple YAML manually — electron-builder format is predictable
+              // Top-level: path: <name>\nsha512: <hash>
+              // Files section: - url: <name>\n  sha512: <hash>
+              const lines = content.split('\n');
+
+              // Check top-level path match
+              let topPath = '', topHash = '';
+              for (const line of lines) {
+                const pm = line.match(/^path:\s*(.+)/);
+                if (pm) topPath = pm[1].trim();
+                const hm = line.match(/^sha512:\s*(.+)/);
+                if (hm) topHash = hm[1].trim();
+              }
+              if (topPath === '${ASSET_NAME}' && topHash) {
+                process.stdout.write(topHash);
+                process.exit(0);
+              }
+
+              // Check files entries
+              let currentUrl = '';
+              for (const line of lines) {
+                const um = line.match(/^\s+-?\s*url:\s*(.+)/);
+                if (um) currentUrl = um[1].trim();
+                const sm = line.match(/^\s+sha512:\s*(.+)/);
+                if (sm && currentUrl === '${ASSET_NAME}') {
+                  process.stdout.write(sm[1].trim());
+                  process.exit(0);
+                }
+              }
+              // Not found — output empty
+            " 2>/dev/null || true
+          }
+
+          # ── Helper: update hash for a filename in a yml file ──
+          update_hash() {
+            local YML_FILE="$1"
+            local ASSET_NAME="$2"
+            local NEW_HASH="$3"
+            local NEW_SIZE="$4"
+            node -e "
+              const fs = require('fs');
+              let content = fs.readFileSync('${YML_FILE}', 'utf8');
+              const lines = content.split('\n');
+              const result = [];
+              let topPath = '';
+              let inTargetFile = false;
+
+              for (let i = 0; i < lines.length; i++) {
+                let line = lines[i];
+
+                // Detect top-level path
+                const pm = line.match(/^path:\s*(.+)/);
+                if (pm) topPath = pm[1].trim();
+
+                // Replace top-level sha512 if path matches
+                if (line.match(/^sha512:\s/) && topPath === '${ASSET_NAME}') {
+                  line = 'sha512: ${NEW_HASH}';
+                }
+
+                // Replace top-level size if path matches
+                if (line.match(/^size:\s/) && topPath === '${ASSET_NAME}') {
+                  line = 'size: ${NEW_SIZE}';
+                }
+
+                // Track which file entry we are in
+                const um = line.match(/^(\s+-?\s*)url:\s*(.+)/);
+                if (um) {
+                  inTargetFile = um[2].trim() === '${ASSET_NAME}';
+                }
+
+                // Replace sha512 in the matching files entry
+                if (inTargetFile && line.match(/^\s+sha512:\s/)) {
+                  const indent = line.match(/^(\s+)/)[1];
+                  line = indent + 'sha512: ${NEW_HASH}';
+                }
+
+                // Replace size in the matching files entry
+                if (inTargetFile && line.match(/^\s+size:\s/)) {
+                  const indent = line.match(/^(\s+)/)[1];
+                  line = indent + 'size: ${NEW_SIZE}';
+                }
+
+                result.push(line);
+              }
+              fs.writeFileSync('${YML_FILE}', result.join('\n'));
+            "
+          }
+
+          # ── Helper: verify and fix one asset file against its yml ──
+          verify_asset() {
+            local ASSET_FILE="$1"
+            local YML_FILE="$2"
+            local TOKEN="$3"
+            local REPO="$4"
+            local REPO_LABEL="$5"
+
+            local ASSET_NAME
+            ASSET_NAME=$(basename "${ASSET_FILE}")
+            local YML_NAME
+            YML_NAME=$(basename "${YML_FILE}")
+
+            local ACTUAL_HASH
+            ACTUAL_HASH=$(compute_hash "${ASSET_FILE}")
+
+            local EXPECTED_HASH
+            EXPECTED_HASH=$(extract_hash "${YML_FILE}" "${ASSET_NAME}")
+
+            if [ -z "${EXPECTED_HASH}" ]; then
+              echo "  Skip: ${ASSET_NAME} not referenced in ${YML_NAME}"
+              return 0
+            fi
+
+            if [ "${ACTUAL_HASH}" = "${EXPECTED_HASH}" ]; then
+              echo "  OK: ${ASSET_NAME} hash matches ${YML_NAME}"
+            else
+              echo "::warning::MISMATCH in ${REPO_LABEL}: ${ASSET_NAME} hash differs from ${YML_NAME}"
+              echo "    Expected: ${EXPECTED_HASH}"
+              echo "    Actual:   ${ACTUAL_HASH}"
+              MISMATCH_FOUND=true
+
+              local ACTUAL_SIZE
+              ACTUAL_SIZE=$(stat -c%s "${ASSET_FILE}" 2>/dev/null || stat -f%z "${ASSET_FILE}")
+
+              update_hash "${YML_FILE}" "${ASSET_NAME}" "${ACTUAL_HASH}" "${ACTUAL_SIZE}"
+              echo "    Updated ${YML_NAME} with correct hash"
+
+              # Return non-zero to signal the yml needs re-uploading
+              return 1
+            fi
+          }
+
+          # ── Main: verify one repo ──────────────────────────────────
+          verify_repo() {
+            local REPO="$1"
+            local TOKEN="$2"
+            local REPO_LABEL="$3"
+            local DL_DIR="${VERIFY_DIR}/${REPO_LABEL}"
+            mkdir -p "${DL_DIR}"
+
+            echo ""
+            echo "--- Verifying ${REPO_LABEL} (${REPO}) ---"
+
+            # Download all release assets
+            GH_TOKEN="${TOKEN}" gh release download "${VERSION}" \
+              --repo "${REPO}" \
+              --dir "${DL_DIR}" 2>/dev/null || {
+                echo "::warning::Could not download assets from ${REPO}. Skipping."
+                return 0
+              }
+
+            echo "Downloaded assets:"
+            ls -la "${DL_DIR}/"
+
+            # ── Windows: verify .exe against latest.yml ──
+            if [ -f "${DL_DIR}/latest.yml" ]; then
+              echo ""
+              echo "Checking Windows assets..."
+              local WIN_NEEDS_UPLOAD=false
+              for EXE_FILE in "${DL_DIR}"/*.exe; do
+                [ -f "${EXE_FILE}" ] || continue
+                verify_asset "${EXE_FILE}" "${DL_DIR}/latest.yml" "${TOKEN}" "${REPO}" "${REPO_LABEL}" || WIN_NEEDS_UPLOAD=true
+              done
+              if [ "${WIN_NEEDS_UPLOAD}" = true ]; then
+                echo "  Re-uploading corrected latest.yml to ${REPO_LABEL}..."
+                GH_TOKEN="${TOKEN}" gh release upload "${VERSION}" \
+                  --repo "${REPO}" --clobber "${DL_DIR}/latest.yml"
+              fi
+            fi
+
+            # ── macOS: verify .dmg and .zip against latest-mac.yml ──
+            if [ -f "${DL_DIR}/latest-mac.yml" ]; then
+              echo ""
+              echo "Checking macOS assets..."
+              local MAC_NEEDS_UPLOAD=false
+              for DMG_FILE in "${DL_DIR}"/*.dmg; do
+                [ -f "${DMG_FILE}" ] || continue
+                verify_asset "${DMG_FILE}" "${DL_DIR}/latest-mac.yml" "${TOKEN}" "${REPO}" "${REPO_LABEL}" || MAC_NEEDS_UPLOAD=true
+              done
+              for ZIP_FILE in "${DL_DIR}"/*.zip; do
+                [ -f "${ZIP_FILE}" ] || continue
+                verify_asset "${ZIP_FILE}" "${DL_DIR}/latest-mac.yml" "${TOKEN}" "${REPO}" "${REPO_LABEL}" || MAC_NEEDS_UPLOAD=true
+              done
+              if [ "${MAC_NEEDS_UPLOAD}" = true ]; then
+                echo "  Re-uploading corrected latest-mac.yml to ${REPO_LABEL}..."
+                GH_TOKEN="${TOKEN}" gh release upload "${VERSION}" \
+                  --repo "${REPO}" --clobber "${DL_DIR}/latest-mac.yml"
+              fi
+            fi
+          }
+
+          # Verify both repos — public first (auto-updater fetches from here)
+          verify_repo "${PUBLIC_REPO}" "${GH_TOKEN}" "public"
+          verify_repo "${PRIVATE_REPO}" "${GITHUB_TOKEN}" "private"
+
+          # Cleanup
+          rm -rf "${VERIFY_DIR}"
+
+          if [ "${MISMATCH_FOUND}" = true ]; then
+            echo ""
+            echo "::warning::Hash mismatches were detected and corrected. Updated yml files re-uploaded."
+          else
+            echo ""
+            echo "All release asset hashes verified successfully."
+          fi

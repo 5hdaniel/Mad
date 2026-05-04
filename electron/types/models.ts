@@ -434,8 +434,6 @@ export interface Message {
   communication_type?: string;
   /** @deprecated Use channel_account_id instead */
   source?: string;
-  /** @deprecated Use thread_id instead */
-  email_thread_id?: string;
   /** @deprecated Use participants JSON instead */
   sender?: string;
   /** @deprecated Use participants JSON instead */
@@ -1110,7 +1108,10 @@ export interface IgnoredCommunication {
   email_subject?: string;
   email_sender?: string;
   email_sent_at?: string;
-  email_thread_id?: string;
+  /** BACKLOG-1560: Direct reference to emails table for reliable suppression */
+  email_id?: string;
+  /** BACKLOG-1560: Thread ID for text/email thread suppression */
+  thread_id?: string;
   original_communication_id?: string;
   reason?: string;
   ignored_at: string;
@@ -1125,7 +1126,10 @@ export interface NewIgnoredCommunication {
   email_subject?: string;
   email_sender?: string;
   email_sent_at?: string;
-  email_thread_id?: string;
+  /** BACKLOG-1560: Direct reference to emails table for reliable suppression */
+  email_id?: string;
+  /** BACKLOG-1560: Thread ID for text/email thread suppression */
+  thread_id?: string;
   original_communication_id?: string;
   reason?: string;
 }

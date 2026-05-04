@@ -24,7 +24,14 @@ import type { AppState } from "./types";
 jest.mock("@sentry/electron/renderer", () => ({
   addBreadcrumb: jest.fn(),
   setTag: jest.fn(),
+  captureException: jest.fn(),
   captureMessage: jest.fn(),
+}));
+
+// BACKLOG-1629: Mock SupportWidget since ErrorScreen now includes it
+// and PlatformProvider is not available in the test wrapper
+jest.mock("../../../components/support/SupportWidget", () => ({
+  SupportWidget: () => null,
 }));
 
 jest.mock("../../../contexts/NetworkContext", () => ({

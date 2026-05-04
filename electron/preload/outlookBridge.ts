@@ -84,6 +84,18 @@ export const updateBridge = {
   },
 
   /**
+   * Listens for auto-updater errors (BACKLOG-1641)
+   * Fires when download/verification fails (e.g. sha512 checksum mismatch)
+   * @param callback - Callback with error message string
+   * @returns Cleanup function
+   */
+  onError: (callback: (error: string) => void) => {
+    const listener = (_: IpcRendererEvent, error: string) => callback(error);
+    ipcRenderer.on("update-error", listener);
+    return () => ipcRenderer.removeListener("update-error", listener);
+  },
+
+  /**
    * Listens for update download progress
    * @param callback - Callback with progress info
    * @returns Cleanup function

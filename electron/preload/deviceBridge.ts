@@ -31,6 +31,48 @@ export const deviceBridge = {
   checkAvailability: () => ipcRenderer.invoke("device:check-availability"),
 
   /**
+   * BACKLOG-1582: Run device detection diagnostics on demand.
+   * Returns actionable info about why devices aren't detected.
+   */
+  runDiagnostics: () => ipcRenderer.invoke("device:run-diagnostics"),
+
+  /**
+   * BACKLOG-1582: Request trust/pairing with a device.
+   * Triggers the "Trust This Computer?" prompt on the iPhone.
+   */
+  requestTrust: (udid: string) => ipcRenderer.invoke("device:request-trust", udid),
+
+  /**
+   * BACKLOG-1582: Subscribe to device-needs-trust events.
+   * Fires when a device is visible but not yet trusted.
+   */
+  onNeedsTrust: (callback: (data: { udid: string; reason?: string }) => void) => {
+    const listener = (_: IpcRendererEvent, data: { udid: string; reason?: string }) => callback(data);
+    ipcRenderer.on("device:needs-trust", listener);
+    return () => ipcRenderer.removeListener("device:needs-trust", listener);
+  },
+
+  /**
+   * BACKLOG-1620/1621: Subscribe to tools-missing events.
+   * Fires when libimobiledevice executables are not found (ENOENT).
+   */
+  onToolsMissing: (callback: () => void) => {
+    const listener = () => callback();
+    ipcRenderer.on("device:tools-missing", listener);
+    return () => ipcRenderer.removeListener("device:tools-missing", listener);
+  },
+
+  /**
+   * BACKLOG-1621: Subscribe to tools-available events.
+   * Fires when tools become available after previously being missing.
+   */
+  onToolsAvailable: (callback: () => void) => {
+    const listener = () => callback();
+    ipcRenderer.on("device:tools-available", listener);
+    return () => ipcRenderer.removeListener("device:tools-available", listener);
+  },
+
+  /**
    * Subscribes to device connected events
    * @param callback - Callback function when device connects
    * @returns Cleanup function to remove listener

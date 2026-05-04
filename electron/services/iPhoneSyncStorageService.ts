@@ -12,6 +12,7 @@ import fs from "fs";
 import path from "path";
 import { app } from "electron";
 import log from "electron-log";
+import * as Sentry from "@sentry/electron/main";
 import databaseService from "./databaseService";
 import * as externalContactDb from "./db/externalContactDbService";
 import { iOSMessagesParser } from "./iosMessagesParser";
@@ -147,6 +148,13 @@ class IPhoneSyncStorageService {
         sessionId: sessionId || "none",
       });
 
+      // BACKLOG-1631: Breadcrumb when persistence starts
+      Sentry.addBreadcrumb({
+        category: "iphone.sync.storage",
+        message: "Starting message persistence",
+        data: { messageCount: result.messages.length, contactCount: result.contacts.length },
+      });
+
       // TASK-2110: Check cancel signal before messages phase
       if (cancelSignal?.cancelled) {
         log.info(`[${IPhoneSyncStorageService.SERVICE_NAME}] Cancelled before messages phase`);
@@ -238,6 +246,17 @@ class IPhoneSyncStorageService {
         duration,
       });
 
+      // BACKLOG-1631: Breadcrumb when persistence completes
+      Sentry.addBreadcrumb({
+        category: "iphone.sync.storage",
+        message: "Persistence complete",
+        data: {
+          savedMessages: messageResult.stored,
+          savedContacts: contactResult.stored,
+          skippedMessages: messageResult.skipped,
+        },
+      });
+
       return {
         success: true,
         messagesStored: messageResult.stored,
@@ -282,6 +301,11 @@ class IPhoneSyncStorageService {
     }
 
     log.info(`[${IPhoneSyncStorageService.SERVICE_NAME}] Rolling back session ${sessionId}`);
+
+    // BACKLOG-1631: Alert Sentry when sync is cancelled and rolling back
+    Sentry.captureMessage("iPhone sync cancelled - rolling back", {
+      level: "warning",
+    });
 
     try {
       // 1. Delete attachments and get orphaned file paths
@@ -380,7 +404,7 @@ class IPhoneSyncStorageService {
       bodyText: string | null;
       participants: string;
       participantsFlat: string;
-      threadId: string;
+      threadId: string | null;
       sentAt: string;
       hasAttachments: number;
       messageType: string | null;
@@ -394,6 +418,12 @@ class IPhoneSyncStorageService {
       if (!isValidGuid(msg.guid)) {
         log.warn(`[${IPhoneSyncStorageService.SERVICE_NAME}] Skipping message with invalid GUID`, {
           guid: msg.guid?.substring(0, 20),
+        });
+        // BACKLOG-1631: Breadcrumb for invalid GUID skips
+        Sentry.addBreadcrumb({
+          category: "iphone.sync.storage",
+          message: "Skipped invalid message GUID",
+          level: "warning",
         });
         skipped++;
         continue;
@@ -463,7 +493,7 @@ class IPhoneSyncStorageService {
         bodyText: sanitizedText,
         participants,
         participantsFlat,
-        threadId: threadId || "",
+        threadId: threadId || null,
         sentAt: msg.date.toISOString(),
         hasAttachments: msg.attachments.length > 0 ? 1 : 0,
         messageType,
@@ -511,9 +541,10 @@ class IPhoneSyncStorageService {
       return { stored: 0, skipped: 0 };
     }
 
-    // TASK-1950: Check if macOS/iPhone contacts source is enabled
+    // Check if iPhone contacts source is enabled (check both keys for compatibility)
+    const iphoneEnabled = await isContactSourceEnabled(userId, "direct", "iphoneContacts", true);
     const macosEnabled = await isContactSourceEnabled(userId, "direct", "macosContacts", true);
-    if (!macosEnabled) {
+    if (!iphoneEnabled && !macosEnabled) {
       log.info(`[${IPhoneSyncStorageService.SERVICE_NAME}] iPhone contacts storage skipped (disabled in preferences)`);
       return { stored: 0, skipped: contacts.length };
     }
@@ -697,6 +728,13 @@ class IPhoneSyncStorageService {
         log.debug(`[${IPhoneSyncStorageService.SERVICE_NAME}] Failed to store attachment`, {
           filename: attachment.filename,
           error: error instanceof Error ? error.message : String(error),
+        });
+        // BACKLOG-1631: Breadcrumb for individual attachment failures (expected, not captureException)
+        Sentry.addBreadcrumb({
+          category: "iphone.sync.storage",
+          message: "Attachment storage failed",
+          level: "warning",
+          data: { error: error instanceof Error ? error.message : String(error) },
         });
         skipped++;
       }

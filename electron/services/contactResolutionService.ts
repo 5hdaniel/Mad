@@ -7,13 +7,15 @@
  *
  * Resolution sources (in priority order):
  * 1. App's imported contacts (contact_phones / contact_emails tables)
- * 2. macOS Contacts database (AddressBook via contactsService)
+ * 2. External contacts (external_contacts table — iPhone, macOS, Outlook, Google)
+ * 3. macOS Contacts database (AddressBook via contactsService)
  *
  * TASK-2026: Extract from export, share with UI, add email handle resolution.
  */
 
 import databaseService from "./databaseService";
 import { getContactNames } from "./contactsService";
+import * as externalContactDb from "./db/externalContactDbService";
 import logService from "./logService";
 import type { Communication } from "../types/models";
 
@@ -72,7 +74,8 @@ function classifyHandle(handle: string): "phone" | "email" | "appleid" {
  * Extracted from folderExportService.getContactNamesByPhonesAsync().
  */
 export async function resolvePhoneNames(
-  phones: string[]
+  phones: string[],
+  userId?: string
 ): Promise<Record<string, string>> {
   if (phones.length === 0) return {};
 
@@ -108,7 +111,34 @@ export async function resolvePhoneNames(
     );
   }
 
-  // Source 2: macOS Contacts database (AddressBook)
+  // Source 2: External contacts (iPhone, macOS, Outlook, Google)
+  if (userId) {
+    try {
+      const normalizedPhones = phones.map((p) => normalizePhone(p));
+      const rows = externalContactDb.getNamesByPhoneDigits(userId, normalizedPhones);
+
+      for (const row of rows) {
+        if (row.name && row.phone) {
+          const norm = normalizePhone(row.phone);
+          // Only set if not already resolved by a higher-priority source
+          if (!result[norm]) {
+            result[norm] = row.name;
+          }
+          if (!result[row.phone]) {
+            result[row.phone] = row.name;
+          }
+        }
+      }
+    } catch (error) {
+      logService.warn(
+        "[ContactResolution] Failed to look up phone names from external contacts",
+        "ContactResolution",
+        { error }
+      );
+    }
+  }
+
+  // Source 3: macOS Contacts database (AddressBook)
   try {
     const { contactMap } = await getContactNames();
 
@@ -164,7 +194,8 @@ export async function resolvePhoneNames(
  * (e.g., paul@icloud.com, madisonsola@gmail.com).
  */
 export async function resolveEmailNames(
-  emails: string[]
+  emails: string[],
+  userId?: string
 ): Promise<Record<string, string>> {
   if (emails.length === 0) return {};
 
@@ -195,6 +226,33 @@ export async function resolveEmailNames(
     );
   }
 
+  // External contacts (iPhone, macOS, Outlook, Google)
+  if (userId) {
+    try {
+      const lowerEmails = emails.map((e) => e.toLowerCase());
+      const rows = externalContactDb.getNamesByEmails(userId, lowerEmails);
+
+      for (const row of rows) {
+        if (row.name && row.email) {
+          const lower = row.email.toLowerCase();
+          if (!result[lower]) {
+            result[lower] = row.name;
+          }
+          const original = emails.find((e) => e.toLowerCase() === lower);
+          if (original && !result[original]) {
+            result[original] = row.name;
+          }
+        }
+      }
+    } catch (error) {
+      logService.warn(
+        "[ContactResolution] Failed to look up email names from external contacts",
+        "ContactResolution",
+        { error }
+      );
+    }
+  }
+
   return result;
 }
 
@@ -205,7 +263,8 @@ export async function resolveEmailNames(
  * and merges results into a single map.
  */
 export async function resolveHandles(
-  handles: string[]
+  handles: string[],
+  userId?: string
 ): Promise<Record<string, string>> {
   if (handles.length === 0) return {};
 
@@ -224,8 +283,8 @@ export async function resolveHandles(
 
   // Resolve in parallel
   const [phoneResults, emailResults] = await Promise.all([
-    resolvePhoneNames(phones),
-    resolveEmailNames(emails),
+    resolvePhoneNames(phones, userId),
+    resolveEmailNames(emails, userId),
   ]);
 
   const result: Record<string, string> = {

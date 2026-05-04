@@ -299,7 +299,7 @@ async function syncDeepLinkUserToLocalDb(userData: PendingDeepLinkUser): Promise
  */
 function redactDeepLinkUrl(url: string): string {
   return url.replace(
-    /(?:code|token|access_token|refresh_token)=[^&#]+/gi,
+    /(?:code|token|access_token|refresh_token|claim)=[^&#]+/gi,
     (match) => {
       const key = match.split("=")[0];
       return `${key}=[REDACTED]`;
@@ -308,15 +308,88 @@ function redactDeepLinkUrl(url: string): string {
 }
 
 // ==========================================
-// DEEP LINK HANDLER (TASK-1500, enhanced TASK-1507)
+// DEEP LINK HANDLER (TASK-1500, enhanced TASK-1507, BACKLOG-1603)
 // ==========================================
+
+/**
+ * BACKLOG-1603: Claim tokens from the claim-tokens edge function.
+ * Called when the deep link contains a claim ID instead of raw tokens.
+ *
+ * The edge function does NOT require user auth (chicken-and-egg: the tokens
+ * are what we're trying to get). The claim UUID itself is the security factor
+ * (unguessable, 60s TTL, single-use). The Supabase anon key authenticates
+ * the request to the API gateway.
+ *
+ * @returns The token payload, or null if claim failed
+ */
+async function claimTokensFromEdgeFunction(claimId: string): Promise<{
+  access_token: string;
+  refresh_token: string;
+  provider_token?: string;
+  provider_refresh_token?: string;
+} | null> {
+  const supabaseUrl = process.env.SUPABASE_URL;
+  const supabaseAnonKey = process.env.SUPABASE_ANON_KEY;
+
+  if (!supabaseUrl || !supabaseAnonKey) {
+    log.error("[DeepLink] Cannot claim tokens: missing SUPABASE_URL or SUPABASE_ANON_KEY");
+    return null;
+  }
+
+  try {
+    log.info("[DeepLink] Claiming tokens from edge function...");
+    const response = await net.fetch(`${supabaseUrl}/functions/v1/claim-tokens`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "apikey": supabaseAnonKey,
+        "Authorization": `Bearer ${supabaseAnonKey}`,
+      },
+      body: JSON.stringify({ claim_id: claimId }),
+    });
+
+    if (!response.ok) {
+      const errorBody = await response.text();
+      log.error("[DeepLink] Claim failed:", response.status, errorBody);
+      return null;
+    }
+
+    const data = await response.json() as {
+      payload?: {
+        access_token?: string;
+        refresh_token?: string;
+        provider_token?: string;
+        provider_refresh_token?: string;
+      };
+      provider?: string;
+    };
+
+    if (!data.payload?.access_token || !data.payload?.refresh_token) {
+      log.error("[DeepLink] Claim response missing tokens in payload");
+      return null;
+    }
+
+    log.info("[DeepLink] Tokens claimed successfully");
+    return {
+      access_token: data.payload.access_token,
+      refresh_token: data.payload.refresh_token,
+      provider_token: data.payload.provider_token,
+      provider_refresh_token: data.payload.provider_refresh_token,
+    };
+  } catch (error) {
+    log.error("[DeepLink] Failed to claim tokens:", error);
+    return null;
+  }
+}
+
 /**
  * Handle incoming deep link authentication callback
  * Parses the URL, validates license, registers device, and sends result to renderer
  *
  * TASK-1507: Enhanced to validate license and register device before completing auth
- *
- * Expected URL format: keepr://callback?access_token=...&refresh_token=...
+ * BACKLOG-1603: Support claim-code flow (keepr://callback?claim=UUID)
+ *   - New format: keepr://callback?claim=UUID (tokens claimed via HTTPS)
+ *   - Old format: keepr://callback?access_token=...&refresh_token=... (deprecated)
  *
  * @param url - The deep link URL to process
  */
@@ -331,18 +404,50 @@ async function handleDeepLinkCallback(url: string): Promise<void> {
       parsed.host === "callback";
 
     if (isCallback) {
-      // TASK-1508A: Parse tokens from both query params AND URL fragment
-      // Supabase OAuth returns tokens in fragment (#access_token=...) not query params (?access_token=...)
-      // URL fragments are not sent to servers, only processed client-side (OAuth implicit flow security)
-      const hashParams = parsed.hash ? new URLSearchParams(parsed.hash.slice(1)) : null;
-      const accessToken = parsed.searchParams.get("access_token") || hashParams?.get("access_token");
-      const refreshToken = parsed.searchParams.get("refresh_token") || hashParams?.get("refresh_token");
+      // BACKLOG-1603: Check for claim-code format first (new secure flow)
+      const claimId = parsed.searchParams.get("claim");
 
-      // Log which format was detected for debugging
-      log.info("[DeepLink] Parsing callback URL", {
-        hasQueryParams: !!parsed.searchParams.get("access_token"),
-        hasHashParams: !!hashParams?.get("access_token"),
-      });
+      let accessToken: string | null = null;
+      let refreshToken: string | null = null;
+      const hashParams = parsed.hash ? new URLSearchParams(parsed.hash.slice(1)) : null;
+
+      if (claimId) {
+        // New claim-code flow: retrieve tokens via HTTPS edge function
+        log.info("[DeepLink] Claim-code format detected, claiming tokens securely");
+        const claimed = await claimTokensFromEdgeFunction(claimId);
+        if (!claimed) {
+          const isOnline = net.isOnline();
+          Sentry.captureException(new Error(`Deep link auth: token claim failed${!isOnline ? " (device offline)" : ""}`), {
+            tags: { component: "deep-link", action: "auth-callback", error_code: "CLAIM_FAILED", networkOnline: isOnline },
+          });
+          sendToRenderer("auth:deep-link-error", {
+            error: !isOnline
+              ? "Authentication failed — you appear to be offline"
+              : "Failed to retrieve authentication tokens. The claim may have expired (60s TTL). Please try signing in again.",
+            code: "CLAIM_FAILED",
+          });
+          return;
+        }
+        accessToken = claimed.access_token;
+        refreshToken = claimed.refresh_token;
+      } else {
+        // Legacy flow: tokens embedded directly in URL (deprecated)
+        // TASK-1508A: Parse tokens from both query params AND URL fragment
+        // Supabase OAuth returns tokens in fragment (#access_token=...) not query params (?access_token=...)
+        accessToken = parsed.searchParams.get("access_token") || hashParams?.get("access_token") || null;
+        refreshToken = parsed.searchParams.get("refresh_token") || hashParams?.get("refresh_token") || null;
+
+        if (accessToken) {
+          // BACKLOG-1603: Deprecation warning for direct token passing
+          log.warn("[DeepLink] DEPRECATED: Received tokens directly in URL. Update broker portal to use claim-code flow.");
+        }
+
+        // Log which format was detected for debugging
+        log.info("[DeepLink] Parsing callback URL (legacy format)", {
+          hasQueryParams: !!parsed.searchParams.get("access_token"),
+          hasHashParams: !!hashParams?.get("access_token"),
+        });
+      }
 
       // Extract OAuth error information if present (provider tells us exactly why auth failed)
       const oauthError = parsed.searchParams.get("error") || hashParams?.get("error");
@@ -350,7 +455,7 @@ async function handleDeepLinkCallback(url: string): Promise<void> {
 
       if (!accessToken || !refreshToken) {
         // Missing tokens - send error to renderer
-        log.error("[DeepLink] Callback URL missing tokens:", redactDeepLinkUrl(url));
+        log.error("[DeepLink] Callback missing tokens after claim/parse");
         if (oauthError) {
           // OAuth provider explicitly returned an error
           Sentry.captureException(new Error(`Deep link auth: OAuth error (${oauthError})`), {
@@ -375,6 +480,9 @@ async function handleDeepLinkCallback(url: string): Promise<void> {
         }
         return;
       }
+
+      // From here on, the flow is identical regardless of how tokens were obtained
+      // (claim-code or direct URL)
 
       // TASK-1507: Step 1 - Verify tokens and establish session using setSession()
       // Per SR Engineer review: Use setSession() instead of getUser() for proper session establishment
@@ -593,6 +701,24 @@ async function handleDeepLinkCallback(url: string): Promise<void> {
       });
 
       focusMainWindow();
+
+      // BACKLOG-1559: Start email precache immediately after login.
+      // Don't wait for renderer/dashboard — start in the main process.
+      try {
+        const { default: emailSyncService } = await import("./services/emailSyncService");
+        const hasMailbox = await databaseService.getOAuthToken(localUserId, "microsoft", "mailbox")
+          || await databaseService.getOAuthToken(localUserId, "google", "mailbox");
+        if (hasMailbox) {
+          log.info("[DeepLink] Starting email precache after login");
+          emailSyncService.precacheEmails(localUserId).then(() => {
+            log.info("[DeepLink] Email precache completed");
+          }).catch((err: unknown) => {
+            log.warn("[DeepLink] Email precache failed (non-fatal):", err);
+          });
+        }
+      } catch (precacheErr) {
+        log.warn("[DeepLink] Email precache setup failed (non-fatal):", precacheErr);
+      }
     }
   } catch (error) {
     // Invalid URL format or unexpected error
@@ -911,12 +1037,23 @@ app.whenReady().then(async () => {
     }
 
     // macOS: Classify "read-only volume" errors as App Translocation issues
-    // and surface user-friendly guidance instead of a generic error
+    // and surface user-friendly guidance instead of a generic error.
+    // The translocation event takes precedence over the generic error so the
+    // renderer shows the actionable "move to Applications" UI instead of a
+    // raw error message.
     const errMsg = err?.message?.toLowerCase() ?? "";
-    if (process.platform === "darwin" && (errMsg.includes("read-only volume") || errMsg.includes("readonly"))) {
-      log.warn("[AutoUpdater] Read-only volume error — likely App Translocation");
-      if (mainWindow && !mainWindow.isDestroyed()) {
+    const isTranslocationError =
+      process.platform === "darwin" &&
+      (errMsg.includes("read-only volume") || errMsg.includes("readonly"));
+
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      if (isTranslocationError) {
+        log.warn("[AutoUpdater] Read-only volume error — likely App Translocation");
         mainWindow.webContents.send("app-translocation-detected");
+      } else {
+        // BACKLOG-1641: Forward error to renderer so UI can show error state
+        // instead of staying stuck at 100% progress forever
+        mainWindow.webContents.send("update-error", sanitizedMessage);
       }
     }
   });

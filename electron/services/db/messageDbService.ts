@@ -102,11 +102,13 @@ export function searchLocalEmailCache(userId: string, query: string, limit = 500
   sender: string | null;
   sent_at: string | null;
   body_preview: string | null;
-  email_thread_id: string | null;
+  thread_id: string | null;
   has_attachments: boolean;
 }> {
   const db = ensureDb();
   const pattern = `%${query}%`;
+  // BACKLOG-1579 Phase 2: Return native UUID from the emails table.
+  // linkEmails now accepts UUIDs directly, so no provider-prefix needed.
   const sql = `
     SELECT
       e.id,
@@ -114,7 +116,7 @@ export function searchLocalEmailCache(userId: string, query: string, limit = 500
       e.sender,
       e.sent_at,
       SUBSTR(e.body_plain, 1, 200) as body_preview,
-      e.thread_id as email_thread_id,
+      e.thread_id,
       e.has_attachments
     FROM emails e
     WHERE e.user_id = ?
@@ -128,7 +130,7 @@ export function searchLocalEmailCache(userId: string, query: string, limit = 500
     sender: string | null;
     sent_at: string | null;
     body_preview: string | null;
-    email_thread_id: string | null;
+    thread_id: string | null;
     has_attachments: boolean;
   }>;
 }

@@ -101,13 +101,31 @@ export interface PmSprint {
   status: SprintStatus;
   start_date: string | null;
   end_date: string | null;
+  /**
+   * @deprecated BACKLOG-1664. Sprints are standalone — they can hold tasks
+   * from multiple projects. Do not filter sprint lookups on this column;
+   * join through `pm_backlog_items.project_id` instead. The column remains
+   * in the schema to keep legacy rows queryable through the RPC's OR-branch.
+   */
   project_id: string | null;
   original_item_count?: number | null;
   created_at: string;
   updated_at: string;
-  // Joined from RPCs (pm_list_sprints)
+  // Joined from RPCs (pm_list_sprints, pm_get_project_detail)
   item_counts?: Record<string, number>;
   total_items?: number;
+  /**
+   * Count of non-deleted backlog items in this sprint that belong to the
+   * project the caller scoped the RPC to. Populated by `pm_get_project_detail`
+   * (BACKLOG-1664). Undefined when the sprint row came from a sprint-centric
+   * RPC like `pm_list_sprints`.
+   */
+  project_total?: number;
+  /**
+   * Count of completed items among `project_total`. Populated by
+   * `pm_get_project_detail` (BACKLOG-1664).
+   */
+  project_completed?: number;
 }
 
 export interface PmProject {
@@ -413,6 +431,19 @@ export const STATUS_COLORS: Record<ItemStatus, string> = {
   waiting_for_user: 'bg-amber-100 text-amber-800',
 };
 
+/** Solid background colors for progress-bar segments (no text color needed). */
+export const SEGMENT_COLORS: Record<ItemStatus, string> = {
+  pending: 'bg-gray-300',
+  in_progress: 'bg-blue-500',
+  testing: 'bg-yellow-400',
+  completed: 'bg-green-500',
+  blocked: 'bg-red-500',
+  deferred: 'bg-orange-400',
+  obsolete: 'bg-gray-400',
+  reopened: 'bg-purple-500',
+  waiting_for_user: 'bg-amber-400',
+};
+
 export const PRIORITY_LABELS: Record<ItemPriority, string> = {
   low: 'Low',
   medium: 'Medium',
@@ -516,7 +547,8 @@ export type SprintSortColumn =
   | 'start_date'
   | 'end_date'
   | 'total_items'
-  | 'progress';
+  | 'progress'
+  | 'created_at';
 
 // ---------------------------------------------------------------------------
 // Timeline types

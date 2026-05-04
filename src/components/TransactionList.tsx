@@ -31,6 +31,7 @@ interface TransactionListComponentProps {
   userId: string;
   provider: OAuthProvider;
   onClose: () => void;
+  initialTransaction?: Transaction | null;
 }
 
 /**
@@ -42,6 +43,7 @@ function TransactionList({
   userId,
   provider,
   onClose,
+  initialTransaction,
 }: TransactionListComponentProps) {
   // Database initialization guard (belt-and-suspenders defense)
   const { isDatabaseInitialized } = useAppStateMachine();
@@ -94,6 +96,13 @@ function TransactionList({
 
   // Initial tab state for TransactionDetails
   const [initialTab, setInitialTab] = useState<TransactionTab>("overview");
+
+  // Auto-open transaction details when initialTransaction is provided (e.g., after creating a new audit)
+  useEffect(() => {
+    if (initialTransaction) {
+      setSelectedTransaction(initialTransaction);
+    }
+  }, [initialTransaction]);
 
   // Selection state for bulk operations
   const {
@@ -379,8 +388,9 @@ function TransactionList({
           userId={userId}
           provider={provider}
           onClose={() => setShowAuditCreate(false)}
-          onSuccess={() => {
+          onSuccess={(transaction: Transaction) => {
             setShowAuditCreate(false);
+            setSelectedTransaction(transaction);
             loadTransactions();
           }}
         />

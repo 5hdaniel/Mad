@@ -5,7 +5,7 @@
  * This keeps modal logic centralized and separate from routing.
  */
 
-import React, { useCallback } from "react";
+import React, { useCallback, useState } from "react";
 import Profile from "../components/Profile";
 import Settings from "../components/Settings";
 import TransactionList from "../components/TransactionList";
@@ -15,6 +15,7 @@ import AuditTransactionModal from "../components/AuditTransactionModal";
 import MoveAppPrompt from "../components/MoveAppPrompt";
 import { IPhoneSyncModal } from "./modals/IPhoneSyncModal";
 import type { AppStateMachine } from "./state/types";
+import type { Transaction } from "@/types";
 import { useEmailSettingsCallbacks } from "./hooks/useEmailSettingsCallbacks";
 
 interface AppModalsProps {
@@ -48,9 +49,13 @@ export function AppModals({ app }: AppModalsProps) {
     closeIPhoneSync,
   } = app;
 
-  // Compound action: close audit transaction modal and open transactions
-  const handleAuditTransactionSuccess = useCallback(() => {
+  // Track newly created transaction so TransactionList can auto-open its details
+  const [auditCreatedTransaction, setAuditCreatedTransaction] = useState<Transaction | null>(null);
+
+  // Compound action: close audit transaction modal and open transactions with the new transaction selected
+  const handleAuditTransactionSuccess = useCallback((transaction: Transaction) => {
     closeAuditTransaction();
+    setAuditCreatedTransaction(transaction);
     openTransactions();
   }, [closeAuditTransaction, openTransactions]);
 
@@ -99,7 +104,11 @@ export function AppModals({ app }: AppModalsProps) {
           <TransactionList
             userId={currentUser.id}
             provider={authProvider as "google" | "microsoft"}
-            onClose={closeTransactions}
+            onClose={() => {
+              setAuditCreatedTransaction(null);
+              closeTransactions();
+            }}
+            initialTransaction={auditCreatedTransaction}
           />
         </div>
       )}

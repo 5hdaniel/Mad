@@ -27,6 +27,15 @@
  */
 import React from "react";
 
+/**
+ * Panel size presets — single source of truth for modal sizing.
+ * Change the value here and every modal using the preset updates.
+ */
+export const MODAL_PANEL = {
+  /** Large workflow modals (audit, transaction details, edit contacts) */
+  lg: "max-w-4xl sm:h-[85vh] sm:min-h-[85vh] sm:max-h-[90vh] sm:overflow-hidden",
+} as const;
+
 interface ResponsiveModalProps {
   /** Close handler — called on backdrop click (desktop only) */
   onClose?: () => void;
@@ -74,7 +83,7 @@ export function ResponsiveModal({
       data-testid={testId}
     >
       <div
-        className={`${panelBg} flex flex-col w-full max-w-[100vw] h-full overflow-hidden sm:overflow-y-auto sm:h-auto sm:max-h-[90vh] sm:rounded-xl sm:shadow-2xl ${panelClassName}`}
+        className={`${panelBg} flex flex-col w-full min-w-[100vw] h-full overflow-hidden sm:min-w-0 sm:rounded-xl sm:shadow-2xl sm:overflow-y-auto sm:h-auto sm:max-h-[90vh] ${panelClassName || ''}`}
       >
         {children}
       </div>

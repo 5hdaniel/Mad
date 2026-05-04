@@ -14,6 +14,7 @@ module.exports = {
   // Override root paths for broker-portal
   rootDir: __dirname,
   roots: ['<rootDir>'],
+  setupFiles: [],
   setupFilesAfterEnv: [],
   moduleNameMapper: {
     ...rootConfig.moduleNameMapper,

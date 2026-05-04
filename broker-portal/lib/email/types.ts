@@ -8,6 +8,9 @@
 // Core send types
 // ---------------------------------------------------------------------------
 
+/** Email type for delivery logging */
+export type EmailType = 'invite' | 'ticket_notification' | 'ticket_confirmation' | 'ticket_reply' | 'ticket_resolved' | 'other';
+
 export interface SendEmailParams {
   /** Recipient email address or array of addresses */
   to: string | string[];
@@ -21,6 +24,10 @@ export interface SendEmailParams {
   from?: string;
   /** Reply-to address */
   replyTo?: string;
+  /** Email type for delivery logging (defaults to 'other') */
+  emailType?: EmailType;
+  /** Additional metadata for delivery logging */
+  logMetadata?: Record<string, unknown>;
 }
 
 export interface SendEmailResult {
@@ -60,6 +67,8 @@ export interface InviteEmailParams {
   inviteLink: string;
   /** Number of days until the invite expires */
   expiresInDays: number;
+  /** Whether this is a resend of an existing invite (changes subject/heading) */
+  isResend?: boolean;
 }
 
 export interface TicketReplyNotificationParams {
@@ -110,4 +119,19 @@ export interface TicketAssignmentNotificationParams {
   priority: string;
   /** Full URL to the ticket in the admin portal */
   ticketLink: string;
+}
+
+export interface TicketResolvedParams {
+  /** Email address of the ticket requester */
+  recipientEmail: string;
+  /** Support ticket subject line */
+  ticketSubject: string;
+  /** Support ticket display number (e.g., "TKT-0042") */
+  ticketNumber: string;
+  /** Resolution summary or latest internal note */
+  resolutionSummary?: string;
+  /** Full URL for the requester to view/reopen their ticket */
+  ticketLink: string;
+  /** The new status: 'resolved' or 'closed' */
+  newStatus: 'resolved' | 'closed';
 }
