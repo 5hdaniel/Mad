@@ -121,4 +121,22 @@ describe('parseSwimLaneCellId', () => {
     expect(parseSwimLaneCellId('cell:dim=project')).toBeNull();
     expect(parseSwimLaneCellId('cell:dim=project:status=pending')).toBeNull();
   });
+
+  // Regression: previously the regex used greedy `(.*)` for the key, which
+  // would silently accept ids whose groupKey contained `:status=` and yield
+  // a wrong parse (groupKey="weird:status=fake", status="pending"). With the
+  // tightened `([^:]+)` pattern such ids are rejected cleanly.
+  it('returns null when groupKey contains a `:status=` injection (greedy-regex regression)', () => {
+    const malformed = 'cell:dim=project:key=weird:status=fake:status=pending';
+    expect(parseSwimLaneCellId(malformed)).toBeNull();
+  });
+
+  it('returns null when groupKey contains any colon (tight-regex guarantee)', () => {
+    expect(
+      parseSwimLaneCellId('cell:dim=area:key=a:b:status=pending')
+    ).toBeNull();
+    expect(
+      parseSwimLaneCellId('cell:dim=assignee:key=user:42:status=completed')
+    ).toBeNull();
+  });
 });
