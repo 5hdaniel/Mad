@@ -8,7 +8,6 @@
 
 import microsoftAuthService from "../microsoftAuthService";
 import databaseService from "../databaseService";
-import axios from "axios";
 
 // Mock dependencies
 jest.mock("../databaseService");

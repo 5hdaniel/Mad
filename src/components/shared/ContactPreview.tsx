@@ -106,12 +106,6 @@ export function ContactPreview({
         ? [contact.phone]
         : [];
 
-  const handleBackdropClick = (e: React.MouseEvent) => {
-    if (e.target === e.currentTarget) {
-      onClose();
-    }
-  };
-
   return (
     <ResponsiveModal onClose={onClose} overlayClassName="bg-black bg-opacity-50" testId="contact-preview-backdrop" panelClassName="max-w-md max-h-[80vh] !h-auto !w-[calc(100%-2rem)] rounded-xl shadow-2xl">
       <div data-testid="contact-preview-modal">

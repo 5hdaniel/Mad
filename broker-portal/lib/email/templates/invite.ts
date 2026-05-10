@@ -48,8 +48,8 @@ export function buildInviteEmail(params: InviteEmailParams): EmailContent {
       </h1>
       <p style="margin:0 0 8px 0; font-size:16px; color:#374151; line-height:1.6;">
         ${isOrgInvite
-          ? `You've been invited to join <strong>${escapeHtml(organizationName)}</strong> on Keepr.`
-          : `You've been invited to join <strong>Keepr</strong> — the real estate transaction auditing platform.`
+          ? `${escapeHtml(inviterName)} has invited you to join <strong>${escapeHtml(organizationName)}</strong> on Keepr.`
+          : `${escapeHtml(inviterName)} has invited you to join <strong>Keepr</strong> — the real estate transaction auditing platform.`
         }
       </p>
       ${isOrgInvite && role ? `
@@ -80,8 +80,8 @@ export function buildInviteEmail(params: InviteEmailParams): EmailContent {
     subject,
     '',
     isOrgInvite
-      ? `You've been invited to join ${organizationName} on Keepr.`
-      : `You've been invited to join Keepr — the real estate transaction auditing platform.`,
+      ? `${inviterName} has invited you to join ${organizationName} on Keepr.`
+      : `${inviterName} has invited you to join Keepr — the real estate transaction auditing platform.`,
   ];
   if (isOrgInvite && role) {
     textLines.push(`Role: ${role}`);

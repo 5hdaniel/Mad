@@ -84,7 +84,6 @@ export default async function OrganizationDetailPage({
   const orgPlans = org.organization_plans as unknown as { plan_id: string; plans: { id: string; name: string; tier: string } | null }[] | null;
   const activePlan = orgPlans?.[0]?.plans ?? null;
   const planName = activePlan?.name ?? 'None';
-  const planTier = activePlan?.tier ?? null;
 
   // Transform members to include user info
   const members: MemberRow[] = (membersResult.data ?? []).map((m) => {
