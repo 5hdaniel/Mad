@@ -18,11 +18,12 @@ import {
   Calendar,
   Info,
 } from 'lucide-react';
-import { createSprint } from '@/lib/pm-queries';
+import { assignToSprint } from '@/lib/pm-queries';
 import type { PmProject, ItemStatus } from '@/lib/pm-types';
 import { STATUS_LABELS, STATUS_COLORS } from '@/lib/pm-types';
 import { DualProgressBar } from '../../../components/DualProgressBar';
 import { formatTokens } from '@/lib/pm-utils';
+import { CreateSprintDialog } from '../../../components/CreateSprintDialog';
 
 const STATUS_ORDER: ItemStatus[] = [
   'pending',
@@ -37,87 +38,94 @@ const STATUS_ORDER: ItemStatus[] = [
 ];
 
 // ---------------------------------------------------------------------------
-// InlineSprintCreate -- "+ Create new sprint" row
+// InlineSprintCreate (BACKLOG-1664)
+//
+// Renders a "+ Create new sprint" button that opens the global
+// CreateSprintDialog. The created sprint is standalone (projectId is not
+// passed — CreateSprintDialog already sends null). If any project tasks are
+// currently multi-selected, those tasks are auto-assigned to the newly
+// created sprint, so the user can scaffold a sprint + populate it in one
+// flow from the project page.
 // ---------------------------------------------------------------------------
 
 interface InlineSprintCreateProps {
+  /**
+   * Retained for API-compatibility with earlier callers. No longer passed
+   * to `createSprint` — sprints are standalone (BACKLOG-1664).
+   */
   projectId: string;
   onCreated: () => void;
+  /**
+   * BACKLOG-1664: when provided, after a new sprint is created these items
+   * are automatically assigned to it. Pass the set that's currently selected
+   * on the project page (may be empty — the dialog just creates a sprint).
+   */
+  selectedItemIds?: string[];
+  /**
+   * BACKLOG-1664: called after auto-assign completes (or was skipped because
+   * `selectedItemIds` was empty), so the page can clear its selection.
+   */
+  onAutoAssigned?: () => void;
 }
 
-export function InlineSprintCreate({ projectId, onCreated }: InlineSprintCreateProps) {
-  const [adding, setAdding] = useState(false);
-  const [name, setName] = useState('');
-  const [goal, setGoal] = useState('');
-  const [submitting, setSubmitting] = useState(false);
+export function InlineSprintCreate({
+  projectId: _projectId,
+  onCreated,
+  selectedItemIds,
+  onAutoAssigned,
+}: InlineSprintCreateProps) {
+  const [dialogOpen, setDialogOpen] = useState(false);
+  // Snapshot the selected ids at the moment the user opens the dialog so
+  // a stale selection doesn't cause surprise assignments if the user
+  // deselects while the dialog is open.
+  const [pendingItemIds, setPendingItemIds] = useState<string[]>([]);
 
-  if (!adding) {
-    return (
-      <button
-        onClick={() => setAdding(true)}
-        className="flex items-center gap-1 text-sm text-blue-600 hover:text-blue-700 py-3 px-4"
-      >
-        <Plus className="h-4 w-4" /> Create new sprint
-      </button>
-    );
+  const openDialog = () => {
+    setPendingItemIds(selectedItemIds ? [...selectedItemIds] : []);
+    setDialogOpen(true);
+  };
+
+  // After CreateSprintDialog calls onCreated, it already closed itself.
+  // We still need to (a) auto-assign the snapshot items to the new sprint
+  // and (b) notify the parent page. As of BACKLOG-1668 the dialog passes
+  // the newly-created sprint's id directly, so we no longer rely on the
+  // "newest sprint by created_at" heuristic (which raced with concurrent
+  // creates).
+  async function handleAfterCreate(newSprintId: string) {
+    if (pendingItemIds.length === 0) {
+      onCreated();
+      onAutoAssigned?.();
+      return;
+    }
+    try {
+      await assignToSprint(pendingItemIds, newSprintId);
+    } catch (err) {
+      // Non-fatal: the sprint still exists; user can assign manually.
+      console.error('Failed to auto-assign items to new sprint:', err);
+    } finally {
+      setPendingItemIds([]);
+      onCreated();
+      onAutoAssigned?.();
+    }
   }
 
   return (
-    <form
-      onSubmit={async (e) => {
-        e.preventDefault();
-        if (!name.trim()) return;
-        setSubmitting(true);
-        try {
-          await createSprint(name.trim(), goal.trim() || null, projectId);
-          setName('');
-          setGoal('');
-          setAdding(false);
-          onCreated();
-        } catch (err) {
-          console.error('Failed to create:', err);
-        } finally {
-          setSubmitting(false);
-        }
-      }}
-      className="border border-gray-200 rounded-lg p-4 space-y-3"
-    >
-      <div>
-        <input
-          type="text"
-          value={name}
-          onChange={(e) => setName(e.target.value)}
-          placeholder="Sprint name..."
-          className="w-full text-sm border border-gray-300 rounded px-3 py-2 text-gray-900 bg-white focus:outline-none focus:ring-1 focus:ring-blue-500"
-          autoFocus
-        />
-      </div>
-      <div>
-        <input
-          type="text"
-          value={goal}
-          onChange={(e) => setGoal(e.target.value)}
-          placeholder="Sprint goal (optional)..."
-          className="w-full text-sm border border-gray-300 rounded px-3 py-2 text-gray-900 bg-white focus:outline-none focus:ring-1 focus:ring-blue-500"
-        />
-      </div>
-      <div className="flex items-center gap-2">
-        <button
-          type="submit"
-          disabled={submitting || !name.trim()}
-          className="text-sm bg-blue-600 text-white px-3 py-1.5 rounded hover:bg-blue-700 disabled:opacity-50"
-        >
-          {submitting ? 'Creating...' : 'Create Sprint'}
-        </button>
-        <button
-          type="button"
-          onClick={() => { setAdding(false); setName(''); setGoal(''); }}
-          className="text-sm text-gray-500 hover:text-gray-700"
-        >
-          Cancel
-        </button>
-      </div>
-    </form>
+    <>
+      <button
+        onClick={openDialog}
+        className="flex items-center gap-1 text-sm text-blue-600 hover:text-blue-700 py-3 px-4"
+      >
+        <Plus className="h-4 w-4" />
+        {selectedItemIds && selectedItemIds.length > 0
+          ? `Create new sprint with ${selectedItemIds.length} selected`
+          : 'Create new sprint'}
+      </button>
+      <CreateSprintDialog
+        open={dialogOpen}
+        onClose={() => setDialogOpen(false)}
+        onCreated={handleAfterCreate}
+      />
+    </>
   );
 }
 
@@ -128,17 +136,40 @@ export function InlineSprintCreate({ projectId, onCreated }: InlineSprintCreateP
 interface StatusSummaryProps {
   itemsByStatus: Record<string, number>;
   tokenSums: { estTotal: number; actualTotal: number; variance: number };
+  /** Active status filter (null = all). */
+  activeFilter?: ItemStatus | null;
+  /** Called when user clicks a segment / legend item. */
+  onStatusFilter?: (status: ItemStatus | null) => void;
 }
 
-export function StatusSummary({ itemsByStatus, tokenSums }: StatusSummaryProps) {
+export function StatusSummary({
+  itemsByStatus,
+  tokenSums,
+  activeFilter,
+  onStatusFilter,
+}: StatusSummaryProps) {
   const totalItems = Object.values(itemsByStatus).reduce((a, b) => a + b, 0);
   const completedItems = itemsByStatus['completed'] ?? 0;
 
+  const handleBadgeClick = (status: ItemStatus) => {
+    if (!onStatusFilter) return;
+    onStatusFilter(activeFilter === status ? null : status);
+  };
+
   return (
     <div className="bg-white border border-gray-200 rounded-lg p-4 mb-6">
-      <h2 className="text-sm font-semibold text-gray-900 mb-3">
-        Status Summary
-      </h2>
+      <div className="flex items-center justify-between mb-3">
+        <h2 className="text-sm font-semibold text-gray-900">Status Summary</h2>
+        {activeFilter && onStatusFilter && (
+          <button
+            type="button"
+            onClick={() => onStatusFilter(null)}
+            className="text-xs text-blue-600 hover:text-blue-700"
+          >
+            Clear filter
+          </button>
+        )}
+      </div>
 
       <DualProgressBar
         completed={completedItems}
@@ -147,23 +178,41 @@ export function StatusSummary({ itemsByStatus, tokenSums }: StatusSummaryProps) 
         estTokens={tokenSums.estTotal}
         actualTokens={tokenSums.actualTotal}
         showLegend={false}
+        onStatusFilter={onStatusFilter}
+        activeFilter={activeFilter}
       />
 
       {totalItems > 0 ? (
         <div className="flex flex-wrap gap-3 mt-4">
           {STATUS_ORDER.filter((s) => (itemsByStatus[s] ?? 0) > 0).map(
-            (status) => (
-              <div key={status} className="flex items-center gap-1.5">
-                <span
-                  className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${STATUS_COLORS[status]}`}
+            (status) => {
+              const isActive = activeFilter === status;
+              const isDimmed = activeFilter && !isActive;
+              const clickable = !!onStatusFilter;
+              return (
+                <button
+                  key={status}
+                  type="button"
+                  onClick={() => handleBadgeClick(status)}
+                  disabled={!clickable}
+                  className={`flex items-center gap-1.5 transition-opacity ${
+                    clickable ? 'cursor-pointer hover:opacity-80' : 'cursor-default'
+                  } ${isDimmed ? 'opacity-40' : ''} ${
+                    isActive ? 'ring-2 ring-offset-1 ring-gray-800 rounded-full' : ''
+                  }`}
+                  aria-pressed={isActive}
                 >
-                  {STATUS_LABELS[status]}
-                </span>
-                <span className="text-sm font-medium text-gray-700">
-                  {itemsByStatus[status]}
-                </span>
-              </div>
-            )
+                  <span
+                    className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${STATUS_COLORS[status]}`}
+                  >
+                    {STATUS_LABELS[status]}
+                  </span>
+                  <span className="text-sm font-medium text-gray-700">
+                    {itemsByStatus[status]}
+                  </span>
+                </button>
+              );
+            }
           )}
         </div>
       ) : (

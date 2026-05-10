@@ -27,6 +27,10 @@ interface DraggableItemRowProps {
   containerId: string;
   /** Render as overlay (no draggable bindings) */
   isDragOverlay?: boolean;
+  /** BACKLOG-1664: whether this row is currently multi-selected */
+  selected?: boolean;
+  /** BACKLOG-1664: toggle selection for this item (bulk-assign flow) */
+  onToggleSelect?: (itemId: string) => void;
 }
 
 export function DraggableItemRow({
@@ -34,6 +38,8 @@ export function DraggableItemRow({
   projectId,
   containerId,
   isDragOverlay = false,
+  selected = false,
+  onToggleSelect,
 }: DraggableItemRowProps) {
   const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
     id: item.id,
@@ -53,9 +59,26 @@ export function DraggableItemRow({
       } ${
         isDragOverlay
           ? 'shadow-lg rotate-1 border-blue-300'
-          : 'border-gray-200 hover:border-blue-300 cursor-grab active:cursor-grabbing'
+          : selected
+            ? 'border-blue-400 ring-1 ring-blue-200 cursor-grab active:cursor-grabbing'
+            : 'border-gray-200 hover:border-blue-300 cursor-grab active:cursor-grabbing'
       }`}
     >
+      {/* Selection checkbox (BACKLOG-1664) */}
+      {onToggleSelect && !isDragOverlay && (
+        <input
+          type="checkbox"
+          checked={selected}
+          onChange={() => onToggleSelect(item.id)}
+          // Stop pointer/drag events from leaking into dnd-kit listeners,
+          // otherwise clicking the checkbox would start a drag.
+          onClick={(e: React.MouseEvent) => e.stopPropagation()}
+          onPointerDown={(e: React.PointerEvent) => e.stopPropagation()}
+          className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500 shrink-0 cursor-pointer"
+          aria-label={`Select ${item.title}`}
+        />
+      )}
+
       {/* Item number */}
       <span className="text-xs text-gray-400 font-mono whitespace-nowrap">
         #{item.item_number}

@@ -23,15 +23,21 @@ import {
 } from '@dnd-kit/core';
 import { resolveColumnStatus } from '../../components/KanbanBoard';
 import {
+  parseSwimLaneCellId,
+  SWIM_LANE_NEW_PROJECT_ID,
+} from '../lib/swim-lane-ids';
+import {
   updateItemStatus,
   updateItemField,
   assignToSprint,
 } from '@/lib/pm-queries';
 import type { PmBacklogItem, ItemStatus, BoardColumns } from '@/lib/pm-types';
+import type { SwimLaneMode } from '../../components/SwimLaneSelector';
 
 interface UseBoardDragDropParams {
   columns: BoardColumns;
   selectedSprintId: string;
+  swimLane: SwimLaneMode;
   loadBoardData: () => Promise<void>;
   loadBacklogItems: (search?: string) => Promise<void>;
   handleStatusChange: (itemId: string, newStatus: ItemStatus) => Promise<void>;
@@ -40,6 +46,7 @@ interface UseBoardDragDropParams {
 export function useBoardDragDrop({
   columns,
   selectedSprintId,
+  swimLane,
   loadBoardData,
   loadBacklogItems,
   handleStatusChange,
@@ -94,9 +101,10 @@ export function useBoardDragDrop({
       if (!over) return;
 
       const data = active.data.current;
+      const overId = over.id as string;
 
       // Board card dropped onto backlog panel -> unassign from sprint
-      if (over.id === 'backlog-panel') {
+      if (overId === 'backlog-panel') {
         if (data?.type === 'backlog-item') return;
         const itemId = active.id as string;
         try {
@@ -109,8 +117,33 @@ export function useBoardDragDrop({
         return;
       }
 
-      const targetStatus = resolveColumnStatus(over.id as string, columns);
+      // Ghost "new project" row -> assign backlog item to sprint (keeps its own project_id).
+      // Existing sprint cards dropped here are a no-op (their project is already
+      // determined by their own project_id; to change project, drop on a specific row).
+      if (overId === SWIM_LANE_NEW_PROJECT_ID) {
+        if (data?.type !== 'backlog-item') return;
+        const item = data.item as PmBacklogItem;
+        if (!selectedSprintId) return;
+        try {
+          await assignToSprint([item.id], selectedSprintId);
+          await loadBoardData();
+          await loadBacklogItems();
+        } catch (err) {
+          console.error('Failed to assign backlog item to sprint (ghost row):', err);
+        }
+        return;
+      }
+
+      const targetStatus = resolveColumnStatus(overId, columns);
       if (!targetStatus) return;
+
+      // Try to extract target project from a structured swim-lane cell id.
+      // Only the 'project' swim-lane dimension triggers cross-project moves.
+      const parsedCell = parseSwimLaneCellId(overId);
+      const targetProjectId =
+        parsedCell && parsedCell.dimension === 'project' && swimLane === 'project'
+          ? parsedCell.groupKey
+          : null;
 
       if (data?.type === 'backlog-item') {
         const item = data.item as PmBacklogItem;
@@ -118,6 +151,15 @@ export function useBoardDragDrop({
 
         try {
           await assignToSprint([item.id], selectedSprintId);
+          // If dropped onto a specific project row whose key differs from the
+          // item's current project_id, move it to that project.
+          if (
+            targetProjectId &&
+            targetProjectId !== 'No Project' &&
+            item.project_id !== targetProjectId
+          ) {
+            await updateItemField(item.id, 'project_id', targetProjectId);
+          }
           if (targetStatus !== 'pending') {
             await updateItemStatus(item.id, targetStatus);
           }
@@ -129,20 +171,52 @@ export function useBoardDragDrop({
       } else {
         const itemId = active.id as string;
 
+        // Find the current item to compare current project + status.
         let currentStatus: ItemStatus | null = null;
+        let currentItem: PmBacklogItem | null = null;
         for (const [status, items] of Object.entries(columns)) {
-          if ((items as PmBacklogItem[]).some((i) => i.id === itemId)) {
+          const found = (items as PmBacklogItem[]).find((i) => i.id === itemId);
+          if (found) {
             currentStatus = status as ItemStatus;
+            currentItem = found;
             break;
           }
         }
+        if (!currentItem || !currentStatus) return;
 
-        if (currentStatus && currentStatus !== targetStatus) {
-          await handleStatusChange(itemId, targetStatus);
+        const statusChanged = currentStatus !== targetStatus;
+        // Cross-project move only applies in project swim-lane mode and when
+        // the target row represents a real project (not "No Project").
+        const projectChanged =
+          targetProjectId !== null &&
+          targetProjectId !== 'No Project' &&
+          currentItem.project_id !== targetProjectId;
+
+        if (!statusChanged && !projectChanged) return;
+
+        try {
+          if (projectChanged && statusChanged) {
+            // Both changes: run in parallel, then refresh once.
+            await Promise.all([
+              updateItemField(itemId, 'project_id', targetProjectId!),
+              updateItemStatus(itemId, targetStatus),
+            ]);
+            await loadBoardData();
+          } else if (projectChanged) {
+            await updateItemField(itemId, 'project_id', targetProjectId!);
+            await loadBoardData();
+          } else if (statusChanged) {
+            // Preserve optimistic-update behavior via handleStatusChange.
+            await handleStatusChange(itemId, targetStatus);
+          }
+        } catch (err) {
+          console.error('Failed to apply drag update:', err);
+          // Error path: reload to revert any partial optimistic state.
+          await loadBoardData();
         }
       }
     },
-    [columns, selectedSprintId, loadBoardData, loadBacklogItems, handleStatusChange]
+    [columns, selectedSprintId, swimLane, loadBoardData, loadBacklogItems, handleStatusChange]
   );
 
   return {

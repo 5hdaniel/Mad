@@ -10,7 +10,8 @@
  */
 
 import { useCallback, useMemo } from 'react';
-import { ChevronDown, ChevronRight } from 'lucide-react';
+import Link from 'next/link';
+import { ArrowUpRight, ChevronDown, ChevronRight } from 'lucide-react';
 import { useDroppable } from '@dnd-kit/core';
 import {
   SortableContext,
@@ -19,6 +20,10 @@ import {
 import { KanbanCard } from '../../components/KanbanCard';
 import { KanbanQuickAdd } from '../../components/KanbanQuickAdd';
 import { COLUMN_ORDER } from '../../components/KanbanBoard';
+import {
+  SWIM_LANE_NEW_PROJECT_ID,
+  buildSwimLaneCellId,
+} from '../lib/swim-lane-ids';
 import type { PmBacklogItem, PmLabel, BoardColumns, ItemStatus } from '@/lib/pm-types';
 import { STATUS_LABELS, STATUS_COLORS } from '@/lib/pm-types';
 import type { AssignableUser } from '../../components/KanbanCard';
@@ -72,6 +77,10 @@ export function groupItemsByDimension(
 
   return groups;
 }
+
+/** UUID v1-v5 matcher used to guard the project detail link. */
+const UUID_RE =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 // ---------------------------------------------------------------------------
 // SwimLaneCell -- A single droppable cell in the swim lane grid
@@ -215,28 +224,63 @@ export function SwimLaneGrid({
             0
           );
           const isCollapsed = collapsedLanes.has(groupKey);
+          const displayName = nameMap.get(groupKey) || groupKey;
+          const isLinkableProject =
+            swimLane === 'project' && UUID_RE.test(groupKey);
           return (
             <div key={groupKey} className="flex gap-0 border-b border-gray-200">
               {/* Project name column */}
               <div className="w-[180px] min-w-[180px] bg-gray-50 px-3 py-3 sticky left-0 z-10 border-r border-gray-200">
-                <button
-                  onClick={() => onToggleLane(groupKey)}
-                  className="flex items-center gap-1.5 text-left w-full"
-                >
-                  {isCollapsed ? (
-                    <ChevronRight className="h-3.5 w-3.5 text-gray-400 flex-shrink-0" />
-                  ) : (
-                    <ChevronDown className="h-3.5 w-3.5 text-gray-400 flex-shrink-0" />
-                  )}
-                  <div>
-                    <span className="text-sm font-semibold text-gray-700 block">
-                      {nameMap.get(groupKey) || groupKey}
-                    </span>
-                    <span className="text-xs text-gray-400">
+                <div className="flex items-start gap-1.5">
+                  <button
+                    type="button"
+                    onClick={() => onToggleLane(groupKey)}
+                    aria-label={isCollapsed ? 'Expand row' : 'Collapse row'}
+                    className="flex-shrink-0 mt-0.5"
+                  >
+                    {isCollapsed ? (
+                      <ChevronRight className="h-3.5 w-3.5 text-gray-400" />
+                    ) : (
+                      <ChevronDown className="h-3.5 w-3.5 text-gray-400" />
+                    )}
+                  </button>
+                  <div className="min-w-0 flex-1">
+                    {isLinkableProject ? (
+                      <div className="flex items-center gap-1 min-w-0">
+                        <Link
+                          href={`/dashboard/pm/projects/${groupKey}`}
+                          title="Open project page"
+                          className="text-sm font-semibold text-gray-700 hover:text-blue-600 hover:underline truncate"
+                        >
+                          {displayName}
+                        </Link>
+                        <Link
+                          href={`/dashboard/pm/projects/${groupKey}`}
+                          title="Open project page"
+                          aria-label={`Open ${displayName}`}
+                          className="text-gray-400 hover:text-blue-600 flex-shrink-0"
+                        >
+                          <ArrowUpRight className="h-3.5 w-3.5" />
+                        </Link>
+                      </div>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => onToggleLane(groupKey)}
+                        className="text-sm font-semibold text-gray-700 text-left block truncate w-full"
+                      >
+                        {displayName}
+                      </button>
+                    )}
+                    <button
+                      type="button"
+                      onClick={() => onToggleLane(groupKey)}
+                      className="text-xs text-gray-400 text-left block w-full"
+                    >
                       {itemCount} {itemCount === 1 ? 'item' : 'items'}
-                    </span>
+                    </button>
                   </div>
-                </button>
+                </div>
               </div>
               {/* Status columns -- hidden when collapsed */}
               {isCollapsed ? (
@@ -246,7 +290,7 @@ export function SwimLaneGrid({
               ) : (
                 COLUMN_ORDER.map((status) => {
                   const items = (groupColumns[status] || []) as PmBacklogItem[];
-                  const droppableId = `${groupKey}::${status}`;
+                  const droppableId = buildSwimLaneCellId(swimLane, groupKey, status);
                   return (
                     <SwimLaneCell
                       key={status}
@@ -272,6 +316,50 @@ export function SwimLaneGrid({
           <p className="text-sm">No items in this sprint</p>
         </div>
       )}
+      {/* Ghost "new project" drop row — only in project swim-lane mode.
+          Drop here to assign a backlog item whose project isn't yet represented. */}
+      {swimLane === 'project' && <GhostNewProjectRow />}
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// GhostNewProjectRow -- Persistent "drop here to add a new project" drop target
+// ---------------------------------------------------------------------------
+
+function GhostNewProjectRow() {
+  const { setNodeRef, isOver } = useDroppable({ id: SWIM_LANE_NEW_PROJECT_ID });
+  return (
+    <div
+      ref={setNodeRef}
+      className={`flex gap-0 border-b border-dashed ${
+        isOver
+          ? 'border-blue-400 bg-blue-50'
+          : 'border-gray-300 bg-gray-50/60'
+      }`}
+    >
+      <div
+        className={`w-[180px] min-w-[180px] px-3 py-4 sticky left-0 z-10 border-r border-dashed ${
+          isOver ? 'border-blue-400' : 'border-gray-300'
+        }`}
+      >
+        <span
+          className={`text-xs font-medium uppercase tracking-wide ${
+            isOver ? 'text-blue-600' : 'text-gray-400'
+          }`}
+        >
+          New project
+        </span>
+      </div>
+      <div
+        className={`flex-1 px-4 py-4 italic ${
+          isOver ? 'text-blue-600' : 'text-gray-400'
+        }`}
+      >
+        <span className="text-sm">
+          Drop tasks here to add a new project to this sprint
+        </span>
+      </div>
     </div>
   );
 }

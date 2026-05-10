@@ -39,6 +39,7 @@ export default function BoardPage() {
   } = useBoardDragDrop({
     columns: board.columns,
     selectedSprintId: board.selectedSprintId,
+    swimLane: board.swimLane,
     loadBoardData: board.loadBoardData,
     loadBacklogItems: board.loadBacklogItems,
     handleStatusChange: board.handleStatusChange,

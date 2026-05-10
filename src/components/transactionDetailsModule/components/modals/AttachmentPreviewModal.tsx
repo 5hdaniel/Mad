@@ -219,11 +219,6 @@ export function AttachmentPreviewModal({
     return () => window.removeEventListener("keydown", handleEscape);
   }, [onClose]);
 
-  // Handle backdrop click
-  const handleBackdropClick = (e: React.MouseEvent) => {
-    if (e.target === e.currentTarget) onClose();
-  };
-
   // Handle open with system viewer
   const handleOpenWithSystem = () => {
     if (attachment.storage_path) {

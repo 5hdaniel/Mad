@@ -12,6 +12,7 @@ import Dashboard from "../components/Dashboard";
 import OfflineFallback from "../components/OfflineFallback";
 import { UpgradeScreen, type UpgradeReason } from "../components/license/UpgradeScreen";
 import type { AppStateMachine } from "./state/types";
+import { useImportSource } from "../hooks/useImportSource";
 import {
   USE_NEW_ONBOARDING,
   isOnboardingStep,
@@ -79,6 +80,9 @@ export function AppRouter({ app }: AppRouterProps) {
     await handleLogout();
   }, [handleLogout]);
 
+  // BACKLOG-1653: Import source preference to gate iPhone sync card.
+  const importSource = useImportSource(currentUser?.id, app.modalState.showSettings);
+
   // New onboarding architecture (when enabled)
   if (USE_NEW_ONBOARDING && isOnboardingStep(currentStep)) {
     return <Suspense fallback={<LoadingScreen />}><OnboardingFlow app={app} /></Suspense>;
@@ -133,8 +137,10 @@ export function AppRouter({ app }: AppRouterProps) {
 
   // Dashboard
   if (currentStep === "dashboard") {
-    // Show iPhone sync button for Windows + iPhone users
-    const showIPhoneSyncButton = isWindows && selectedPhoneType === "iphone";
+    // BACKLOG-1653: Show iPhone sync card based on import source preference,
+    // not platform or phone type. Card shows when user explicitly selects
+    // "iphone-sync" in Settings, regardless of macOS or Windows.
+    const showIPhoneSyncButton = importSource === "iphone-sync";
 
     // Scroll to and highlight a target element inside the Settings modal.
     // Reusable helper for handleContinueSetup and handleOpenSettings.

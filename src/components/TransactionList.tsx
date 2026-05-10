@@ -31,6 +31,7 @@ interface TransactionListComponentProps {
   userId: string;
   provider: OAuthProvider;
   onClose: () => void;
+  initialTransaction?: Transaction | null;
 }
 
 /**
@@ -42,6 +43,7 @@ function TransactionList({
   userId,
   provider,
   onClose,
+  initialTransaction,
 }: TransactionListComponentProps) {
   // Database initialization guard (belt-and-suspenders defense)
   const { isDatabaseInitialized } = useAppStateMachine();
@@ -94,6 +96,13 @@ function TransactionList({
 
   // Initial tab state for TransactionDetails
   const [initialTab, setInitialTab] = useState<TransactionTab>("overview");
+
+  // Auto-open transaction details when initialTransaction is provided (e.g., after creating a new audit)
+  useEffect(() => {
+    if (initialTransaction) {
+      setSelectedTransaction(initialTransaction);
+    }
+  }, [initialTransaction]);
 
   // Selection state for bulk operations
   const {
@@ -164,14 +173,6 @@ function TransactionList({
   }
 
 
-  const handleQuickExport = (
-    transaction: Transaction,
-    e: React.MouseEvent<HTMLButtonElement>,
-  ): void => {
-    e.stopPropagation(); // Prevent opening transaction details
-    setQuickExportTransaction(transaction);
-  };
-
   const handleQuickExportComplete = (result: unknown): void => {
     const exportResult = result as { path?: string };
     setQuickExportTransaction(null);
@@ -205,33 +206,6 @@ function TransactionList({
     } else {
       setInitialTab("overview");
       setSelectedTransaction(transaction);
-    }
-  };
-
-  // Create handlers that include the transaction context for communication count clicks
-  const createMessagesClickHandler = (transaction: Transaction) => (e: React.MouseEvent): void => {
-    e.stopPropagation();
-    if (!selectionMode) {
-      if (transaction.detection_status === "pending" || transaction.status === "pending") {
-        setInitialTab("messages");
-        setPendingReviewTransaction(transaction);
-      } else {
-        setInitialTab("messages");
-        setSelectedTransaction(transaction);
-      }
-    }
-  };
-
-  const createEmailsClickHandler = (transaction: Transaction) => (e: React.MouseEvent): void => {
-    e.stopPropagation();
-    if (!selectionMode) {
-      if (transaction.detection_status === "pending" || transaction.status === "pending") {
-        setInitialTab("emails");
-        setPendingReviewTransaction(transaction);
-      } else {
-        setInitialTab("emails");
-        setSelectedTransaction(transaction);
-      }
     }
   };
 
@@ -379,8 +353,9 @@ function TransactionList({
           userId={userId}
           provider={provider}
           onClose={() => setShowAuditCreate(false)}
-          onSuccess={() => {
+          onSuccess={(transaction: Transaction) => {
             setShowAuditCreate(false);
+            setSelectedTransaction(transaction);
             loadTransactions();
           }}
         />

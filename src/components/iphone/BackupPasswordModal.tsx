@@ -35,16 +35,6 @@ export const BackupPasswordModal: React.FC<BackupPasswordModalProps> = ({
     [password, isLoading, onSubmit],
   );
 
-  // Handle keyboard events
-  const handleKeyDown = useCallback(
-    (e: React.KeyboardEvent) => {
-      if (e.key === "Escape" && !isLoading) {
-        onCancel();
-      }
-    },
-    [isLoading, onCancel],
-  );
-
   if (!isOpen) return null;
 
   return (
