@@ -143,20 +143,40 @@ describe("OutlookFetchService", () => {
       );
     });
 
-    it("should filter by from address when contactEmails provided", async () => {
+    it("should filter by from address using KQL $search when contactEmails provided (BACKLOG-1549)", async () => {
       mockAxios.mockResolvedValue({ data: { value: [] } });
 
       await outlookFetchService.searchEmails({
         contactEmails: ["user@example.com"],
       });
 
-      // Verify the from/emailAddress/address filter is applied (server-side)
-      // Note: any() lambdas on toRecipients/ccRecipients/bccRecipients return 400
-      // from Graph API, so only from direction is filtered server-side
+      // BACKLOG-1549: switched inbox contact filter from OData
+      // `from/emailAddress/address eq` to KQL `$search="from:..."` so
+      // case variants and aliases match (parity with sentItems path).
+      expect(mockAxios).toHaveBeenCalledWith(
+        expect.objectContaining({
+          url: expect.stringContaining('$search="from:user@example.com"'),
+        }),
+      );
+      // The old OData equality filter is gone.
+      expect(mockAxios).not.toHaveBeenCalledWith(
+        expect.objectContaining({
+          url: expect.stringContaining("from/emailAddress/address eq"),
+        }),
+      );
+    });
+
+    it("should OR multiple contactEmails inside a single KQL $search (BACKLOG-1549)", async () => {
+      mockAxios.mockResolvedValue({ data: { value: [] } });
+
+      await outlookFetchService.searchEmails({
+        contactEmails: ["a@example.com", "b@example.com"],
+      });
+
       expect(mockAxios).toHaveBeenCalledWith(
         expect.objectContaining({
           url: expect.stringContaining(
-            "from/emailAddress/address eq 'user@example.com'",
+            '$search="from:a@example.com OR from:b@example.com"',
           ),
         }),
       );

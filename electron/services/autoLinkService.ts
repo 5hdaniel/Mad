@@ -228,16 +228,20 @@ async function findEmailsByContactEmails(
     return [];
   }
 
-  // BACKLOG-1095: Exact matching for sender (single email), LIKE for recipients/cc (comma-separated).
+  // BACKLOG-1095: Exact matching for sender (single email), LIKE for recipients/cc/bcc (comma-separated).
+  // BACKLOG-1544/1549: bcc included so the user being BCC'd on a contact's email still links.
   const emailConditions = contactEmails
-    .map(() => "(LOWER(e.sender) = ? OR LOWER(e.recipients) LIKE ? OR LOWER(e.cc) LIKE ?)")
+    .map(
+      () =>
+        "(LOWER(e.sender) = ? OR LOWER(e.recipients) LIKE ? OR LOWER(e.cc) LIKE ? OR LOWER(e.bcc) LIKE ?)"
+    )
     .join(" OR ");
 
   const params: (string | number)[] = [userId, transactionId];
 
-  // BACKLOG-1095: exact match for sender, LIKE for recipients/cc
+  // BACKLOG-1095: exact match for sender, LIKE for recipients/cc/bcc
   for (const email of contactEmails) {
-    params.push(email, `%${email}%`, `%${email}%`);
+    params.push(email, `%${email}%`, `%${email}%`, `%${email}%`);
   }
 
   // Add date range
@@ -276,7 +280,7 @@ async function findEmailsByContactEmails(
   // Reorder params: transactionId for JOIN, userId for WHERE, then email patterns, then date range, then address
   const reorderedParams: (string | number)[] = [transactionId, userId];
   for (const email of contactEmails) {
-    reorderedParams.push(email, `%${email}%`, `%${email}%`);
+    reorderedParams.push(email, `%${email}%`, `%${email}%`, `%${email}%`);
   }
   reorderedParams.push(dateRange.start.toISOString());
   reorderedParams.push(dateRange.end.toISOString());

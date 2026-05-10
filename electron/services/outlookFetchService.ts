@@ -430,14 +430,17 @@ class OutlookFetchService {
         searchParam = `$search="${sanitized}"`;
         // No $filter allowed — dates will be filtered client-side
       } else if (hasContactFilter) {
-        // Contact filter via $filter (no text query)
+        // BACKLOG-1549: Use KQL $search="from:..." instead of OData
+        // `from/emailAddress/address eq` so the inbox query is case-insensitive
+        // and tokenizing — matches case variants, plus-aliases, and the address
+        // Graph actually stored. The sentItems path (searchSentEmailsToContacts)
+        // already uses KQL; this brings inbox into parity.
+        // Dates are filtered client-side because $search and $filter can't combine.
         const fromClauses = contactEmails!.map((email) => {
-          const escaped = email.replace(/'/g, "''");
-          return `from/emailAddress/address eq '${escaped}'`;
+          const sanitized = email.replace(/"/g, "").trim();
+          return `from:${sanitized}`;
         });
-        filters.push(`(${fromClauses.join(" or ")})`);
-        if (after) filters.push(`receivedDateTime ge ${after.toISOString()}`);
-        if (before) filters.push(`receivedDateTime le ${before.toISOString()}`);
+        searchParam = `$search="${fromClauses.join(" OR ")}"`;
       } else {
         // No search, no contacts — just date filter
         if (after) filters.push(`receivedDateTime ge ${after.toISOString()}`);

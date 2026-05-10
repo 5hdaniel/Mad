@@ -120,11 +120,19 @@ export function searchLocalEmailCache(userId: string, query: string, limit = 500
       e.has_attachments
     FROM emails e
     WHERE e.user_id = ?
-      AND (LOWER(e.subject) LIKE LOWER(?) OR LOWER(e.sender) LIKE LOWER(?) OR LOWER(e.body_plain) LIKE LOWER(?))
+      AND (
+        LOWER(e.subject) LIKE LOWER(?)
+        OR LOWER(e.sender) LIKE LOWER(?)
+        OR LOWER(e.body_plain) LIKE LOWER(?)
+        OR LOWER(e.recipients) LIKE LOWER(?)
+        OR LOWER(e.cc) LIKE LOWER(?)
+        OR LOWER(e.bcc) LIKE LOWER(?)
+      )
     ORDER BY e.sent_at DESC
     LIMIT ?
   `;
-  return db.prepare(sql).all(userId, pattern, pattern, pattern, limit) as Array<{
+  // BACKLOG-1550: search recipients/cc/bcc so to/cc/bcc-only matches surface in the cache fallback.
+  return db.prepare(sql).all(userId, pattern, pattern, pattern, pattern, pattern, pattern, limit) as Array<{
     id: string;
     subject: string | null;
     sender: string | null;

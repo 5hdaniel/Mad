@@ -240,9 +240,13 @@ export async function getCachedEmails(
     params.push(options.before.toISOString());
   }
   if (options?.query) {
-    conditions.push("(subject LIKE ? OR sender LIKE ? OR recipients LIKE ?)");
+    // BACKLOG-1550: search cc/bcc in addition to subject/sender/recipients so contacts
+    // who appear only on cc/bcc lines still match name/email searches in Attach Emails.
+    conditions.push(
+      "(subject LIKE ? OR sender LIKE ? OR recipients LIKE ? OR cc LIKE ? OR bcc LIKE ?)"
+    );
     const q = `%${options.query}%`;
-    params.push(q, q, q);
+    params.push(q, q, q, q, q);
   }
 
   const limit = options?.maxResults || 500;

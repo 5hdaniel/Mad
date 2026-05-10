@@ -437,6 +437,72 @@ describe("autoLinkService", () => {
       }
     });
 
+    // BACKLOG-1544/1549: bcc field included in the email-match clause so the user
+    // being BCC'd on a contact's email still links to the transaction.
+    describe("bcc/cc inclusion in email match (BACKLOG-1544/1549)", () => {
+      it("should include LOWER(e.bcc) LIKE ? in the email match condition", () => {
+        setupMocks({
+          contactExists: true,
+          emails: ["john@example.com"],
+          phones: [],
+          transactionExists: true,
+          foundEmailIds: ["email-1"],
+          foundMessageIds: [],
+        });
+
+        return autoLinkCommunicationsForContact({
+          contactId: mockContactId,
+          transactionId: mockTransactionId,
+        }).then(() => {
+          const emailQueryCall = mockDbAll.mock.calls.find(
+            (call) =>
+              typeof call[0] === "string" && call[0].includes("FROM emails e")
+          );
+          expect(emailQueryCall).toBeDefined();
+          const sql = emailQueryCall![0] as string;
+          expect(sql).toContain("LOWER(e.sender) = ?");
+          expect(sql).toContain("LOWER(e.recipients) LIKE ?");
+          expect(sql).toContain("LOWER(e.cc) LIKE ?");
+          expect(sql).toContain("LOWER(e.bcc) LIKE ?");
+        });
+      });
+
+      it("should push four params per contact email (sender, recipients, cc, bcc)", async () => {
+        setupMocks({
+          contactExists: true,
+          emails: ["a@example.com", "b@example.com"],
+          phones: [],
+          transactionExists: true,
+          foundEmailIds: [],
+          foundMessageIds: [],
+        });
+
+        await autoLinkCommunicationsForContact({
+          contactId: mockContactId,
+          transactionId: mockTransactionId,
+        });
+
+        const emailQueryCall = mockDbAll.mock.calls.find(
+          (call) =>
+            typeof call[0] === "string" && call[0].includes("FROM emails e")
+        );
+        expect(emailQueryCall).toBeDefined();
+        const params = emailQueryCall![1] as unknown[];
+        // Params layout: [transactionId, userId, ...per-email(4 each), startDate, endDate]
+        // For 2 emails: 2 fixed + 8 email patterns + 2 date params = 12 total
+        expect(params.length).toBe(12);
+        // Verify each contact email appears 4 times (sender exact + 3 LIKE patterns)
+        const aCount = params.filter(
+          (p) => p === "a@example.com" || p === "%a@example.com%"
+        ).length;
+        const bCount = params.filter(
+          (p) => p === "b@example.com" || p === "%b@example.com%"
+        ).length;
+        expect(aCount).toBe(4);
+        expect(bCount).toBe(4);
+      });
+    });
+
     // TASK-2087: Address-based filtering tests
     describe("address-based filtering", () => {
       it("should pass separate address parts to email query when transaction has property_address", async () => {
