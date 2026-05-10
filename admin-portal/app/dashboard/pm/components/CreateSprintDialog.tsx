@@ -16,7 +16,12 @@ import { createSprint } from '@/lib/pm-queries';
 interface CreateSprintDialogProps {
   open: boolean;
   onClose: () => void;
-  onCreated: () => void;
+  /**
+   * Called after the sprint was successfully created. Receives the newly
+   * created sprint's id so callers can auto-assign items, navigate, or
+   * update UI state without racing a re-list (BACKLOG-1668).
+   */
+  onCreated: (newSprintId: string) => void;
 }
 
 const INPUT_CLASS =
@@ -51,7 +56,7 @@ export function CreateSprintDialog({
     setError(null);
 
     try {
-      await createSprint(
+      const created = await createSprint(
         name,
         goal || null,
         null, // projectId
@@ -59,7 +64,7 @@ export function CreateSprintDialog({
         endDate || null
       );
       resetForm();
-      onCreated();
+      onCreated(created.id);
       onClose();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to create sprint');

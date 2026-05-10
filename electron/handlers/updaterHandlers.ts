@@ -35,6 +35,22 @@ export function registerUpdaterHandlers(mainWindow: BrowserWindow): void {
         return { updateAvailable: false, currentVersion: app.getVersion() };
       }
 
+      // macOS App Translocation: skip update check when running from a translocated
+      // path — Squirrel.Mac cannot write to the app bundle in this state
+      if (process.platform === "darwin" && process.execPath.includes("/AppTranslocation/")) {
+        logService.warn(
+          "App Translocation detected — update check skipped",
+          "UpdaterHandlers",
+          { execPath: process.execPath }
+        );
+        return {
+          updateAvailable: false,
+          currentVersion: app.getVersion(),
+          error: "Please move Keepr to your Applications folder to enable automatic updates.",
+          translocationDetected: true,
+        };
+      }
+
       // Race the update check against a 15-second timeout
       const timeoutMs = 15000;
       const result = await Promise.race([
@@ -59,6 +75,18 @@ export function registerUpdaterHandlers(mainWindow: BrowserWindow): void {
         "check_for_updates",
         error instanceof Error ? error.message : "Check failed"
       );
+
+      // macOS: Surface read-only volume errors as translocation guidance
+      const errMsg = error instanceof Error ? error.message.toLowerCase() : "";
+      if (process.platform === "darwin" && (errMsg.includes("read-only volume") || errMsg.includes("readonly"))) {
+        return {
+          updateAvailable: false,
+          currentVersion: app.getVersion(),
+          error: "Please move Keepr to your Applications folder to enable automatic updates.",
+          translocationDetected: true,
+        };
+      }
+
       return {
         updateAvailable: false,
         currentVersion: app.getVersion(),

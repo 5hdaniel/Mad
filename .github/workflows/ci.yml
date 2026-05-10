@@ -23,7 +23,7 @@ jobs:
       os-matrix: ${{ steps.os.outputs.os-matrix }}
     steps:
       - name: Checkout code
-        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
           fetch-depth: 0  # Fetch all history for proper branch comparison
 
@@ -113,7 +113,7 @@ jobs:
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
 
       - name: Setup Node.js ${{ matrix.node-version }}
         uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
@@ -156,14 +156,6 @@ jobs:
         env:
           NODE_OPTIONS: "--max-old-space-size=4096"
 
-      - name: Upload coverage to Codecov
-        if: matrix.os == 'macos-latest' && matrix.node-version == '20.x'
-        uses: codecov/codecov-action@ab904c41d6ece82784817410c45d8b8c02684457 # v3
-        with:
-          files: ./coverage/lcov.info
-          flags: unittests
-          name: codecov-umbrella
-
   build:
     name: Build Application
     runs-on: ${{ matrix.os }}
@@ -176,7 +168,7 @@ jobs:
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
 
       - name: Setup Node.js
         uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
@@ -218,7 +210,7 @@ jobs:
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
 
       - name: Setup Node.js
         uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
@@ -248,7 +240,7 @@ jobs:
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
 
       - name: Setup Node.js
         uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0

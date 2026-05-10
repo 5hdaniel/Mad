@@ -201,7 +201,10 @@ export default function SprintsPage() {
       <CreateSprintDialog
         open={showCreateDialog}
         onClose={() => setShowCreateDialog(false)}
-        onCreated={loadData}
+        onCreated={(newSprintId) => {
+          setShowCreateDialog(false);
+          router.push(`/dashboard/pm/sprints/${newSprintId}`);
+        }}
       />
     </div>
   );

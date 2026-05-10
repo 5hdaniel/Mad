@@ -131,5 +131,19 @@ export const updateBridge = {
     version?: string;
     currentVersion: string;
     error?: string;
+    translocationDetected?: boolean;
   }> => ipcRenderer.invoke("app:check-for-updates"),
+
+  /**
+   * Listens for macOS App Translocation detection.
+   * Fired when the app is running from a quarantined/translocated path
+   * and cannot auto-update. The user should move the app to /Applications.
+   * @param callback - Callback invoked when translocation is detected
+   * @returns Cleanup function
+   */
+  onTranslocationDetected: (callback: () => void) => {
+    const listener = () => callback();
+    ipcRenderer.on("app-translocation-detected", listener);
+    return () => ipcRenderer.removeListener("app-translocation-detected", listener);
+  },
 };

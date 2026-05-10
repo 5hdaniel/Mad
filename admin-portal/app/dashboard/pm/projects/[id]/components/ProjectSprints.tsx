@@ -18,7 +18,7 @@ import {
   Calendar,
   Info,
 } from 'lucide-react';
-import { assignToSprint, listSprints } from '@/lib/pm-queries';
+import { assignToSprint } from '@/lib/pm-queries';
 import type { PmProject, ItemStatus } from '@/lib/pm-types';
 import { STATUS_LABELS, STATUS_COLORS } from '@/lib/pm-types';
 import { DualProgressBar } from '../../../components/DualProgressBar';
@@ -87,29 +87,18 @@ export function InlineSprintCreate({
 
   // After CreateSprintDialog calls onCreated, it already closed itself.
   // We still need to (a) auto-assign the snapshot items to the new sprint
-  // (by diffing the sprint list) and (b) notify the parent page.
-  async function handleAfterCreate() {
+  // and (b) notify the parent page. As of BACKLOG-1668 the dialog passes
+  // the newly-created sprint's id directly, so we no longer rely on the
+  // "newest sprint by created_at" heuristic (which raced with concurrent
+  // creates).
+  async function handleAfterCreate(newSprintId: string) {
     if (pendingItemIds.length === 0) {
       onCreated();
       onAutoAssigned?.();
       return;
     }
     try {
-      // The sprint list RPC returns sprints ordered by creation (newest
-      // first); the newly-created sprint is the one whose id wasn't in our
-      // pre-snapshot. We don't snapshot before open, so instead we look at
-      // the most recently created non-deleted sprint. That's a best-effort
-      // heuristic — if an external create happened between snapshot and
-      // refresh it's still the newest so still correct.
-      const fresh = await listSprints();
-      const freshArr = Array.isArray(fresh) ? fresh : [];
-      const newest = [...freshArr].sort(
-        (a, b) =>
-          new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
-      )[0];
-      if (newest) {
-        await assignToSprint(pendingItemIds, newest.id);
-      }
+      await assignToSprint(pendingItemIds, newSprintId);
     } catch (err) {
       // Non-fatal: the sprint still exists; user can assign manually.
       console.error('Failed to auto-assign items to new sprint:', err);
