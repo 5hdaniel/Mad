@@ -50,8 +50,12 @@ const VALID_STATUSES = new Set<string>([
 /** Parse a structured swim-lane cell droppable id, or null if not a cell id. */
 export function parseSwimLaneCellId(overId: string): ParsedSwimLaneCell | null {
   if (!overId.startsWith('cell:')) return null;
+  // Key uses `[^:]+` (not `.*`) so that an embedded `:status=` inside a
+  // groupKey cannot confuse the parse. All current groupKeys (UUIDs,
+  // "No Project", "No Area", "Unassigned", area/assignee names) are colon-
+  // free; any id carrying a `:` in the key is malformed and returns null.
   const match = overId.match(
-    /^cell:dim=(project|area|assignee):key=(.*):status=([a-z_]+)$/
+    /^cell:dim=(project|area|assignee):key=([^:]+):status=([a-z_]+)$/
   );
   if (!match) return null;
   const [, dimension, groupKey, status] = match;
