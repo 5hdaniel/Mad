@@ -10,6 +10,7 @@ export default function UpdateNotification() {
   const [updateError, setUpdateError] = useState<string | null>(null);
   const [downloadProgress, setDownloadProgress] = useState(0);
   const [updateInfo, setUpdateInfo] = useState<UpdateInfo | null>(null);
+  const [translocationDetected, setTranslocationDetected] = useState(false);
   const [retrying, setRetrying] = useState(false);
 
   useEffect(() => {
@@ -52,6 +53,14 @@ export default function UpdateNotification() {
       if (cleanup) cleanups.push(cleanup);
     }
 
+    // macOS App Translocation: show guidance when app is not in /Applications
+    if (window.api?.update?.onTranslocationDetected) {
+      const cleanup = window.api.update.onTranslocationDetected(() => {
+        setTranslocationDetected(true);
+      });
+      if (cleanup) cleanups.push(cleanup);
+    }
+
     return () => {
       cleanups.forEach((fn) => fn());
     };
@@ -67,6 +76,10 @@ export default function UpdateNotification() {
     setUpdateDownloaded(false);
     setUpdateAvailable(false);
     setUpdateError(null);
+  };
+
+  const handleDismissTranslocation = () => {
+    setTranslocationDetected(false);
   };
 
   const handleRetry = async () => {
@@ -87,8 +100,30 @@ export default function UpdateNotification() {
     }
   };
 
-  // BACKLOG-1641: Error state — shown when download/verification fails
   // BACKLOG-610: Use z-[110] to ensure visibility above all modals and toasts (z-[100])
+
+  // macOS App Translocation warning — shown when app cannot auto-update
+  // Takes precedence over the generic error UI because it's actionable.
+  if (translocationDetected) {
+    return (
+      <div className="fixed bottom-4 right-4 bg-amber-500 text-white p-4 rounded-lg shadow-lg max-w-sm z-[110]">
+        <h3 className="font-bold text-lg mb-2">Updates Unavailable</h3>
+        <p className="text-sm mb-3">
+          Please move Keepr to your Applications folder to enable automatic
+          updates. macOS prevents updates when the app is run from a download
+          or temporary location.
+        </p>
+        <button
+          onClick={handleDismissTranslocation}
+          className="w-full px-4 py-2 bg-amber-600 text-white rounded hover:bg-amber-700 transition-colors"
+        >
+          Dismiss
+        </button>
+      </div>
+    );
+  }
+
+  // BACKLOG-1641: Error state — shown when download/verification fails
   if (updateError) {
     return (
       <div className="fixed bottom-4 right-4 bg-red-500 text-white p-4 rounded-lg shadow-lg max-w-sm z-[110]">
