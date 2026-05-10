@@ -968,9 +968,22 @@ function createWindow(): void {
     mainWindow.loadURL('app://./index.html');
 
     // Check for updates after window loads (only in production)
-    setTimeout(() => {
-      autoUpdater.checkForUpdates();
-    }, UPDATE_CHECK_DELAY);
+    // macOS App Translocation: When the app is run from a quarantined/translocated
+    // path (e.g., /private/var/folders/.../AppTranslocation/...), Squirrel.Mac cannot
+    // write to the app bundle, causing "Cannot update while running on a read-only volume".
+    // Detect this and skip auto-update, notifying the user to move to /Applications.
+    if (process.platform === "darwin" && process.execPath.includes("/AppTranslocation/")) {
+      log.warn("[AutoUpdater] App Translocation detected — skipping auto-update. Path:", process.execPath);
+      setTimeout(() => {
+        if (mainWindow && !mainWindow.isDestroyed()) {
+          mainWindow.webContents.send("app-translocation-detected");
+        }
+      }, UPDATE_CHECK_DELAY);
+    } else {
+      setTimeout(() => {
+        autoUpdater.checkForUpdates();
+      }, UPDATE_CHECK_DELAY);
+    }
   }
 }
 
@@ -1022,10 +1035,26 @@ app.whenReady().then(async () => {
       clearTimeout(downloadStallTimer);
       downloadStallTimer = null;
     }
-    // BACKLOG-1641: Forward error to renderer so UI can show error state
-    // instead of staying stuck at 100% progress forever
+
+    // macOS: Classify "read-only volume" errors as App Translocation issues
+    // and surface user-friendly guidance instead of a generic error.
+    // The translocation event takes precedence over the generic error so the
+    // renderer shows the actionable "move to Applications" UI instead of a
+    // raw error message.
+    const errMsg = err?.message?.toLowerCase() ?? "";
+    const isTranslocationError =
+      process.platform === "darwin" &&
+      (errMsg.includes("read-only volume") || errMsg.includes("readonly"));
+
     if (mainWindow && !mainWindow.isDestroyed()) {
-      mainWindow.webContents.send("update-error", sanitizedMessage);
+      if (isTranslocationError) {
+        log.warn("[AutoUpdater] Read-only volume error — likely App Translocation");
+        mainWindow.webContents.send("app-translocation-detected");
+      } else {
+        // BACKLOG-1641: Forward error to renderer so UI can show error state
+        // instead of staying stuck at 100% progress forever
+        mainWindow.webContents.send("update-error", sanitizedMessage);
+      }
     }
   });
 
