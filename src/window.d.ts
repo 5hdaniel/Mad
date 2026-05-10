@@ -73,7 +73,10 @@ interface ElectronAPI {
     version?: string;
     currentVersion: string;
     error?: string;
+    translocationDetected?: boolean;
   }>;
+  /** Fires when macOS App Translocation is detected (app not in /Applications) */
+  onTranslocationDetected: (callback: () => void) => () => void;
 
   // Outlook Integration
   outlookInitialize: () => Promise<{ success: boolean; error?: string }>;
