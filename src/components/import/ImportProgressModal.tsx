@@ -14,12 +14,14 @@
 
 import React, { useMemo } from "react";
 import { ResponsiveModal } from "../common/ResponsiveModal";
+// BACKLOG-2832: ONE definition of the progress phase (was spelled by hand 4x here).
+import type { ImportPhase } from "@electron/types/ipc/importPhase";
 
 /**
  * Progress state from the import service
  */
 export interface ImportProgressState {
-  phase: "querying" | "deleting" | "importing" | "attachments";
+  phase: ImportPhase;
   current: number;
   total: number;
   percent: number;
@@ -74,7 +76,7 @@ function calculateETA(
  * Get human-readable phase name
  */
 function getPhaseName(
-  phase: "querying" | "deleting" | "importing" | "attachments"
+  phase: ImportPhase
 ): string {
   switch (phase) {
     case "querying":
@@ -92,7 +94,7 @@ function getPhaseName(
  * Get phase-specific item label
  */
 function getItemLabel(
-  phase: "querying" | "deleting" | "importing" | "attachments"
+  phase: ImportPhase
 ): string {
   switch (phase) {
     case "querying":
@@ -110,7 +112,7 @@ function getItemLabel(
  * Get phase-specific progress bar color
  */
 function getPhaseColor(
-  phase: "querying" | "deleting" | "importing" | "attachments"
+  phase: ImportPhase
 ): string {
   switch (phase) {
     case "querying":

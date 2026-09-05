@@ -26,6 +26,9 @@ import {
   type CapFittingRange,
 } from "./ImportPlanDialog";
 import type { MessageImportPlanFacts } from "@electron/types/ipc/window-api-messages";
+// BACKLOG-2832: this local shape also omitted "querying", so the panel could
+// never name the phase it was actually in during the query pass.
+import type { ImportPhase } from "@electron/types/ipc/importPhase";
 import { usePlatform } from "../../contexts/PlatformContext";
 import { useSyncOrchestrator } from "../../hooks/useSyncOrchestrator";
 import { settingsService } from '../../services';
@@ -95,7 +98,7 @@ export function stripStaleCapClause(
 
 /** Import progress state for inline display */
 interface ImportProgressState {
-  phase: "deleting" | "attachments" | "importing";
+  phase: ImportPhase;
   current: number;
   total: number;
   percent: number;
