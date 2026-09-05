@@ -55,6 +55,21 @@ export function getSecretStore(): SecretStore {
 }
 
 /**
+ * Whether a host shell has installed a real implementation (BACKLOG-2962).
+ *
+ * The `instanceof` check deliberately lives HERE, in the module that owns the
+ * class, and not in the registry that calls it. `jest.isolateModules` creates a
+ * fresh module registry, and a class loaded twice produces two distinct
+ * constructors — an `instanceof` written across that boundary answers `false`
+ * for an object that is in fact an `UnavailableSecretStore`. Keeping the
+ * comparison next to the only `new UnavailableSecretStore()` sites means both
+ * sides always come from the same registry.
+ */
+export function isSecretStoreInstalled(): boolean {
+  return !(installed instanceof UnavailableSecretStore);
+}
+
+/**
  * A {@link SecretStore} that forwards each call to the installed
  * implementation at the moment of the call.
  *

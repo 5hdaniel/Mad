@@ -57,6 +57,19 @@ describe("core modules load without Electron (BACKLOG-2962)", () => {
     expect(() => loadWithoutElectron("../../services/tokenEncryptionService")).not.toThrow();
   });
 
+  it("secretStoreProvider loads with no Electron present", () => {
+    // BACKLOG-2962: the provider's own header claims it "imports no platform:
+    // it holds an interface". That claim shipped in PR #2487 with no control.
+    expect(() => loadWithoutElectron("../secretStoreProvider")).not.toThrow();
+  });
+
+  it("nativeCapabilities loads with no Electron present", () => {
+    // Same claim, same file-header wording, in the registry that both halves of
+    // the composition-root guard read. If it ever reaches the platform, the
+    // static guard's own dependency does.
+    expect(() => loadWithoutElectron("../nativeCapabilities")).not.toThrow();
+  });
+
   it("the probe itself is honest: a module that does import electron still fails", () => {
     // startupHealthCheck imports `dialog` and `app` — it is a SHELL module by nature and is
     // not claimed to be portable. It is here so that a broken probe (one that silently
