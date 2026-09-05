@@ -2223,7 +2223,14 @@ class EmailSyncService {
     // ones that finished. A duration is spent on every provider the run tried,
     // including one that failed halfway, so the connected set is what makes two
     // measurements comparable.
-    timedProviders = connectedProviders;
+    //
+    // COPIED, not aliased. `connectedProviders` is not mutated anywhere today
+    // (checked: its five references are all reads), but `rebuiltProviders` two
+    // lines below IS mutated in place and holds the narrowed set — so an edit
+    // that ever narrowed this array instead would silently change what the
+    // timing line means, with no test to catch it. The copy costs nothing and
+    // makes the snapshot the intent rather than a coincidence.
+    timedProviders = [...connectedProviders];
     // A provider joins this only when its ENTIRE fetch succeeded — the inbox
     // round AND the all-folders/all-labels round. A partial fetch must not
     // delete that provider's live rows; see `restrictForceSetToRebuiltProviders`.

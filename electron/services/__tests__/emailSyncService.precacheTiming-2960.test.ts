@@ -533,6 +533,37 @@ describe("BACKLOG-2960 — the counts on the line are the run's own", () => {
   });
 
   /**
+   * The providers reported are the ones the run WORKED, not the ones that
+   * FINISHED — asserted at the boundary where those two sets differ.
+   *
+   * A force run whose Outlook all-folders round fails keeps Outlook out of
+   * `rebuiltProviders` (a partial fetch must not license deleting Outlook's live
+   * rows — BACKLOG-2856), while Gmail completes. The run still spent its Outlook
+   * time. Reporting the narrowed set would make a slow half-failed run look like
+   * a fast single-provider one, which is exactly the confusion that would make a
+   * 3% comparison wrong.
+   *
+   * MUTATION: report `rebuiltProviders` instead of the connected set -> RED.
+   */
+  it("names every provider the run worked, not only those that finished", async () => {
+    seedEmail("live-1", "ext-1", "2026-03-01T10:00:00Z");
+    mockGetOAuthToken.mockImplementation(async (_u: string, provider: string) =>
+      provider === "microsoft" ? OUTLOOK_TOKEN : GMAIL_TOKEN,
+    );
+    mockGmailInit.mockResolvedValue(true);
+    // Not a network error, so the run continues instead of aborting — this is
+    // the "continuing" branch in the service, and it withholds the rebuilt mark.
+    mockOutlookSearchAll.mockRejectedValue(new Error("folder enumeration failed"));
+
+    const result = await emailSyncService.precacheEmails(USER, undefined, { force: true });
+
+    // The premise: the two sets really do differ on this run. Without this the
+    // assertion below could pass for the wrong reason.
+    expect(result.forceSwap?.providers).toEqual(["gmail"]);
+    expect(field(theTimingLine(), "providers")).toBe("outlook+gmail");
+  });
+
+  /**
    * With Sentry mocked down to two methods (see the mock's own note) the build
    * cannot be read, and the line must say "unknown" rather than omit the field
    * or throw. This is the guard in `resolvePrecacheBuild` under test.
