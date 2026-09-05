@@ -23,20 +23,25 @@
  *
  * WHAT IS **NOT** COVERED HERE, stated rather than implied
  * --------------------------------------------------------
- *   - What Electron's runtime DOES with a module-scope throw in the main
- *     process. No test in this repository launches Electron, so nothing here
- *     asserts it. It is nonetheless MEASURED, not traced: SR's review of
- *     PR #2515 ran the real Electron binary and observed stderr's `App threw an
- *     error during load`, then a modal error box naming the missing capability
- *     verbatim, and then a process that KEEPS RUNNING with no window until it
- *     is force-quit. There is no exit — non-zero or otherwise. The launch is
- *     stopped; the process is not. See `nativeCapabilities.ts` for the full
- *     sequence and why exiting is a separate decision.
+ *   - What the shell DOES with the throw. It no longer escapes: the
+ *     composition root catches it, shows an error box naming the capability
+ *     and calls `app.exit(1)`. That is asserted in
+ *     `electron/bootstrap/__tests__/installNativeCapabilities.startupFailure.test.ts`,
+ *     with `dialog` and `app` mocked — not here.
+ *   - What Electron's runtime does with a module-scope throw that DOES escape.
+ *     No test in this repository launches Electron. SR measured it on the real
+ *     binary for PR #2515 — stderr, then a late modal, then a process that kept
+ *     running windowless until force-quit — and that measurement is why the
+ *     catch exists. See `nativeCapabilities.ts` for the full sequence.
  *   - Whether the installed implementation works. That is
  *     `electron/capabilities/electron/__tests__/electronSecretStore.test.ts`.
- *   - `installAppDataPaths`, which has the same shape and no guard of any kind.
- *     It is a path override, not a capability behind an interface, so it is out
- *     of this registry's scope rather than covered by it.
+ *   - `installAppDataPaths`, which has the same shape. It is a path override,
+ *     not a capability behind an interface, so this RUNTIME layer still does
+ *     not cover it — but it is no longer unguarded: rule E2 in
+ *     `compositionRootGuard.test.ts`, fed by `REQUIRED_ENTRY_IMPORTS`, now
+ *     asserts `main.ts` imports it and that it stays the first statement.
+ *     Static only, deliberately; the measurements behind that choice are on
+ *     `REQUIRED_ENTRY_IMPORTS` in `../nativeCapabilities`.
  *   - The case where `main.ts` never imports the composition root: nothing here
  *     loads, so nothing here throws. That case is the STATIC guard's, and it is
  *     exactly the mutation SR found unguarded.
