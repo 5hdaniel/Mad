@@ -74,7 +74,6 @@ import { planEmailWrites, computeLegacyContentKey, type ExistingByMessageId } fr
 // the rebuild never touches the live table until one final transaction.
 import {
   buildEmailForceSet,
-  emailForceReadView,
   emailForceStagingLifecycle,
   restrictForceSetToRebuiltProviders,
   sweepStaleEmailStaging,
@@ -485,7 +484,10 @@ async function fetchStoreAndDedup(params: {
    * BACKLOG-2856: present only during a force re-cache. When set, this batch is
    * written into the run's STAGING tables and the live `emails` table is neither
    * written nor read on its own — every dedup read becomes "survivors of the
-   * pending swap ∪ what this run has staged so far" (`emailForceReadView`).
+   * pending swap ∪ what this run has staged so far"
+   * (`db/emailForceSetSql.ts`'s `emailForceReadView`, reached through
+   * `emailSyncSql.ts`'s `readSource` — the thin re-export that used to sit in
+   * `emailForceStaging.ts` was dead and was deleted by BACKLOG-3102 PR 2).
    *
    * Absent, every line below behaves exactly as it did before, which is the
    * property that keeps ordinary delta syncs out of this feature's blast radius.
@@ -507,7 +509,8 @@ async function fetchStoreAndDedup(params: {
   // live still holds the entire force set (that is the point of staging), so
   // every re-fetched row would match, be classified an already-cached duplicate,
   // and never be staged — staging would finish empty and the swap would delete
-  // the user's corpus and put nothing back. `emailForceReadView` substitutes
+  // the user's corpus and put nothing back. `db/emailForceSetSql.ts`'s
+  // `emailForceReadView` substitutes
   // "rows the swap will keep ∪ rows staged so far" for the table name.
   // BACKLOG-2989 chunk 4: what crosses into db/ is a DISCRIMINATED TARGET
   // carrying the branded staging names, never a pre-quoted identifier. The

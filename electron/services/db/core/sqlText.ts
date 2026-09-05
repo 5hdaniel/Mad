@@ -78,10 +78,23 @@
  *   true, and the sentence is corrected rather than deleted so the reader can see
  *   what changed.** That was Phase A. **BACKLOG-3085 (Phase B) converted 258 of the
  *   262 in-layer escapes**, so the tag is now the ordinary way a statement is
- *   written inside `db/**` and the escape is what it was named as. The counted
- *   escape stands at **135**: 131 outside the layer (BACKLOG-3044, unchanged) and 4
- *   inside it that CANNOT use the tag because they splice a value into SQL text
- *   (BACKLOG-3102).
+ *   written inside `db/**` and the escape is what it was named as.
+ *
+ *   **The counted escape now stands at ZERO, and this sentence has been wrong
+ *   twice — so here is what it counts.** It used to read "135: 131 outside the
+ *   layer and 4 inside it". The 131 went when BACKLOG-3044 finished moving those
+ *   statements into `db/`; the 4 went with BACKLOG-3102, which bound a row limit
+ *   (PR 1) and a provider list, and branded the staging identifier through
+ *   `core/identifierSql.ts` (PR 2). `__tests__/sqlText.escapeSet.test.ts`'s
+ *   `EXPECTED_ESCAPES` is empty and the ratchet is LOCKED there: a new
+ *   `unsafeSql` anywhere fails it by name.
+ *
+ *   **Zero escapes does NOT mean no unbranded SQL exists inside `db/`.** The two
+ *   raw-handle exits named above are still open, and statements built on the
+ *   handle they hand out never pass a conduit. What is zero is unbranded SQL
+ *   reaching the CONDUITS. `unsafeSql` stays exported at zero call sites on
+ *   purpose: it is the VISIBLE option, and removing it would push the next
+ *   engineer toward `as SafeSql`, which is invisible.
  * - **Fragments are branded by BODIED helpers, not by escapes.** `core/sqlFragments.ts`
  *   (placeholder lists, fragment joins) and `core/columnSql.ts` (every whitelisted
  *   column name, enumerated under a `satisfies`) are the shape
