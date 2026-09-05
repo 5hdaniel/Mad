@@ -297,6 +297,29 @@ describe("composition-root guard: must fire", () => {
     expect(rules(findings)).toEqual(["E2"]);
   });
 
+  it("E2 — a re-export chain through a barrel is rejected (the other known false reject)", () => {
+    // The header lists this beside the type-only case. Pinned rather than
+    // traced: on this item SR measured a shipped "traced, not tested" claim
+    // false, and an unpinned claim in a file whose next paragraph opens
+    // "Measured by SR's review" is the shape that goes stale first.
+    //
+    // `./bootstrap` resolves to `electron/bootstrap`, which is not
+    // `electron/bootstrap/installAppDataPaths`, so E2 reports it MISSING even
+    // if that barrel imports the override. Same one-hop resolution limit C1
+    // has: this rule reads one file and does not descend into another.
+    const findings = check({
+      entrySource: [
+        `import "./bootstrap";`,
+        `import "./bootstrap/installNativeCapabilities";`,
+        ``,
+      ].join("\n"),
+      requiredCalls: [],
+      requiredEntryImports: APP_DATA_IMPORT,
+    });
+    expect(rules(findings)).toEqual(["E2"]);
+    expect(findings[0].detail).toContain("electron/bootstrap/installAppDataPaths");
+  });
+
   it("E2 — a TYPE-ONLY import above it is rejected, although it is erased (a known false reject)", () => {
     // Pinned deliberately, so the next engineer meets this as DOCUMENTED
     // behaviour rather than as a surprise red on correct code. "First" is
