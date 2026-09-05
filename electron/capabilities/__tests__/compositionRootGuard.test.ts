@@ -16,11 +16,16 @@
  * the one mutation it was written against is a name-matcher, and this repo has
  * shipped seven of those.
  *
- * WHAT THIS FILE DOES NOT COVER is stated in full in
- * `tests/helpers/compositionRootStatic.ts`'s header — read it there rather than
- * inferring coverage from the case list below. In short: no re-exports, no
- * wrapper functions, no dynamic import, no default-import form, no ordering, no
- * bundler, and `installAppDataPaths` is out of scope rather than covered.
+ * WHAT THIS GUARD FALSELY REJECTS, AND WHAT IT LETS THROUGH, is stated in full
+ * in `tests/helpers/compositionRootStatic.ts`'s header — read it there rather
+ * than inferring coverage from the case list below. In short, per SR's
+ * five-refactor measurement on PR #2515: it FALSELY REJECTS cross-module
+ * indirection (a barrel re-export, or either call moved into a sibling
+ * module); it ACCEPTS a same-file wrapper (an earlier version of this comment
+ * wrongly listed "wrapper functions" as uncovered); and it LETS THROUGH a call
+ * that exists but never runs, a dynamic import, the default-import form, any
+ * call-shaped entry import, install order, and anything a bundler would catch.
+ * `installAppDataPaths` is out of scope rather than covered.
  */
 
 import * as fs from "fs";

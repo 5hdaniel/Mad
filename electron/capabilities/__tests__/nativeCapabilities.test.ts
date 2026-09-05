@@ -24,10 +24,14 @@
  * WHAT IS **NOT** COVERED HERE, stated rather than implied
  * --------------------------------------------------------
  *   - What Electron's runtime DOES with a module-scope throw in the main
- *     process (default crash dialog / non-zero exit). That is TRACED — the
- *     `uncaughtException` handler is registered after the import, so the app's
- *     own handler cannot reach it — but it is NOT tested here: no test in this
- *     repository launches Electron.
+ *     process. No test in this repository launches Electron, so nothing here
+ *     asserts it. It is nonetheless MEASURED, not traced: SR's review of
+ *     PR #2515 ran the real Electron binary and observed stderr's `App threw an
+ *     error during load`, then a modal error box naming the missing capability
+ *     verbatim, and then a process that KEEPS RUNNING with no window until it
+ *     is force-quit. There is no exit — non-zero or otherwise. The launch is
+ *     stopped; the process is not. See `nativeCapabilities.ts` for the full
+ *     sequence and why exiting is a separate decision.
  *   - Whether the installed implementation works. That is
  *     `electron/capabilities/electron/__tests__/electronSecretStore.test.ts`.
  *   - `installAppDataPaths`, which has the same shape and no guard of any kind.

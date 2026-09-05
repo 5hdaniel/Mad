@@ -40,12 +40,41 @@
  * nothing the parser would have accepted elsewhere. What E1 genuinely excludes
  * is every CALL form — see the "does not cover" list below.
  *
- * WHAT THIS DOES **NOT** COVER — no completeness claim beyond this list
- * ---------------------------------------------------------------------
- *   - Calls reached through a RE-EXPORT, a wrapper function, or a dynamic
- *     `await import()`. A composition root that calls
- *     `bootstrapEverything()`, which installs inside, satisfies nothing here
- *     and will be reported as missing.
+ * WHAT IT FALSELY REJECTS — correct code this guard reds on
+ * ---------------------------------------------------------
+ * Measured by SR's review of PR #2515, which ran five plausible refactors
+ * through `checkCompositionRoot` against the real registry. Three are rejected
+ * although they are correct code:
+ *
+ *   - a BARREL RE-EXPORT — `import { installSecretStore,
+ *     assertNativeCapabilitiesInstalled } from "../capabilities"` — rejects
+ *     both required calls;
+ *   - the ASSERT moved into a sibling module (e.g. `./verifyCapabilities`) —
+ *     rejects `the runtime self-check`;
+ *   - the INSTALL moved into a sibling module (e.g. `./installStores`) —
+ *     rejects `secretStore`.
+ *
+ * The common cause is CROSS-MODULE INDIRECTION: C1 resolves a callee one hop,
+ * to the module the composition root imports it from, and does not follow a
+ * re-export or descend into another file. No barrel exists today
+ * (`electron/capabilities/index.ts` is absent), so nothing is broken now — but
+ * the first engineer to add one meets a red guard on correct code, and a guard
+ * that reds on correct code is a guard people learn to delete. Naming the gap
+ * is what prevents that.
+ *
+ * NOTE, because an earlier version of this header got it backwards: a
+ * SAME-FILE wrapper — `function installAll() { installSecretStore(...) }` then
+ * `installAll()` — is ACCEPTED. `callsRequired` walks the whole tree with
+ * `forEachChild`, so a call nested inside a local function satisfies C1 just as
+ * the already-planted `try {}` case does. "Wrapper functions" was listed here
+ * as uncovered and is in fact covered.
+ *
+ * WHAT IT LETS THROUGH — no completeness claim beyond this list
+ * -------------------------------------------------------------
+ *   - An install call that EXISTS but never RUNS — inside a function nobody
+ *     invokes, or a branch never taken. C1 is a reachability floor, not a
+ *     control-flow proof. The RUNTIME layer is what catches this.
+ *   - Calls reached through a dynamic `await import()`.
  *   - `import installX from "..."` (default import). Named, aliased-named,
  *     namespace and `require()`-destructured forms are recognised; the default
  *     form is not, because no module in this tree default-exports an installer.

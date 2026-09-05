@@ -131,8 +131,34 @@ export class MissingNativeCapabilityError extends Error {
  * Called as the LAST statement of the composition root, so it runs during
  * `main.ts` module evaluation: before `app.whenReady()`, before the
  * `process.on("uncaughtException")` handler registered further down `main.ts`,
- * and therefore before `createWindow()`. A module-scope throw there stops the
- * process rather than becoming the silent unhandled rejection SR traced.
+ * and therefore before `createWindow()`.
+ *
+ * WHAT THAT THROW ACTUALLY DOES — MEASURED against this repo's own Electron
+ * binary by SR review of PR #2515 (probes A/B/C), not traced:
+ *
+ *   1. Electron installs exactly ONE default `uncaughtException` listener
+ *      before the main script loads, and it never calls `process.exit`. This
+ *      app's own handler is registered at `main.ts:259`, AFTER the import at
+ *      line 12, so the default handler is the only one in play.
+ *   2. stderr gets `App threw an error during load` plus the stack.
+ *   3. A modal error box appears — "A JavaScript error occurred in the main
+ *      process" — carrying the `MissingNativeCapabilityError` message
+ *      verbatim, capability named. It lags the throw by several seconds:
+ *      Electron's default handler reaches `dialog` via an async
+ *      `import("electron")`. Visually confirmed by screen capture.
+ *   4. The process then does NOT exit. It stays alive with no window, before
+ *      and after `OK` is clicked, until it is force-quit.
+ *
+ * So: THE LAUNCH IS STOPPED, THE PROCESS IS NOT. No window is created and no
+ * core code runs, and the user is told by name which capability is missing —
+ * which is the loud failure this guard is for. But an earlier version of this
+ * comment claimed the throw "stops the process", and that was false. Whether
+ * to exit non-zero instead is deliberately left alone here: `process.exit(1)`
+ * would suppress the dialog entirely, trading a loud failure for a silent one.
+ * That is a behaviour change with its own trap and belongs in its own item.
+ *
+ * Measured on macOS (darwin 24.6.0). The mechanism is platform-independent, so
+ * Windows is INFERRED, not measured.
  *
  * @param capabilities injected by tests so a dummy registry can be checked;
  *   production always uses {@link NATIVE_CAPABILITIES}.
