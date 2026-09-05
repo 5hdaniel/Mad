@@ -248,10 +248,22 @@ const OWNERS = {
   // `db/`. What remains is homogeneous and is item 5's class, not 2991's, and it
   // is 38 sites in 29 keys, enumerated with `--explain` rather than described:
   // 22 pragma (21 connection/maintenance + the interpolated `table_info`
-  // reflection), 9 prepare (7 static `sqlite_master` reflections + the two
-  // interpolated backup/restore column-list statements), and 7 `exec` of which 4
-  // replay text the database itself produced and so have no authored text to
-  // move. 22 + 9 + 7 = 38. BACKLOG-2992 is
+  // reflection), 9 prepare, and 7 `exec` of which 4 replay text the database
+  // itself produced and so have no authored text to move. 22 + 9 + 7 = 38.
+  //
+  // The 9 prepares, classified by the COOKED text of each statement rather than
+  // by the line its `.prepare(` sits on — three of them span lines, so a
+  // line-keyed reading misclassifies them:
+  //
+  //   6  sqlite_master reflection                  :655 :796 :800 :804 :824 :1054
+  //   1  PRAGMA reflection                         :1302  PRAGMA table_info(schema_version)
+  //   2  interpolated (backup/restore column list) :859 :867
+  //
+  // SIX sqlite_master, not seven. `:1302` is reflection prepared through PRAGMA,
+  // not through `sqlite_master`, and an earlier draft of this comment counted it
+  // in the wrong bucket. Both the class name and the count come from a run, not
+  // from the review prose this file has already been bitten by twice.
+  // BACKLOG-2992 is
   // `deferred` behind BACKLOG-2834/2836, and a deferred item is a legal
   // baseline owner — its own body already specifies exactly this model
   // ("visible, ratcheted, not silently excepted").

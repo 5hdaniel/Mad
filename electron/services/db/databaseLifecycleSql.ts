@@ -112,10 +112,27 @@ export const SCHEMA_VERSION_UPDATE_SQL = sql`UPDATE schema_version SET version =
  * key SR's independently built extractor named in the #2484 review — two
  * extractors, same identifier.
  *
- * The gate's own `text:a73cb4792d87` key is NOT that check. It hashes
- * whitespace-NORMALISED source (`sha256(src.replace(/\s+/g,' ').trim())`), so a
- * whitespace-only edit leaves it unchanged — which is exactly the difference a
- * move must not make. Do not cite the gate key as evidence of byte identity.
+ * The gate's own `text:a73cb4792d87` key is NOT that check, and the difference is
+ * narrower than "it ignores whitespace". What the gate builds is
+ * `hash12(normalize(node.getText(sf)))` (`check-sql-boundary.mjs:800`), where
+ * `normalize` is `s.replace(/\s+/g, " ").trim()` and `hash12` is the first 12 hex
+ * of a sha256. Two consequences, both measured on this statement rather than
+ * reasoned about:
+ *
+ *   - It keys on the SOURCE SLICE, quotes included — not on the value. Rewriting
+ *     `"…"` as a backtick template with byte-identical cooked text moves the key
+ *     (`a73cb4792d87` -> `f98f3d772978`). So it reacts to changes SQLite never sees.
+ *   - `normalize` collapses each existing RUN of whitespace to one space and trims
+ *     the ends. It is therefore blind to the AMOUNT of whitespace where whitespace
+ *     already is — an extra space, a newline plus indent, leading or trailing
+ *     padding all keep `a73cb4792d87`. It is NOT blind to whitespace generally:
+ *     adding a space where there was none (`type=` -> `type =`) gives
+ *     `066baf6fa1f0`, and removing one entirely gives `b42847a568d2`.
+ *
+ * That blind spot is the one a move has to worry about — reindenting a statement
+ * into a new file is exactly "the amount of whitespace where whitespace already
+ * is" — which is why the identity control above hashes the cooked value at full
+ * length instead. Do not cite the gate key as evidence of byte identity.
  *
  * No bound parameters: the table name is a constant of the schema, not an input.
  */
