@@ -232,29 +232,33 @@ export class MissingNativeCapabilityError extends Error {
  * `process.on("uncaughtException")` handler registered further down `main.ts`,
  * and therefore before `createWindow()`.
  *
- * WHAT THAT THROW ACTUALLY DOES — MEASURED against this repo's own Electron
- * binary by SR review of PR #2515 (probes A/B/C), not traced:
+ * WHO HANDLES THE THROW — the Electron shell's composition root does, now.
+ * `electron/bootstrap/installNativeCapabilities.ts` calls this inside a `try`
+ * and, on failure, shows an error box carrying the message below verbatim and
+ * then calls `app.exit(1)`. Read that file for the sequence; this module holds
+ * no platform and cannot do either thing itself.
+ *
+ * WHAT HAPPENED BEFORE THAT CATCH EXISTED — kept because it is why the catch
+ * exists, and because it is the only MEASURED account of an escaped throw.
+ * SR ran this repo's own Electron binary for PR #2515 (probes A/B/C):
  *
  *   1. Electron installs exactly ONE default `uncaughtException` listener
  *      before the main script loads, and it never calls `process.exit`. This
  *      app's own handler is registered at `main.ts:259`, AFTER the import at
- *      line 12, so the default handler is the only one in play.
- *   2. stderr gets `App threw an error during load` plus the stack.
- *   3. A modal error box appears — "A JavaScript error occurred in the main
+ *      line 12, so the default handler was the only one in play.
+ *   2. stderr got `App threw an error during load` plus the stack.
+ *   3. A modal error box appeared — "A JavaScript error occurred in the main
  *      process" — carrying the `MissingNativeCapabilityError` message
- *      verbatim, capability named. It lags the throw by several seconds:
+ *      verbatim, capability named. It lagged the throw by several seconds:
  *      Electron's default handler reaches `dialog` via an async
  *      `import("electron")`. Visually confirmed by screen capture.
- *   4. The process then does NOT exit. It stays alive with no window, before
- *      and after `OK` is clicked, until it is force-quit.
+ *   4. The process then did NOT exit. It stayed alive with no window, before
+ *      and after `OK` was clicked, until it was force-quit.
  *
- * So: THE LAUNCH IS STOPPED, THE PROCESS IS NOT. No window is created and no
- * core code runs, and the user is told by name which capability is missing —
- * which is the loud failure this guard is for. But an earlier version of this
- * comment claimed the throw "stops the process", and that was false. Whether
- * to exit non-zero instead is deliberately left alone here: `process.exit(1)`
- * would suppress the dialog entirely, trading a loud failure for a silent one.
- * That is a behaviour change with its own trap and belongs in its own item.
+ * So the launch was stopped and the process was not, which is the windowless
+ * hang the founder ruled against. The trap that shape teaches is still live and
+ * is why the catch orders its two statements the way it does: exiting FIRST
+ * would suppress the box entirely, trading a loud failure for a silent one.
  *
  * Measured on macOS (darwin 24.6.0). The mechanism is platform-independent, so
  * Windows is INFERRED, not measured.

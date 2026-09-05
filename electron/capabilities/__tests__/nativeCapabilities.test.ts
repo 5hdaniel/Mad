@@ -23,15 +23,16 @@
  *
  * WHAT IS **NOT** COVERED HERE, stated rather than implied
  * --------------------------------------------------------
- *   - What Electron's runtime DOES with a module-scope throw in the main
- *     process. No test in this repository launches Electron, so nothing here
- *     asserts it. It is nonetheless MEASURED, not traced: SR's review of
- *     PR #2515 ran the real Electron binary and observed stderr's `App threw an
- *     error during load`, then a modal error box naming the missing capability
- *     verbatim, and then a process that KEEPS RUNNING with no window until it
- *     is force-quit. There is no exit — non-zero or otherwise. The launch is
- *     stopped; the process is not. See `nativeCapabilities.ts` for the full
- *     sequence and why exiting is a separate decision.
+ *   - What the shell DOES with the throw. It no longer escapes: the
+ *     composition root catches it, shows an error box naming the capability
+ *     and calls `app.exit(1)`. That is asserted in
+ *     `electron/bootstrap/__tests__/installNativeCapabilities.startupFailure.test.ts`,
+ *     with `dialog` and `app` mocked — not here.
+ *   - What Electron's runtime does with a module-scope throw that DOES escape.
+ *     No test in this repository launches Electron. SR measured it on the real
+ *     binary for PR #2515 — stderr, then a late modal, then a process that kept
+ *     running windowless until force-quit — and that measurement is why the
+ *     catch exists. See `nativeCapabilities.ts` for the full sequence.
  *   - Whether the installed implementation works. That is
  *     `electron/capabilities/electron/__tests__/electronSecretStore.test.ts`.
  *   - `installAppDataPaths`, which has the same shape. It is a path override,

@@ -46,8 +46,12 @@
  * All of that was MEASURED on this repo's own Electron binary by SR's review of
  * PR #2515 (probes A, B and C), not traced.
  *
- * Now nothing escapes this module, so neither handler is involved and the
- * behaviour does not depend on how much of `main.ts` has evaluated. That is
+ * The assertion's throw no longer escapes, so neither handler is involved and
+ * the behaviour does not depend on how much of `main.ts` has evaluated. Only
+ * the assertion's: `installSecretStore(new ElectronSecretStore())` sits outside
+ * the `try` deliberately, because a constructor that throws is a different
+ * failure with a different message, and swallowing it into this box would
+ * mislabel it. That is
  * also why the handling lives here rather than in `main.ts`: a TypeScript
  * `import` statement cannot be wrapped in `try`/`catch`, so catching there
  * would mean rewriting `main.ts:12` as a `require()` call — which rule E1 does
