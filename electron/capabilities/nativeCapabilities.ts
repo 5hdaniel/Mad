@@ -16,12 +16,19 @@
  *
  * THE TWO LAYERS, AND WHY NEITHER IS ENOUGH ALONE
  * ------------------------------------------------
- * | mutation                                              | static | runtime |
- * |-------------------------------------------------------|--------|---------|
- * | `main.ts`'s import of the composition root deleted     | RED    | green   |
- * | an install call deleted from the composition root      | RED    | RED     |
- * | install call present but installs nothing at runtime   | green  | RED     |
- * | a capability registered here with no installer         | RED    | RED     |
+ * | mutation                                                | static | runtime |
+ * |---------------------------------------------------------|--------|---------|
+ * | `main.ts`'s import of the composition root deleted       | RED    | green   |
+ * | an install call deleted from the composition root        | RED    | RED     |
+ * | install call present but installs nothing at runtime     | green  | RED     |
+ * | a capability registered here with no installer           | RED    | RED     |
+ * | `main.ts`'s import of the app-data override deleted      | RED    | n/a     |
+ * | that import moved out of first position                  | RED    | n/a     |
+ *
+ * The last two rows are {@link REQUIRED_ENTRY_IMPORTS}, added by the follow-up
+ * PR to this one. Their runtime column is `n/a`, not `green`: no runtime layer
+ * was built for them, and the reason is recorded on that list rather than left
+ * for the next reader to guess.
  *
  * The static layer is `electron/capabilities/__tests__/compositionRootGuard.test.ts`;
  * it reads {@link NATIVE_CAPABILITIES} and matches each `installFunction` in the
@@ -86,6 +93,98 @@ export const COMPOSITION_ROOT = "electron/bootstrap/installNativeCapabilities";
 
 /** Repo-relative path of the Electron shell's entry module. */
 export const SHELL_ENTRY = "electron/main.ts";
+
+/**
+ * A module the shell's ENTRY imports for its side effect, in its own right.
+ *
+ * Not a capability: nothing installs an implementation, no core module depends
+ * on an interface it satisfies, and there is no `isInstalled()` to call. It is
+ * a bootstrap step the entry performs before the rest of the entry runs — the
+ * composition root is the other one, and it is deliberately NOT on this list
+ * (see {@link REQUIRED_ENTRY_IMPORTS}).
+ */
+export interface RequiredEntryImport {
+  /** Name used in guard failures. A description, not an identifier. */
+  readonly name: string;
+  /**
+   * Repo-relative, extensionless, POSIX-separated path of the module the entry
+   * must import. RESOLVED from the entry's specifier, not string-compared, so
+   * any spelling that resolves here satisfies the rule.
+   */
+  readonly module: string;
+  /**
+   * True when the import must be the entry's FIRST statement, not merely
+   * present. Only set this where a comment in the entry already says so and
+   * gives the reason — the rule exists to keep that comment enforceable, not to
+   * impose a house style.
+   */
+  readonly mustBeFirstStatement: boolean;
+  /** Why the entry needs it, quoted into the guard's failure message. */
+  readonly why: string;
+}
+
+/**
+ * Side-effect imports `electron/main.ts` must make, beyond the composition root.
+ *
+ * WHY THIS LIST EXISTS SEPARATELY FROM THE COMPOSITION ROOT'S RULE
+ * ----------------------------------------------------------------
+ * Reviewing PR #2515, SR ran the same mutation one line up: delete
+ * `electron/main.ts:6` — `import "./bootstrap/installAppDataPaths";` — and
+ * NOTHING went red. Re-measured at `b2cc5cbf7` before this list was written:
+ * 10 affected suites / 160 tests identically green, `tsc -p
+ * tsconfig.electron.json` exit 0. Same hazard class as the composition root's,
+ * one line apart, and the composition root's rule could not express it:
+ *
+ *   - There is no install function to match. C1 matches a CALL the composition
+ *     root makes; this module is imported by the ENTRY and calls nothing out.
+ *   - Its contract is STRICTER, not looser. The composition root's E1
+ *     deliberately asserts no ordering, because a top-level import runs before
+ *     `ready` whatever its statement index. `installAppDataPaths` must run
+ *     before `app.requestSingleInstanceLock()` writes inside userData and
+ *     before the first `electron-log` write picks a path — so for this one,
+ *     position IS the contract, and `main.ts:1-5` says so in prose. This list
+ *     makes that prose enforceable.
+ *
+ * The composition root is not listed here on purpose. It is covered by E1 with
+ * different (ordering-free) semantics, and listing it twice would red two tests
+ * for one mutation — which says less about what broke than one precisely-named
+ * failure does.
+ *
+ * WHY THERE IS NO RUNTIME LAYER FOR THIS ONE
+ * ------------------------------------------
+ * Both reasons were measured, not traced, while this list was written:
+ *
+ *   1. The hazard is development-only. In a packaged build with no
+ *      `KEEPR_USER_DATA_DIR`, `applyAppDataPaths()` returns `null` and the
+ *      module is a no-op — deleting its import changes nothing a shipped user
+ *      sees. What it costs is a developer machine writing to the founder's real
+ *      database, which is the BACKLOG-2709 incident. That exposure is
+ *      repo-visible, and the static layer is where repo-visible defects belong.
+ *   2. A hard ordering assert in the composition root reds two currently-green
+ *      tests. Adding a `hasRunAppDataPaths()` predicate and throwing on it in
+ *      `installNativeCapabilities.ts` took `nativeCapabilities.test.ts` to
+ *      2 failed / 9 passed of 11: `loads without throwing and leaves an
+ *      ElectronSecretStore installed` and `the outer registry is untouched by
+ *      the isolate`. Both load the real composition root inside
+ *      `jest.isolateModules`, where the bootstrap module has not run. Making
+ *      them pass would need real `fs.mkdirSync` side effects inside an isolate,
+ *      or a test-only escape hatch in the guard. Both are worse than the gap.
+ *
+ * So this one is single-layer, and says so, rather than claiming a second layer
+ * it does not have.
+ */
+export const REQUIRED_ENTRY_IMPORTS: readonly RequiredEntryImport[] = [
+  {
+    name: "the app-data path override",
+    module: "electron/bootstrap/installAppDataPaths",
+    mustBeFirstStatement: true,
+    why:
+      "it repoints userData before `app.requestSingleInstanceLock()` writes " +
+      "SingletonLock inside it and before the first electron-log write picks a " +
+      "log path, so a dev launch cannot open the installed app's database " +
+      "(BACKLOG-2709)",
+  },
+];
 
 /**
  * Calls the composition root must make BEYOND installing each capability.

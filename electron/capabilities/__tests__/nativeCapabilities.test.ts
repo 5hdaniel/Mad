@@ -34,9 +34,13 @@
  *     sequence and why exiting is a separate decision.
  *   - Whether the installed implementation works. That is
  *     `electron/capabilities/electron/__tests__/electronSecretStore.test.ts`.
- *   - `installAppDataPaths`, which has the same shape and no guard of any kind.
- *     It is a path override, not a capability behind an interface, so it is out
- *     of this registry's scope rather than covered by it.
+ *   - `installAppDataPaths`, which has the same shape. It is a path override,
+ *     not a capability behind an interface, so this RUNTIME layer still does
+ *     not cover it — but it is no longer unguarded: rule E2 in
+ *     `compositionRootGuard.test.ts`, fed by `REQUIRED_ENTRY_IMPORTS`, now
+ *     asserts `main.ts` imports it and that it stays the first statement.
+ *     Static only, deliberately; the measurements behind that choice are on
+ *     `REQUIRED_ENTRY_IMPORTS` in `../nativeCapabilities`.
  *   - The case where `main.ts` never imports the composition root: nothing here
  *     loads, so nothing here throws. That case is the STATIC guard's, and it is
  *     exactly the mutation SR found unguarded.
