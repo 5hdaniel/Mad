@@ -20,7 +20,7 @@ import type {
   TransactionId,
 } from "../../types/ids";
 import { dbGet, dbAll, dbRun } from "./core/dbConnection";
-import { sql, unsafeSql } from "./core/sqlText";
+import { sql } from "./core/sqlText";
 import { validateFields, type ColumnOf } from "../../utils/sqlFieldWhitelist";
 import { isTextMessage } from "../../utils/channelHelpers";
 import { dbTimestampNow } from "../../utils/dbTimestamp";
@@ -776,13 +776,7 @@ export async function getCommunicationsWithMessages(
   //
   // NOTE: The return type Communication is aliased to Message for backward compatibility.
   // The SELECT populates Message fields from JOINs to messages/emails tables.
-  // BACKLOG-3102 — NOT CONVERTED, and the escape is the record of why.
-  // `LIMIT ${Number(limit)}` below splices a NUMBER into SQL text. That is
-  // BACKLOG-3062's shape exactly, and the `sql` tag refuses it — correctly.
-  // Rewriting it (`LIMIT ?`, with the value bound) is a real fix and a real
-  // behaviour change, so it does NOT belong inside a byte-identical
-  // conversion. Filed, owned, and left visible rather than escaped past.
-  const statement = unsafeSql(`
+  const statement = sql`
     SELECT
       -- Use content table ID when available, fall back to communication ID
       COALESCE(m.id, e.id, c.id) as id,
@@ -865,13 +859,30 @@ export async function getCommunicationsWithMessages(
       tn.thread_id = m.thread_id AND tn.user_id = m.user_id
     )
     WHERE c.transaction_id = ?
-    ${channelFilter === "email" ? "AND c.email_id IS NOT NULL" : ""}
-    ${channelFilter === "text" ? "AND c.email_id IS NULL" : ""}
+    ${channelFilter === "email" ? sql`AND c.email_id IS NOT NULL` : sql``}
+    ${channelFilter === "text" ? sql`AND c.email_id IS NULL` : sql``}
     ORDER BY COALESCE(m.sent_at, e.sent_at) DESC
-    ${limit ? `LIMIT ${Number(limit)}` : ""}
-  `);
+    ${limit ? sql`LIMIT ?` : sql``}
+  `;
 
-  const results = dbAll<Communication>(statement, [transactionId]);
+  // BACKLOG-3102: the clause is emitted on TRUTHINESS, not on `!== undefined`,
+  // and that is load-bearing rather than sloppy. The spliced form this replaces
+  // was `${limit ? `LIMIT ${Number(limit)}` : ""}`, so a caller passing 0 got NO
+  // LIMIT CLAUSE and every row. Binding on `limit !== undefined` would emit
+  // `LIMIT ?` with 0 bound and return NOTHING — a silent, total loss of the
+  // result set. `communicationDbService.rowLimit-3102.test.ts` pins that
+  // boundary; the naive predicate fails it and nothing else in the suite.
+  //
+  // `Number(limit)` is kept for the same reason: the spliced text coerced, so a
+  // stringy value has always reached SQLite as a number. Pushing `limit` raw
+  // would bind TEXT and change the type SQLite has been receiving.
+  //
+  // The two conditions must stay the SAME predicate — one decides whether the
+  // placeholder exists, the other whether a parameter is supplied for it.
+  const params: unknown[] = [transactionId];
+  if (limit) params.push(Number(limit));
+
+  const results = dbAll<Communication>(statement, params);
 
   // Deduplicate by message ID first
   const seenIds = new Set<string>();
