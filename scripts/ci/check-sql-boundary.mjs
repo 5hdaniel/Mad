@@ -233,7 +233,45 @@ const DECLARED_EXCEPTIONS = [
  * and the gate rejects a baseline containing one.
  */
 const OWNERS = {
-  "electron/services/databaseService.ts": "BACKLOG-2991",
+  // BACKLOG-2992, re-owned FROM BACKLOG-2991 — the commit that makes the work
+  // someone else's is the commit that moves the ownership. SR's D2, review
+  // addendum on BACKLOG-2991, accepted by the PM.
+  //
+  // This line is what `--update-baseline` reads. Leaving it at 2991 while the
+  // 29 JSON rows say 2992 would let the next regeneration by anyone silently
+  // re-own all 38 sites back to a closed item, and the JSON edit would read as
+  // the thing that had been undone.
+  //
+  // 2991 moved everything it should: the seven sites of PR #2484 plus the
+  // `schema_version` table probe (4 sites, key `text:a73cb4792d87`) that SR
+  // found half-moved — it was the guard for a statement already living in
+  // `db/`. What remains is homogeneous and is item 5's class, not 2991's, and it
+  // is 38 sites in 29 keys, enumerated with `--explain` rather than described:
+  // 22 pragma (21 connection/maintenance + the interpolated `table_info`
+  // reflection), 9 prepare, and 7 `exec` of which 4 replay text the database
+  // itself produced and so have no authored text to move. 22 + 9 + 7 = 38.
+  //
+  // The 9 prepares, classified by the COOKED text of each statement rather than
+  // by the line its `.prepare(` sits on — three of them span lines, so a
+  // line-keyed reading misclassifies them:
+  //
+  //   6  sqlite_master reflection                  :655 :796 :800 :804 :824 :1054
+  //   1  PRAGMA reflection                         :1302  PRAGMA table_info(schema_version)
+  //   2  interpolated (backup/restore column list) :859 :867
+  //
+  // SIX sqlite_master, not seven. `:1302` is reflection prepared through PRAGMA,
+  // not through `sqlite_master`, and an earlier draft of this comment counted it
+  // in the wrong bucket. Both the class name and the count come from a run, not
+  // from the review prose this file has already been bitten by twice.
+  // BACKLOG-2992 is
+  // `deferred` behind BACKLOG-2834/2836, and a deferred item is a legal
+  // baseline owner — its own body already specifies exactly this model
+  // ("visible, ratcheted, not silently excepted").
+  //
+  // File-granular is the right granularity HERE because the file is now
+  // homogeneous by owner. Per-entry ownership stays the right general fix and
+  // is not needed for these 29 keys.
+  "electron/services/databaseService.ts": "BACKLOG-2992",
   // BACKLOG-3062, re-owned by BACKLOG-2990 chunk 5 — the commit that made the
   // work someone else's is the commit that moves the ownership.
   //
