@@ -2788,10 +2788,15 @@ class EmailSyncService {
 
       // BACKLOG-2960 — THE ONE TIMING LINE, on every exit path, emitted FIRST.
       //
-      // First, so the measured span ends where the user's wait ends: the staging
-      // drop below runs only on the paths that did not swap, and folding it into
-      // the number would make an error run look slower than the success run it
-      // is meant to be compared against.
+      // First, so the staging drop below is outside the measured span. That drop
+      // runs on EVERY exit path, success included: it is gated on whether a
+      // force run created staging, not on how the run ended, and
+      // `swapEmailStagingIntoLive` does not drop the tables itself — it copies
+      // out of them and returns, so on a successful force run they still hold
+      // the whole corpus when the drop reaches them. Excluding it keeps ~44 ms
+      // at 33,637 emails (measured on the real driver — SR review, pm_comments
+      // `f18e9103` §2) out of the number, identically on both sides of the
+      // before/after comparison. The founder does wait through it.
       //
       // Wrapped, because an instrument must never be the reason a re-cache
       // fails. An unguarded throw here would skip `forceStaging.drop()` and leak
