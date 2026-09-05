@@ -207,16 +207,50 @@ describe("BACKLOG-3102 — the row limit, swept across its boundary", () => {
    * `number`, so the cast is deliberate: it exercises the path a caller with
    * an unvalidated payload would take.
    *
-   * WHAT THIS DOES NOT PROVE, stated because the obvious reading is wrong:
-   * removing `Number()` and binding `limit` raw leaves this case GREEN.
-   * SQLite converts the TEXT '3' to 3 for LIMIT without loss, so no input this
-   * suite sweeps can tell the two apart. `Number()` is retained because it
-   * preserves exactly what the spliced text did, NOT because a test here
-   * discriminates it. Finding an input that does (`'1e1'`, say) would mean
-   * inventing a contract for garbage nobody has specified.
+   * This case alone does NOT justify keeping `Number()`: drop it, bind `limit`
+   * raw, and this stays green. SQLite converts the TEXT '3' to 3 for LIMIT
+   * without loss. The case below is the one that discriminates.
    */
   it("a stringy limit behaves as it did before the conversion", async () => {
     const stringy = "3" as unknown as number;
     expect(await idsFor(stringy)).toEqual(NEWEST_FIRST.slice(0, 3));
+  });
+
+  /**
+   * `Number()` IS load-bearing, and the reason is not the coercion of `'3'`.
+   *
+   * No input **of the declared type `number`** separates `Number(limit)` from a
+   * raw bind. Two out-of-type TRUTHY inputs do, measured on the real driver:
+   *
+   *     true     ->  Number(): binds as 1, returns rows
+   *                  raw:      THROWS "SQLite3 can only bind numbers, strings,
+   *                                    bigints, buffers, and null"
+   *     "0x2"    ->  Number(): binds as 2, returns rows
+   *                  raw:      THROWS "datatype mismatch"
+   *
+   * `'1e1'` does NOT discriminate — both forms return every row, because
+   * SQLite's own text-to-numeric conversion reaches 10 exactly as `Number()`
+   * does. An earlier version of this comment named it as the discriminator and
+   * was wrong; the two above were measured, it was not.
+   *
+   * So dropping `Number()` converts a RETURNED RESULT into an EXCEPTION for
+   * inputs the shipped code accepted. That is a behaviour change, not a
+   * simplification.
+   *
+   * WHAT THIS ASSERTS, and what it deliberately does not: only that the call
+   * COMPLETES — that `Number()` leaves every truthy input in a shape the driver
+   * can bind. It does NOT pin what `true` or `"0x2"` should mean as a row
+   * limit. Pinning that would invent a contract for values outside the declared
+   * type, which nobody has specified and nobody should rely on. This is a guard
+   * on the implementation, in the same spirit as the escape ratchet — not a
+   * product rule about booleans.
+   */
+  it("Number() keeps out-of-type truthy inputs BINDABLE — drop it and these throw", async () => {
+    for (const outOfType of [true, "0x2"] as unknown[]) {
+      // Awaited bare on purpose: without Number() this REJECTS, and the red
+      // carries the driver's own message rather than a matcher's paraphrase.
+      const rows = await idsFor(outOfType as number);
+      expect(Array.isArray(rows)).toBe(true);
+    }
   });
 });
