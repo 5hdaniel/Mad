@@ -26,14 +26,19 @@
  * Every one of those is a planted control in
  * `electron/capabilities/__tests__/compositionRootGuard.test.ts`.
  *
- * WHY E1 ASSERTS "TOP-LEVEL" AND NOT AN ORDERING
- * ----------------------------------------------
+ * WHY E1 ASSERTS NO ORDERING
+ * --------------------------
  * A top-level import executes during the entry module's evaluation, which
  * completes before Electron's `ready` event fires — so the composition root
  * runs before `createWindow()` whatever its statement index. Statement ORDER is
  * therefore not what makes that true, and asserting an order would forbid
- * rearrangements that are perfectly valid. What top-level buys is that the
- * import cannot be hidden inside a function or a conditional that never runs.
+ * rearrangements that are perfectly valid.
+ *
+ * E1 walks `sourceFile.statements` rather than the whole tree, but that buys
+ * less than it looks like: TypeScript's grammar already forbids an
+ * `ImportDeclaration` inside a function or a block, so the restriction excludes
+ * nothing the parser would have accepted elsewhere. What E1 genuinely excludes
+ * is every CALL form — see the "does not cover" list below.
  *
  * WHAT THIS DOES **NOT** COVER — no completeness claim beyond this list
  * ---------------------------------------------------------------------
@@ -44,6 +49,12 @@
  *   - `import installX from "..."` (default import). Named, aliased-named,
  *     namespace and `require()`-destructured forms are recognised; the default
  *     form is not, because no module in this tree default-exports an installer.
+ *   - Any CALL-shaped entry import. E1 recognises `import "..."` and
+ *     `import x = require("...")` only. A top-level `require("./bootstrap/…")`
+ *     statement — valid in this tree's CommonJS emit — or a dynamic
+ *     `import("./bootstrap/…")` is reported as MISSING, not accepted. That is
+ *     conservative in the safe direction (it over-reports), but it is a false
+ *     positive waiting for anyone who rewrites `main.ts` in that style.
  *   - Install ORDER, between capabilities or between bootstrap modules.
  *   - Whether the installed implementation WORKS. That is
  *     `electron/capabilities/electron/__tests__/electronSecretStore.test.ts`.

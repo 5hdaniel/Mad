@@ -138,7 +138,7 @@ describe("composition-root guard: must fire", () => {
     expect(findings[0].detail).toContain(COMPOSITION_ROOT);
   });
 
-  it("E1 — the import is present but hidden inside a function, so it may never run", () => {
+  it("E1 — a dynamic import() is not recognised, at any position (a conservative false positive, documented)", () => {
     const findings = check({
       entrySource: [
         `function lazyBoot() {`,
