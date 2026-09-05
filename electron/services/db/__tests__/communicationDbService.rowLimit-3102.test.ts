@@ -34,19 +34,22 @@
  * fail under the naive bind. The rest of the suite passes without them.
  *
  * ===========================================================================
- * REACHABILITY — STATED, BECAUSE THE RULING OVERSTATED IT
+ * WHY PIN A PARAMETER NOTHING PASSES
  * ===========================================================================
- * The SR ruling (F2) called `limit = 0` reachable from the renderer. Measured
- * at `c3d9b6f3e`, it is NOT: `transactionCrudHandlers.ts:249` and `:301`
- * forward no third argument, `preload/transactionBridge.ts:129` and `:143`
- * send none, and `types/database.ts:152` declares a one-parameter signature.
- * No production call site passes a limit at all.
+ * Measured when this suite was written: NO production call site supplies a
+ * limit. The `transactions:get-details` and `transactions:get-communications`
+ * handlers forward only the transaction id (and the channel filter), the
+ * preload bridge sends no third argument to either channel, and the
+ * `DatabaseService` interface declares `getCommunicationsByTransaction` with a
+ * single parameter. So the boundary is LATENT, not live.
  *
- * The boundary is therefore LATENT, not live — and that is precisely why it is
- * pinned here rather than left to the next caller to discover. There is no IPC
- * payload to transcribe; the producer of this value is the exported signature
- * `limit?: number` on `getCommunicationsWithMessages` itself, which is what
- * these cases call.
+ * That is the reason to pin it, not a reason to skip it: the next caller to
+ * pass a limit inherits whatever this function does with 0, and by then the
+ * truthiness test will look like an accident someone should tidy up.
+ *
+ * It also means there is no IPC payload to transcribe as a fixture. The
+ * producer of this value is the exported signature `limit?: number` on
+ * `getCommunicationsWithMessages` itself, which is what these cases call.
  */
 
 // eslint-disable-next-line @typescript-eslint/no-require-imports
@@ -197,16 +200,22 @@ describe("BACKLOG-3102 — the row limit, swept across its boundary", () => {
   });
 
   /**
-   * The `Number()` coercion is load-bearing and must survive the conversion.
+   * A stringy limit behaves the same after the conversion as before it.
    *
-   * The shipped text was `LIMIT ${Number(limit)}`, so a stringy value was
-   * already normalised to a number before it reached SQLite. Binding `limit`
-   * RAW instead of `Number(limit)` would bind TEXT and hand SQLite a different
-   * type than it has been getting. The parameter is typed `number`, so the
-   * cast here is deliberate: it exercises the coercion the production code
-   * performs, which is the only reason that coercion is still in the diff.
+   * The shipped text was `LIMIT ${Number(limit)}` — it COERCED — so this case
+   * exists to show the conversion did not drop that. The parameter is typed
+   * `number`, so the cast is deliberate: it exercises the path a caller with
+   * an unvalidated payload would take.
+   *
+   * WHAT THIS DOES NOT PROVE, stated because the obvious reading is wrong:
+   * removing `Number()` and binding `limit` raw leaves this case GREEN.
+   * SQLite converts the TEXT '3' to 3 for LIMIT without loss, so no input this
+   * suite sweeps can tell the two apart. `Number()` is retained because it
+   * preserves exactly what the spliced text did, NOT because a test here
+   * discriminates it. Finding an input that does (`'1e1'`, say) would mean
+   * inventing a contract for garbage nobody has specified.
    */
-  it("coerces a stringy limit, exactly as the spliced Number() did", async () => {
+  it("a stringy limit behaves as it did before the conversion", async () => {
     const stringy = "3" as unknown as number;
     expect(await idsFor(stringy)).toEqual(NEWEST_FIRST.slice(0, 3));
   });
