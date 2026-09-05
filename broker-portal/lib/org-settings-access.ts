@@ -19,11 +19,11 @@ import { isFeatureEnabledFailClosed } from '@/lib/feature-gate';
 import { SCIM_FEATURE_KEY } from '@/lib/scim-access';
 import { JIT_FEATURE_KEY } from '@/lib/jit-access';
 import {
-  fetchBuiltFeatureKeys,
+  fetchFeatureBuildStates,
   featureRenderPolicy,
   featureUnlockLabel,
   isFeatureBuilt,
-  type BuiltFeatureKeys,
+  type FeatureBuildStates,
   type FeatureRenderPolicy,
 } from '@/lib/feature-availability';
 
@@ -100,7 +100,7 @@ export interface OrgSettingsFeatureView {
 function toCardPolicy(
   featureKey: string,
   enabled: boolean,
-  built: BuiltFeatureKeys
+  built: FeatureBuildStates
 ): CardPolicy {
   const policy = featureRenderPolicy(enabled, isFeatureBuilt(built, featureKey));
   return { policy, unlockLabel: featureUnlockLabel(featureKey, policy) };
@@ -121,7 +121,7 @@ function toCardPolicy(
  * TWO INDEPENDENT READS, ON PURPOSE — and two different failure directions.
  * ---------------------------------------------------------------------------
  * `isFeatureEnabledFailClosed` answers "has this org bought it" from
- * broker_get_org_features; `fetchBuiltFeatureKeys` answers "does it exist at
+ * broker_get_org_features; `fetchFeatureBuildStates` answers "does it exist at
  * all" from feature_definitions. Folding the second into the first RPC would
  * merge their failure modes: a hiccup in the org's plan lookup would then also
  * erase the fact that retention is a real, shipped feature, and the retention
@@ -129,14 +129,14 @@ function toCardPolicy(
  * grays retention (never leaving an org-wide policy control writable), and an
  * unreadable is_built still hides — each failure lands where it belongs.
  *
- * `fetchBuiltFeatureKeys` is one read for all keys, resolved alongside the
+ * `fetchFeatureBuildStates` is one read for all keys, resolved alongside the
  * per-key checks rather than after them.
  */
 export async function resolveOrgSettingsFeatures(
   organizationId: string
 ): Promise<OrgSettingsFeatureView> {
   const [built, retention, scim, jit] = await Promise.all([
-    fetchBuiltFeatureKeys(),
+    fetchFeatureBuildStates(),
     isFeatureEnabledFailClosed(organizationId, RETENTION_FEATURE_KEY),
     isFeatureEnabledFailClosed(organizationId, SCIM_FEATURE_KEY),
     isFeatureEnabledFailClosed(organizationId, JIT_FEATURE_KEY),

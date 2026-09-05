@@ -44,16 +44,25 @@ import { createClient } from '@/lib/supabase/server';
 export type FeatureRenderPolicy = 'enabled' | 'grayed' | 'hidden';
 
 /**
- * The keys of every feature the database says is BUILT.
+ * What the database says about each feature's existence: key -> is_built.
  *
- * A set of the built ones rather than a map or a set of the unbuilt ones, and
- * that choice is load-bearing: every way of not knowing — the read failed, the
- * column is missing, the row was deleted, the key was misspelled — produces an
- * absence, and an absence reads as "not built", which renders HIDDEN. The
- * conservative answer is the one you get by default rather than the one
- * somebody has to remember to write.
+ * A map of every row rather than a set of the built ones, and the difference is
+ * load-bearing in BOTH directions:
+ *
+ *   PRESENT AND FALSE is the DESIGNED state — scim_provisioning and
+ *   jit_provisioning are supposed to read false. It renders hidden, quietly. A
+ *   set of the built keys could not tell that apart from a fault, so every
+ *   admin load of /dashboard/settings would log two errors forever and bury the
+ *   line that means something real.
+ *
+ *   ABSENT is a FAULT — the read failed, the column is missing, the row was
+ *   deleted, the key was misspelled. Still hidden, because an unreadable column
+ *   is not evidence a feature exists, but reported loudly.
+ *
+ * The conservative render is still the one you get by default: every way of not
+ * knowing produces an absence, and an absence is not built.
  */
-export type BuiltFeatureKeys = ReadonlySet<string>;
+export type FeatureBuildStates = ReadonlyMap<string, boolean>;
 
 /**
  * What unlocks each grayed feature.
@@ -90,8 +99,8 @@ export const DEFAULT_UNLOCK_LABEL = 'Not included in your plan';
  * /dashboard/settings is absent, retention included. Apply the migration before
  * deploying the portal.
  */
-export async function fetchBuiltFeatureKeys(): Promise<BuiltFeatureKeys> {
-  const EMPTY: BuiltFeatureKeys = new Set<string>();
+export async function fetchFeatureBuildStates(): Promise<FeatureBuildStates> {
+  const EMPTY: FeatureBuildStates = new Map<string, boolean>();
 
   try {
     const supabase = await createClient();
@@ -101,43 +110,53 @@ export async function fetchBuiltFeatureKeys(): Promise<BuiltFeatureKeys> {
 
     if (error) {
       console.error('feature_definitions.is_built unreadable:', error);
-      return EMPTY; // every feature unbuilt -> every gated control hidden
+      return EMPTY; // every feature unknown -> every OFF control hidden
     }
     if (!Array.isArray(data)) {
       console.error('feature_definitions returned no usable rows');
-      return EMPTY; // every feature unbuilt -> every gated control hidden
+      return EMPTY; // every feature unknown -> every OFF control hidden
     }
 
-    const built = new Set<string>();
+    const states = new Map<string, boolean>();
     for (const row of data as { key?: unknown; is_built?: unknown }[]) {
       // `=== true`, not truthiness: a null landing in this column (a row
       // written before the NOT NULL default, a view that widens it) must read
-      // as unbuilt rather than coerce to built.
-      if (typeof row?.key === 'string' && row.is_built === true) built.add(row.key);
+      // as unbuilt rather than coerce to built. It is still a row we HAVE, so
+      // it maps to false rather than being left absent.
+      if (typeof row?.key === 'string') states.set(row.key, row.is_built === true);
     }
-    return built;
+    return states;
   } catch (e) {
     // createClient throws outside a request scope, and PostgREST can reject
     // before it produces an `error` object.
     console.error('feature_definitions.is_built unreadable:', e);
-    return EMPTY; // every feature unbuilt -> every gated control hidden
+    return EMPTY; // every feature unknown -> every OFF control hidden
   }
 }
 
 /**
  * Does this feature exist, according to the database?
  *
- * A key the database does not mention is reported LOUDLY and treated as
- * unbuilt. Silence would be the wrong shape twice over: a misspelled key in the
- * portal and a deleted feature row are both real faults, and neither should be
- * discoverable only as a card that quietly stopped appearing.
+ * Three answers, not two, and the middle one is why this reads a map:
+ *
+ *   true       the row says built. Render by plan.
+ *   false      the row says NOT built. Hidden, and SILENT — this is the state
+ *              the migration deliberately puts scim_provisioning and
+ *              jit_provisioning in, not a fault to report on every page load.
+ *   no row     a fault: a misspelled key here, a deleted feature row, or a
+ *              column that could not be read. Hidden, and reported LOUDLY,
+ *              because neither should be discoverable only as a card that
+ *              quietly stopped appearing.
  */
-export function isFeatureBuilt(built: BuiltFeatureKeys, featureKey: string): boolean {
-  if (built.has(featureKey)) return true;
+export function isFeatureBuilt(
+  states: FeatureBuildStates,
+  featureKey: string
+): boolean {
+  const isBuilt = states.get(featureKey);
+  if (isBuilt !== undefined) return isBuilt;
   console.error(
-    `Feature "${featureKey}" is not a known built feature — hiding its control. ` +
-      'Either feature_definitions has no such row, its is_built is false, or the ' +
-      'column could not be read.'
+    `Feature "${featureKey}" is not in feature_definitions — hiding its control. ` +
+      'Either the row is missing or the is_built column could not be read.'
   );
   return false;
 }

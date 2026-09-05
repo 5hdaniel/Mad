@@ -36,10 +36,11 @@ jest.mock('@/lib/supabase/server', () => ({
 import {
   DEFAULT_UNLOCK_LABEL,
   FEATURE_UNLOCK_LABELS,
-  fetchBuiltFeatureKeys,
+  fetchFeatureBuildStates,
   featureRenderPolicy,
   featureUnlockLabel,
   isFeatureBuilt,
+  type FeatureBuildStates,
 } from '@/lib/feature-availability';
 import {
   FEATURE_DEFINITION_ROWS,
@@ -49,6 +50,11 @@ import {
   makeSupabaseStub,
   withBuiltFlag,
 } from '../fixtures/orgFeatures';
+
+/** The map shape fetchFeatureBuildStates produces, from fixture rows. */
+function statesFrom(rows: { key: string; is_built: boolean }[]): FeatureBuildStates {
+  return new Map(rows.map((r) => [r.key, r.is_built]));
+}
 
 const UNBUILT = 'scim_provisioning';
 const AVAILABLE = 'custom_retention';
@@ -147,20 +153,21 @@ describe('featureUnlockLabel', () => {
 // 2. Reading the column
 // ---------------------------------------------------------------------------
 
-describe('fetchBuiltFeatureKeys', () => {
+describe('fetchFeatureBuildStates', () => {
   it('returns every key the table marks built, and no key it marks unbuilt', () => {
     // Identity, not counts: a set of the right size made of the wrong keys
     // would hide the wrong cards.
     definitionsRead({ data: builtFlagRows(), error: null });
-    return fetchBuiltFeatureKeys().then((built) => {
-      expect([...built].sort()).toEqual(
-        FEATURE_DEFINITION_ROWS.filter((r) => r.is_built)
-          .map((r) => r.key)
-          .sort()
+    return fetchFeatureBuildStates().then((states) => {
+      // Every row is present — a row that says false is a row we HAVE, and the
+      // difference between that and an absent row is what keeps the healthy
+      // state quiet. Identity, not counts.
+      expect([...states.keys()].sort()).toEqual(
+        FEATURE_DEFINITION_ROWS.map((r) => r.key).sort()
       );
-      expect(built.has('scim_provisioning')).toBe(false);
-      expect(built.has('jit_provisioning')).toBe(false);
-      expect(built.has('custom_retention')).toBe(true);
+      expect(states.get('scim_provisioning')).toBe(false);
+      expect(states.get('jit_provisioning')).toBe(false);
+      expect(states.get('custom_retention')).toBe(true);
     });
   });
 
@@ -168,7 +175,7 @@ describe('fetchBuiltFeatureKeys', () => {
     // A read naming the wrong table or the wrong columns returns nothing, hides
     // everything, and is indistinguishable from correct caution at the surface.
     const stub = definitionsRead({ data: builtFlagRows(), error: null });
-    await fetchBuiltFeatureKeys();
+    await fetchFeatureBuildStates();
     expect(stub.from).toHaveBeenCalledWith('feature_definitions');
     const query = stub.from.mock.results[0].value as { select: jest.Mock };
     expect(query.select).toHaveBeenCalledWith('key, is_built');
@@ -176,12 +183,12 @@ describe('fetchBuiltFeatureKeys', () => {
 
   it('reads the table ONCE for every key, not once per key', async () => {
     const stub = definitionsRead({ data: builtFlagRows(), error: null });
-    await fetchBuiltFeatureKeys();
+    await fetchFeatureBuildStates();
     expect(stub.from).toHaveBeenCalledTimes(1);
   });
 });
 
-describe('fetchBuiltFeatureKeys — every way of not knowing means UNBUILT', () => {
+describe('fetchFeatureBuildStates — every way of not knowing means UNBUILT', () => {
   // The migration has not been applied to prod, so `column is_built does not
   // exist` is the live case, not a hypothetical one.
   it('a query error yields an empty set', async () => {
@@ -189,24 +196,24 @@ describe('fetchBuiltFeatureKeys — every way of not knowing means UNBUILT', () 
       data: null,
       error: { message: 'column feature_definitions.is_built does not exist' },
     });
-    expect([...(await fetchBuiltFeatureKeys())]).toEqual([]);
+    expect((await fetchFeatureBuildStates()).size).toBe(0);
   });
 
   it('a non-array payload yields an empty set', async () => {
     definitionsRead({ data: { unexpected: true }, error: null });
-    expect([...(await fetchBuiltFeatureKeys())]).toEqual([]);
+    expect((await fetchFeatureBuildStates()).size).toBe(0);
   });
 
   it('a throwing client yields an empty set rather than a 500', async () => {
     // createClient throws outside a request scope; an unhandled throw here
     // would take the whole settings page down instead of hiding a card.
     mockCreateClient.mockRejectedValue(new Error('cookies() outside request scope'));
-    expect([...(await fetchBuiltFeatureKeys())]).toEqual([]);
+    expect((await fetchFeatureBuildStates()).size).toBe(0);
   });
 
   it('reports the failure rather than swallowing it', async () => {
     definitionsRead({ data: null, error: { message: 'boom' } });
-    await fetchBuiltFeatureKeys();
+    await fetchFeatureBuildStates();
     expect(errorSpy).toHaveBeenCalled();
   });
 
@@ -215,29 +222,40 @@ describe('fetchBuiltFeatureKeys — every way of not knowing means UNBUILT', () 
       data: [{ key: 'custom_retention', is_built: null }],
       error: null,
     });
-    expect((await fetchBuiltFeatureKeys()).has('custom_retention')).toBe(false);
+    expect((await fetchFeatureBuildStates()).get('custom_retention')).toBe(false);
   });
 
   it('treats a non-boolean is_built as unbuilt', async () => {
     definitionsRead({ data: [{ key: 'custom_retention', is_built: 'true' }], error: null });
-    expect((await fetchBuiltFeatureKeys()).has('custom_retention')).toBe(false);
+    expect((await fetchFeatureBuildStates()).get('custom_retention')).toBe(false);
   });
 });
 
 describe('isFeatureBuilt', () => {
   it('reports a key the database marks built', () => {
-    expect(isFeatureBuilt(new Set(['custom_retention']), 'custom_retention')).toBe(true);
+    expect(isFeatureBuilt(statesFrom(builtFlagRows()), 'custom_retention')).toBe(true);
   });
 
-  it('a key missing from the set is UNBUILT, so its control hides', () => {
-    expect(isFeatureBuilt(new Set(['custom_retention']), 'scim_provisioning')).toBe(false);
+  it('a key missing from the table is UNBUILT, so its control hides', () => {
+    expect(isFeatureBuilt(statesFrom([{ key: 'custom_retention', is_built: true }]), 'scim_provisioning')).toBe(false);
+  });
+
+  it('is SILENT about a row that exists and says false — that is the designed state', () => {
+    // scim_provisioning and jit_provisioning are SUPPOSED to read false. If
+    // "not built" and "I could not find out" produced the same console.error,
+    // every admin load of /dashboard/settings would log two errors forever and
+    // bury the line that means something real.
+    const states = statesFrom(builtFlagRows());
+    expect(isFeatureBuilt(states, 'scim_provisioning')).toBe(false);
+    expect(isFeatureBuilt(states, 'jit_provisioning')).toBe(false);
+    expect(errorSpy).not.toHaveBeenCalled();
   });
 
   it('a missing key fails LOUDLY — a deleted row must not be silent', () => {
     // The backlog item is explicit: an unknown key or a feature row missing
     // entirely must fail loudly rather than default to visible. Hidden is the
     // right pixel; silence is the wrong diagnostic.
-    isFeatureBuilt(new Set<string>(), 'custom_retention');
+    isFeatureBuilt(new Map<string, boolean>(), 'custom_retention');
     expect(errorSpy).toHaveBeenCalledWith(expect.stringContaining('custom_retention'));
   });
 });
@@ -249,8 +267,8 @@ describe('isFeatureBuilt', () => {
 describe('flipping is_built changes the render with no code change', () => {
   async function policyFor(key: string, rows: { key: string; is_built: boolean }[]) {
     definitionsRead({ data: rows, error: null });
-    const built = await fetchBuiltFeatureKeys();
-    return featureRenderPolicy(false, isFeatureBuilt(built, key));
+    const states = await fetchFeatureBuildStates();
+    return featureRenderPolicy(false, isFeatureBuilt(states, key));
   }
 
   it('is_built false + plan off -> hidden', async () => {
