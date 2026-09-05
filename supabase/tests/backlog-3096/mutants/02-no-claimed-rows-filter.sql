@@ -4,11 +4,15 @@
 -- by deleting exactly one line: `AND user_id IS NOT NULL` from the membership
 -- count. Everything else, including the FOR UPDATE lock, is unchanged.
 --
--- EXPECTED: reds CONTROL 3 only. A pre-created white-glove org carries
--- unclaimed invite rows; without the filter they read as members and the
--- arriving IT admin is demoted to the org default role ('broker' in that
--- fixture) instead of admin. Controls 1, 2, 4, 5 and 6 stay GREEN -- none of
--- them has an unclaimed row, so the filter makes no difference to them.
+-- MEASURED 2026-09-05: reds CONTROL 3 only -- "white-glove IT admin got
+-- 'broker', expected admin". A pre-created white-glove org carries unclaimed
+-- invite rows; without the filter they read as members and the arriving IT
+-- admin is demoted to the org default role instead of admin.
+--
+-- Controls 1, 2, 4, 6 and 7 were all RE-RUN under this mutant and stayed
+-- GREEN: none of them has an unclaimed row, so the filter cannot matter to
+-- them. That "stays green" list is executed, not assumed -- it is what makes a
+-- red here attributable to the filter and nothing else.
 --
 -- Apply, run the controls, then restore with restore-shipped.sql.
 

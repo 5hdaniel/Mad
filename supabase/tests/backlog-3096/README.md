@@ -85,8 +85,8 @@ deleting its fixture ids, so it is re-runnable across mutant runs.
 
 Controls 1 and 3 are green here **by design** — first-user-wins agrees with a
 hard-coded `'admin'` whenever the caller genuinely is the first claimed member.
-That is why they need their own failing input, and why "all seven red on the
-old body" would have been a false claim.
+That is why they need their own failing input (mutant 04, run below), and why
+"all seven red on the old body" would have been a false claim.
 
 ### After applying the migration
 
@@ -96,12 +96,26 @@ B=`agent`, **admin count 1** each run — pre-registered as 1 before running.
 
 ### Mutants, on the fixed body
 
+Every cell below was **executed**. The predicted matrix this replaced got one
+row wrong — see the note under the table.
+
 | Mutant | Red | Green | Evidence |
 |---|---|---|---|
-| minus `FOR UPDATE` | **5**, 4/4 runs | 1, 2, 3, 4, 6, 7 — all re-run and green | busy=0, both `admin`, admin count 2 every run |
-| minus `AND user_id IS NOT NULL` | **3** | 1, 2, 4, 6, 7 — all re-run and green | `white-glove IT admin got 'broker', expected admin` |
+| `03` minus `FOR UPDATE` | **5**, 4/4 runs | 1, 2, 3, 4, 6, 7 | busy=0, both `admin`, admin count 2 every run |
+| `02` minus `AND user_id IS NOT NULL` | **3** | 1, 2, 4, 6, 7 | `white-glove IT admin got 'broker', expected admin` |
+| `04` `v_role := v_default_role` unconditionally | **1, 2, 3, 5, 7** | 4, 6 | C1 `got 'agent'`; C2 `caller A got 'agent'`; C3 `got 'broker'`; C5 A=`agent`, **admin count 0**; C7 `first caller stored as 'broker'` |
 
-Both "stays green" columns were **executed**, not assumed. The first row is the
+**Mutant 04's row was predicted as "reds 1, 3, 5 / stays green 2, 4, 6". Running
+it showed reds 1, 2, 3, 5, 7.** The prediction missed control 2 and control 7
+because both open with an assertion that the *first* caller is `admin` — which
+this mutant breaks — and reading the controls as "the second-caller test" and
+"the return-shape test" hid that from a description-based reading. The rule
+holds: a claim about which members of a set fail has to be enumerated by
+running them, never derived from what each one is *for*.
+
+That correction does not weaken the matrix. Every control still has at least
+one mutant that reds it, and mutants 02 and 03 still red exactly one each —
+which is what makes a red attributable. The first row is the
 point of control 5 being two-session: removing the lock reds *nothing* in the
 six sequential controls. A sequential test cannot tell a locked implementation
 from an unlocked one, and if control 5 were sequential this change would ship
@@ -266,6 +280,23 @@ with def as (select pg_get_functiondef('public.auto_provision_it_admin'::regproc
 select position('FOR UPDATE' in (select c from code)) > 0 as lock_present,
        position('user_id IS NOT NULL' in (select c from code)) > 0 as filter_present;
 ```
+
+## Deployment ordering — the migration goes first
+
+This is no longer a migration-only change: `broker-portal/app/auth/setup/callback/route.ts`
+reads the `role` key the migration adds.
+
+**Apply the migration before, or together with, the portal deploy.** If the
+portal ships first, `data.role` is `undefined` for every fresh provision,
+`canGrantAdminConsent` fails closed, and a genuine first IT admin is sent to
+`/dashboard` instead of the Microsoft consent page. It self-heals — their next
+visit to `/setup` hits the existing-membership branch, sees role `admin` with
+consent not yet granted, and forwards them to `/setup/consent` — but it is a
+visible degradation for the length of the window, and it is avoidable by
+ordering the two correctly.
+
+Failing closed is the right default (nobody is handed a consent page they
+should not have), but "right default" is not "no consequence".
 
 ## Fixture identifiers are invented
 

@@ -45,13 +45,18 @@
 -- speculative insertion behind a conflicting in-flight one -- and this would
 -- pass with or without FOR UPDATE.
 
+-- psql does NOT interpolate :variables inside quoted literals, and a
+-- dollar-quoted $race$ ... $race$ body counts as one. Writing :'conn' inside
+-- the DO block sends it verbatim and plpgsql fails on a syntax error. Hoist it
+-- into a GUC out here, and read it back inside.
 \set conn 'host=localhost port=6543 dbname=postgres user=REPLACE_ME password=REPLACE_ME'
+SELECT set_config('backlog3096.conn', :'conn', false);
 
 create temp table race_out(step text, val text);
 
 DO $race$
 DECLARE
-  k_conn CONSTANT TEXT := :'conn';
+  k_conn CONSTANT TEXT := current_setting('backlog3096.conn');
   k_a    CONSTANT TEXT := '00000000-0000-4000-8000-000000309651'; -- pii-allow-uuid: invented fixture id, verified absent from every live table
   k_b    CONSTANT TEXT := '00000000-0000-4000-8000-000000309652'; -- pii-allow-uuid: invented fixture id, verified absent from every live table
   k_call CONSTANT TEXT := $q$select public.auto_provision_it_admin('fixture-tenant-3096-c5','Fixture Org 3096 C5','fixture-org-3096-c5')::text$q$;

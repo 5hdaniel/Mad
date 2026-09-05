@@ -4,10 +4,15 @@
 -- by deleting exactly one line: `FOR UPDATE` from the organizations SELECT.
 -- The role resolution, including the claimed-rows filter, is unchanged.
 --
--- EXPECTED: reds CONTROL 5 ONLY, and only when driven from two concurrent
--- sessions. Controls 1, 2, 3, 4 and 6 are sequential and stay GREEN -- a
--- sequential test cannot distinguish a locked implementation from an unlocked
--- one, which is precisely why control 5 is a two-session script.
+-- MEASURED 2026-09-05: reds CONTROL 5 ONLY -- 4 runs out of 4, deterministic,
+-- with dblink_is_busy=0 (B never waited), both racers 'admin', admin count 2.
+--
+-- Controls 1, 2, 3, 4, 6 and 7 were all RE-RUN under this mutant and stayed
+-- GREEN. That is the entire argument for control 5 being two-session: removing
+-- the row lock reds NOTHING in the six sequential controls. A sequential test
+-- cannot distinguish a locked implementation from an unlocked one, so had
+-- control 5 been sequential this change would have shipped with an unprotected
+-- race and a fully green board.
 --
 -- Apply, run control 5 via control-5-run.sh, then restore with restore-shipped.sql.
 

@@ -4,13 +4,24 @@
 -- by replacing the CASE expression with an unconditional
 -- `v_role := v_default_role;`. The lock is unchanged.
 --
--- EXPECTED: reds CONTROLS 1, 3 and 5. This mutant exists because controls 1 and
--- 3 are GREEN under the old live body (mutant 01) -- first-user-wins agrees
--- with a hard-coded 'admin' whenever the caller really is first. Without this
--- mutant, controls 1 and 3 would have no failing input at all and would be
--- proving nothing. Control 5 reds too: racer A never becomes admin.
--- Controls 2, 4 and 6 stay GREEN -- their expected answer already IS the
--- default role.
+-- This mutant exists because controls 1 and 3 are GREEN under the old live
+-- body (mutant 01): first-user-wins agrees with a hard-coded 'admin' whenever
+-- the caller really is first. Without a mutant that breaks the admin case,
+-- controls 1 and 3 would have no failing input at all and would prove nothing.
+--
+-- MEASURED 2026-09-05: reds CONTROLS 1, 2, 3, 5 and 7. Green: 4 and 6.
+--   C1  "first caller into an empty org got role 'agent', expected admin"
+--   C2  "caller A got 'agent', expected admin"
+--   C3  "white-glove IT admin got 'broker', expected admin"
+--   C5  racer A got 'agent' -- admin count 0, nobody administers the org
+--   C7  "first caller stored as 'broker', expected admin"
+--
+-- This row had been PREDICTED as "reds 1, 3, 5 / green 2, 4, 6". The prediction
+-- missed controls 2 and 7 because both OPEN with an assertion that the FIRST
+-- caller is admin, which this mutant breaks -- invisible to anyone reasoning
+-- from what each control is "for" (the second-caller test, the return-shape
+-- test) rather than from what it asserts. Enumerate by running; never derive a
+-- set claim from a description.
 --
 -- Apply, run the controls, then restore with restore-shipped.sql.
 

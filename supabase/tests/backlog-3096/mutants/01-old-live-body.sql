@@ -9,8 +9,10 @@
 -- step. Note the hard-coded 'admin' near the bottom and the absence of any
 -- lock on the organizations row.
 --
--- EXPECTED: reds CONTROLS 2, 4, 6 (the caller lands as 'admin' in all three)
--- and CONTROL 5 (both racers become admin).
+-- MEASURED 2026-09-05 (not predicted): reds CONTROLS 2, 4, 6 -- the caller
+-- lands as 'admin' in all three -- plus CONTROL 5 (both racers admin, admin
+-- count 2, and B never blocks) and CONTROL 7 (this body returns no 'role' key
+-- at all).
 --
 -- CONTROLS 1 AND 3 STAY GREEN UNDER THIS MUTANT, BY DESIGN. First-user-wins
 -- agrees with a hard-coded 'admin' whenever the caller genuinely is the first
