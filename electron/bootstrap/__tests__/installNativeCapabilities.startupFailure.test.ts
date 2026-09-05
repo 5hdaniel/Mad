@@ -22,6 +22,8 @@
 interface Probe {
   showErrorBox: jest.Mock;
   exit: jest.Mock;
+  logError: jest.Mock;
+  consoleError: jest.Mock;
 }
 
 /**
@@ -33,6 +35,15 @@ interface Probe {
 function loadCompositionRoot(options: { install: boolean }): Probe {
   const showErrorBox = jest.fn();
   const exit = jest.fn();
+  const logError = jest.fn();
+  // Swapped by hand rather than with `jest.spyOn`, and restored in a `finally`
+  // below. `jest.spyOn` over an already-spied `console.error` WRAPS the previous
+  // spy instead of replacing it, and `jest.restoreAllMocks()` in an `afterEach`
+  // did not unwind the chain here — measured: the first case's spy went on
+  // recording later cases' calls and this count read 3 instead of 1.
+  const consoleError = jest.fn();
+  const realConsoleError = console.error;
+  console.error = consoleError as unknown as typeof console.error;
 
   jest.isolateModules(() => {
     // Only three members of the Electron surface are reachable from this
@@ -64,16 +75,30 @@ function loadCompositionRoot(options: { install: boolean }): Probe {
       }));
     }
 
+    // electron-log must be mocked HERE and not left to the global
+    // `moduleNameMapper` entry: the catch writes through it, and this test has
+    // to hold the same `jest.fn()` the module called in order to assert WHEN it
+    // was called. A real transport would also reach `app.getPath`, which the
+    // Electron mock above does not supply, and would throw inside the catch —
+    // reddening this suite for a reason that has nothing to do with the guard.
+    jest.doMock("electron-log", () => {
+      const mock = { error: logError };
+      return { ...mock, default: mock };
+    });
+
     // eslint-disable-next-line @typescript-eslint/no-var-requires
     require("../installNativeCapabilities");
   });
 
+  console.error = realConsoleError;
   jest.dontMock("electron");
+  jest.dontMock("electron-log");
   jest.dontMock("../../capabilities/secretStoreProvider");
-  return { showErrorBox, exit };
+  return { showErrorBox, exit, logError, consoleError };
 }
 
 describe("composition root: a missing capability at launch (BACKLOG-2962)", () => {
+
   it("names the missing capability in the error box", () => {
     const { showErrorBox } = loadCompositionRoot({ install: false });
 
@@ -93,6 +118,36 @@ describe("composition root: a missing capability at launch (BACKLOG-2962)", () =
     expect(exit).toHaveBeenCalledWith(1);
   });
 
+  it("writes the error to the log and to stderr BEFORE the box, because the box does not survive", () => {
+    // The box is dismissed and gone, and an unattended launch has nobody to
+    // dismiss it. Before this write existed, `npm run dev` failed with an empty
+    // terminal — a regression, because the throw it replaced at least reached
+    // Electron's default handler, which printed a stack.
+    //
+    // Order is asserted, not just the calls: text after the box would be text
+    // nobody reads, and text after `app.exit(1)` would never run at all.
+    const { logError, consoleError, showErrorBox } = loadCompositionRoot({ install: false });
+
+    expect(logError).toHaveBeenCalledTimes(1);
+    expect(consoleError).toHaveBeenCalledTimes(1);
+
+    // The whole error object, not the message: that is what carries the stack
+    // into both sinks, and it is what `main.ts:261-262` passes on its own fatal
+    // path.
+    const logged = logError.mock.calls[0][1] as unknown;
+    expect(logged).toBeInstanceOf(Error);
+    expect((logged as Error).message).toContain("secretStore");
+    expect((logged as Error).stack).toBeTruthy();
+
+    expect(consoleError.mock.invocationCallOrder[0]).toBeLessThan(
+      showErrorBox.mock.invocationCallOrder[0],
+    );
+    expect(logError.mock.invocationCallOrder[0]).toBeLessThan(
+      showErrorBox.mock.invocationCallOrder[0],
+    );
+
+  });
+
   it("shows the box BEFORE exiting — the other order would suppress it", () => {
     const { showErrorBox, exit } = loadCompositionRoot({ install: false });
 
@@ -105,9 +160,11 @@ describe("composition root: a missing capability at launch (BACKLOG-2962)", () =
     // The real provider, the real ElectronSecretStore. If this fired, the three
     // assertions above would be describing the ordinary launch path rather than
     // a failure, and would say nothing.
-    const { showErrorBox, exit } = loadCompositionRoot({ install: true });
+    const { showErrorBox, exit, logError, consoleError } = loadCompositionRoot({ install: true });
 
     expect(showErrorBox).not.toHaveBeenCalled();
     expect(exit).not.toHaveBeenCalled();
+    expect(logError).not.toHaveBeenCalled();
+    expect(consoleError).not.toHaveBeenCalled();
   });
 });

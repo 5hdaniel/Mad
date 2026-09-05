@@ -59,8 +59,12 @@
  *
  * `dialog.showErrorBox` is the one dialog API usable before `app.whenReady()`.
  * Measured rather than assumed, though not by me: SR's probe C watched
- * Electron's own default handler render exactly this box while `whenReady()`
- * was never reached. `app.exit(1)` rather than `app.quit()` — quit runs
+ * Electron's own default handler render a `showErrorBox` at this same point in
+ * the lifecycle, while `whenReady()` was never reached. That box was Electron's
+ * own, titled "A JavaScript error occurred in the main process" — so what is
+ * established is the API working pre-ready, not this call site's box. Visual
+ * confirmation of THIS box is the founder's launch test, not something any
+ * instrument here has shown. `app.exit(1)` rather than `app.quit()` — quit runs
  * `before-quit` handlers and can be cancelled, while exit ends the process
  * immediately with the code, so crash reporting and the updater see a failed
  * launch.
@@ -69,6 +73,7 @@
  */
 
 import { app, dialog } from "electron";
+import log from "electron-log";
 
 import { installSecretStore } from "../capabilities/secretStoreProvider";
 import { ElectronSecretStore } from "../capabilities/electron/electronSecretStore";
@@ -87,8 +92,21 @@ try {
   // verbatim: the whole value of this guard is that whoever reads the box is
   // told WHICH capability is missing.
   const message = error instanceof Error ? error.message : String(error);
-  // Box FIRST, exit second. The other order ends the process before the box can
-  // render, which trades a loud failure for a silent one.
+  // TEXT FIRST, and both sinks. The box is dismissed and gone; a support report
+  // needs something that stays. `console.error` reaches the terminal running
+  // `npm run dev`, and any unattended launch that nobody is there to dismiss the
+  // box for; `log.error` reaches the log file, which by now points at the right
+  // directory because `installAppDataPaths` (main.ts:6) ran first. The whole
+  // `error` is passed, not just `message`, so both sinks carry the stack.
+  //
+  // This mirrors `main.ts:261-262`, the app's only other fatal path, down to the
+  // order. It deliberately does NOT use `logService`: `main.ts` does not either,
+  // and that wrapper only writes a file once a `logDirectory` is configured,
+  // which nothing has done at this point in startup.
+  console.error("[FATAL] Native capability missing:", error);
+  log.error("[FATAL] Native capability missing:", error);
+  // Box after the text, exit after the box. Exiting first ends the process
+  // before the box is reached — SR measured both orders on the real binary.
   dialog.showErrorBox(STARTUP_FAILURE_TITLE, message);
   app.exit(1);
 }
