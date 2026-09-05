@@ -1,6 +1,13 @@
 /**
  * BACKLOG-3096 — where /setup sends a caller once they have been provisioned.
  *
+ * ON `toBeNull()` AS THE "ADMIT" ASSERTION: it does distinguish a real admit
+ * from a crash, but NOT for the reason first written here. `middleware.ts`
+ * catches, sees a protected route, and redirects to `/login` — it does not fall
+ * through returning no location. So a thrown middleware is visibly different
+ * from an admitted one, and `middleware redirects a crashed session to /login`
+ * below pins that down instead of leaving it asserted in a comment.
+ *
  * THE CONTROL THIS FILE EXISTS FOR:
  *
  *   Until first-user-wins landed, `auto_provision_it_admin` made EVERY caller
@@ -136,6 +143,13 @@ async function callbackRedirect(): Promise<string> {
  * request through to the page it asked for.
  */
 async function middlewareVerdict(path: string, role: string): Promise<string | null> {
+  // Establish the session HERE rather than relying on the caller. Two tests
+  // below call this without a preceding callback run, and `jest.clearAllMocks()`
+  // clears calls but NOT implementations — so they used to pass only because a
+  // previous test's `mockGetUser.mockResolvedValue(...)` leaked into them. Run
+  // alone with `-t`, they failed with `/login`. A test that depends on its
+  // neighbour reads green until the neighbour is deleted or reordered.
+  signedInAzureUser();
   mockMembershipSingle.mockResolvedValue({ data: { role, organization_id: ORG_ID } });
   const response = await middleware(new NextRequest(`${ORIGIN}${path}`));
   return response.headers.get('location');
@@ -245,6 +259,19 @@ describe('hop 2: middleware is the only role → destination authority', () => {
 
   it('admits an admin to /dashboard', async () => {
     expect(await middlewareVerdict('/dashboard', 'admin')).toBeNull();
+  });
+
+  it('redirects a crashed session to /login — so null really does mean admitted', async () => {
+    // The control on the control, stated correctly. If middleware throws it
+    // does NOT return a null location: the catch block (BACKLOG-1486) sees a
+    // protected route, builds `new URL('/login', request.url)` — no
+    // `redirectTo`, unlike the unauthenticated branch above it — clears the
+    // Supabase cookies and redirects. That is what makes `toBeNull()` above a
+    // real admit rather than "nothing happened", and it is exactly what the two
+    // order-dependent tests printed when they ran alone without a session.
+    mockGetUser.mockRejectedValue(new Error('fixture: session lookup failed'));
+    const response = await middleware(new NextRequest(`${ORIGIN}/dashboard`));
+    expect(response.headers.get('location')).toBe(`${ORIGIN}/login`);
   });
 });
 

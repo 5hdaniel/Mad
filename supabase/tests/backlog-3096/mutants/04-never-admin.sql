@@ -131,10 +131,12 @@ BEGIN
   WHERE user_id = v_user_id AND organization_id = v_org_id;
 
   IF v_role IS NULL THEN
-    -- BACKLOG-3096: first user wins. 'admin' only when this org has no CLAIMED
-    -- member yet. user_id IS NOT NULL is load-bearing: pre-created white-glove
-    -- orgs carry unclaimed invite rows (user_id IS NULL) and counting those
-    -- would demote the org's own IT admin to 'agent' on arrival.
+    -- THE MUTATION. The shipped body resolves 'admin' here when the org has no
+    -- CLAIMED member yet; this hard-codes the default role instead, so nobody
+    -- ever becomes an administrator. The shipped comment that used to sit here
+    -- described that CASE, and was deliberately removed with it -- a comment
+    -- left behind describing code that is gone reads as live code to the next
+    -- person who greps for it.
     v_role := v_default_role;
 
     INSERT INTO organization_members (organization_id, user_id, role, joined_at, license_status, provisioned_by)
