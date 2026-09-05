@@ -1,0 +1,324 @@
+/**
+ * STATIC composition-root guard — the AST half of BACKLOG-2962's remainder.
+ *
+ * WHAT IT CHECKS
+ * --------------
+ *   E1  The shell's entry module (`electron/main.ts`) contains a TOP-LEVEL
+ *       import whose specifier RESOLVES to the composition root.
+ *   C1  For each required call, the composition root contains a call
+ *       expression whose callee resolves, THROUGH AN IMPORT BINDING, to the
+ *       named export of the named module.
+ *
+ * WHY IT IS AN AST WALK AND NOT A LINE MATCH
+ * ------------------------------------------
+ * This repo has had seven line matchers produce wrong answers, three of them on
+ * this very item (86 -> 17/10 -> 15/6; the truth was 14 call expressions in 5
+ * files, every error a mention counted as a call). So:
+ *   - `installSecretStore` written in a comment or a string literal does not
+ *     satisfy C1;
+ *   - a LOCALLY DECLARED `function installSecretStore()` called locally does
+ *     not satisfy C1 — the callee must resolve to the provider module;
+ *   - `./bootstrap/../bootstrap/installNativeCapabilities` DOES satisfy E1,
+ *     because specifiers are resolved to a repo-relative path rather than
+ *     compared as strings;
+ *   - `import * as p` + `p.installSecretStore(...)` and
+ *     `import { installSecretStore as x }` + `x(...)` both satisfy C1.
+ * Every one of those is a planted control in
+ * `electron/capabilities/__tests__/compositionRootGuard.test.ts`.
+ *
+ * WHY E1 ASSERTS "TOP-LEVEL" AND NOT AN ORDERING
+ * ----------------------------------------------
+ * A top-level import executes during the entry module's evaluation, which
+ * completes before Electron's `ready` event fires — so the composition root
+ * runs before `createWindow()` whatever its statement index. Statement ORDER is
+ * therefore not what makes that true, and asserting an order would forbid
+ * rearrangements that are perfectly valid. What top-level buys is that the
+ * import cannot be hidden inside a function or a conditional that never runs.
+ *
+ * WHAT THIS DOES **NOT** COVER — no completeness claim beyond this list
+ * ---------------------------------------------------------------------
+ *   - Calls reached through a RE-EXPORT, a wrapper function, or a dynamic
+ *     `await import()`. A composition root that calls
+ *     `bootstrapEverything()`, which installs inside, satisfies nothing here
+ *     and will be reported as missing.
+ *   - `import installX from "..."` (default import). Named, aliased-named,
+ *     namespace and `require()`-destructured forms are recognised; the default
+ *     form is not, because no module in this tree default-exports an installer.
+ *   - Install ORDER, between capabilities or between bootstrap modules.
+ *   - Whether the installed implementation WORKS. That is
+ *     `electron/capabilities/electron/__tests__/electronSecretStore.test.ts`.
+ *   - Whether the capability is reachable at all in a packaged build. Nothing
+ *     here runs a bundler.
+ *   - `electron/bootstrap/installAppDataPaths`. SR named it as the same hazard
+ *     class with no guard of any kind, and it is still unguarded: it is a
+ *     path override, not a capability with an interface, so it is out of this
+ *     registry's scope rather than covered by it.
+ *   - Any shell other than Electron. `entryFile` is a parameter, but only
+ *     `electron/main.ts` is asserted today.
+ *
+ * @module tests/helpers/compositionRootStatic
+ */
+
+import * as path from "path";
+import * as ts from "typescript";
+
+/** A call the composition root must make, identified by module + export. */
+export interface RequiredCall {
+  /** Name used in failure messages — a capability name, or a description. */
+  readonly name: string;
+  /** Repo-relative, extensionless, POSIX path of the module exporting it. */
+  readonly providerModule: string;
+  /** The named export that must be called. */
+  readonly installFunction: string;
+}
+
+/** One thing the guard found wrong. */
+export interface Finding {
+  readonly rule: "E1" | "C1";
+  /** The capability/call name for C1; the entry file for E1. */
+  readonly subject: string;
+  readonly detail: string;
+}
+
+export interface CompositionRootInput {
+  /** Repo-relative POSIX path of the shell entry, e.g. `electron/main.ts`. */
+  readonly entryFile: string;
+  readonly entrySource: string;
+  /** Repo-relative, extensionless, POSIX path of the composition root. */
+  readonly compositionRoot: string;
+  readonly compositionRootSource: string;
+  readonly requiredCalls: readonly RequiredCall[];
+}
+
+const SOURCE_EXT = /\.(ts|tsx|mts|cts|js|jsx|mjs|cjs)$/;
+
+/**
+ * Resolve a RELATIVE module specifier to a repo-relative, extensionless path.
+ *
+ * Returns `null` for bare and aliased specifiers (`"electron"`, `"@electron/x"`)
+ * — nothing in this tree imports the composition root that way, and guessing at
+ * `tsconfig` path mapping here would be a second resolver to keep correct.
+ *
+ * `path.posix` throughout: CI runs this on Windows, where `path.join` would
+ * emit backslashes that never match a registry constant.
+ */
+export function resolveSpecifier(fromFile: string, specifier: string): string | null {
+  if (!specifier.startsWith(".")) return null;
+  const fromPosix = fromFile.split(path.sep).join("/");
+  // `path.posix.join` already collapses `..` and `.`, so no separate normalise
+  // call is needed. There WAS one here; mutation-testing removed it and nothing
+  // went red, which is how it was found to be redundant rather than
+  // belt-and-braces. Removing `join` itself DOES red three cases, so the one
+  // remaining normaliser is load-bearing.
+  const joined = path.posix.join(path.posix.dirname(fromPosix), specifier);
+  return joined.replace(SOURCE_EXT, "").replace(/\/index$/, "");
+}
+
+/** `require("x")` with `await`, parens, `as` and `!` peeled off. */
+function requireTarget(expr: ts.Expression | undefined): string | null {
+  let e: ts.Node | undefined = expr;
+  for (;;) {
+    if (!e) return null;
+    if (ts.isAwaitExpression(e) || ts.isParenthesizedExpression(e)) e = e.expression;
+    else if (ts.isAsExpression(e) || ts.isNonNullExpression(e)) e = e.expression;
+    else break;
+  }
+  if (
+    ts.isCallExpression(e) &&
+    ts.isIdentifier(e.expression) &&
+    e.expression.text === "require" &&
+    e.arguments.length === 1 &&
+    ts.isStringLiteralLike(e.arguments[0])
+  ) {
+    return e.arguments[0].text;
+  }
+  return null;
+}
+
+interface Bindings {
+  /** local name -> { module, exportName } */
+  readonly named: Map<string, { module: string; exportName: string }>;
+  /** local name -> module (namespace import / whole-module require) */
+  readonly namespaces: Map<string, string>;
+}
+
+/**
+ * Every VALUE binding the file takes from a relative module, resolved to a
+ * repo-relative module path. Type-only imports are excluded: they are erased
+ * and cannot call anything.
+ */
+function collectBindings(sourceFile: ts.SourceFile, filePath: string): Bindings {
+  const named = new Map<string, { module: string; exportName: string }>();
+  const namespaces = new Map<string, string>();
+
+  const visit = (node: ts.Node): void => {
+    if (
+      ts.isImportDeclaration(node) &&
+      ts.isStringLiteral(node.moduleSpecifier) &&
+      node.importClause &&
+      !node.importClause.isTypeOnly
+    ) {
+      const mod = resolveSpecifier(filePath, node.moduleSpecifier.text);
+      if (mod) {
+        const nb = node.importClause.namedBindings;
+        if (nb && ts.isNamespaceImport(nb)) {
+          namespaces.set(nb.name.text, mod);
+        } else if (nb && ts.isNamedImports(nb)) {
+          for (const el of nb.elements) {
+            if (el.isTypeOnly) continue;
+            named.set(el.name.text, {
+              module: mod,
+              exportName: (el.propertyName ?? el.name).text,
+            });
+          }
+        }
+        // `import installX from "..."` (default) is deliberately NOT recorded —
+        // see the module header's "does not cover" list.
+      }
+    }
+
+    // import p = require("...")
+    if (
+      ts.isImportEqualsDeclaration(node) &&
+      ts.isExternalModuleReference(node.moduleReference) &&
+      ts.isStringLiteral(node.moduleReference.expression)
+    ) {
+      const mod = resolveSpecifier(filePath, node.moduleReference.expression.text);
+      if (mod) namespaces.set(node.name.text, mod);
+    }
+
+    // const p = require("...")  /  const { installX: y } = require("...")
+    if (ts.isVariableDeclaration(node) && node.initializer) {
+      const spec = requireTarget(node.initializer);
+      const mod = spec === null ? null : resolveSpecifier(filePath, spec);
+      if (mod) {
+        if (ts.isIdentifier(node.name)) {
+          namespaces.set(node.name.text, mod);
+        } else if (ts.isObjectBindingPattern(node.name)) {
+          for (const el of node.name.elements) {
+            if (!ts.isIdentifier(el.name)) continue;
+            const exportName =
+              el.propertyName && ts.isIdentifier(el.propertyName)
+                ? el.propertyName.text
+                : el.name.text;
+            named.set(el.name.text, { module: mod, exportName });
+          }
+        }
+      }
+    }
+
+    ts.forEachChild(node, visit);
+  };
+  visit(sourceFile);
+  return { named, namespaces };
+}
+
+/** Does `file` call `required.installFunction` as exported by its module? */
+function callsRequired(
+  sourceFile: ts.SourceFile,
+  bindings: Bindings,
+  required: RequiredCall,
+): boolean {
+  let found = false;
+
+  const visit = (node: ts.Node): void => {
+    if (found) return;
+    if (ts.isCallExpression(node)) {
+      const callee = node.expression;
+
+      // installX(...) where installX came from the provider module
+      if (ts.isIdentifier(callee)) {
+        const binding = bindings.named.get(callee.text);
+        if (
+          binding &&
+          binding.module === required.providerModule &&
+          binding.exportName === required.installFunction
+        ) {
+          found = true;
+          return;
+        }
+      }
+
+      // p.installX(...) where p is a namespace of the provider module
+      if (
+        ts.isPropertyAccessExpression(callee) &&
+        ts.isIdentifier(callee.expression) &&
+        callee.name.text === required.installFunction &&
+        bindings.namespaces.get(callee.expression.text) === required.providerModule
+      ) {
+        found = true;
+        return;
+      }
+    }
+    ts.forEachChild(node, visit);
+  };
+  visit(sourceFile);
+  return found;
+}
+
+/** Parse `source` as TypeScript with parent pointers set. */
+function parse(filePath: string, source: string): ts.SourceFile {
+  return ts.createSourceFile(filePath, source, ts.ScriptTarget.ES2022, true, ts.ScriptKind.TS);
+}
+
+/**
+ * Run E1 and C1. Returns every finding; an empty array means the guard passes.
+ *
+ * Deterministic order: E1 first, then C1 in `requiredCalls` order, so a failure
+ * message reads the same on every machine.
+ */
+export function checkCompositionRoot(input: CompositionRootInput): Finding[] {
+  const findings: Finding[] = [];
+
+  // ---- E1: the entry module imports the composition root, at top level ----
+  const entry = parse(input.entryFile, input.entrySource);
+  const importsRoot = entry.statements.some((stmt) => {
+    if (ts.isImportDeclaration(stmt) && ts.isStringLiteral(stmt.moduleSpecifier)) {
+      return resolveSpecifier(input.entryFile, stmt.moduleSpecifier.text) === input.compositionRoot;
+    }
+    if (
+      ts.isImportEqualsDeclaration(stmt) &&
+      ts.isExternalModuleReference(stmt.moduleReference) &&
+      ts.isStringLiteral(stmt.moduleReference.expression)
+    ) {
+      return (
+        resolveSpecifier(input.entryFile, stmt.moduleReference.expression.text) ===
+        input.compositionRoot
+      );
+    }
+    return false;
+  });
+
+  if (!importsRoot) {
+    findings.push({
+      rule: "E1",
+      subject: input.entryFile,
+      detail:
+        `${input.entryFile} has no top-level import that resolves to ` +
+        `${input.compositionRoot}. Nothing installs the shell's native capabilities, ` +
+        "so the core reaches an uninstalled provider and the app launches without a window. " +
+        "This is the exact mutation that went red nowhere before this guard existed.",
+    });
+  }
+
+  // ---- C1: the composition root actually calls each required installer ----
+  const rootFile = `${input.compositionRoot}.ts`;
+  const root = parse(rootFile, input.compositionRootSource);
+  const bindings = collectBindings(root, rootFile);
+
+  for (const required of input.requiredCalls) {
+    if (!callsRequired(root, bindings, required)) {
+      findings.push({
+        rule: "C1",
+        subject: required.name,
+        detail:
+          `${input.compositionRoot} never calls ${required.installFunction}() as imported ` +
+          `from ${required.providerModule}, so "${required.name}" is registered but never ` +
+          "installed. A same-named local function or a mention in a comment does not count: " +
+          "the callee must resolve through an import binding.",
+      });
+    }
+  }
+
+  return findings;
+}
