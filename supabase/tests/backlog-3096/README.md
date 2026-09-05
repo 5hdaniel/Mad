@@ -3,7 +3,9 @@
 These files execute the fix in
 `supabase/migrations/20260905_backlog_3096_setup_first_user_wins.sql`.
 
-**They have not been run yet.** See *Why nothing here has run* below.
+**They have been run.** Against a disposable Postgres replica on 2026-09-05:
+first against production's unfixed body, then against the fix, then against two
+mutants. Results below — every one measured, none inferred.
 
 ---
 
@@ -67,43 +69,56 @@ deleting its fixture ids, so it is re-runnable across mutant runs.
 
 ---
 
-## The mutation matrix — "revert and watch it go red" is not one revert
+## Results — measured 2026-09-05, not predicted
 
-**Reverting to the old body does not red all six, and claiming it does would be
-false.** Controls 1 and 3 are green under the old body *by design*:
-first-user-wins agrees with a hard-coded `'admin'` whenever the caller really is
-the first claimed member. Each control therefore needs its own failing input.
+### Baseline: production's unfixed body
 
-| Mutant | Change | Reds | Stays green |
+| # | Outcome | What the database actually said |
+|---|---|---|
+| 1 | GREEN | first caller → `admin` |
+| 2 | **RED** | `SECOND caller got role 'admin', expected agent` |
+| 3 | GREEN | white-glove IT admin → `admin` |
+| 4 | **RED** | `newcomer got role 'admin', expected broker` |
+| 5 | **RED** | B never blocked (`dblink_is_busy`=0), A=`admin` B=`admin`, **admin count 2** |
+| 6 | **RED** | `caller at a headless org got role 'admin', expected agent` |
+| 7 | **RED** | `the RPC returned no role key at all: {success, user_id, organization_id}` |
+
+Controls 1 and 3 are green here **by design** — first-user-wins agrees with a
+hard-coded `'admin'` whenever the caller genuinely is the first claimed member.
+That is why they need their own failing input, and why "all seven red on the
+old body" would have been a false claim.
+
+### After applying the migration
+
+**All seven green.** Control 5 over 3 runs: `dblink_is_busy`=1 every time (B
+blocked for the full 3s), B returned 3–6 ms after A committed, A=`admin`
+B=`agent`, **admin count 1** each run — pre-registered as 1 before running.
+
+### Mutants, on the fixed body
+
+| Mutant | Red | Green | Evidence |
 |---|---|---|---|
-| `mutants/01-old-live-body.sql` | the production definition, verbatim (hard-coded `'admin'`, no lock, no `role` key) | **2, 4, 5, 6, 7** | 1, 3 |
-| `mutants/02-no-claimed-rows-filter.sql` | shipped body minus `AND user_id IS NOT NULL` | **3** | 1, 2, 4, 5, 6, 7 |
-| `mutants/03-no-row-lock.sql` | shipped body minus `FOR UPDATE` | **5** — and only two-session | 1, 2, 3, 4, 6, 7 |
-| `mutants/04-never-admin.sql` | shipped body with `v_role := v_default_role` unconditionally | **1, 3, 5** | 2, 4, 6, 7 |
+| minus `FOR UPDATE` | **5**, 4/4 runs | 1, 2, 3, 4, 6, 7 — all re-run and green | busy=0, both `admin`, admin count 2 every run |
+| minus `AND user_id IS NOT NULL` | **3** | 1, 2, 4, 6, 7 — all re-run and green | `white-glove IT admin got 'broker', expected admin` |
 
-Every control has at least one mutant that reds it, and every mutant reds at
-least one control.
+Both "stays green" columns were **executed**, not assumed. The first row is the
+point of control 5 being two-session: removing the lock reds *nothing* in the
+six sequential controls. A sequential test cannot tell a locked implementation
+from an unlocked one, and if control 5 were sequential this change would ship
+with an unprotected race and a full green board.
 
-**Drift:** nothing in git history ever defined `auto_provision_it_admin`.
-`git log --all -S 'auto_provision_it_admin'` returns 11 commits, every one a
-call site, a comment, guide copy or a planning doc;
-`git log --all -S 'FUNCTION auto_provision_it_admin'` returns only the commit
-that adds the migration. Production was the sole source of truth.
+The no-lock failure is **deterministic, not probabilistic** — 4 runs out of 4.
+B is dispatched while A provably still holds an open transaction, so there is
+no window to miss.
 
-**Provenance of mutant 01:** it is not hand-written. It is
-`pg_get_functiondef('public.auto_provision_it_admin'::regproc)` captured on
-2026-09-04, and it is byte-identical to what production was running —
-`md5` of the captured definition and of the file's body both come to
-`0f8c87bb35f8aa31b3b245907666e892`.
+### Provenance of the mutants
 
-Mutants 02–04 were **derived from the shipped migration by script**, each with a
-single targeted edit, so they cannot differ from it in any other way. Their
-diffs against the shipped body are one deleted line, one deleted line, and one
-replaced `CASE` expression respectively.
+Mutant 01 is not hand-written: `md5(pg_get_functiondef(…))` from production and
+the md5 of the file's body both come to `0f8c87bb35f8aa31b3b245907666e892`.
+Mutants 02–04 were derived from the shipped migration **by script** (re-derived
+after the return shape changed), one targeted edit each.
 
----
-
-## The one control that HAS been run
+## The text-level test
 
 `broker-portal/__tests__/migrations/setup-first-user-wins.test.ts` parses this
 migration's text. It cannot prove behaviour — it can only prove what the file
@@ -154,6 +169,42 @@ a literal in `VALUES`; recorded as measured rather than as the test name reads.
 
 ---
 
+## How they were run — and what the run had to work around
+
+Against a **disposable** Supabase project holding a targeted replica of
+`public.users`, `public.organizations`, `public.organization_members` and
+`auth.users`, reached through the Supabase MCP. Never against production.
+
+**The installed baseline was verified to be production's function, not a
+paraphrase of it.** `pg_get_functiondef` on the replica did not match
+production's md5 — because the replica's copy has the comments stripped. Once
+`--` lines and blank lines are removed from both, the two bodies are
+**byte-identical**, md5 `5331bf0cc2a9e04c9d914defc7b5937b`. A baseline that is
+only approximately the real thing makes every red below meaningless, so this
+was checked before anything was run.
+
+Three things about the environment are worth knowing before you re-run these:
+
+1. **`auth.uid()` is driven by a GUC**, and the controls set it with
+   `set_config('request.jwt.claim.sub', …, true)`. Do **not** `SET ROLE
+   authenticated`: the function is `SECURITY DEFINER` and runs as its owner
+   either way, and switching role only RLS-filters the asserting `SELECT`s.
+   The probe that established this also checked the negative case — with no
+   claim set, `auth.uid()` is `NULL` — because an impersonation that "works"
+   without being set proves nothing.
+
+2. **`ASSERT` really does surface as an error** through the MCP. Verified with
+   a deliberate `ASSERT false` before trusting a single green. Every control's
+   verdict rests on that, so it is not something to assume.
+
+3. **`public.users` must be seeded explicitly for pre-seeded members.**
+   `organization_members.user_id` carries a foreign key to *both* `auth.users`
+   and `public.users`, and nothing in the schema populates the second from the
+   first. Production happens to have an `on_auth_user_created` →
+   `handle_new_user()` trigger that does — controls 4 and 6 were silently
+   depending on it and broke on a replica without it. They now seed the row
+   themselves. A control must not lean on a trigger it never declared.
+
 ## Running them
 
 Against a **disposable** database — a Supabase branch, or any throwaway
@@ -183,52 +234,38 @@ psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f supabase/tests/backlog-3096/mutants/0
 psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f supabase/tests/backlog-3096/mutants/restore-shipped.sql
 ```
 
-### Run them as the database owner, not as `authenticated`
+### No psql? Use `control-5-dblink-single-call.sql`
 
-Do **not** `SET ROLE authenticated`. The function is `SECURITY DEFINER`, so it
-runs as its owner either way; switching role only RLS-filters the asserting
-`SELECT`s and fails the controls for the wrong reason. RLS is enabled but not
-`FORCE`d on `organizations`, `organization_members` and `users`, so an owner
-session reads the fixture rows unfiltered. The grant that actually matters is
-asserted directly in control 1:
+`control-5-run.sh` needs two shell-driven psql sessions. Where the only route
+to the database is a stateless API (the Supabase MCP, the dashboard SQL editor
+— every call its own session, no transaction spanning calls),
+`control-5-dblink-single-call.sql` does the same race inside **one** statement
+using `dblink`, and it is the form the 2026-09-05 results came from. Its header
+carries the connection caveats: dblink refuses an unauthenticated local socket
+for a non-superuser, so it needs a password-authenticated login role, and on
+Supabase the pooler port answered where the direct port did not.
+
+### VERIFY THE RESTORE. Do not assume it.
+
+**A restore that shares a statement with anything that errors is rolled back
+with it, and leaves the mutant installed.** That happened on 2026-09-05: the
+`CREATE OR REPLACE` restoring the shipped body was batched with a `DROP ROLE`
+that failed on dependent privileges, so the whole call rolled back and the
+database was still running the no-filter mutant. It was caught only because the
+next step re-read the installed definition instead of trusting the restore.
+
+After every restore, read the definition back — with `--` comment lines
+stripped, since the mutants' own comments mention the very strings you are
+grepping for — and re-run the control that discriminates the mutation you just
+undid:
 
 ```sql
-has_function_privilege('authenticated',
-  'public.auto_provision_it_admin(text,text,text)', 'EXECUTE')
+with def as (select pg_get_functiondef('public.auto_provision_it_admin'::regproc) as d),
+     lines as (select unnest(string_to_array(d, E'\n')) as ln from def),
+     code as (select string_agg(ln, E'\n') as c from lines where ln !~ '^\s*--')
+select position('FOR UPDATE' in (select c from code)) > 0 as lock_present,
+       position('user_id IS NOT NULL' in (select c from code)) > 0 as filter_present;
 ```
-
-### How the caller is impersonated
-
-`auth.uid()` reads `request.jwt.claim.sub`, so each control does
-`PERFORM set_config('request.jwt.claim.sub', '<uuid>', true)` before calling the
-RPC. `is_local = true` scopes it to the surrounding transaction.
-
-Inserting into `auth.users` fires `on_auth_user_created` →
-`handle_new_user()`, which creates the matching `public.users` row. It creates
-no organization and no membership, so the fixtures stay exactly as written.
-
----
-
-## Why nothing here has run
-
-There is no way to execute plpgsql on the development machine, and this was
-checked rather than assumed:
-
-- no `docker`, no `psql` on PATH;
-- no `supabase/config.toml`, so `supabase start` has nothing to start (and it
-  needs Docker regardless);
-- no pgTAP and no prior SQL test directory anywhere in the repo;
-- **no Postgres driver or embedded Postgres in `node_modules`** — checked `pg`,
-  `postgres`, `slonik`, `knex`, `drizzle-orm`, `prisma`, `typeorm`,
-  `@electric-sql/*` (PGlite), `@neondatabase/*`, `pg-mem`, `pg-promise`. All
-  absent, and adding a dependency to run a test was out of scope.
-
-The existing `broker-portal/__tests__/migrations/*.test.ts` **parse SQL text**;
-they never execute it. So does the companion test for this change.
-
-Nothing was run against production, not even inside a transaction intended for
-rollback. Everything read from production was schema metadata and
-column-presence aggregates — no row values.
 
 ## Fixture identifiers are invented
 

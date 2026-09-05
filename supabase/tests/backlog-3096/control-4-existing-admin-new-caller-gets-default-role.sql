@@ -47,6 +47,19 @@ BEGIN
   INSERT INTO organizations (id, name, slug, microsoft_tenant_id, plan, max_seats, default_member_role)
   VALUES (k_org_id, k_name, k_slug, k_tenant, 'trial', 10, 'broker');
 
+
+  -- public.users is a SEPARATE foreign-key target from auth.users --
+  -- organization_members carries one constraint to each -- and NOTHING in the
+  -- schema populates it from an auth.users insert. Production happens to have
+  -- an on_auth_user_created -> handle_new_user() trigger that does, but a
+  -- control must not depend on a trigger it never declared: this fixture broke
+  -- on a schema replica that omitted it. Seed the row explicitly.
+  --
+  -- Only PRE-SEEDED members need this. The RPC caller's public.users row is
+  -- created by the function itself, which is part of what is under test.
+  INSERT INTO public.users (id, email, oauth_provider, oauth_id) VALUES
+    (k_admin, 'c4-admin@fixture-3096.example.test', 'azure', 'fixture-oauth-3096-c4-admin');
+
   INSERT INTO organization_members (organization_id, user_id, role, joined_at, license_status, provisioned_by)
   VALUES (k_org_id, k_admin, 'admin', NOW() - INTERVAL '30 days', 'active', 'manual');
 
