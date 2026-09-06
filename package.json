@@ -65,6 +65,8 @@
     "lint:migrations": "bash scripts/lint-migrations.sh",
     "check:pii": "node scripts/ci/check-fixture-pii.mjs",
     "verify:pii": "node scripts/__tests__/check-fixture-pii.verify.js",
+    "check:msg-hygiene": "node scripts/ci/check-message-hygiene.mjs",
+    "verify:msg-hygiene": "node scripts/__tests__/check-message-hygiene.verify.js",
     "check:pii:list": "node scripts/ci/check-fixture-pii.mjs --list",
     "check:hooks": "node scripts/ci/check-hooks-tracking.mjs",
     "check:sql-boundary": "node scripts/ci/check-sql-boundary.mjs",
