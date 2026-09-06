@@ -45,11 +45,13 @@
  * Three independent instruments catch that, all three MEASURED on this PR's own
  * tree by dropping the `await` at `entitlementService.ts:200` and re-running:
  *   - `tsc` — `error TS2801: This condition will always return true since this
- *     'Promise<CachedUnlock | null>' is always defined.` Reported by BOTH
- *     `npm run type-check` and `npm run type-check:tests`.
- *   - `@typescript-eslint/no-misused-promises`, which is enabled for all of
- *     `electron/**`: `Expected non-Promise value in a boolean conditional`.
- *     This one fires under the PROJECT config, i.e. under CI's `npm run lint`.
+ *     'Promise<…CachedUnlock | null>' is always defined.` (abbreviated: the real
+ *     diagnostic spells the type as a full `import("…/unlockCacheDbService")`
+ *     path.) Reported by BOTH `npm run type-check` and `npm run type-check:tests`.
+ *   - `@typescript-eslint/no-misused-promises`, which `eslint.config.js` enables
+ *     for all of `electron/**` production code (test files are ignored):
+ *     `Expected non-Promise value in a boolean conditional`. This one fires under
+ *     the PROJECT config, i.e. under CI's `npm run lint`.
  *   - `electron/services/db/__tests__/unlockCacheDbService.realDriver-2960.test.ts`,
  *     RED by name on `OFFLINE + empty cache ⇒ LOCKED (offline_uncached)` and on
  *     `ONLINE + the server read FAILS + empty cache ⇒ LOCKED (error)`.
