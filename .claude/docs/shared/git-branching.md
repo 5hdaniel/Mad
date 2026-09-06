@@ -35,7 +35,7 @@ feature/*, fix/*, claude/* (feature branches)
 | `claude/*` | AI-assisted development | `develop` | `develop` | No |
 | `int/*` | Integration branches (multi-feature) | `develop` | `develop` | No |
 | `project/*` | Multi-sprint project branches | `develop` | `develop` | No |
-| `portal/*` | Portal work needing a Vercel preview | `develop` | `develop` | No |
+| `<type>-portal/*` | Opt in to a Vercel portal preview | `develop` | `develop` | No |
 
 ---
 
@@ -50,7 +50,7 @@ feature/*, fix/*, claude/* (feature branches)
 | `int/` | Integration branches | `int/ai-polish` |
 | `project/` | Multi-sprint projects | `project/ai-integration` |
 | `refactor/` | Code refactoring | `refactor/docs-consolidation` |
-| `portal/` | Portal work needing a Vercel preview | `portal/fix-broker-login` |
+| `<type>-portal/` | Opt in to a Vercel portal preview (a modifier on the type, not a new type) | `fix-portal/broker-login` |
 
 For sprint tasks, include the task ID:
 - `fix/task-510-database-cleanup`
@@ -60,41 +60,65 @@ For sprint tasks, include the task ID:
 
 ### Portal preview deployments (BACKLOG-2833)
 
-The two web apps (`broker-portal/`, `admin-portal/`) deploy to Vercel. The account is on
-the free plan, which limits deployments **created** per day — and a deployment that the
-Ignored Build Step cancels **still counts**. Both portals draw one pool, so every push to
-a deploying branch costs **2**. The real limits are **100/day, 100/hour, and 60 per
-5 minutes**, so the founder-facing figure is **~50 pushes/day**, and a merge burst trips
-the 5-minute window long before the daily one.
+The two web apps (`broker-portal/`, `admin-portal/`) deploy to Vercel. Portal previews are
+**off by default**, because the free plan caps deployments **created** — and a deployment
+that the Ignored Build Step cancels still counts against that cap.
 
-So portal previews are **off by default**. These branches deploy:
+**To get a preview, add `-portal` to the type segment of your branch name:** `fix-portal/…`,
+`docs-portal/…`, `chore-portal/…`, `feat-portal/…`. The type keeps its meaning; `-portal` is
+a modifier on it, not a new type. (`portal/…` also works, as a spare spelling.)
 
 | Branch | Previews? |
 |---|---|
 | `main`, `develop`, `int/*` | yes — `int/*` is where founder testing happens |
 | `dependabot/*` | yes — dependency bumps are real portal changes |
 | `hotfix/*`, `release/*` | yes |
-| `portal/…` | **yes — this is the opt-in** |
+| `fix-portal/…`, `docs-portal/…`, any `<type>-portal/…` | **yes — this is the opt-in** |
 | everything else (`fix/`, `feat/`, `chore/`, `docs/`, …) | no |
 
-**To get a preview, name the branch `portal/…`.** If you are already on a branch and do
-not want to rename it, deploy on demand instead:
+**If your preview never appears, check the branch name first.** A branch the config denies
+gets no deployment *and no error* — Vercel posts no commit status at all for it. The symptom
+is silence, which reads like a broken feature rather than a naming miss. `fix-portals/`,
+`portal-fix/` and `fix_portal/` all miss: the modifier must end the type segment and be
+followed by `/`.
+
+**The limits.** From Vercel's published limits page, <https://vercel.com/docs/limits> → "API
+rate limits", Free tier, every one scoped to the **account** (not the project):
+
+| Limit | Value | Window |
+|---|---|---|
+| Deployments per day (Free) | 100 | 86400s |
+| Deployments per hour (Free) | 100 | 3600s |
+| Deployments per five minutes (Free) | 60 | 300s |
+
+These are **rolling windows, not calendar days.** There is no midnight reset — a refusal was
+observed at 18:41 UTC while that calendar day's count was only 68 — so a burst can still be
+costing you the next morning.
+
+Both portals sit under one account, so every push to a **deploying** branch costs **2**.
+That puts the day's ceiling at roughly **50 pushes to deploying branches**. Pushes to any
+other branch cost nothing.
+
+**Editing `broker-portal/vercel.json` or `admin-portal/vercel.json`?** The `"**": false`
+entry in `git.deploymentEnabled` must stay the **last** key. This is an observed rule and
+the mechanism is *not* established: with that key written first, branches an allow key
+matches were denied on both portals; written last, they deployed. JSON cannot carry a
+comment saying so, so `scripts/ci/check-vercel-deploy-map.mjs` (workflow **Vercel Deploy
+Map**) asserts it and fails the build if the order changes. Without that check a reordering
+would silently deny every branch — `main` and `develop` included — with no red anywhere.
+
+**Already on a non-portal branch and need a preview now?**
 
 ```bash
 vercel deploy --cwd broker-portal     # or admin-portal
 ```
 
-That costs one deployment from the same pool, needs a one-time `vercel link` per portal
-directory, and uploads your **working tree** — so the preview can include uncommitted
-local changes and corresponds to no commit. It also produces no PR comment.
+One deployment from the same account budget. Needs a one-time `vercel link` per portal
+directory, and it uploads your **working tree** — so the preview can include uncommitted
+changes and corresponds to no commit. It also produces no PR comment.
 
-**If your preview never appears, check the branch name first.** A branch that does not
-match the list above gets no deployment and no error — the symptom is silence, which
-reads like a broken feature rather than a naming miss.
-
-A `portal/…` PR still needs the Engineer Metrics section and a BACKLOG id like any other
-branch; `[skip-metrics]` in the PR title is the escape if you are pushing a quick fix by
-hand.
+A `<type>-portal/…` PR still needs the Engineer Metrics section and a BACKLOG id like any
+other branch; `[skip-metrics]` in the PR title is the escape for a quick hand-pushed fix.
 
 ---
 
