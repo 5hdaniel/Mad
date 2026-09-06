@@ -248,9 +248,48 @@ describe("BACKLOG-2960 — llmSettingsDbService and its callers, against the rea
       expect(created.enable_auto_detect).toBe(false);
     });
 
-    it("refuses a second row for the same user (user_id is UNIQUE)", async () => {
+    /**
+     * A FAILED WRITE THROWS SYNCHRONOUSLY. This is the seam property, and it has
+     * no schema dependency: `updateLLMSettings` on a user with no row fails in
+     * the module's own read-back, not in SQLite.
+     *
+     * These wrappers are plain functions returning promises, never `async`, so
+     * the throw happens BEFORE the promise is constructed and an enclosing
+     * `better-sqlite3` transaction rolls back rather than committing over it
+     * (SR 79c3aa69 §2a). `expect(() => …).toThrow()` — not `.rejects` — is what
+     * asserts that, and it is what goes red if anyone makes one of these
+     * `async`.
+     */
+    it("a failed write throws SYNCHRONOUSLY, not as a rejection", () => {
+      db.prepare("DELETE FROM llm_settings WHERE user_id = ?").run(USER_ID);
+      expect(rowCount()).toBe(0);
+
+      expect(() => updateLLMSettings(USER_ID, { openai_model: "gpt-4o" })).toThrow(
+        `LLM settings not found for user ${USER_ID}`,
+      );
+    });
+
+    /**
+     * The same property provoked at the DRIVER instead of in application code.
+     *
+     * The DDL is asserted first, from the migrated database rather than from
+     * `schema.sql`, because without the constraint the assertion below proves
+     * nothing — and because this test failed on CI while passing locally
+     * (BACKLOG-2960 lane A round 1, PR #2544). If it fails again, the first
+     * assertion names the cause instead of leaving it to be guessed at.
+     */
+    it("refuses a second row for the same user (user_id is UNIQUE)", () => {
+      const ddl = (
+        db
+          .prepare(
+            "SELECT sql FROM sqlite_master WHERE type='table' AND name='llm_settings'",
+          )
+          .get() as { sql: string }
+      ).sql;
+      expect(ddl).toMatch(/user_id\s+TEXT\s+NOT\s+NULL\s+UNIQUE/i);
+
       expect(rowCount()).toBe(1);
-      await expect(Promise.resolve().then(() => createLLMSettings(USER_ID))).rejects.toThrow();
+      expect(() => createLLMSettings(USER_ID)).toThrow(/UNIQUE constraint failed/);
       expect(rowCount()).toBe(1);
     });
   });
