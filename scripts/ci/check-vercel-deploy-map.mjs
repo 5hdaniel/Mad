@@ -42,19 +42,35 @@ import { fileURLToPath } from 'node:url';
 const CATCH_ALL = '**';
 const FILES = ['broker-portal/vercel.json', 'admin-portal/vercel.json'];
 
-// Allows whose silent loss nobody is positioned to notice.
+// Fixtures, not knobs.
 //
-// Deleting "main" or "develop" stops production and staging deploying, and
-// because a branch the config denies posts NO commit status at all, there is
-// nothing to see: no red check, no error, no failed deployment. The live site
-// simply stops being updated, and that is found late and by accident.
+// These three are settled arrangements nobody has proposed changing. Losing any
+// of them is silent: a branch the config denies posts NO commit status at all,
+// so there is no red check, no error and no failed deployment — production,
+// staging or the founder's testing surface simply stops being deployed, and it
+// is found late and by accident.
 //
-// The line is drawn here deliberately rather than asserting every allow. For
-// int/**, dependabot/**, hotfix/**, release/** and the *-portal/** opt-in, a
-// person is waiting on a specific preview URL, finds out within minutes, and
-// the branch-naming docs name the first thing to check. main and develop are
-// the only entries where the deploy IS the product and nobody is waiting on it.
-const REQUIRED_TRUE = ['main', 'develop'];
+// The rest of the map is knobs we already expect to turn — dependabot/** has an
+// open item against it (BACKLOG-3151), and the *-portal/** opt-in is a naming
+// convention that may still move. Asserting those would make an anticipated
+// edit fight the guard, which is how a check earns a reputation for crying wolf.
+//
+// int/** was initially left out on the grounds that someone waiting on a preview
+// notices within minutes and the branch-naming docs tell them to check the
+// branch name first. That reasoning was wrong, and the way it fails is worth
+// recording: if int/** is deleted, the branch name is CORRECT, so the documented
+// first step misdirects while the real cause is a deleted key with no red
+// anywhere. A diagnostic that points away from the fault does not make a failure
+// self-announcing. Being a glob over the whole namespace, it also costs nothing
+// to assert: reorganising which int branches exist never touches this key.
+const REQUIRED_TRUE = ['main', 'develop', 'int/**'];
+
+// What stops working when each goes missing, for the error message.
+const ROLE = {
+  main: 'production',
+  develop: 'staging',
+  'int/**': "the founder's integration testing surface",
+};
 
 const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), '../..');
 const findings = [];
@@ -101,9 +117,9 @@ for (const rel of FILES) {
 
   for (const key of REQUIRED_TRUE) {
     if (!Object.prototype.hasOwnProperty.call(map, key)) {
-      findings.push(`${rel}: "${key}" is missing from git.deploymentEnabled, so the "${CATCH_ALL}" catch-all denies it. That silently stops ${key === 'main' ? 'production' : 'staging'} deploying — a denied branch posts no commit status at all, so nothing goes red and the live site just stops updating.`);
+      findings.push(`${rel}: "${key}" is missing from git.deploymentEnabled, so the "${CATCH_ALL}" catch-all denies it. That silently stops ${ROLE[key]} deploying — a denied branch posts no commit status at all, so nothing goes red and nothing fails; it just stops being deployed.`);
     } else if (map[key] !== true) {
-      findings.push(`${rel}: "${key}" must be true, got ${JSON.stringify(map[key])}. That silently stops ${key === 'main' ? 'production' : 'staging'} deploying.`);
+      findings.push(`${rel}: "${key}" must be true, got ${JSON.stringify(map[key])}. That silently stops ${ROLE[key]} deploying.`);
     }
   }
 
