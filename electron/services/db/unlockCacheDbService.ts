@@ -23,50 +23,33 @@
  * swapped in behind it without touching a caller. Until then the work is still
  * synchronous: each wrapper below is a PLAIN function — never `async` — that
  * runs its driver call FIRST and only then wraps the finished value in
- * `Promise.resolve`. That eagerness is the whole design, and it is load-bearing:
- * SR measured on the real driver (PR #2544 review, `4161d899` §2; reproduced in
- * PR #2545, `a5515a44` §5.3) that a plain wrapper's throw propagates
- * synchronously and an enclosing `better-sqlite3` transaction rolls back, while
- * the SAME call through an `async` wrapper lets the transaction COMMIT over the
- * error. Do not add `async` to any export in this file.
+ * `Promise.resolve`. That eagerness is the design: the driver call, and any
+ * throw it raises, stay synchronous and inside whatever `better-sqlite3`
+ * transaction encloses the caller. The measurements behind that rule are on
+ * BACKLOG-2960 (SR reviews of PRs #2544 and #2545), dated and attributed.
+ * Do not add `async` to any export in this file.
  *
  * ===========================================================================
- * THE FAILURE MODE, STATED AS MEASURED — AND IT IS A PAYWALL BYPASS
+ * THE FAILURE MODE THIS GUARDS — A PAYWALL, NOT A CRASH
  * ===========================================================================
- * `entitlementService.getUnlockStatus` decides the per-transaction gate with
+ * `entitlementService.getUnlockStatus` decides the per-transaction gate from
+ * the RESOLVED value of `getCachedUnlock`:
  *
  *     const cached = await getCachedUnlock(localTransactionId, userId);
  *     if (cached) return { status: "unlocked", fromCache: true };
  *
- * Drop that `await` and `cached` is a `Promise`, which is ALWAYS truthy — so a
- * cache MISS resolves UNLOCKED, the exact inverse of the fail-closed contract
- * above. Nothing throws and nothing logs.
+ * The resolved value is the verdict, and `null` is LOCKED. The promise object
+ * itself carries no verdict — it is truthy either way — so the `await` at each
+ * call site is part of the fail-closed contract stated above, not a style
+ * preference. Await the two `void`-returning writes below for the same reason:
+ * their ordering has to hold for whatever driver sits behind this boundary,
+ * not only for today's synchronous one.
  *
- * Three independent instruments catch that, all three MEASURED on this PR's own
- * tree by dropping the `await` at `entitlementService.ts:200` and re-running:
- *   - `tsc` — `error TS2801: This condition will always return true since this
- *     'Promise<…CachedUnlock | null>' is always defined.` (abbreviated: the real
- *     diagnostic spells the type as a full `import("…/unlockCacheDbService")`
- *     path.) Reported by BOTH `npm run type-check` and `npm run type-check:tests`.
- *   - `@typescript-eslint/no-misused-promises`, which `eslint.config.js` enables
- *     for all of `electron/**` production code (test files are ignored):
- *     `Expected non-Promise value in a boolean conditional`. This one fires under
- *     the PROJECT config, i.e. under CI's `npm run lint`.
- *   - `electron/services/db/__tests__/unlockCacheDbService.realDriver-2960.test.ts`,
- *     RED by name on `OFFLINE + empty cache ⇒ LOCKED (offline_uncached)` and on
- *     `ONLINE + the server read FAILS + empty cache ⇒ LOCKED (error)`.
- *
- * The two `void`-returning writes below (`upsertUnlock`, `removeCachedUnlock`)
- * are the weaker case, and it is worth being exact about why. A plain wrapper
- * has already done the work by the time the promise exists, so dropping their
- * `await` changes nothing observable on this driver: measured, `tsc` is silent,
- * the project eslint config is silent, and the real-driver suite above stays
- * 16/16 green. What does see it: the forced `no-floating-promises` rule (12 -> 13
- * on `entitlementService.ts`, which is NOT in that rule's `files:` scope, so it
- * is not a CI gate — BACKLOG-3150), and the two `BACKLOG-2960 — ... BEFORE
- * getUnlockStatus returns` cases in `entitlementService.test.ts`, whose mock
- * settles on a macrotask precisely so that a dropped `await` on a write is
- * visible. Both were measured RED under exactly that mutation.
+ * Which instruments watch this contract, and what each one reports, is recorded
+ * on BACKLOG-2960 and in the SR review of PR #2548 — dated, attributed, and
+ * re-runnable. It is deliberately not restated here: a comment cannot be
+ * re-run, so a sentence naming a test or a diagnostic outlives the thing it
+ * names.
  */
 
 import { dbGet, dbRun } from "./core/dbConnection";
