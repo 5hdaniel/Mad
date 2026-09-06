@@ -182,10 +182,16 @@ describe("deleteThreadNamesByIds — width derived from the values bound", () =>
  * synchronous body — and shows that even then the enclosing transaction still
  * rolls back, because a plain `Promise.resolve(...)` over a synchronous
  * primitive does all its work, INCLUDING ITS THROW, before the promise exists.
- * Make the wrapper `async` and this test fails with `INSIDE-TX`: the transaction
- * commits over the error and the failure arrives later as a rejection. That
- * contrast was measured on this module in PR #2546 and is the same one the
- * #2544 SR review measured on `llmSettingsDbService`.
+ * Make the wrapper `async` and this test does NOT report `INSIDE-TX`. That was
+ * measured, not assumed: the test floats the wrapper with `void`, so under an
+ * `async` wrapper the rejection is unhandled — the jest worker dies on an
+ * unhandled `SqliteError` from the driver, and the run prints no `Tests:` line
+ * and no assertion output at all. Someone who follows that instruction sees a
+ * crash and learns nothing about commit-vs-rollback. The contrast itself is
+ * real, and is stated in the seam module's docblock: it was measured on this
+ * module in PR #2546 with a probe that attaches a `.catch` to the floated call,
+ * and on `llmSettingsDbService` in the #2544 SR review. But THIS test is not
+ * the instrument that demonstrates it.
  *
  * The forced failure is a real driver error at a real boundary, not a stub:
  * SQLite's parameter limit is 32,766 (measured on this build — 32,766 binds

@@ -106,15 +106,29 @@ export function deleteThreadNamesByIdsSync(
  *   - a sync body doing `cleared += deleteThreadNamesByIds(...)` -> TS2365, but
  *     only because that site consumes the count arithmetically. It is not a
  *     general property of calling the wrapper from a body.
- *   - a sync body that FLOATS the wrapper -> caught by NOTHING static. The rows
- *     are still deleted, because a plain wrapper's work is synchronous; only the
- *     returned count is lost. `tsc` is silent, `npm run lint` is silent
- *     (`no-floating-promises` is scoped to `electron/services/db/**`, and this
- *     body is not in it — BACKLOG-3150), and the sync-twin guard stays green
- *     (its reachability walk stops at `async`, so it walks straight through a
- *     plain `Promise<...>`-annotated wrapper to the twin). The only instrument
- *     is the count assertion in
- *     `services/__tests__/importHelpers.threadNameSync-2960.test.ts`.
+ *   - a sync body that FLOATS the wrapper -> the rows are still deleted, because
+ *     a plain wrapper's work is synchronous; only the returned count is lost.
+ *     WHICH instrument sees that moved under this train, so the answer is
+ *     stamped: everything below was re-planted at the call site and re-run on
+ *     `int/epic9-close@434f9a04a`, which carries #2547's sync-twin guard repair
+ *     (both boundary checks went from `isAsync` to `isPromiseReturning`).
+ *       * `void deleteThreadNamesByIds(...)` -> `tsc` silent; `npm run lint`
+ *         silent (`no-floating-promises` is scoped to `electron/services/db/**`
+ *         and this body is not in it — BACKLOG-3150); the REPAIRED twin guard
+ *         goes RED, 1 failed of 5, naming `deleteThreadNamesByIdsSync` a dead
+ *         twin. Against this PR's original base it was GREEN on this shape, so
+ *         any docblock in this train saying "the guard stays green" is stale
+ *         rather than wrong when written — re-derive it, do not copy it.
+ *       * `cleared += deleteThreadNamesByIds(...)` -> RED twice: TS2365 as in
+ *         the bullet above, and the same twin-guard failure.
+ *     So both float shapes are now caught without running a test. What is NOT
+ *     caught is the COUNT. Drop only the accumulation — leave
+ *     `deleteThreadNamesByIdsSync(...)` in place with no `cleared +=`, so the
+ *     rows still go and no promise appears anywhere — and `tsc`, `npm run lint`
+ *     and the repaired guard are ALL still green (the guard walks reachability,
+ *     it does not read arithmetic). The one instrument that goes RED is
+ *     `services/__tests__/importHelpers.threadNameSync-2960.test.ts`, 2 failed
+ *     of 4. The count, not the float, is what that suite uniquely protects.
  */
 export function deleteThreadNamesByIds(
   db: DatabaseType,
