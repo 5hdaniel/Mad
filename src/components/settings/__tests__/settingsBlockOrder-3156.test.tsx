@@ -126,7 +126,7 @@ describe("BACKLOG-3156 — Emails", () => {
     });
   });
 
-  it("runs Sources → Import Preferences → Stored on this computer → actions", async () => {
+  it("runs Sources → Import Preferences → actions", async () => {
     render(<EmailSettings userId="u" initialPreferences={undefined as never} />);
     await waitFor(() =>
       expect(screen.getByTestId("emails-block-actions")).toBeInTheDocument(),
@@ -135,9 +135,55 @@ describe("BACKLOG-3156 — Emails", () => {
     expectInOrder([
       "emails-block-sources",
       "emails-block-preferences",
-      "emails-block-stored",
       "emails-block-actions",
     ]);
+  });
+
+  /**
+   * BACKLOG-3158 owns the per-provider cached-email count. Until it lands there
+   * is no number to put in a "Stored on this computer" grid — the block was
+   * built, rendered three em-dashes, and was removed on the founder's call
+   * because that reads as broken software.
+   *
+   * This asserts the ABSENCE, so the block cannot come back unannounced. It is
+   * not a permanent rule: whoever lands BACKLOG-3158 deletes this test in the
+   * same commit that restores the block with its data, and the deletion is the
+   * announcement.
+   */
+  it("has no Stored on this computer block until BACKLOG-3158 supplies the count", async () => {
+    render(<EmailSettings userId="u" initialPreferences={undefined as never} />);
+    await waitFor(() =>
+      expect(screen.getByTestId("emails-block-actions")).toBeInTheDocument(),
+    );
+
+    expect(screen.queryByTestId("emails-block-stored")).not.toBeInTheDocument();
+    expect(screen.queryByText("Stored on this computer")).not.toBeInTheDocument();
+    // The em-dash placeholder specifically: its return is the failure mode this
+    // guards, and it would not be caught by the testid check alone if the block
+    // came back under a different wrapper.
+    expect(screen.queryByText("—")).not.toBeInTheDocument();
+  });
+
+  /**
+   * SR found an `<h4>Import Emails</h4>` sitting directly above the `Import
+   * Emails` button — the same words twice in one column. Stage B moves this
+   * prose into the `?` popup and the card goes away; until then the heading is
+   * gone, and this keeps it gone.
+   */
+  it("does not print the primary's name twice in the same column", async () => {
+    render(<EmailSettings userId="u" initialPreferences={undefined as never} />);
+    await waitFor(() =>
+      expect(screen.getByTestId("emails-block-actions")).toBeInTheDocument(),
+    );
+
+    // Exactly one thing on the page says "Import Emails", and it is the button.
+    const hits = screen.getAllByText("Import Emails");
+    expect(hits).toHaveLength(1);
+    expect(hits[0].tagName).toBe("BUTTON");
+    // The description it used to head is still there, unchanged in what it claims.
+    expect(screen.getByTestId("recache-description")).toHaveTextContent(
+      /Fetches new mail/i,
+    );
   });
 
   /**

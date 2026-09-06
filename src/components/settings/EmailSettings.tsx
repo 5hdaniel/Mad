@@ -463,7 +463,7 @@ export function EmailSettings({
         Emails
       </h3>
       <div className="space-y-4">
-        {/* BACKLOG-3156 stage A: block 1 of 4 — Sources. The two connection
+        {/* BACKLOG-3156 stage A: block 1 of 3 — Sources. The two connection
             cards are the sources; they keep their own error styling (the merged
             connection control is stage C). */}
         <div data-testid="emails-block-sources" className="space-y-4">
@@ -671,7 +671,7 @@ export function EmailSettings({
 
         </div>
 
-        {/* BACKLOG-3156 stage A: block 2 of 4 — Import Preferences.
+        {/* BACKLOG-3156 stage A: block 2 of 3 — Import Preferences.
             TASK-2072: Email History (cache duration) */}
         <div data-testid="emails-block-preferences">
         <p className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-2">
@@ -705,60 +705,24 @@ export function EmailSettings({
         </div>
         </div>
 
-        {/* BACKLOG-3156 stage A: block 3 of 4 — Stored on this computer.
+        {/* BACKLOG-3156 stage A: THE "STORED ON THIS COMPUTER" BLOCK IS
+            DELIBERATELY ABSENT HERE, and its absence is the decision, not an
+            omission.
             ────────────────────────────────────────────────────────────────
-            EVERY CELL IS A PLACEHOLDER TODAY, AND THAT IS NOT A BUG IN THIS
-            BLOCK. No renderer-reachable API returns a cached-email count: there
-            is no `count` or `stats` channel for mail anywhere in
-            `electron/preload/` (the contacts grid this mirrors reads
-            `getContactSourceStats`, which has no email equivalent). Adding one
-            means an IPC handler in `electron/`, which stage A does not touch.
-            So the grid renders the same em-dash the contacts grid renders for a
-            source it has no number for, rather than deriving a number from
-            something that is not a stored total — `recacheResult.emailsInserted`
-            counts ONE RUN, not what is cached.
-            Follow-up filed on BACKLOG-3156. */}
-        <div data-testid="emails-block-stored">
-        <p className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-2">
-          Stored on this computer
-        </p>
-        <div className="p-4 bg-gray-50 rounded-lg border border-gray-200">
-          <div className="grid grid-cols-3 gap-2 text-center">
-            <div className={`p-2 rounded border ${
-              connections.google?.connected
-                ? "bg-green-50 border-green-200"
-                : "bg-gray-50 border-gray-200 opacity-50"
-            }`}>
-              <div className={`text-lg font-semibold ${connections.google?.connected ? "text-green-700" : "text-gray-400"}`}>
-                —
-              </div>
-              <div className={`text-xs ${connections.google?.connected ? "text-green-600" : "text-gray-400"}`}>Gmail</div>
-            </div>
-            <div className={`p-2 rounded border ${
-              connections.microsoft?.connected
-                ? "bg-indigo-50 border-indigo-200"
-                : "bg-gray-50 border-gray-200 opacity-50"
-            }`}>
-              <div className={`text-lg font-semibold ${connections.microsoft?.connected ? "text-indigo-700" : "text-gray-400"}`}>
-                —
-              </div>
-              <div className={`text-xs ${connections.microsoft?.connected ? "text-indigo-600" : "text-gray-400"}`}>Outlook</div>
-            </div>
-            <div className={`p-2 rounded border ${
-              hasAnyConnection
-                ? "bg-blue-50 border-blue-200"
-                : "bg-gray-50 border-gray-200 opacity-50"
-            }`}>
-              <div className={`text-lg font-semibold ${hasAnyConnection ? "text-blue-700" : "text-gray-400"}`}>
-                —
-              </div>
-              <div className={`text-xs ${hasAnyConnection ? "text-blue-600" : "text-gray-400"}`}>Cached</div>
-            </div>
-          </div>
-        </div>
-        </div>
-
-        {/* BACKLOG-3156 stage A: block 4 of 4 — the actions, BARE on the page.
+            The approved design gives Emails the same three-cell grid Contacts
+            has. It was built, and every cell rendered an em-dash, because no
+            renderer-reachable API returns a cached-email count: there is no
+            count or stats channel for mail in `electron/preload/`, and the only
+            email-count function in the tree (`countEmailsByUser`,
+            `electron/services/db/emailDbService.ts`) is not exposed to the
+            renderer and returns ONE TOTAL with no per-provider split — so it
+            could not fill the Gmail and Outlook cells even if it were.
+            A grid of three em-dashes reads as broken software, which is worse
+            than no grid. FOUNDER DECISION 2026-09-06: ship without it.
+            The block returns WITH ITS DATA under BACKLOG-3158, which owns the
+            per-provider count. `settingsBlockOrder-3156.test.tsx` asserts the
+            block is absent, so it cannot come back unannounced. */}
+        {/* BACKLOG-3156 stage A: block 3 of 3 — the actions, BARE on the page.
             No surrounding card and no heading, primary then destructive. The two
             descriptions stay in a card above them; the `?` popup that will carry
             this prose is stage B, so nothing is deleted here.
@@ -767,10 +731,26 @@ export function EmailSettings({
             `isRecaching || !isOnline || !hasAnyConnection`, and both titles still
             distinguish offline from not-connected. */}
         <div className="p-4 bg-gray-50 rounded-lg border border-gray-200">
+          {/* BACKLOG-3156 stage A: this card carried an `<h4>Import Emails</h4>`
+              directly above an `Import Emails` button — the same words twice in
+              one column. The heading is gone rather than reworded, for two
+              reasons read off the RENDERED order, not the source:
+
+              (1) The card describes TWO actions. `Force re-cache.` is the next
+                  paragraph inside the same card, so a heading naming the
+                  primary put the destructive paragraph under a title that was
+                  not about it. That was wrong independently of the duplication.
+              (2) The card's own convention is an inline lead-in, not a heading:
+                  the force paragraph labels itself with a bold `Force
+                  re-cache.` span. Dropping the heading makes the two paragraphs
+                  parallel, and the first is already verb-initial ("Fetches new
+                  mail…") — the same shape as the Contacts popup's "Adds new
+                  contacts, updates existing ones…".
+
+              NOT retitled: a name for "what these two buttons do" is exactly the
+              job the `?` popup takes in stage B, and inventing one now would be
+              a third pattern that stage B deletes. */}
           <div data-testid="recache-description">
-            <h4 className="text-sm font-medium text-gray-900">
-              Import Emails
-            </h4>
             {/* BACKLOG-3056: this used to promise "Only downloads emails newer
                 than what is already cached." That became false when the run
                 started filling in the older mail a widened Email History
