@@ -734,8 +734,17 @@ describe("BACKLOG-2960 — database time is reported separately from total elaps
     });
 
     expect(plantedDbDelayMs).toBe(0); // the plant actually fired
-    expect(delayed.dbMs - baseline.dbMs).toBeGreaterThanOrEqual(ROSE);
-    expect(delayed.elapsedMs - baseline.elapsedMs).toBeGreaterThanOrEqual(ROSE);
+
+    const dbRise = delayed.dbMs - baseline.dbMs;
+    const elapsedRise = delayed.elapsedMs - baseline.elapsedMs;
+
+    expect(dbRise).toBeGreaterThanOrEqual(ROSE);
+    expect(elapsedRise).toBeGreaterThanOrEqual(ROSE);
+    // And by the SAME amount — a blocking wait inside the database stalls the
+    // event loop too, so the whole delay lands in both figures. Asserting only
+    // that each rose would also pass an instrument that charged some unrelated
+    // extra work to `dbMs`.
+    expect(Math.abs(elapsedRise - dbRise)).toBeLessThan(DID_NOT_RISE);
   });
 
   /**
