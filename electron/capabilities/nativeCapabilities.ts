@@ -243,12 +243,30 @@ export class MissingNativeCapabilityError extends Error {
   readonly missing: readonly string[];
 
   constructor(missing: readonly string[]) {
+    // THIS TEXT REACHES THE FOUNDER, in the "Keepr cannot start" box, so it may
+    // only say what is true of EVERY registered capability.
+    //
+    // It used to end "each capability's provider throws on first use, so this
+    // fails during startup". That was true when `secretStore` was the only
+    // entry. It stopped being true the moment `logger` and `errorReporter` were
+    // registered: their defaults are silent BY DESIGN, because every call site
+    // they wrap sits inside a `catch` and a throwing default would escape from
+    // inside an error handler (see logger.ts / errorReporter.ts).
+    //
+    // The old sentence also inverted its own argument. For the two silent
+    // capabilities this check is not a nicety on top of a provider that would
+    // have thrown anyway — it is the ONLY thing that can notice they are
+    // missing. Whoever edits this next: if a future capability changes how its
+    // default behaves, nothing here needs to change, because the sentence no
+    // longer claims anything about defaults.
     super(
       `Native capability not installed: ${missing.join(", ")}. The host shell's ` +
         "composition root ran without supplying an implementation " +
-        `(Electron's is ${COMPOSITION_ROOT}.ts). Each capability's provider ` +
-        "throws on first use, so this fails during startup — before the window " +
-        "opens — rather than at whatever call site happens to reach it first.",
+        `(Electron's is ${COMPOSITION_ROOT}.ts). This check runs during startup — ` +
+        "before the window opens — so a missing capability is named here rather " +
+        "than surfacing later at whatever call site happens to reach it first. " +
+        "Some providers throw on first use and some are silent by design, which " +
+        "is why this check exists rather than being left to the first caller.",
     );
     this.name = "MissingNativeCapabilityError";
     this.missing = [...missing];

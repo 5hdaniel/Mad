@@ -94,7 +94,10 @@ const PORTABLE = new Set([
   // platform ONLY through `electron-log`, `@sentry/electron/main` or a single
   // `app.getPath("userData")`, and now takes the capability from a provider.
   // BACKLOG-2961's instrument re-run on that branch: the closure's directly
-  // coupled set went 10 modules -> 3, and its platform-free set 81 -> 121.
+  // coupled set went 10 modules -> 3, and its platform-free set 81 of 122 ->
+  // 121 of 128. Both denominators are stated on purpose: the closure GREW,
+  // because the six new capability interface/provider modules join it, and
+  // "121 of 122" is not a true sentence.
   "electron/services/logService.ts",
   "electron/schemas/validate.ts",
   "electron/services/db/core/dbConnection.ts",

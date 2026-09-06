@@ -69,6 +69,27 @@ describe("ElectronLogger (BACKLOG-2962)", () => {
     );
   });
 
+  it("passes the tail through on info and debug too, which no live site exercises yet", () => {
+    // SR measured this gap on PR #2523 (control SR-4): dropping `...args` from
+    // `info` passed every suite in the tree, because all four tail-passing call
+    // sites today are `error` x1 (databaseService.ts:311) and `warn` x3 (:606,
+    // :692, :770). LATENT, not live — no production path could observe it.
+    //
+    // Pinned rather than removed. The tail is load-bearing on two of the four
+    // methods, so deleting it from the other two would make the interface
+    // asymmetric for no runtime gain, and the first person to write
+    // `hostLogger.info(msg, err)` would meet a compile error on `info` and none
+    // on `warn`. Two assertions close the gap instead.
+    const logger = new ElectronLogger();
+    logger.info("[Precache] warmed", 12, "threads");
+    logger.debug("[InitBroadcaster] stage", { stage: "db-opening" });
+
+    expect(mockLog.info).toHaveBeenCalledWith("[Precache] warmed", 12, "threads");
+    expect(mockLog.debug).toHaveBeenCalledWith("[InitBroadcaster] stage", {
+      stage: "db-opening",
+    });
+  });
+
   it("calls with no tail reach electron-log with exactly one argument", () => {
     // `logService.writeToConsole` passes one string and nothing else. Spreading
     // an empty tail must not turn that into a second `undefined` argument,
