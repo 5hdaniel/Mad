@@ -1,25 +1,38 @@
 #!/usr/bin/env node
 /**
- * hooks-doctor — BACKLOG-2577
+ * hooks-doctor — BACKLOG-2577, updated by BACKLOG-3068
  *
- * Answers one question for the CURRENT worktree: "when I push, which hook runs,
- * and is it mine?"
+ * Answers one question for the CURRENT worktree: "when I commit or push, which
+ * hook runs, and is it mine?"
  *
  * Why this exists. `.git/config` sets `core.hooksPath`, and that value is shared
- * by every worktree. While it is ABSOLUTE, all ~66 worktrees execute the MAIN
- * checkout's `.husky/pre-push`, whatever branch each has checked out. While it
- * is RELATIVE (`.husky/_`, which is what husky itself writes on every
- * `npm install`), each worktree runs its own — but a worktree with no
- * `.husky/_` directory runs NOTHING, and git reports that with silence and
- * exit 0. This script turns that silence into a non-zero exit.
+ * by every worktree. Three states, and this script distinguishes them:
+ *
+ *   `.husky`   (relative, TRACKED hooks — what `prepare` now writes)
+ *              each worktree runs its OWN branch's hook, with nothing to seed,
+ *              because the hooks are tracked at mode 100755 and arrive with
+ *              every checkout. This is the PROTECTED state.
+ *
+ *   `.husky/_` (relative, husky's GENERATED runner — what bare husky writes)
+ *              each worktree runs its own, but a worktree with no `.husky/_`
+ *              runs NOTHING and git reports that with silence and exit 0.
+ *              Measured on the filing machine: 5 of 79 worktrees had it.
+ *
+ *   absolute   every worktree runs ONE checkout's hook, whatever branch that
+ *              checkout holds — which is how a worktree ends up running a hook
+ *              missing a check its own branch added (BACKLOG-2577).
+ *
+ * This script turns each silent state into a non-zero exit.
  *
  * It is a DIAGNOSTIC. It reads git config and copies files; it never writes git
- * config. `npx husky` would rewrite the shared `core.hooksPath` as a side effect
- * of what should be a per-worktree file copy, which is why `--seed` exists here
- * instead.
+ * config. Setting `core.hooksPath` belongs to `scripts/install-hooks.mjs` (the
+ * `prepare` script), which is why `--seed` exists here instead.
  *
  *   node scripts/hooks-doctor.mjs           diagnose, exit non-zero if unprotected
- *   node scripts/hooks-doctor.mjs --seed    create this worktree's .husky/_, then diagnose
+ *   node scripts/hooks-doctor.mjs --seed    LEGACY. Copies the main checkout's
+ *                                           .husky/_ into this worktree. Needed
+ *                                           only while core.hooksPath still
+ *                                           points at `_`; a no-op otherwise.
  *
  * @module scripts/hooks-doctor
  */
@@ -75,6 +88,19 @@ const isMain = path.resolve(mainRoot) === path.resolve(worktreeRoot);
 // --seed: give this worktree its own .husky/_ by copying the main checkout's
 // ---------------------------------------------------------------------------
 if (SEED) {
+  // BACKLOG-3068: seeding exists to give a worktree the GENERATED `_` runner.
+  // When core.hooksPath is the tracked `.husky`, git runs the hook files that
+  // every checkout already has, and there is nothing to seed. Say so and stop —
+  // copying `_` in would be inert, and an inert command that reports success is
+  // how the seed instruction outlived its mechanism in the first place.
+  const currentPath = git(["config", "--get", "core.hooksPath"]);
+  if (currentPath && !currentPath.split("/").includes("_")) {
+    console.log(
+      green(`--seed is not needed: core.hooksPath is '${currentPath}', the tracked hooks directory.\n`) +
+        "Every worktree already has those files — they are tracked. Nothing copied.\n" +
+        "Running the diagnosis anyway:\n"
+    );
+  } else {
   const from = path.join(mainRoot, ".husky", "_");
   const to = path.join(worktreeRoot, ".husky", "_");
   // A failed seed must still be loud — this is the ACTION failing, which is the
@@ -95,10 +121,13 @@ if (SEED) {
   }
   console.log(green(`seeded ${copied} file(s) into ${to}`));
   console.log(
-    "These copies are deliberately UNTRACKED: hook infrastructure requires\n" +
-      "branch-independence, and tracking is definitionally branch-dependence\n" +
-      "(a checkout of a branch without them would delete the directory).\n"
+    "These copies are deliberately UNTRACKED: the GENERATED runner directory\n" +
+      "must stay branch-independent, and tracking is definitionally branch-\n" +
+      "dependence (a checkout of a branch without them would delete it).\n" +
+      "The hooks themselves — .husky/pre-commit, .husky/pre-push — ARE tracked,\n" +
+      "which is what BACKLOG-3068 points core.hooksPath at.\n"
   );
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -124,30 +153,48 @@ if (!hooksPath) {
   console.log(`  path style      ${absolute ? yellow("ABSOLUTE — shared by every worktree") : green("relative — resolves per worktree")}`);
   console.log("");
 
+  // Which layout is core.hooksPath pointing at? Decided by MECHANISM, not by
+  // the directory's name: husky's generated runner directory is the one holding
+  // the `h` dispatcher, and every shim in it is `. "$(dirname "$0")/h"`. A
+  // directory without `h` holds the hooks themselves, and git runs them directly.
+  const viaHuskyRunner = fs.existsSync(path.join(shimDir, "h"));
+  console.log(
+    `  layout          ${viaHuskyRunner ? "husky runner dir (_/h dispatches to ../<hook>)" : "hooks executed directly by git"}`
+  );
+  console.log("");
+
   for (const hook of HOOKS) {
-    const shim = path.join(shimDir, hook);
-    // husky's _/h resolves the user hook as dirname(dirname($0))/$(basename $0)
-    const userHook = path.join(path.dirname(path.dirname(shim)), hook);
+    // What git invokes.
+    const entry = path.join(shimDir, hook);
+    // What ultimately executes: through the runner, husky's `_/h` resolves the
+    // user hook as dirname(dirname($0))/$(basename $0); executed directly, the
+    // entry point IS the user hook.
+    const userHook = viaHuskyRunner
+      ? path.join(path.dirname(path.dirname(entry)), hook)
+      : entry;
     const ownHook = path.join(worktreeRoot, ".husky", hook);
 
-    const shimExists = fs.existsSync(shim);
+    const entryExists = fs.existsSync(entry);
     const userExists = fs.existsSync(userHook);
     const isOwn = path.resolve(userHook) === path.resolve(ownHook);
 
     console.log(bold(`  ${hook}`));
+    console.log(`    git invokes   ${entry}`);
     console.log(`    resolves to   ${userHook}`);
     console.log(`    exists        ${userExists ? green("yes") : red("NO")}   md5 ${md5(userHook) ?? red("n/a")}`);
     console.log(`    this worktree ${ownHook}`);
     console.log(`                  ${fs.existsSync(ownHook) ? `md5 ${md5(ownHook)}` : red("ABSENT")}`);
 
-    if (!shimExists) {
+    if (!entryExists) {
       console.log(`    verdict       ${red("NO HOOK WILL RUN — this is NOT a passing state")}`);
       fail(
-        `${hook}: ${shimDir} has no '${hook}' shim, so git finds no hook and pushes proceed unchecked (exit 0, no warning).`,
-        `Fix: npm run hooks:doctor -- --seed`
+        `${hook}: ${shimDir} has no '${hook}', so git finds no hook and commits/pushes proceed unchecked (exit 0, no warning).`,
+        viaHuskyRunner
+          ? `This worktree has no .husky/_ runner. Fix: npm run install-hooks (or 'npm install'), which points core.hooksPath at the TRACKED .husky (BACKLOG-3068).`
+          : `This branch has no .husky/${hook}.`
       );
     } else if (!userExists) {
-      console.log(`    verdict       ${red("NO HOOK WILL RUN (husky exits 0 silently)")}`);
+      console.log(`    verdict       ${red("NO HOOK WILL RUN (the runner exits 0 silently)")}`);
       fail(
         `${hook}: husky's _/h exits 0 when the user hook is missing, so this worktree is unprotected in silence.`,
         `This branch has no .husky/${hook}.`
@@ -156,7 +203,7 @@ if (!hooksPath) {
       console.log(`    verdict       ${red("WRONG HOOK — running another checkout's file")}`);
       fail(
         `${hook}: resolves to ${userHook}, not this worktree's ${ownHook}.`,
-        `This is BACKLOG-2577: core.hooksPath is absolute, so every worktree runs the main checkout's hook.`
+        `core.hooksPath is absolute, so every worktree runs one checkout's hook whatever branch it holds (BACKLOG-2577). Fix: 'npm run prepare' in ${mainRoot} sets the relative, tracked '.husky' (BACKLOG-3068).`
       );
     } else {
       console.log(`    verdict       ${green("OK — this worktree's own hook")}`);
@@ -184,26 +231,29 @@ console.log(
     yellow("remains the gate, so nothing bad merges because of this.\n")
 );
 if (!SEED) {
-  console.log("Fix:\n\n  npm run hooks:doctor -- --seed\n");
+  console.log(`Fix:\n\n  npm run prepare        (in ${mainRoot})\n\n` +
+    "which sets core.hooksPath to the tracked '.husky' for every worktree at once\n" +
+    "(BACKLOG-3068). It writes git config, so it is the repo owner's command to run.\n");
   process.exit(1);
 }
 
 // ---------------------------------------------------------------------------
 // Exit-code contract (--seed): the ACTION's result, not the diagnosis's.
 //
-// `npm run hooks:doctor -- --seed` is the MANDATORY step in the canonical
-// worktree-creation snippet (CLAUDE.md, git-branching.md). Until core.hooksPath
-// is switched to a relative path, WRONG HOOK is the CORRECT verdict for every
-// worktree — so exiting non-zero here would fail that snippet every time, abort
-// `set -e` flows, and train readers to ignore a non-zero exit from this script.
-// That would destroy the exact signal the script exists to create.
+// --seed was the MANDATORY step in the canonical worktree-creation snippet
+// while core.hooksPath pointed at the GENERATED `.husky/_`. In that state WRONG
+// HOOK was the correct verdict for every worktree, so exiting non-zero here
+// would have failed that snippet every time, aborted `set -e` flows, and
+// trained readers to ignore a non-zero exit from this script.
 //
-// So: --seed reports whether the SEED worked. The bare `hooks:doctor` keeps
-// strict semantics and is the diagnostic.
+// BACKLOG-3068 removed the reason: core.hooksPath is the TRACKED `.husky`, the
+// snippet no longer calls --seed, and the bare diagnostic passes. The contract
+// is kept anyway, because --seed still exists for the legacy state and its exit
+// code should keep meaning one thing: whether the SEED worked. The bare
+// `hooks:doctor` keeps strict semantics and is the diagnostic.
 // ---------------------------------------------------------------------------
 console.log(
-  bold("--seed reports the SEED, not the diagnosis above — the copy succeeded, so this exits 0.\n") +
-    "Until core.hooksPath becomes relative, WRONG HOOK is the correct verdict for\n" +
-    "every worktree. For the strict check, run:\n\n  npm run hooks:doctor\n"
+  bold("--seed reports the SEED, not the diagnosis above — so this exits 0.\n") +
+    "For the strict check, run:\n\n  npm run hooks:doctor\n"
 );
 process.exit(0);

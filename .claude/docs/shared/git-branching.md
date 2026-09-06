@@ -408,33 +408,48 @@ git worktree add ../Mad-task-616 -b refactor/TASK-616-console-cleanup develop
 git worktree add ../Mad-hotfix-001 -b hotfix/critical-security-patch main
 ```
 
-**Then, in the new worktree, seed its hook runner (MANDATORY — BACKLOG-2577):**
+### Hooks in a new worktree — no setup step (BACKLOG-3068)
 
-```bash
-cd ../Mad-task-701
-npm run hooks:doctor -- --seed
-```
+A new worktree runs its own branch's `pre-commit` and `pre-push` immediately.
+There is nothing to seed.
 
-### Why the seed step is not optional
+`core.hooksPath` is `.husky` — **relative**, so git resolves it against each
+worktree's own root, and pointing at the **tracked** hooks directory, so
+`.husky/pre-commit` and `.husky/pre-push` arrive with the checkout at mode
+100755 like any other tracked file.
 
-`core.hooksPath` is shared by every worktree, and husky resolves the user hook
-relative to it. A worktree with no `.husky/_` directory runs **no pre-push hook
-at all**, and git reports that with **silence and exit 0** — there is no warning,
-and a push that checked nothing looks exactly like a push that passed.
+**What this replaced, and why.** Until BACKLOG-3068, `core.hooksPath` was
+`.husky/_` — husky's **generated** runner directory, which husky gitignores by
+design (it writes a `.gitignore` holding `*` into it). `git worktree add` cannot
+bring along a file that is not tracked, so a new worktree had no `_`, git found
+no hook, and **the commit or push proceeded with no gate and no message, exit
+0** — a push that checked nothing looked exactly like a push that passed. The
+remedy was a one-time `npm run hooks:doctor -- --seed` per worktree, documented
+as MANDATORY. Measured at the time of the fix: **5 of 79 worktrees had been
+seeded**. A step that 94% of instances skip is a note, not a mechanism.
 
-`.husky/_` is deliberately **untracked**, so `git worktree add` cannot bring it
-along: hook infrastructure requires branch-independence, and tracking is
-definitionally branch-dependence (a checkout of a branch without the files would
-delete the directory and disable hooks repo-wide). The one-time seed is the
-price of that safety.
+The generated `_` directory is still gitignored, and `npm run check:hooks`
+(a CI gate) still fails if anything under it is committed — tracking it would
+make hook presence depend on the checked-out branch, so a checkout of any branch
+without those files would delete the directory and disable hooks repo-wide. What
+changed is only that `core.hooksPath` no longer points there.
 
-Run `npm run hooks:doctor` (without `--seed`) at any time to see which hook a
-push from this worktree will actually execute, whether it is this worktree's own,
-and its md5. It exits non-zero when the answer is wrong.
+**If you suspect a hook did not fire**, run `npm run hooks:doctor`. It reports
+which file a commit or push from this worktree will actually execute, whether it
+is this worktree's own, and its md5, and exits non-zero when the answer is wrong:
 
-**Bounding the risk:** an unseeded worktree loses **local fast feedback, not
-correctness**. CI remains the gate, so nothing bad merges because of a missed
-seed. Fix it anyway rather than pushing blind.
+| verdict | meaning | fix |
+|---|---|---|
+| `PROTECTED` | this worktree's own hooks run | — |
+| `WRONG HOOK` | `core.hooksPath` is absolute; every worktree runs one checkout's file whatever branch it holds | `npm run prepare` in the main checkout |
+| `NO HOOK WILL RUN` | `core.hooksPath` points at a directory this worktree has no hook in | `npm run prepare` in the main checkout |
+
+`npm run prepare` writes git config and fixes every worktree at once, so it is
+the repo owner's command to run, not an agent's.
+
+**Bounding the risk:** a hookless worktree loses **local fast feedback, not
+correctness**. CI remains the gate, so nothing bad merges because of it. Fix it
+rather than pushing blind.
 
 ### Verification Steps (MANDATORY)
 

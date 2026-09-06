@@ -416,19 +416,27 @@ git worktree add ../Mad-task-XXX -b feature/TASK-XXX-description int/<sprint-nam
 
 cd ../Mad-task-XXX
 
-# Give the worktree its own hook runner (BACKLOG-2577). A worktree without
-# .husky/_ runs NO pre-push hook and git reports that with silence and exit 0.
-npm run hooks:doctor -- --seed
-
 # Verify isolation
 git worktree list
 pwd  # Should show Mad-task-XXX, NOT main repo
 ```
 
-`hooks:doctor` (no `--seed`) answers "which hook runs when I push, and is it
-mine?" and exits non-zero when the answer is wrong. A hookless worktree loses
-**local fast feedback, not correctness** — CI remains the gate — but fix it
-anyway rather than pushing blind.
+**There is no hook-seeding step (BACKLOG-3068).** `core.hooksPath` is `.husky`,
+the **tracked** hooks directory, so a new worktree runs its own branch's
+`pre-commit` and `pre-push` the moment it is created — nothing to copy, nothing
+to remember. The old `npm run hooks:doctor -- --seed` step is gone. It existed
+because `core.hooksPath` pointed at the **generated** `.husky/_`, which husky
+gitignores by design and which therefore never exists in a new worktree; that
+step was documented as mandatory and had been performed in 5 of 79 worktrees.
+
+`npm run hooks:doctor` answers "which hook runs when I commit or push, and is it
+mine?" and exits non-zero when the answer is wrong. Run it if you suspect a hook
+did not fire. `WRONG HOOK` or `NO HOOK WILL RUN` means `core.hooksPath` has been
+reset; `npm run prepare` in the main checkout restores it for every worktree at
+once. That command writes git config, so it is the repo owner's to run.
+
+A hookless worktree loses **local fast feedback, not correctness** — CI remains
+the gate — but fix it rather than pushing blind.
 
 **Full documentation:** `.claude/docs/shared/git-branching.md` (Git Worktrees section)
 

@@ -410,6 +410,48 @@ jobs:
       - name: Assert nothing under .husky/_ is tracked
         run: npm run check:hooks
 
+  # BACKLOG-3068: `core.hooksPath` decides whether ANY hook runs, and it fails
+  # silently in both directions -- a worktree whose hooks do not run accepts the
+  # commit with exit 0 and no message, and nothing reports that `npm install`
+  # reset the value. Measured on the filing machine: 5 of 79 worktrees had the
+  # generated `.husky/_` husky's own value points at, so 74 were ungated.
+  #
+  # The fix points `core.hooksPath` at the TRACKED `.husky`, which every checkout
+  # and worktree already has. This job executes that claim against a real
+  # throwaway repo with a real linked worktree, including the pair that proves
+  # `set -e` is in force in the hook files now that husky's `sh -e` wrapper is
+  # gone.
+  #
+  # Separate from hooks-tracking on purpose: that job reads the git index only
+  # and deliberately never installs, and this one needs `husky` on disk to run
+  # the real `prepare` script. `ignore-scripts` keeps `prepare` from running as
+  # an install side effect, so the only thing that writes `core.hooksPath` here
+  # is the harness, inside its own temp directory.
+  #
+  # Unique job name + unique status-check name. Do NOT add a second job with
+  # this name.
+  hooks-path:
+    name: Hooks Path Guard
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Setup Node.js 20.x
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: 20.x
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm install
+        env:
+          npm_config_ignore_scripts: true
+
+      - name: Verify the hooks path
+        run: npm run verify:hooks-path
+
   # BACKLOG-2959: SQL text belongs in electron/services/db/** (the *Sql.ts
   # pattern). This gate fails when a NEW site defines SQL text anywhere else.
   #

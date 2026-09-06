@@ -78,7 +78,8 @@
     "check:test-drift": "node scripts/ci/check-test-drift.mjs",
     "check:android-version": "node scripts/ci/check-android-version-bump.mjs",
     "hooks:doctor": "node scripts/hooks-doctor.mjs",
-    "prepare": "husky",
+    "verify:hooks-path": "node scripts/__tests__/hooks-path.verify.js",
+    "prepare": "node scripts/install-hooks.mjs",
     "prestart": "node scripts/rebuild-native.js"
   },
   "keywords": [
