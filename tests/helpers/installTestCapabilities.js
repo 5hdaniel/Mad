@@ -100,6 +100,9 @@ function installTestCapabilities() {
   const { installAppPaths } = require("../../electron/capabilities/appPathsProvider");
   const { installWindows } = require("../../electron/capabilities/windowsProvider");
   const { installDialog } = require("../../electron/capabilities/dialogProvider");
+  const {
+    installAppLifecycle,
+  } = require("../../electron/capabilities/appLifecycleProvider");
 
   installLogger({
     debug: (message, ...args) => currentLog().debug(message, ...args),
@@ -138,6 +141,19 @@ function installTestCapabilities() {
   // would make those assertions describe this file instead.
   installDialog({
     showMessageBox: (request) => currentDialog().showMessageBox(request),
+  });
+
+  // `isPackaged` is a PROPERTY on Electron's `app` and on the mock, so it is
+  // read per call rather than bound — a suite that flips it between cases (the
+  // KEEPR_TEST_DB_DELAY seam's own suite does) must see the new value.
+  // `isReady` is deliberately NOT added to `tests/__mocks__/electron.js`: the
+  // shared mock has never had one, so a suite reaching that path without its own
+  // mock gets the same TypeError, in the same place, as it did before the seam.
+  installAppLifecycle({
+    isPackaged: () => currentApp().isPackaged,
+    isReady: () => currentApp().isReady(),
+    whenReady: () => currentApp().whenReady(),
+    quit: () => currentApp().quit(),
   });
 
   installWindows({

@@ -83,6 +83,8 @@ import { installAppPaths } from "../capabilities/appPathsProvider";
 import { ElectronAppPaths } from "../capabilities/electron/electronAppPaths";
 import { installWindows } from "../capabilities/windowsProvider";
 import { ElectronWindows } from "../capabilities/electron/electronWindows";
+import { installAppLifecycle } from "../capabilities/appLifecycleProvider";
+import { ElectronAppLifecycle } from "../capabilities/electron/electronAppLifecycle";
 import { installDialog } from "../capabilities/dialogProvider";
 import { ElectronDialog } from "../capabilities/electron/electronDialog";
 import { installSecretStore } from "../capabilities/secretStoreProvider";
@@ -116,6 +118,10 @@ installWindows(new ElectronWindows());
 // recorded in this file's header, and it is SR's measurement of Electron's own
 // default handler, not of this call site.
 installDialog(new ElectronDialog());
+// `ElectronAppLifecycle` reads `app.isPackaged` per call rather than at
+// construction, so installing it here — during `main.ts` evaluation, long before
+// `ready` — freezes nothing.
+installAppLifecycle(new ElectronAppLifecycle());
 installSecretStore(new ElectronSecretStore());
 
 // LAST — every capability above must now answer `isInstalled()`.

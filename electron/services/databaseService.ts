@@ -22,7 +22,7 @@ import { hostLogger } from "../capabilities/loggerProvider";
 import path from "path";
 import fs from "fs";
 import crypto from "crypto";
-import { app } from "electron";
+import { hostAppLifecycle } from "../capabilities/appLifecycleProvider";
 import { hostAppPaths } from "../capabilities/appPathsProvider";
 import { hostDialog } from "../capabilities/dialogProvider";
 import { hostErrorReporter } from "../capabilities/errorReporterProvider";
@@ -182,7 +182,7 @@ class DatabaseService implements IDatabaseService {
     // BACKLOG-1842 (resume-at-step fix round): test-only seam to reproduce
     // the "relaunch reaches auth/onboarding reads before the local DB is
     // ready" race on demand, without depending on real memory pressure.
-    // Double-gated (!app.isPackaged && KEEPR_TEST_DB_DELAY set) so it is DEAD
+    // Double-gated (!hostAppLifecycle.isPackaged() && KEEPR_TEST_DB_DELAY set) so it is DEAD
     // CODE in any packaged/shipped build, mirroring the KEEPR_E2E gates in
     // permissionHandlers.ts. Value is milliseconds to sleep before DB init
     // proceeds -- e.g. `KEEPR_TEST_DB_DELAY=5000 npm run dev` delays DB
@@ -190,7 +190,7 @@ class DatabaseService implements IDatabaseService {
     // get-phone-type, check-email-onboarding, check-all-connections, the
     // onboarding resume-marker flow) can be exercised against a real race
     // instead of only unit-test mocks.
-    if (!app.isPackaged && process.env.KEEPR_TEST_DB_DELAY) {
+    if (!hostAppLifecycle.isPackaged() && process.env.KEEPR_TEST_DB_DELAY) {
       const delayMs = parseInt(process.env.KEEPR_TEST_DB_DELAY, 10);
       if (Number.isFinite(delayMs) && delayMs > 0) {
         await logService.warn(
@@ -328,8 +328,8 @@ class DatabaseService implements IDatabaseService {
         });
 
         // Ensure app is ready before showing dialog
-        if (!app.isReady()) {
-          await app.whenReady();
+        if (!hostAppLifecycle.isReady()) {
+          await hostAppLifecycle.whenReady();
         }
 
         if (restoreResult.restored) {
@@ -418,7 +418,7 @@ class DatabaseService implements IDatabaseService {
           // Destructive beats annoying, so the destructive outcome is the
           // one that has to be opted into.
           if (options?.quitOnUnrecoverableFailure) {
-            app.quit();
+            hostAppLifecycle.quit();
           }
 
           throw new MigrationRecoveryFailedError(
@@ -450,7 +450,8 @@ class DatabaseService implements IDatabaseService {
         // and documents the case as informational), and LoadingOrchestrator
         // reads `retryable` only into a Sentry extra. What actually stops a
         // retry loop on an unfixable database is the sequence below: the user
-        // is TOLD (dialog, awaited), and then the app EXITS (app.quit()) —
+        // is TOLD (dialog, awaited), and then the app EXITS
+        // (hostAppLifecycle.quit()) —
         // quit makes renderer state moot. Do not "fix" a future retry bug by
         // teaching the reducer about retryable; the dialog+quit is the
         // load-bearing surface, by SR ruling on this item.
@@ -474,8 +475,8 @@ class DatabaseService implements IDatabaseService {
         // (BACKLOG-1576 precedent on the auto-restore path).
         await hostErrorReporter.flush(2000);
 
-        if (!app.isReady()) {
-          await app.whenReady();
+        if (!hostAppLifecycle.isReady()) {
+          await hostAppLifecycle.whenReady();
         }
         // ORDER IS LOAD-BEARING: the dialog is AWAITED, then quit. Dropping
         // the await would exit mid-dialog — the user would never learn why
@@ -505,7 +506,7 @@ class DatabaseService implements IDatabaseService {
             `Database: ${this.dbPath ?? "unknown"}`,
           buttons: ["Quit"],
         });
-        app.quit();
+        hostAppLifecycle.quit();
         throw error;
       }
 

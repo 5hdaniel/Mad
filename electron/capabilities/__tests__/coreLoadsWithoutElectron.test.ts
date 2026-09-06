@@ -168,18 +168,15 @@ describe("core modules load without Electron (BACKLOG-2962)", () => {
     expect(() => loadWithoutElectron("../../services/autoLinkService")).not.toThrow();
   });
 
-  it("emailDeduplicationService STILL fails — and that is PR B's remainder, named", () => {
-    // Not a gap in this PR: `emailDeduplicationService.ts:21` statically imports
-    // `databaseService`, which keeps `import { app, dialog } from "electron"` for
-    // 7 `app.*` lifecycle calls and 3 `dialog.showMessageBox` calls — the Dialog
-    // and Window seams, deliberately out of scope here.
-    //
-    // Asserted as a THROW rather than left unwritten, so the boundary is a fact
-    // in the suite instead of an absence. When PR B lands, this case reds and
-    // whoever lands it flips it to `.not.toThrow()`.
+  it("emailDeduplicationService loads with no Electron present — PR B's remainder, closed", () => {
+    // PR A left this case asserting a THROW, with the reason written down:
+    // `emailDeduplicationService.ts:21` statically imports `databaseService`,
+    // which kept `import { app, dialog } from "electron"`. That import is gone,
+    // so this case reds as a throw and is flipped here — which is the point of
+    // having written the boundary as an assertion rather than an absence.
     expect(() =>
       loadWithoutElectron("../../services/emailDeduplicationService"),
-    ).toThrow(NO_ELECTRON);
+    ).not.toThrow();
   });
 
   it("windowsProvider loads with no Electron present", () => {
@@ -211,6 +208,20 @@ describe("core modules load without Electron (BACKLOG-2962)", () => {
   it("dialogProvider loads with no Electron present", () => {
     // The Dialog seam's own interface side (BACKLOG-2962, seams PR B).
     expect(() => loadWithoutElectron("../dialogProvider")).not.toThrow();
+  });
+
+  it("appLifecycleProvider loads with no Electron present", () => {
+    // The AppLifecycle seam's own interface side (BACKLOG-2962, seams PR B).
+    expect(() => loadWithoutElectron("../appLifecycleProvider")).not.toThrow();
+  });
+
+  it("databaseService loads with no Electron present", () => {
+    // THE LAST ONE. It was the only module left in BACKLOG-2961's extraction
+    // closure importing `electron`, and it held all four of the closure's
+    // transitively-coupled modules. 3 `dialog.showMessageBox` and 7
+    // `app.isPackaged`/`isReady`/`whenReady`/`quit`, on the terminal database
+    // paths where the app tells the user why it is about to stop.
+    expect(() => loadWithoutElectron("../../services/databaseService")).not.toThrow();
   });
 
   it("messageMatchingService loads with no Electron present", () => {

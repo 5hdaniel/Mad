@@ -182,6 +182,7 @@ describe("composition-root guard: the real tree (BACKLOG-2962)", () => {
       "appPaths",
       "windows",
       "dialog",
+      "appLifecycle",
       "the runtime self-check",
     ]);
   });
@@ -198,6 +199,7 @@ describe("composition-root guard: the real tree (BACKLOG-2962)", () => {
       "appPaths",
       "windows",
       "dialog",
+      "appLifecycle",
     ]);
     expect(NATIVE_CAPABILITIES.map((c) => c.installFunction)).toEqual([
       "installSecretStore",
@@ -206,6 +208,7 @@ describe("composition-root guard: the real tree (BACKLOG-2962)", () => {
       "installAppPaths",
       "installWindows",
       "installDialog",
+      "installAppLifecycle",
     ]);
     expect(NATIVE_CAPABILITIES.map((c) => c.providerModule)).toEqual([
       "electron/capabilities/secretStoreProvider",
@@ -214,6 +217,7 @@ describe("composition-root guard: the real tree (BACKLOG-2962)", () => {
       "electron/capabilities/appPathsProvider",
       "electron/capabilities/windowsProvider",
       "electron/capabilities/dialogProvider",
+      "electron/capabilities/appLifecycleProvider",
     ]);
   });
 

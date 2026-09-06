@@ -43,6 +43,7 @@
  * @module electron/capabilities/nativeCapabilities
  */
 
+import { isAppLifecycleInstalled } from "./appLifecycleProvider";
 import { isAppPathsInstalled } from "./appPathsProvider";
 import { isDialogInstalled } from "./dialogProvider";
 import { isErrorReporterInstalled } from "./errorReporterProvider";
@@ -142,6 +143,12 @@ export const NATIVE_CAPABILITIES: readonly NativeCapability[] = [
     providerModule: "electron/capabilities/dialogProvider",
     installFunction: "installDialog",
     isInstalled: isDialogInstalled,
+  },
+  {
+    name: "appLifecycle",
+    providerModule: "electron/capabilities/appLifecycleProvider",
+    installFunction: "installAppLifecycle",
+    isInstalled: isAppLifecycleInstalled,
   },
 ];
 

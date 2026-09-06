@@ -113,6 +113,12 @@ const PORTABLE = new Set([
   // under another shell" are different properties and epic 9 wants both.
   "electron/services/initializationBroadcaster.ts",
   "electron/services/reviewStateService.ts",
+  // Seams PR B (Dialog + AppLifecycle). `databaseService.ts` was the last module
+  // in BACKLOG-2961's extraction closure to import `electron`: 3
+  // `dialog.showMessageBox` and 7 `app.isPackaged`/`isReady`/`whenReady`/`quit`.
+  // With it, the closure's directly-coupled set reaches 0 and its transitively-
+  // coupled set with it. Its 38 parked SQL sites (BACKLOG-2992) are untouched.
+  "electron/services/databaseService.ts",
 ]);
 
 /**
