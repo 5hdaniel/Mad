@@ -15,8 +15,8 @@
  * export becomes a one-line wrapper over it:
  *
  *     export function updateContactSync(id, fields): void { ...the work... }
- *     export async function updateContact(id, fields): Promise<void> {
- *       return updateContactSync(id, fields);
+ *     export function updateContact(id, fields): Promise<void> {
+ *       return Promise.resolve(updateContactSync(id, fields));
  *     }
  *
  * THE PRIMITIVE IS THE SYNC ONE. THE WRAPPER IS THE PROMISE ONE. Never the
@@ -96,9 +96,10 @@
  * literal passed as the first argument to `dbTransaction(...)` or to any
  * `.transaction(...)` property call. From each body's callees the graph is
  * walked by NAME: a call `foo(...)` or `x.foo(...)` is an edge to every
- * function-like declaration named `foo`, and the walk does not enter an
- * `async` function (it is the SYNC call graph — e90659a1's definition). An
- * inline non-async function literal is walked as part of its container.
+ * function-like declaration named `foo`, and the walk does not enter a
+ * PROMISE-RETURNING function — `async`, or annotated `Promise<…>` (it is the
+ * SYNC call graph — e90659a1's definition). An inline function literal that is
+ * not promise-returning is walked as part of its container.
  *
  *   Name-based edges OVER-connect and never under-connect. A same-named
  *   delegate (`databaseService.updateContactSync` -> `contactDb.updateContactSync`)
@@ -106,9 +107,14 @@
  *   also joined, which can only make (iv) EASIER to satisfy. The guard's
  *   strict assertions — (i), (ii), (iii) — do not depend on the graph.
  *
- *   The walk stops at `async` on purpose. A twin reached ONLY through its own
- *   promise-returning sibling is reported as unreached — and that is the
- *   anti-pattern (a body calling the wrapper) surfacing as a red, not a hole.
+ *   The walk stops at a PROMISE-RETURNING function on purpose — `async`, or the
+ *   ruled plain shape annotated `Promise<…>`. It stopped only at `async` until
+ *   BACKLOG-2960 (SR a5515a44): a body calling a PLAIN promise-returning wrapper
+ *   was walked THROUGH the wrapper, the twin read as reached, and the finding was
+ *   never made — measured by plant, green before this change and red after. A twin
+ *   reached ONLY through its own promise-returning sibling is reported as
+ *   unreached — and that is the anti-pattern (a body calling the wrapper)
+ *   surfacing as a red, not a hole.
  *
  *   "Promise-returning" is read from syntax: the `async` keyword or an explicit
  *   `Promise<…>` return annotation. A plain wrapper with no annotation reads as
@@ -273,14 +279,15 @@ function transactionBodyOf(call: ts.CallExpression): FnNode | null {
 }
 
 /**
- * The names this function calls, synchronously. Nested NON-async literals are
- * part of their container (a `for` body's arrow, a `.forEach` callback); a
- * nested `async` literal is a boundary and is not entered.
+ * The names this function calls, synchronously. Nested literals that are not
+ * promise-returning are part of their container (a `for` body's arrow, a
+ * `.forEach` callback); a nested promise-returning literal — `async`, or
+ * annotated `Promise<…>` — is a boundary and is not entered.
  */
 function calleeNames(fn: FnNode): Set<string> {
   const out = new Set<string>();
   const visit = (n: ts.Node): void => {
-    if (n !== fn && isFnLike(n) && isAsync(n)) return;
+    if (n !== fn && isFnLike(n) && isPromiseReturning(n)) return;
     if (ts.isCallExpression(n)) {
       const c = n.expression;
       if (ts.isIdentifier(c)) out.add(c.text);
@@ -336,7 +343,7 @@ function analyze(sources: Map<string, string>): Analysis {
       if (reached.has(name)) continue;
       reached.add(name);
       for (const decl of declsByName.get(name) ?? []) {
-        if (isAsync(decl.node)) continue;
+        if (isPromiseReturning(decl.node)) continue;
         for (const callee of calleeNames(decl.node)) if (!reached.has(callee)) queue.push(callee);
       }
     }
@@ -514,13 +521,23 @@ describe("a sync twin is derived from source, never listed (BACKLOG-2960)", () =
     ).toEqual([`${DB_LAYER}e.ts: quxSync returns a promise — the *Sync twin must be the synchronous primitive, never the wrapper`]);
 
     // (f) Reached only THROUGH the async sibling — the body calls the wrapper.
-    //     The sync walk stops at `async`, so the twin reads as unreached: red.
+    //     The sync walk stops at a promise-returning function, so the twin reads
+    //     as unreached: red.
     expect(
       verdict([
         db("f", `export function readSync(): number { return 1; }\nexport async function read(): Promise<number> { return readSync(); }`),
         svc("caller", `dbTransaction(() => { void read(); });`),
       ]),
     ).toEqual([`${DB_LAYER}f.ts: readSync is not reached from any transaction body — a dead twin; delete it or call it where the transaction is`]);
+
+    // (f') THE RULED WRAPPER SHAPE, same anti-pattern: the body calls a PLAIN
+    //     function annotated `Promise<…>`. Must be red for the same reason as (f).
+    expect(
+      verdict([
+        db("f2", `export function readSync(): number { return 1; }\nexport function read(): Promise<number> { return Promise.resolve(readSync()); }`),
+        svc("caller", `dbTransaction(() => { void read(); });`),
+      ]),
+    ).toEqual([`${DB_LAYER}f2.ts: readSync is not reached from any transaction body — a dead twin; delete it or call it where the transaction is`]);
 
     // (g) Transitive reach through a sync helper in another file is reach.
     expect(
