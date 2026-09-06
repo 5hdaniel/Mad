@@ -1155,7 +1155,7 @@ export class BackupService extends EventEmitter {
         this.emit("error", error);
       });
 
-      this.currentProcess.on("close", async (code: number | null) => {
+      const onProcessClose = async (code: number | null) => {
         const duration = Date.now() - this.startTime;
         this.isRunning = false;
         this.currentProcess = null;
@@ -1386,6 +1386,9 @@ export class BackupService extends EventEmitter {
         this.emit("complete", result);
 
         resolve(result);
+      };
+      this.currentProcess.on("close", (code: number | null) => {
+        void onProcessClose(code);
       });
     });
   }

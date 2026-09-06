@@ -1507,7 +1507,7 @@ export function registerContactHandlers(mainWindow: BrowserWindow): void {
               "Contacts",
             );
 
-            setImmediate(async () => {
+            const refreshContactNamesInBackground = async () => {
               try {
                 const { phoneToContactInfo, contacts } = await getContactNames();
 
@@ -1542,6 +1542,9 @@ export function registerContactHandlers(mainWindow: BrowserWindow): void {
               } catch (err) {
                 logService.warn(`[Main] Background external contacts sync failed: ${err}`, "Contacts");
               }
+            };
+            setImmediate(() => {
+              void refreshContactNamesInBackground();
             });
           }
         }

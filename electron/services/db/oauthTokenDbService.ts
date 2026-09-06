@@ -160,7 +160,7 @@ export async function deleteOAuthToken(
 export async function clearAllOAuthTokens(): Promise<void> {
   const statement = sql`DELETE FROM oauth_tokens`;
   dbRun(statement, []);
-  logService.info("[OAuthTokenDbService] Cleared all OAuth tokens for session-only OAuth", "OAuthTokenDbService");
+  void logService.info("[OAuthTokenDbService] Cleared all OAuth tokens for session-only OAuth", "OAuthTokenDbService");
 }
 
 /**
@@ -204,7 +204,7 @@ export async function updateOAuthTokenSyncTime(
     WHERE user_id = ? AND provider = ? AND purpose = 'mailbox' AND is_active = 1
   `;
   dbRun(statement, [syncTime.toISOString(), userId, provider]);
-  logService.info(
+  void logService.info(
     `[OAuthTokenDbService] Updated last_sync_at for ${provider} to ${syncTime.toISOString()}`,
     "OAuthTokenDbService",
   );

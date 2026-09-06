@@ -429,7 +429,7 @@ export async function addIgnoredCommunication(
 
   dbRun(statement, params);
 
-  logService.debug("[BACKLOG-1560] addIgnoredCommunication SUCCESS", "CommunicationDbService", {
+  void logService.debug("[BACKLOG-1560] addIgnoredCommunication SUCCESS", "CommunicationDbService", {
     id, transaction_id: data.transaction_id, thread_id: data.thread_id ?? 'NULL'
   });
 
@@ -610,7 +610,7 @@ export function getIgnoredThreadIdsForTransaction(
   const rows = dbAll<{ thread_id: string }>(statement, [transactionId]);
   const result = new Set(rows.map((r) => r.thread_id));
 
-  logService.debug("[BACKLOG-1560] getIgnoredThreadIds", "CommunicationDbService", {
+  void logService.debug("[BACKLOG-1560] getIgnoredThreadIds", "CommunicationDbService", {
     transactionId, count: result.size, ids: Array.from(result)
   });
 

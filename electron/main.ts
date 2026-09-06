@@ -1628,7 +1628,8 @@ app.whenReady().then(async () => {
   // Handle renderer process crashes and unresponsive states
   // Uses native dialog (not renderer-based) since the renderer may be dead
   if (mainWindow) {
-    mainWindow.webContents.on("render-process-gone", async (_event, details) => {
+    mainWindow.webContents.on("render-process-gone", (_event, details) => {
+      void (async () => {
       console.error("[Main] Renderer process gone:", details.reason, details.exitCode);
       log.error("[Main] Renderer process gone:", details.reason, details.exitCode);
 
@@ -1658,9 +1659,11 @@ app.whenReady().then(async () => {
       } else {
         app.quit();
       }
+      })();
     });
 
-    mainWindow.on("unresponsive", async () => {
+    mainWindow.on("unresponsive", () => {
+      void (async () => {
       console.warn("[Main] Window became unresponsive");
       log.warn("[Main] Window became unresponsive");
 
@@ -1682,6 +1685,7 @@ app.whenReady().then(async () => {
         app.quit();
       }
       // response === 0: Wait (do nothing)
+      })();
     });
   }
 
