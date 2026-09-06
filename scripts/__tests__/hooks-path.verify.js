@@ -278,7 +278,7 @@ function runInstallHooks(cwd, env = {}) {
  * is the control: if the hook still aborts without it, the probe is measuring
  * something other than errexit.
  */
-function probeErrexit(hookName, stripSetE) {
+function probeErrexit(hookName, stripSetE, inject = ["false"]) {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), "hookspath-errexit-"));
   try {
     const src = fs.readFileSync(path.join(REAL_HOOKS, hookName), "utf8");
@@ -289,7 +289,7 @@ function probeErrexit(hookName, stripSetE) {
       ? [...lines.slice(0, setEIndex), ...lines.slice(setEIndex + 1)]
       : lines.slice();
     const injectAt = stripSetE ? setEIndex : setEIndex + 1;
-    body.splice(injectAt, 0, "false", 'echo "REACHED_PAST_FAILURE"', "exit 0");
+    body.splice(injectAt, 0, ...inject, 'echo "REACHED_PAST_FAILURE"', "exit 0");
     const file = path.join(dir, hookName);
     fs.writeFileSync(file, body.join("\n"), { mode: 0o755 });
     const r = spawnSync(file, [], { cwd: dir, encoding: "utf8" });
@@ -308,6 +308,20 @@ for (const hook of ["pre-commit", "pre-push"]) {
     withSetE.missing
       ? "no `set -e` line in the hook — errexit is not in force and every `|| true` guard is dead code"
       : `exit=${withSetE.code}, reached-past-failure=${withSetE.out.includes("REACHED_PAST_FAILURE")}`,
+  );
+
+  // The other half, and what makes the "4 `|| true` guards + 5 `|| exit_code=$?`
+  // calls are dead code without errexit" claim EXECUTABLE rather than merely
+  // stated: under errexit a GUARDED failure must NOT abort. C8 alone would stay
+  // green if the guard pattern itself were broken.
+  const guarded = probeErrexit(hook, false, ["false || true"]);
+  record(
+    `C8b.${hook}`,
+    `${hook}: under \`set -e\`, a GUARDED failure (\`|| true\`) does NOT abort — the guards work`,
+    !guarded.missing && guarded.code === 0 && guarded.out.includes("REACHED_PAST_FAILURE"),
+    guarded.missing
+      ? "no `set -e` line in the hook"
+      : `exit=${guarded.code}, reached-past-failure=${guarded.out.includes("REACHED_PAST_FAILURE")}`,
   );
 
   const without = probeErrexit(hook, true);
