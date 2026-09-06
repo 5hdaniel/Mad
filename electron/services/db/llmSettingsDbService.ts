@@ -17,8 +17,23 @@
  *
  * State the failure mode precisely, because the obvious fear is the wrong one:
  * a floated call to one of these from inside a synchronous transaction body
- * does NOT let writes escape the transaction — the synchronous work runs to
- * completion before any microtask. What is lost is the ERROR PATH.
+ * does NOT let writes escape the transaction — the synchronous work, the throw
+ * included, runs to completion before any microtask. What a floated call loses
+ * is the RESOLVED VALUE and nothing else: the settings row, or the `void` a
+ * writer resolves with. It cannot lose an error path, because none of these
+ * wrappers can reject — every one returns `Promise.resolve(...)`, and every
+ * throw happens before that promise is constructed, so it propagates out of the
+ * transaction body and the driver rolls back.
+ *
+ * What DOES lose the error path is making one of these `async`. The throw then
+ * arrives after the frame that could have rolled back: the transaction commits
+ * over it and the failure surfaces later as a rejection.
+ *
+ * Both halves were measured on the real driver in the SR review of PR #2544. A
+ * plain wrapper floated inside a synchronous `dbTransaction` body: the throw
+ * propagated and the body's own write was rolled back. The same call with the
+ * wrapper made `async`: the transaction saw no error and COMMITTED, while the
+ * failure arrived later as a rejection.
  *
  * The driver conduits (`dbGet`, `dbRun`) stay synchronous and are the only
  * thing under this file that touches SQLite. `readLLMSettings` below is the
