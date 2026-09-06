@@ -17,8 +17,8 @@
  *    throws during `main.ts` module evaluation if this file finished without
  *    installing something the core will demand. That is before
  *    `app.whenReady()` and therefore before the window opens. The `catch`
- *    below turns that throw into a named error box and a non-zero exit — see
- *    "WHAT HAPPENS WHEN IT FIRES".
+ *    below turns that throw into a Sentry event, a named error box and a
+ *    non-zero exit — see "WHAT HAPPENS WHEN IT FIRES".
  * 2. `electron/capabilities/__tests__/compositionRootGuard.test.ts` is the
  *    STATIC guard: it AST-matches every `installFunction` in
  *    `NATIVE_CAPABILITIES` — **and the `assertNativeCapabilitiesInstalled()`
@@ -57,6 +57,38 @@
  * would mean rewriting `main.ts:12` as a `require()` call — which rule E1 does
  * not recognise as an entry import, taking this item's own static guard red.
  *
+ * SENTRY, AND WHAT WAITING FOR IT CHANGES (BACKLOG-2962 follow-up, 2026-09-06)
+ * ---------------------------------------------------------------------------
+ * The founder's launch probe at `139913c51` passed and then asked "did it also
+ * fire a Sentry log?" — no, by construction: `Sentry.init` sat at `main.ts:223`,
+ * after this module, and this `catch` never called it. Now `main.ts` imports
+ * `./installSentry` ABOVE this module, and the `catch` captures the error and
+ * waits for the flush before the box. Two consequences, both TRACED at
+ * `139913c51` and neither measured on the binary — the founder's launch check
+ * at promotion is the measurement:
+ *
+ *   1. With Sentry ENABLED the box comes AFTER `ready`. The Electron transport
+ *      sends only once `app.whenReady()` resolves (`@sentry/electron/main`
+ *      `transports/electron-net.js`), so no flush can settle before `ready`.
+ *      Up to `SENTRY_FLUSH_TIMEOUT_MS` may pass between the failure and the
+ *      box. With Sentry DISABLED (no DSN → no transport) the flush resolves at
+ *      once and the box follows on the microtask after `main.ts` finishes
+ *      evaluating — still before `ready`, which is a macrotask.
+ *   2. `main.ts` keeps evaluating while the flush is pending, because an
+ *      `import` cannot be caught and this `catch` no longer blocks. Its
+ *      ready-time paths are told to stand down through `./startupFailure`,
+ *      which this `catch` writes BEFORE anything asynchronous starts. The
+ *      three sites are listed in that module's header and pinned by
+ *      `electron/__tests__/main.startupFailureGuards-2962.test.ts`.
+ *
+ * SR's #2518 ruling on `app.exit(1)` ("its safety is a consequence of WHERE the
+ * catch sits ... if the catch ever moves into any post-ready path this ruling
+ * must be re-derived") is re-derived here: the exit may now run after `ready`,
+ * when `main.ts`'s `before-quit` handlers exist — but the `whenReady` body
+ * returned at its first statement, so no worker pool, backup or interval was
+ * ever started and those handlers have nothing to end. `exit`, not `quit`,
+ * for the same reasons as before: not cancellable, carries the code.
+ *
  * `dialog.showErrorBox` is the one dialog API usable before `app.whenReady()`.
  * Measured rather than assumed, though not by me: SR's probe C watched
  * Electron's own default handler render a `showErrorBox` at this same point in
@@ -74,7 +106,9 @@
 
 import { app, dialog } from "electron";
 import log from "electron-log";
+import * as Sentry from "@sentry/electron/main";
 
+import { recordStartupFailure } from "./startupFailure";
 import { installLogger } from "../capabilities/loggerProvider";
 import { ElectronLogger } from "../capabilities/electron/electronLogger";
 import { installErrorReporter } from "../capabilities/errorReporterProvider";
@@ -93,6 +127,13 @@ import { assertNativeCapabilitiesInstalled } from "../capabilities/nativeCapabil
 
 /** Title of the error box shown when a capability is missing at launch. */
 export const STARTUP_FAILURE_TITLE = "Keepr cannot start";
+
+/**
+ * How long the fatal path waits for Sentry before showing the box and exiting.
+ * Sentry's own `shutdownTimeout` default, and what its uncaught-exception
+ * integration waits before its dialog.
+ */
+export const SENTRY_FLUSH_TIMEOUT_MS = 2000;
 
 // Logger FIRST, so that anything a later installer's constructor might log
 // reaches the file transport rather than the silent default. Nothing logs
@@ -145,8 +186,34 @@ try {
   // which nothing has done at this point in startup.
   console.error("[FATAL] Native capability missing:", error);
   log.error("[FATAL] Native capability missing:", error);
-  // Box after the text, exit after the box. Exiting first ends the process
-  // before the box is reached — SR measured both orders on the real binary.
-  dialog.showErrorBox(STARTUP_FAILURE_TITLE, message);
-  app.exit(1);
+  // RECORD, before anything asynchronous. `main.ts` keeps evaluating after
+  // this module returns, and its ready-time paths consult this record — see
+  // `./startupFailure` and this file's header, "what waiting for it changes".
+  const failure = error instanceof Error ? error : new Error(message);
+  recordStartupFailure(failure);
+  // SENTRY, before the box. Raw `Sentry`, not the ErrorReporter capability,
+  // for the reason the box below is raw `dialog`: this is the shell reporting
+  // that a capability is missing, and reporting through a capability would be
+  // circular. `Sentry.init` has already run — `main.ts` imports
+  // `./installSentry` above this module, and `installSentry.test.ts` pins
+  // that order. When Sentry is disabled (no DSN) the capture is dropped inside
+  // Sentry, not raised.
+  Sentry.captureException(failure, {
+    tags: { component: "composition-root" },
+    extra: { missingCapabilities: message },
+  });
+  // FLUSH, then box, then exit. `app.exit(1)` ends the process at once, so an
+  // event still inside the transport dies with it; the flush waits for it, up
+  // to SENTRY_FLUSH_TIMEOUT_MS. This is module scope in CommonJS, so it cannot
+  // `await`: the box and the exit move into the continuation. The `.catch`
+  // is what keeps a rejected flush from skipping them — a transport failure
+  // is Sentry's to log, not a reason to leave the process windowless and
+  // alive. Box before exit within the continuation for the reason SR measured
+  // on #2518: exiting first ends the process before the box is reached.
+  void Sentry.flush(SENTRY_FLUSH_TIMEOUT_MS)
+    .catch(() => undefined)
+    .then(() => {
+      dialog.showErrorBox(STARTUP_FAILURE_TITLE, message);
+      app.exit(1);
+    });
 }
