@@ -208,6 +208,11 @@ describe("core modules load without Electron (BACKLOG-2962)", () => {
     expect(() => loadWithoutElectron("../../services/reviewStateService")).not.toThrow();
   });
 
+  it("dialogProvider loads with no Electron present", () => {
+    // The Dialog seam's own interface side (BACKLOG-2962, seams PR B).
+    expect(() => loadWithoutElectron("../dialogProvider")).not.toThrow();
+  });
+
   it("messageMatchingService loads with no Electron present", () => {
     // A (b) module, coupled by nothing of its own — it was held only through
     // `dbConnection` and `logService`. That it loads now is the transitive half

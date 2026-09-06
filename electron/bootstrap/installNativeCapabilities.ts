@@ -83,6 +83,8 @@ import { installAppPaths } from "../capabilities/appPathsProvider";
 import { ElectronAppPaths } from "../capabilities/electron/electronAppPaths";
 import { installWindows } from "../capabilities/windowsProvider";
 import { ElectronWindows } from "../capabilities/electron/electronWindows";
+import { installDialog } from "../capabilities/dialogProvider";
+import { ElectronDialog } from "../capabilities/electron/electronDialog";
 import { installSecretStore } from "../capabilities/secretStoreProvider";
 import { ElectronSecretStore } from "../capabilities/electron/electronSecretStore";
 import { assertNativeCapabilitiesInstalled } from "../capabilities/nativeCapabilities";
@@ -106,6 +108,14 @@ installAppPaths(new ElectronAppPaths());
 // holds no window handle, so installing it here — long before any window
 // exists — captures nothing that could go stale.
 installWindows(new ElectronWindows());
+// The `dialog.showErrorBox` in the catch below is NOT routed through this
+// capability, deliberately. This file is the shell: it runs before any
+// capability is trusted, and reporting "a capability is missing" through a
+// capability would be circular — the box would be the thing that failed. What
+// is established about `showErrorBox` working at this point in the lifecycle is
+// recorded in this file's header, and it is SR's measurement of Electron's own
+// default handler, not of this call site.
+installDialog(new ElectronDialog());
 installSecretStore(new ElectronSecretStore());
 
 // LAST — every capability above must now answer `isInstalled()`.

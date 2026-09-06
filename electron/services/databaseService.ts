@@ -22,8 +22,9 @@ import { hostLogger } from "../capabilities/loggerProvider";
 import path from "path";
 import fs from "fs";
 import crypto from "crypto";
-import { app, dialog } from "electron";
+import { app } from "electron";
 import { hostAppPaths } from "../capabilities/appPathsProvider";
+import { hostDialog } from "../capabilities/dialogProvider";
 import { hostErrorReporter } from "../capabilities/errorReporterProvider";
 import logService from "./logService";
 import {
@@ -343,7 +344,7 @@ class DatabaseService implements IDatabaseService {
           // 2999 defect behind it, in the same commit. Do not "fix" 2834 by
           // deleting this boundary: the no-quit assertion in
           // databaseService.migration-restore.test.ts pins it.
-          dialog.showMessageBox({
+          hostDialog.showMessageBox({
             type: "warning",
             title: "Database Update Notice",
             message: "A database update failed, but your data has been restored.",
@@ -391,7 +392,7 @@ class DatabaseService implements IDatabaseService {
           // whereas this user's data may well be recoverable and those
           // scripts would destroy it. The path is appended because it is the
           // first thing support asks for.
-          await dialog.showMessageBox({
+          await hostDialog.showMessageBox({
             type: "error",
             title: "Database Update Failed",
             message: "A database update failed and could not be automatically fixed.",
@@ -487,7 +488,7 @@ class DatabaseService implements IDatabaseService {
         // hand-deleted folder leaves a stale key behind and produces a
         // different, more confusing failure. No retry is offered — there is
         // nothing to retry.
-        await dialog.showMessageBox({
+        await hostDialog.showMessageBox({
           type: "error",
           title: "Database from an older version",
           message: "This database was created by an older version of Keepr and cannot be opened.",

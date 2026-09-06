@@ -44,6 +44,7 @@
  */
 
 import { isAppPathsInstalled } from "./appPathsProvider";
+import { isDialogInstalled } from "./dialogProvider";
 import { isErrorReporterInstalled } from "./errorReporterProvider";
 import { isLoggerInstalled } from "./loggerProvider";
 import { isSecretStoreInstalled } from "./secretStoreProvider";
@@ -135,6 +136,12 @@ export const NATIVE_CAPABILITIES: readonly NativeCapability[] = [
     providerModule: "electron/capabilities/windowsProvider",
     installFunction: "installWindows",
     isInstalled: isWindowsInstalled,
+  },
+  {
+    name: "dialog",
+    providerModule: "electron/capabilities/dialogProvider",
+    installFunction: "installDialog",
+    isInstalled: isDialogInstalled,
   },
 ];
 
