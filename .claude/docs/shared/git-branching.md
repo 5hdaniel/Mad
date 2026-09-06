@@ -35,6 +35,7 @@ feature/*, fix/*, claude/* (feature branches)
 | `claude/*` | AI-assisted development | `develop` | `develop` | No |
 | `int/*` | Integration branches (multi-feature) | `develop` | `develop` | No |
 | `project/*` | Multi-sprint project branches | `develop` | `develop` | No |
+| `portal/*` | Portal work needing a Vercel preview | `develop` | `develop` | No |
 
 ---
 
@@ -49,10 +50,51 @@ feature/*, fix/*, claude/* (feature branches)
 | `int/` | Integration branches | `int/ai-polish` |
 | `project/` | Multi-sprint projects | `project/ai-integration` |
 | `refactor/` | Code refactoring | `refactor/docs-consolidation` |
+| `portal/` | Portal work needing a Vercel preview | `portal/fix-broker-login` |
 
 For sprint tasks, include the task ID:
 - `fix/task-510-database-cleanup`
 - `feature/task-512-export-feature`
+
+---
+
+### Portal preview deployments (BACKLOG-2833)
+
+The two web apps (`broker-portal/`, `admin-portal/`) deploy to Vercel. The account is on
+the free plan, which limits deployments **created** per day — and a deployment that the
+Ignored Build Step cancels **still counts**. Both portals draw one pool, so every push to
+a deploying branch costs **2**. The real limits are **100/day, 100/hour, and 60 per
+5 minutes**, so the founder-facing figure is **~50 pushes/day**, and a merge burst trips
+the 5-minute window long before the daily one.
+
+So portal previews are **off by default**. These branches deploy:
+
+| Branch | Previews? |
+|---|---|
+| `main`, `develop`, `int/*` | yes — `int/*` is where founder testing happens |
+| `dependabot/*` | yes — dependency bumps are real portal changes |
+| `hotfix/*`, `release/*` | yes |
+| `portal/…` | **yes — this is the opt-in** |
+| everything else (`fix/`, `feat/`, `chore/`, `docs/`, …) | no |
+
+**To get a preview, name the branch `portal/…`.** If you are already on a branch and do
+not want to rename it, deploy on demand instead:
+
+```bash
+vercel deploy --cwd broker-portal     # or admin-portal
+```
+
+That costs one deployment from the same pool, needs a one-time `vercel link` per portal
+directory, and uploads your **working tree** — so the preview can include uncommitted
+local changes and corresponds to no commit. It also produces no PR comment.
+
+**If your preview never appears, check the branch name first.** A branch that does not
+match the list above gets no deployment and no error — the symptom is silence, which
+reads like a broken feature rather than a naming miss.
+
+A `portal/…` PR still needs the Engineer Metrics section and a BACKLOG id like any other
+branch; `[skip-metrics]` in the PR title is the escape if you are pushing a quick fix by
+hand.
 
 ---
 
