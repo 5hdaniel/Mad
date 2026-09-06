@@ -182,8 +182,16 @@ export const AB_MULTIVALUE_BY_RECORD_SQL = `
  * `Promise.resolve(...)` keeps the throw synchronous, so it still unwinds a
  * caller that has not awaited yet. Nothing in this file's call graph currently
  * runs inside a transaction; the shape is the one that stays correct when
- * something does. `dbTransaction`'s type refuses a promise-returning body, so
- * such a caller is a compile error rather than a silent commit.
+ * something does.
+ *
+ * What that type does and does not catch, measured at this commit:
+ * `dbTransaction`'s type rejects a body that AWAITS a promise-returning call
+ * (TS2345, argument not assignable to `() => never`) and one that RETURNS the
+ * promise (TS2322). It cannot see a body that merely FLOATS the call: `tsc` is
+ * silent and `npm run lint` reports nothing, because
+ * `@typescript-eslint/no-floating-promises` is scoped in `eslint.config.js` to
+ * `electron/services/db/**` only. So a floated call at a flip site outside that
+ * scope is caught by nothing in CI today — that gap is BACKLOG-3150.
  */
 export function prepareAbPersonStatements(
   db: DatabaseType,

@@ -101,10 +101,12 @@ export interface IdentityCaptureStats {
 /**
  * Parser for iOS AddressBook.sqlitedb from iTunes-style backups.
  *
- * Usage:
+ * Usage (inside an async function): `open()` returns a promise since
+ * BACKLOG-2960, and a call that skips the `await` leaves the caches empty —
+ * `getAllContacts()` then returns `[]` with no error thrown.
  * ```typescript
  * const parser = new iOSContactsParser();
- * parser.open('/path/to/backup');
+ * await parser.open('/path/to/backup');
  * const contacts = parser.getAllContacts();
  * const result = parser.lookupByHandle('+15555550112');
  * parser.close();
