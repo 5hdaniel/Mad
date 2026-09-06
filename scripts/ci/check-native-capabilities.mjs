@@ -105,6 +105,14 @@ const PORTABLE = new Set([
   "electron/services/db/maintenanceDbService.ts",
   "electron/services/emailDeduplicationService.ts",
   "electron/services/autoLinkService.ts",
+  // Seams PR B (Windows). `BrowserWindow.getAllWindows()` was the only Electron
+  // reach left in either of these, and both now take the Windows capability.
+  // `initializationBroadcaster.ts` also named `BrowserWindow` as a TYPE, which
+  // R2 and R3 both permit — a type-only import emits no `require` — so that was
+  // removed rather than converted: "compiles under another shell" and "loads
+  // under another shell" are different properties and epic 9 wants both.
+  "electron/services/initializationBroadcaster.ts",
+  "electron/services/reviewStateService.ts",
 ]);
 
 /**

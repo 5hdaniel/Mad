@@ -81,6 +81,8 @@ import { installErrorReporter } from "../capabilities/errorReporterProvider";
 import { ElectronErrorReporter } from "../capabilities/electron/electronErrorReporter";
 import { installAppPaths } from "../capabilities/appPathsProvider";
 import { ElectronAppPaths } from "../capabilities/electron/electronAppPaths";
+import { installWindows } from "../capabilities/windowsProvider";
+import { ElectronWindows } from "../capabilities/electron/electronWindows";
 import { installSecretStore } from "../capabilities/secretStoreProvider";
 import { ElectronSecretStore } from "../capabilities/electron/electronSecretStore";
 import { assertNativeCapabilitiesInstalled } from "../capabilities/nativeCapabilities";
@@ -100,6 +102,10 @@ installErrorReporter(new ElectronErrorReporter());
 // installing it here does NOT freeze the value `installAppDataPaths`
 // (main.ts:6, which has already run) set. Rule E2 keeps that import first.
 installAppPaths(new ElectronAppPaths());
+// `ElectronWindows` calls `BrowserWindow.getAllWindows()` per broadcast and
+// holds no window handle, so installing it here — long before any window
+// exists — captures nothing that could go stale.
+installWindows(new ElectronWindows());
 installSecretStore(new ElectronSecretStore());
 
 // LAST — every capability above must now answer `isInstalled()`.

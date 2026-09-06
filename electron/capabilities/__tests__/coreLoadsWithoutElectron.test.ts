@@ -182,6 +182,32 @@ describe("core modules load without Electron (BACKLOG-2962)", () => {
     ).toThrow(NO_ELECTRON);
   });
 
+  it("windowsProvider loads with no Electron present", () => {
+    // The Windows seam's own interface side (BACKLOG-2962, seams PR B).
+    expect(() => loadWithoutElectron("../windowsProvider")).not.toThrow();
+  });
+
+  it("initializationBroadcaster loads with no Electron present", () => {
+    // It reached the platform ONE way after PR A: `BrowserWindow.getAllWindows()`
+    // at :167, inside the broadcast every renderer surface listens to. It also
+    // named `BrowserWindow` as the TYPE of a write-only field, which a type-only
+    // import would have hidden from both this probe and the static gate; that
+    // type is now opaque, so the module compiles as well as loads without
+    // Electron.
+    expect(() =>
+      loadWithoutElectron("../../services/initializationBroadcaster"),
+    ).not.toThrow();
+  });
+
+  it("reviewStateService loads with no Electron present", () => {
+    // `BrowserWindow.getAllWindows()` at :577 was its ONLY Electron reach, and
+    // BACKLOG-2961's closure held `autoLinkService` in the transitively-coupled
+    // set for it alone — through the `await import("./reviewStateService")` at
+    // `autoLinkService.ts:544` and `:915` that a load-time probe cannot see and
+    // the compiler can.
+    expect(() => loadWithoutElectron("../../services/reviewStateService")).not.toThrow();
+  });
+
   it("messageMatchingService loads with no Electron present", () => {
     // A (b) module, coupled by nothing of its own — it was held only through
     // `dbConnection` and `logService`. That it loads now is the transitive half
