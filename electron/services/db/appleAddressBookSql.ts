@@ -166,13 +166,31 @@ export const AB_MULTIVALUE_BY_RECORD_SQL = `
  * must be built from the SAME list, and `getContactById()` falls through to the
  * by-id form on a cache miss. Returning them as a pair makes preparing one
  * without the other unrepresentable rather than merely discouraged.
+ *
+ * ## Promise-returning at the export, and NOT `async` — BACKLOG-2960
+ *
+ * The data layer's export surface is becoming driver-agnostic: every `db/**`
+ * export returns a promise so a future non-`better-sqlite3` driver can satisfy
+ * the same signature. The driver underneath stays SYNCHRONOUS — both
+ * `db.prepare()` calls run to completion before the promise is constructed.
+ *
+ * `async` is deliberately not used, and the difference is not stylistic.
+ * `better-sqlite3` commits a transaction when its callback RETURNS, so an
+ * `async` wrapper would convert a throw from `db.prepare()` into a rejection
+ * that arrives AFTER the commit — the transaction would commit over the error
+ * (SR ruling 79c3aa69 §2a, executed). A plain function returning
+ * `Promise.resolve(...)` keeps the throw synchronous, so it still unwinds a
+ * caller that has not awaited yet. Nothing in this file's call graph currently
+ * runs inside a transaction; the shape is the one that stays correct when
+ * something does. `dbTransaction`'s type refuses a promise-returning body, so
+ * such a caller is a compile error rather than a silent commit.
  */
 export function prepareAbPersonStatements(
   db: DatabaseType,
   present: ReadonlySet<string>,
-): { all: Statement; byId: Statement } {
-  return {
+): Promise<{ all: Statement; byId: Statement }> {
+  return Promise.resolve({
     all: db.prepare(abPersonSelectAllSql(present)),
     byId: db.prepare(abPersonSelectByIdSql(present)),
-  };
+  });
 }
