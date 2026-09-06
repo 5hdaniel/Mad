@@ -116,6 +116,41 @@ describe("BACKLOG-3128 — no fabricated percentage for the messages import", ()
     expect(screen.queryByText(/^\d+%$/)).not.toBeInTheDocument();
   });
 
+  it("renders no percentage for the item the listener ACTUALLY emits mid-import", () => {
+    // TRANSCRIBED FROM THE PRODUCER, not invented — and this is the assertion
+    // whose absence let a "0%" ship.
+    //
+    // Every other fixture in this file passes `indeterminate: true`, a state the
+    // orchestrator's listener reached at most once per run (the first querying
+    // event, before any total was known). So the whole suite described a state
+    // the producer barely produces. During a counted phase the listener's first
+    // form emitted `indeterminate: false` with real counts, `activeProgress`
+    // resolved to `progress` — 0 — and the dashboard pinned a hard "0%".
+    //
+    // This item is what `macOSMessagesImportService.ts:1756` (per-batch importing
+    // progress) becomes by the time it reaches the queue.
+    mockUseSyncOrchestrator.mockReturnValue(
+      orchestratorState(
+        [
+          syncItem("messages", "running", {
+            phase: "importing",
+            progress: 0,
+            current: 4120,
+            total: 33637,
+            indeterminate: true,
+          }),
+        ],
+        true
+      )
+    );
+
+    render(<SyncStatusIndicator />);
+
+    expect(screen.getByTestId("sync-pill-messages")).toBeInTheDocument();
+    expect(screen.queryByText("0%")).not.toBeInTheDocument();
+    expect(screen.queryByText(/%/)).not.toBeInTheDocument();
+  });
+
   it("still shows a percentage for a sync that HAS an honest one", () => {
     // The distinguishing input. Without this, the assertion above would pass on
     // an indicator that had simply stopped rendering percentages for everyone.

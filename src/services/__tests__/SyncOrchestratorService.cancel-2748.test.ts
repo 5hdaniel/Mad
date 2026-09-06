@@ -346,3 +346,89 @@ describe('BACKLOG-2776 — the reported progress freezes when the user asks to c
     ).toBeUndefined();
   });
 });
+
+/**
+ * BACKLOG-3128 — the macOS Messages item must declare it has no honest
+ * percentage, for the WHOLE run, not only while a phase happens to lack counts.
+ *
+ * This suite drives the REAL messages listener (`progressHandler` is the
+ * callback the sync function registers with `window.api.messages.onImportProgress`),
+ * which is what makes it a pin rather than a restatement: the sibling
+ * `progressDetail-3128` suite hands a `detail` object straight to a `contacts`
+ * sync function and so never executes this listener at all.
+ *
+ * WHAT WENT WRONG WITHOUT IT. The listener first read
+ * `indeterminate: !hasCounts` — "does THIS EVENT carry counts". The dashboard
+ * consumes the flag as "does THIS ITEM have an honest percent". Those are not
+ * the same claim: the producer sends counts on nearly every event (querying per
+ * batch, importing per batch, attachments), so the flag was `false` for almost
+ * the entire run, `activeProgress` resolved to the item's `progress` of 0, and
+ * the dashboard pinned a hard "0%" — the very defect this item exists to remove,
+ * re-entering through a different door.
+ *
+ * Nothing caught it because every indicator fixture passed `indeterminate: true`
+ * — a state the listener reached at most once per run, on the first querying
+ * event before any total was known. The fixtures did not come from the producer.
+ * The event below is transcribed from what the listener really receives during a
+ * counted phase.
+ */
+describe('BACKLOG-3128 — the messages item always declares it has no percentage', () => {
+  async function startPausedRun(): Promise<{ finish: () => Promise<void> }> {
+    let release: (value: Record<string, any>) => void = () => {};
+    mockImportMacOSMessages.mockImplementationOnce(
+      () => new Promise((resolve) => { release = resolve; })
+    );
+    syncOrchestrator.initializeSyncFunctions();
+    const run = (syncOrchestrator as any).startSync({ types: ['messages'], userId: USER });
+    while (!progressHandler) {
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    }
+    return {
+      finish: async () => {
+        release({ success: true, messagesImported: 0 });
+        await run;
+      },
+    };
+  }
+
+  const item = () =>
+    syncOrchestrator.getState().queue.find((queued) => queued.type === 'messages');
+
+  const emit = async (data: Record<string, unknown>) => {
+    progressHandler?.(data);
+    await new Promise((resolve) => setTimeout(resolve, 0));
+  };
+
+  it('is indeterminate even during a phase that DOES report counts', async () => {
+    // CONTROL: revert the listener to `indeterminate: !hasCounts` and this reds.
+    // Transcribed from the producer — macOSMessagesImportService.ts:1756 emits
+    // per-batch importing progress with real current/total.
+    const { finish } = await startPausedRun();
+
+    await emit({ phase: 'importing', percent: 12, current: 4120, total: 33637 });
+
+    expect(item()?.indeterminate).toBe(true);
+    // The counts still flow — they drive the Settings panel's bar. The flag says
+    // only "no percentage for this item", never "nothing is known".
+    expect(item()?.current).toBe(4120);
+    expect(item()?.total).toBe(33637);
+    // And the number the dashboard would have rendered is still 0, which is
+    // exactly why the flag has to be the gate.
+    expect(item()?.progress).toBe(0);
+
+    await finish();
+  });
+
+  it('is indeterminate during a phase with no counts either', async () => {
+    // The other half. Both must hold, or the flag is describing the event.
+    const { finish } = await startPausedRun();
+
+    await emit({ phase: 'querying', percent: 0, current: 0, total: 0 });
+
+    expect(item()?.indeterminate).toBe(true);
+    expect(item()?.current).toBeUndefined();
+    expect(item()?.total).toBeUndefined();
+
+    await finish();
+  });
+});

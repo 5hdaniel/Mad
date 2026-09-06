@@ -627,7 +627,19 @@ class SyncOrchestratorServiceClass {
           onProgress(0, data.phase, {
             current: hasCounts ? data.current : undefined,
             total: hasCounts ? data.total : undefined,
-            indeterminate: !hasCounts,
+            // ALWAYS true for this source, for the whole run — this flag is a
+            // claim about the ITEM ("has no honest percentage"), not about the
+            // EVENT ("this phase reports counts"). It first read `!hasCounts`,
+            // which conflated the two: the producer sends counts on nearly every
+            // event, so the flag went false for almost the entire import, the
+            // dashboard's gate let `progress` through, and it pinned a hard "0%"
+            // — the exact defect this item exists to remove.
+            //
+            // Counts are NOT the same signal. They flow on regardless, and they
+            // drive the Settings panel's determinate bar fill. "We know how many
+            // messages this phase has read" and "we know how far through the
+            // import we are" are different claims, and only the first is true.
+            indeterminate: true,
           });
         });
 
