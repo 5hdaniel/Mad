@@ -111,8 +111,15 @@ const EXEMPT: Record<string, string> = {
   // These three writes lived in `services/` before this chunk and were invisible
   // to a guard that enumerates `db/`. The move did not create the exposure; it
   // made it visible.
-  "electron/services/db/macosForceSetSql.ts::deleteLiveForceSet":
-    "atomic via swapStagingIntoLive's db.transaction() at forceStaging.ts:453, its only call path; nesting would convert a swap-aborting failure into a savepoint rollback",
+  //
+  // BACKLOG-2960 RE-KEYED, not re-argued: the three DELETEs now live in the
+  // SYNCHRONOUS TWIN `deleteLiveForceSetSync`, because the seam export
+  // `deleteLiveForceSet` became a promise-returning wrapper and a
+  // `db.transaction()` body cannot await. The exemption follows the writes. The
+  // reasoning above is unchanged — same three DELETEs, same single call path,
+  // same reason nesting would be wrong — and this map still holds two entries.
+  "electron/services/db/macosForceSetSql.ts::deleteLiveForceSetSync":
+    "atomic via swapStagingIntoLive's db.transaction() at forceStaging.ts:453, its only call path (body -> forceSwapSteps.deleteLiveForceSet -> this twin); nesting would convert a swap-aborting failure into a savepoint rollback",
   "electron/services/db/contactValueProvenanceBackfill.ts::relabelTypedContactValues":
     "called only from a migration — inside migration v60's migrate() at databaseService.ts:3276 — and EVERY migration is run by `const runInTransaction = currentDb.transaction(...)` at databaseService.ts:3513, verified by reading the caller, not inferred (BACKLOG-2569 re-checked these; they had drifted from :3231/:3468)",
 };
