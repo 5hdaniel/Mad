@@ -10,7 +10,7 @@
 
 import { BrowserWindow } from "electron";
 import { hostLogger } from "../capabilities/loggerProvider";
-import * as Sentry from "@sentry/electron/main";
+import { hostErrorReporter } from "../capabilities/errorReporterProvider";
 
 // ============================================
 // TYPE DEFINITIONS
@@ -246,7 +246,7 @@ class InitializationBroadcaster {
           // to its transient/fallback path for this launch — worth knowing
           // about in aggregate, not just per-caller. One event here covers
           // every call site without threading telemetry through each of them.
-          Sentry.captureMessage("db_ready_timeout", {
+          hostErrorReporter.captureMessage("db_ready_timeout", {
             level: "warning",
             tags: { component: "startup", event: "db_ready_timeout" },
             extra: {

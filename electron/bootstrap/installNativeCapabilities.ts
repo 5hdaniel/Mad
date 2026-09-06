@@ -77,6 +77,8 @@ import log from "electron-log";
 
 import { installLogger } from "../capabilities/loggerProvider";
 import { ElectronLogger } from "../capabilities/electron/electronLogger";
+import { installErrorReporter } from "../capabilities/errorReporterProvider";
+import { ElectronErrorReporter } from "../capabilities/electron/electronErrorReporter";
 import { installSecretStore } from "../capabilities/secretStoreProvider";
 import { ElectronSecretStore } from "../capabilities/electron/electronSecretStore";
 import { assertNativeCapabilitiesInstalled } from "../capabilities/nativeCapabilities";
@@ -91,6 +93,7 @@ export const STARTUP_FAILURE_TITLE = "Keepr cannot start";
 // the right directory, so the first line written from here lands in the right
 // file.
 installLogger(new ElectronLogger());
+installErrorReporter(new ElectronErrorReporter());
 installSecretStore(new ElectronSecretStore());
 
 // LAST — every capability above must now answer `isInstalled()`.

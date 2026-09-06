@@ -11,7 +11,7 @@
  */
 import { z } from 'zod/v4';
 import { hostLogger } from '../capabilities/loggerProvider';
-import * as Sentry from '@sentry/electron/main';
+import { hostErrorReporter } from '../capabilities/errorReporterProvider';
 
 /**
  * Validate data against a Zod schema with graceful degradation.
@@ -38,7 +38,7 @@ export function validateResponse<T>(schema: z.ZodType<T>, data: unknown, context
 
     // Sentry breadcrumb with specific field-level details (BACKLOG-1347)
     try {
-      Sentry.addBreadcrumb({
+      hostErrorReporter.addBreadcrumb({
         category: "validation",
         message: `Schema validation failed: ${context}`,
         level: "warning",

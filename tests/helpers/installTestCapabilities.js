@@ -9,8 +9,8 @@
  * `electron/bootstrap/installNativeCapabilities.ts`; `tests/setup.js` says so
  * here. Without it, every suite that reaches a `hostLogger` call would exercise the
  * uninstalled default instead of the path it was written to test — 22 suites
- * assert on the `electron-log` mock. ErrorReporter and AppPaths join this
- * helper in the two commits after this one.
+ * assert on the `electron-log` mock and 6 on the `@sentry/electron` mock.
+ * AppPaths joins this helper in the commit after this one.
  *
  * WHY IT RESOLVES THE SDK AT CALL TIME, WHEN `installTestSecretStore` DOES NOT
  * ---------------------------------------------------------------------------
@@ -37,6 +37,12 @@
  * do for `installTestSecretStore`.
  */
 
+/** The `@sentry/electron/main` namespace as the mock in force exposes it. */
+function currentSentry() {
+  const mod = require("@sentry/electron/main");
+  return mod && mod.default && mod.default.captureException ? mod.default : mod;
+}
+
 /** `electron-log`'s default export, however the mock in force exposes it. */
 function currentLog() {
   const mod = require("electron-log");
@@ -46,11 +52,26 @@ function currentLog() {
 function installTestCapabilities() {
   const { installLogger } = require("../../electron/capabilities/loggerProvider");
 
+  const {
+    installErrorReporter,
+  } = require("../../electron/capabilities/errorReporterProvider");
+
   installLogger({
     debug: (message, ...args) => currentLog().debug(message, ...args),
     info: (message, ...args) => currentLog().info(message, ...args),
     warn: (message, ...args) => currentLog().warn(message, ...args),
     error: (message, ...args) => currentLog().error(message, ...args),
+  });
+
+  // Each method reaches the SDK property at call time, so a mock that omits one
+  // — `tests/__mocks__/sentry-electron.js` has no `flush` — fails in exactly the
+  // place and the same way it does today, rather than being papered over here.
+  installErrorReporter({
+    captureException: (error, options) => currentSentry().captureException(error, options),
+    captureMessage: (message, options) => currentSentry().captureMessage(message, options),
+    addBreadcrumb: (breadcrumb) => currentSentry().addBreadcrumb(breadcrumb),
+    flush: (timeoutMs) => currentSentry().flush(timeoutMs),
+    setUser: (user) => currentSentry().setUser(user),
   });
 }
 

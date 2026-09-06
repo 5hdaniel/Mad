@@ -118,6 +118,19 @@ describe("core modules load without Electron (BACKLOG-2962)", () => {
     expect(() => loadWithoutElectron("../../services/logService")).not.toThrow();
   });
 
+  it("errorReporterProvider loads with no Electron present", () => {
+    // The ErrorReporter seam's own interface side.
+    expect(() => loadWithoutElectron("../errorReporterProvider")).not.toThrow();
+  });
+
+  it("schemas/validate loads with no Electron present", () => {
+    // It reached BOTH packages — `electron-log` at :13 and `@sentry/electron/main`
+    // at :14 — and neither `electron` itself. It is the module that proves the
+    // coupling class matters: under the old single-specifier probe it would have
+    // loaded green while being completely unportable.
+    expect(() => loadWithoutElectron("../../schemas/validate")).not.toThrow();
+  });
+
   describe("the probe is honest — one case per specifier in the coupling class", () => {
     // Without these, a replacement that silently stopped applying would make
     // every assertion above pass by doing nothing.

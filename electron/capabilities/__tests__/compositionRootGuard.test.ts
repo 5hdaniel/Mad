@@ -178,6 +178,7 @@ describe("composition-root guard: the real tree (BACKLOG-2962)", () => {
     expect(REQUIRED.map((r) => r.name)).toEqual([
       "secretStore",
       "logger",
+      "errorReporter",
       "the runtime self-check",
     ]);
   });
@@ -187,14 +188,20 @@ describe("composition-root guard: the real tree (BACKLOG-2962)", () => {
     // deleted one. BACKLOG-2962's seams PR adds to this list; the list is
     // updated here rather than loosened to a length check, because the whole
     // value of the case is that a silently DROPPED capability reds it.
-    expect(NATIVE_CAPABILITIES.map((c) => c.name)).toEqual(["secretStore", "logger"]);
+    expect(NATIVE_CAPABILITIES.map((c) => c.name)).toEqual([
+      "secretStore",
+      "logger",
+      "errorReporter",
+    ]);
     expect(NATIVE_CAPABILITIES.map((c) => c.installFunction)).toEqual([
       "installSecretStore",
       "installLogger",
+      "installErrorReporter",
     ]);
     expect(NATIVE_CAPABILITIES.map((c) => c.providerModule)).toEqual([
       "electron/capabilities/secretStoreProvider",
       "electron/capabilities/loggerProvider",
+      "electron/capabilities/errorReporterProvider",
     ]);
   });
 

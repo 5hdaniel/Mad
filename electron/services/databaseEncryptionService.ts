@@ -10,7 +10,7 @@ import { hostSecretStore } from "../capabilities/secretStoreProvider";
 import crypto from "crypto";
 import fs from "fs";
 import path from "path";
-import * as Sentry from "@sentry/electron/main";
+import { hostErrorReporter } from "../capabilities/errorReporterProvider";
 import logService from "./logService";
 
 /**
@@ -68,7 +68,7 @@ export class DatabaseEncryptionService {
         "DatabaseEncryptionService",
         { error: error instanceof Error ? error.message : String(error) },
       );
-      Sentry.captureException(error, {
+      hostErrorReporter.captureException(error, {
         tags: { service: "database-encryption", operation: "initialize" },
       });
       throw error;
@@ -88,7 +88,7 @@ export class DatabaseEncryptionService {
         "DatabaseEncryptionService",
         { error: error instanceof Error ? error.message : String(error) },
       );
-      Sentry.captureException(error, {
+      hostErrorReporter.captureException(error, {
         tags: { service: "database-encryption", operation: "isEncryptionAvailable" },
       });
       return false;
@@ -163,7 +163,7 @@ export class DatabaseEncryptionService {
         "DatabaseEncryptionService",
         { error: error instanceof Error ? error.message : String(error) },
       );
-      Sentry.captureException(error, {
+      hostErrorReporter.captureException(error, {
         tags: { service: "database-encryption", operation: "generateNewKey" },
       });
       throw error;
@@ -212,7 +212,7 @@ export class DatabaseEncryptionService {
         "DatabaseEncryptionService",
         { error: error instanceof Error ? error.message : String(error) },
       );
-      Sentry.captureException(error, {
+      hostErrorReporter.captureException(error, {
         tags: { service: "database-encryption", operation: "getKeyFromStore" },
       });
       return null;
@@ -265,7 +265,7 @@ export class DatabaseEncryptionService {
         "DatabaseEncryptionService",
         { error: error instanceof Error ? error.message : String(error) },
       );
-      Sentry.captureException(error, {
+      hostErrorReporter.captureException(error, {
         tags: { service: "database-encryption", operation: "saveKeyToStore" },
       });
       throw error;
@@ -312,7 +312,7 @@ export class DatabaseEncryptionService {
           error: error instanceof Error ? error.message : String(error),
         },
       );
-      Sentry.captureException(error, {
+      hostErrorReporter.captureException(error, {
         tags: { service: "database-encryption", operation: "isDatabaseEncrypted" },
       });
       return false;
@@ -415,7 +415,7 @@ export class DatabaseEncryptionService {
         "DatabaseEncryptionService",
         { error: error instanceof Error ? error.message : String(error) },
       );
-      Sentry.captureException(error, {
+      hostErrorReporter.captureException(error, {
         tags: { service: "database-encryption", operation: "getKeyMetadata" },
       });
       return null;
