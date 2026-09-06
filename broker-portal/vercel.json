@@ -3,7 +3,6 @@
   "ignoreCommand": "sh ../scripts/vercel-ignore-build.sh broker-portal",
   "git": {
     "deploymentEnabled": {
-      "**": false,
       "main": true,
       "develop": true,
       "int/**": true,
@@ -11,7 +10,8 @@
       "portal/**": true,
       "dependabot/**": true,
       "hotfix/**": true,
-      "release/**": true
+      "release/**": true,
+      "**": false
     }
   },
   "framework": "nextjs",
