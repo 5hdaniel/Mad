@@ -206,9 +206,11 @@ export async function linkContactToTransaction(
    * contact's default role are ONE write. A throw between them left the person
    * attached to the deal while their stored role said something else.
    *
-   * The callback is SYNCHRONOUS even though this function is `async` — that is
-   * what makes wrapping safe here. An async callback would let the transaction
-   * commit over a rejected promise; see `createTransactionSync`.
+   * The callback below is deliberately synchronous even though this function is
+   * `async`; `dbTransaction` requires a synchronous callback (BACKLOG-2960).
+   * What is at stake if a callback in this position is not synchronous is
+   * asserted, by name, in
+   * `db/__tests__/transactionDbService.atomicDealCreate-2538.test.ts`.
    */
   dbTransaction(() => {
     const id = crypto.randomUUID();
@@ -255,30 +257,39 @@ export async function linkContactToTransaction(
 }
 
 /**
- * Assign contact to transaction with detailed role data
- * Uses INSERT OR REPLACE to handle duplicate assignments gracefully
+ * Assign a contact to a transaction with detailed role data.
+ *
+ * The promise side of the pair (BACKLOG-2960). Deliberately a PLAIN function
+ * rather than `async`, and deliberately eager: the sync core is called and only
+ * its VALUE is handed to `Promise.resolve`. The reason that shape is required
+ * of every seam export, and what changes when it is not held, is asserted by
+ * name in `db/__tests__/transactionDbService.atomicDealCreate-2538.test.ts`.
+ *
+ * Duplicate assignments are resolved inside the sync core, which probes for an
+ * existing (transaction, contact) row and UPDATEs it. There is no
+ * `INSERT OR REPLACE` on this path — BACKLOG-2366 revives the tombstoned row
+ * rather than replacing it, which is what preserves its `created_at` and its
+ * history.
  */
-export async function assignContactToTransaction(
+export function assignContactToTransaction(
   transactionId: string,
   data: TransactionContactData,
 ): Promise<string> {
-  return assignContactToTransactionSync(transactionId, data);
+  return Promise.resolve(assignContactToTransactionSync(transactionId, data));
 }
 
 /**
  * The synchronous core of `assignContactToTransaction` (BACKLOG-2538).
  *
- * WHY IT HAD TO BE SPLIT OUT. Creating a deal with its parties is now ONE
- * transaction, and `dbTransaction` takes a SYNCHRONOUS callback. This body was
- * already synchronous — every statement is `dbGet`/`dbRun` — but the `async`
- * keyword turns a throw into a REJECTED PROMISE rather than a synchronous
- * throw. Called from inside `dbTransaction`, the callback would appear to
- * return normally and the transaction would COMMIT over the failure, with the
- * error surfacing later as an unhandled rejection. **The deal would keep the
- * parties that had already been written and lose the rest, silently** — the
- * exact outcome the transaction exists to prevent.
+ * WHY IT IS SPLIT OUT. Creating a deal with its parties is ONE transaction, and
+ * `dbTransaction` takes a SYNCHRONOUS callback — so the composition in
+ * `transactionDbService.createTransactionWithContactsSync` needs a callee that
+ * is synchronous all the way down. Every statement here is `dbGet`/`dbRun`.
  *
- * The async wrapper stays because other callers await it.
+ * This function must stay synchronous, and stays exported for that one
+ * consumer; the promise side of the pair is the plain wrapper above. What is at
+ * stake if it does not stay synchronous is asserted, by name, in
+ * `db/__tests__/transactionDbService.atomicDealCreate-2538.test.ts`.
  */
 export function assignContactToTransactionSync(
   transactionId: string,
