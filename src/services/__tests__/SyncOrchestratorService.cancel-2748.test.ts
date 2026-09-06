@@ -419,6 +419,47 @@ describe('BACKLOG-3128 — the messages item always declares it has no percentag
     await finish();
   });
 
+  it("carries the attachments phase and its counts, once the producer emits them", async () => {
+    // NOT the reproduction of the founder's 2026-09-05 report, and worth being
+    // explicit about that: this passed at the head where he saw the bug. Given
+    // the events, the queue plumbing is correct — which is exactly what it
+    // established, and why the search moved upstream to the producer. The real
+    // reproduction is `macOSMessagesImportService.cancel-2748.test.ts`
+    // ("reports ~20 times across a corpus that is almost entirely skipped"),
+    // where zero attachment events were emitted at all.
+    //
+    // Values transcribed from that run, not invented: 34,547 messages / 69,265
+    // attachments, attachReportInterval = max(1, floor(69265/20)) = 3463.
+    const { finish } = await startPausedRun();
+
+    // Last importing batch — this is the "34,547 of 34,547" he saw.
+    await emit({ phase: 'importing', percent: 100, current: 34547, total: 34547 });
+    expect(item()?.phase).toBe('importing');
+    expect(item()?.current).toBe(34547);
+
+    // First attachments report, 3463 of 69265.
+    await emit({ phase: 'attachments', percent: 5, current: 3463, total: 69265 });
+    expect(item()?.phase).toBe('attachments');
+    expect(item()?.current).toBe(3463);
+    expect(item()?.total).toBe(69265);
+
+    // Mid-phase.
+    await emit({ phase: 'attachments', percent: 50, current: 34630, total: 69265 });
+    expect(item()?.current).toBe(34630);
+    expect(item()?.total).toBe(69265);
+
+    // Final attachments report.
+    await emit({ phase: 'attachments', percent: 100, current: 69265, total: 69265 });
+    expect(item()?.phase).toBe('attachments');
+    expect(item()?.current).toBe(69265);
+
+    // The late :1043 "rebuild complete, about to swap" event.
+    await emit({ phase: 'importing', percent: 100, current: 34547, total: 34547 });
+    expect(item()?.phase).toBe('importing');
+
+    await finish();
+  });
+
   it('is indeterminate during a phase with no counts either', async () => {
     // The other half. Both must hold, or the flag is describing the event.
     const { finish } = await startPausedRun();

@@ -2188,25 +2188,46 @@ class MacOSMessagesImportService {
         }
         skipped++;
         processed++;
-      }
+      } finally {
+        // BACKLOG-3128: this tail runs in `finally` because EIGHT of the ten
+        // exit paths above are `continue` statements — unsupported type, no
+        // message id, no source path, already-stored, and so on, each doing
+        // `processed++; continue;`. Sitting after the try/catch, it was reached
+        // only by the stored path and the catch.
+        //
+        // The founder's 2026-09-05 force re-import: 69,265 attachments, 2,409
+        // stored, 66,856 SKIPPED, 16 seconds. `processed` raced past every
+        // multiple of the 3,463 report interval inside a skipped iteration, so
+        // `processed % attachReportInterval === 0` almost never ran on a tick
+        // where it was true. Zero progress events were sent for the whole phase,
+        // and the panel held a stale "34,547 of 34,547 messages" throughout.
+        // The renderer was blameless; nothing was ever emitted to it.
+        //
+        // The yield was bypassed the same way, so 66,856 skips ran without ever
+        // returning to the event loop. `finally` fixes both, because both live
+        // in this tail.
+        //
+        // The cancellation `break` is deliberately OUTSIDE this try: a run the
+        // user abandoned must not emit a final progress report on its way out.
 
-      // Update progress bar
-      attachProgressBar.update(processed);
+        // Update progress bar
+        attachProgressBar.update(processed);
 
-      // Report progress to UI at ~5% increments
-      if (processed % attachReportInterval === 0 || processed === totalAttachments) {
-        const percent = Math.round((processed / totalAttachments) * 100);
-        onProgress?.({
-          phase: "attachments",
-          current: processed,
-          total: totalAttachments,
-          percent,
-        });
-      }
+        // Report progress to UI at ~5% increments
+        if (processed % attachReportInterval === 0 || processed === totalAttachments) {
+          const percent = Math.round((processed / totalAttachments) * 100);
+          onProgress?.({
+            phase: "attachments",
+            current: processed,
+            total: totalAttachments,
+            percent,
+          });
+        }
 
-      // Yield to event loop every 100 attachments to prevent UI freeze
-      if (processed % 100 === 0) {
-        await yieldToEventLoop();
+        // Yield to event loop every 100 attachments to prevent UI freeze
+        if (processed % 100 === 0) {
+          await yieldToEventLoop();
+        }
       }
     }
 
