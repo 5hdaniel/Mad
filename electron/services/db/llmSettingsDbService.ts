@@ -4,6 +4,27 @@
  *
  * SECURITY: API keys are stored encrypted. Encryption/decryption
  * happens in the config service (TASK-311), not here.
+ *
+ * BACKLOG-2960 (export seam, wave 1 lane A) — every export below returns a
+ * PROMISE, and every one of them is a PLAIN function, never `async`.
+ *
+ * That is not a style choice. `better-sqlite3` commits a transaction when the
+ * callback RETURNS. Under an `async` wrapper a failed write resolves the
+ * wrapper's promise, the enclosing transaction commits over the error, and the
+ * failure arrives later as an unhandled rejection — the BACKLOG-2545 class of
+ * defect (SR ruling 79c3aa69 §2a, executed). A plain wrapper lets the throw
+ * propagate synchronously, so the driver rolls back.
+ *
+ * State the failure mode precisely, because the obvious fear is the wrong one:
+ * a floated call to one of these from inside a synchronous transaction body
+ * does NOT let writes escape the transaction — the synchronous work runs to
+ * completion before any microtask. What is lost is the ERROR PATH.
+ *
+ * The driver conduits (`dbGet`, `dbRun`) stay synchronous and are the only
+ * thing under this file that touches SQLite. `readLLMSettings` below is the
+ * shared synchronous read-back; it is deliberately NOT exported and NOT named
+ * `*Sync`, because this module has no transaction body and therefore needs no
+ * twin (syncTwin.guard.test.ts).
  */
 
 import crypto from "crypto";
@@ -45,18 +66,31 @@ type LLMSettingsColumn = keyof typeof LLM_SETTINGS_COLUMN_SQL;
 
 
 /**
- * Get LLM settings for a user
+ * The synchronous read every writer below uses for its read-back.
+ *
+ * Private on purpose. The exported reader is the promise-returning wrapper over
+ * it; keeping the primitive synchronous is what lets the writers compose
+ * without any of them becoming `async`.
  */
-export function getLLMSettingsByUserId(userId: string): LLMSettings | null {
+function readLLMSettings(userId: string): LLMSettings | null {
   const statement = sql`SELECT * FROM llm_settings WHERE user_id = ?`;
   const row = dbGet<Record<string, unknown>>(statement, [userId]);
   return row ? mapRowToLLMSettings(row) : null;
 }
 
 /**
+ * Get LLM settings for a user
+ */
+export function getLLMSettingsByUserId(
+  userId: string,
+): Promise<LLMSettings | null> {
+  return Promise.resolve(readLLMSettings(userId));
+}
+
+/**
  * Create default LLM settings for a user
  */
-export function createLLMSettings(userId: string): LLMSettings {
+export function createLLMSettings(userId: string): Promise<LLMSettings> {
   const id = crypto.randomUUID();
 
   const statement = sql`
@@ -67,20 +101,20 @@ export function createLLMSettings(userId: string): LLMSettings {
   dbRun(statement, [id, userId]);
 
   // Return the created settings
-  const settings = getLLMSettingsByUserId(userId);
+  const settings = readLLMSettings(userId);
   if (!settings) {
     throw new Error(`Failed to create LLM settings for user ${userId}`);
   }
-  return settings;
+  return Promise.resolve(settings);
 }
 
 /**
  * Get or create LLM settings for a user
  */
-export function getOrCreateLLMSettings(userId: string): LLMSettings {
-  const existing = getLLMSettingsByUserId(userId);
+export function getOrCreateLLMSettings(userId: string): Promise<LLMSettings> {
+  const existing = readLLMSettings(userId);
   if (existing) {
-    return existing;
+    return Promise.resolve(existing);
   }
   return createLLMSettings(userId);
 }
@@ -91,7 +125,7 @@ export function getOrCreateLLMSettings(userId: string): LLMSettings {
 export function updateLLMSettings(
   userId: string,
   updates: Partial<Omit<LLMSettings, 'id' | 'user_id' | 'created_at' | 'updated_at'>>
-): LLMSettings {
+): Promise<LLMSettings> {
   const allowedFields = Object.keys(LLM_SETTINGS_COLUMN_SQL) as LLMSettingsColumn[];
 
   // Filter to only allowed fields that are present in updates
@@ -136,11 +170,11 @@ export function updateLLMSettings(
 
   dbRun(statement, [...values, userId]);
 
-  const settings = getLLMSettingsByUserId(userId);
+  const settings = readLLMSettings(userId);
   if (!settings) {
     throw new Error(`LLM settings not found for user ${userId}`);
   }
-  return settings;
+  return Promise.resolve(settings);
 }
 
 /**
@@ -171,7 +205,7 @@ export type ClearableLLMSettingsColumn =
 export function clearLLMSettingsField(
   userId: string,
   column: ClearableLLMSettingsColumn
-): LLMSettings {
+): Promise<LLMSettings> {
   // The union makes a bad column a compile error; this guards the JS callers and
   // any `as` cast that gets past it, and is what keeps the interpolation below
   // safe.
@@ -187,43 +221,45 @@ export function clearLLMSettingsField(
 
   dbRun(statement, [userId]);
 
-  const settings = getLLMSettingsByUserId(userId);
+  const settings = readLLMSettings(userId);
   if (!settings) {
     throw new DatabaseError(`LLM settings not found for user ${userId}`);
   }
-  return settings;
+  return Promise.resolve(settings);
 }
 
 /**
  * Increment token usage for a user
  */
-export function incrementTokenUsage(userId: string, tokens: number): void {
+export function incrementTokenUsage(userId: string, tokens: number): Promise<void> {
   const statement = sql`
     UPDATE llm_settings
     SET tokens_used_this_month = tokens_used_this_month + ?,
         updated_at = CURRENT_TIMESTAMP
     WHERE user_id = ?
   `;
-  dbRun(statement, [tokens, userId]);
+  dbRun(statement, [tokens, userId])
+  return Promise.resolve();
 }
 
 /**
  * Increment platform allowance usage for a user
  */
-export function incrementPlatformAllowanceUsage(userId: string, tokens: number): void {
+export function incrementPlatformAllowanceUsage(userId: string, tokens: number): Promise<void> {
   const statement = sql`
     UPDATE llm_settings
     SET platform_allowance_used = platform_allowance_used + ?,
         updated_at = CURRENT_TIMESTAMP
     WHERE user_id = ?
   `;
-  dbRun(statement, [tokens, userId]);
+  dbRun(statement, [tokens, userId])
+  return Promise.resolve();
 }
 
 /**
  * Reset monthly token usage for a user
  */
-export function resetMonthlyUsage(userId: string): void {
+export function resetMonthlyUsage(userId: string): Promise<void> {
   const statement = sql`
     UPDATE llm_settings
     SET tokens_used_this_month = 0,
@@ -231,13 +267,14 @@ export function resetMonthlyUsage(userId: string): void {
         updated_at = CURRENT_TIMESTAMP
     WHERE user_id = ?
   `;
-  dbRun(statement, [userId]);
+  dbRun(statement, [userId])
+  return Promise.resolve();
 }
 
 /**
  * Set LLM data consent for a user
  */
-export function setLLMDataConsent(userId: string, consent: boolean): LLMSettings {
+export function setLLMDataConsent(userId: string, consent: boolean): Promise<LLMSettings> {
   const statement = sql`
     UPDATE llm_settings
     SET llm_data_consent = ?,
@@ -247,19 +284,20 @@ export function setLLMDataConsent(userId: string, consent: boolean): LLMSettings
   `;
   dbRun(statement, [consent ? 1 : 0, userId]);
 
-  const settings = getLLMSettingsByUserId(userId);
+  const settings = readLLMSettings(userId);
   if (!settings) {
     throw new Error(`LLM settings not found for user ${userId}`);
   }
-  return settings;
+  return Promise.resolve(settings);
 }
 
 /**
  * Delete LLM settings for a user
  */
-export function deleteLLMSettings(userId: string): void {
+export function deleteLLMSettings(userId: string): Promise<void> {
   const statement = sql`DELETE FROM llm_settings WHERE user_id = ?`;
-  dbRun(statement, [userId]);
+  dbRun(statement, [userId])
+  return Promise.resolve();
 }
 
 /**
