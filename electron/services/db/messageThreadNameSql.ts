@@ -39,7 +39,7 @@ export const SELECT_MACOS_THREAD_IDS_SQL = `SELECT thread_id FROM message_thread
             WHERE user_id = ? AND thread_id LIKE 'macos-chat-%'`;
 
 /**
- * Delete a specific set of thread names.
+ * Delete a specific set of thread names — THE SYNCHRONOUS PRIMITIVE.
  *
  * Takes the VALUES and derives the `IN` width from them, so a same-length
  * different-values divergence is unrepresentable rather than merely unlikely —
@@ -49,8 +49,16 @@ export const SELECT_MACOS_THREAD_IDS_SQL = `SELECT thread_id FROM message_thread
  * An empty set is answered without touching the database: `IN ()` is valid
  * SQLite that matches nothing, so building one would delete nothing by accident
  * rather than by design.
+ *
+ * WHY THIS ONE IS THE PRIMITIVE AND `deleteThreadNamesByIds` IS THE WRAPPER
+ * (BACKLOG-2960). Its only production caller is inside the `db.transaction(...)`
+ * body that `syncMacChatThreadNames` opens
+ * (`macOSMessagesImportService/importHelpers.ts`). `better-sqlite3` commits when
+ * that callback RETURNS, so the body must stay synchronous, and so must every
+ * `db/**` call it makes. Never the reverse: a wrapper that awaits cannot be
+ * called from a body at all.
  */
-export function deleteThreadNamesByIds(
+export function deleteThreadNamesByIdsSync(
   db: DatabaseType,
   userId: string,
   threadIds: readonly string[],
@@ -63,4 +71,69 @@ export function deleteThreadNamesByIds(
               WHERE user_id = ? AND thread_id IN (${placeholders})`,
     )
     .run(userId, ...threadIds).changes;
+}
+
+/**
+ * The seam export (BACKLOG-2960): promise-returning, so a caller outside this
+ * layer is written against an interface a non-`better-sqlite3` driver could
+ * also satisfy. Every caller must `await` it —
+ *
+ *     const cleared = await deleteThreadNamesByIds(db, userId, doomed);
+ *
+ * — except a caller inside a transaction body, which must call
+ * `deleteThreadNamesByIdsSync` instead.
+ *
+ * A PLAIN function, never `async`, and the difference is not cosmetic. Measured
+ * on the real driver for this module (PR #2546, control (c); the same pair was
+ * measured on `llmSettingsDbService` in the #2544 SR review):
+ *
+ *   - plain wrapper, floated inside a synchronous `db.transaction` body after an
+ *     in-body write, throwing from the driver -> the throw propagates out of the
+ *     body synchronously and the in-body write is ROLLED BACK.
+ *   - the same probe with this function made `async` -> the transaction sees no
+ *     error and COMMITS the in-body write; the failure arrives afterwards as a
+ *     rejection.
+ *
+ * So `Promise.resolve(...)` over a synchronous primitive is the whole shape: the
+ * work, and any throw, happen before the promise exists.
+ *
+ * WHAT PROTECTS THE CALL SITE, AND WHAT DOES NOT. The consuming body is a RAW
+ * `db.transaction(...)`, not `dbTransaction`, so `dbTransaction`'s conditional
+ * return type cannot see it. Each of these was measured in PR #2546 against
+ * that body, which lives outside `db/**`:
+ *
+ *   - an `async` body -> REJECTED by `no-restricted-syntax` (eslint.config.js).
+ *   - a sync body doing `cleared += deleteThreadNamesByIds(...)` -> TS2365, but
+ *     only because that site consumes the count arithmetically. It is not a
+ *     general property of calling the wrapper from a body.
+ *   - a sync body that FLOATS the wrapper -> the rows are still deleted, because
+ *     a plain wrapper's work is synchronous; only the returned count is lost.
+ *     WHICH instrument sees that moved under this train, so the answer is
+ *     stamped: everything below was re-planted at the call site and re-run on
+ *     `int/epic9-close@434f9a04a`, which carries #2547's sync-twin guard repair
+ *     (both boundary checks went from `isAsync` to `isPromiseReturning`).
+ *       * `void deleteThreadNamesByIds(...)` -> `tsc` silent; `npm run lint`
+ *         silent (`no-floating-promises` is scoped to `electron/services/db/**`
+ *         and this body is not in it — BACKLOG-3150); the REPAIRED twin guard
+ *         goes RED, 1 failed of 5, naming `deleteThreadNamesByIdsSync` a dead
+ *         twin. Against this PR's original base it was GREEN on this shape, so
+ *         any docblock in this train saying "the guard stays green" is stale
+ *         rather than wrong when written — re-derive it, do not copy it.
+ *       * `cleared += deleteThreadNamesByIds(...)` -> RED twice: TS2365 as in
+ *         the bullet above, and the same twin-guard failure.
+ *     So both float shapes are now caught without running a test. What is NOT
+ *     caught is the COUNT. Drop only the accumulation — leave
+ *     `deleteThreadNamesByIdsSync(...)` in place with no `cleared +=`, so the
+ *     rows still go and no promise appears anywhere — and `tsc`, `npm run lint`
+ *     and the repaired guard are ALL still green (the guard walks reachability,
+ *     it does not read arithmetic). The one instrument that goes RED is
+ *     `services/__tests__/importHelpers.threadNameSync-2960.test.ts`, 2 failed
+ *     of 4. The count, not the float, is what that suite uniquely protects.
+ */
+export function deleteThreadNamesByIds(
+  db: DatabaseType,
+  userId: string,
+  threadIds: readonly string[],
+): Promise<number> {
+  return Promise.resolve(deleteThreadNamesByIdsSync(db, userId, threadIds));
 }
