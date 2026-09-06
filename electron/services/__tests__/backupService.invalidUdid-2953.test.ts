@@ -144,21 +144,24 @@ describe("BACKLOG-2953: startBackup UDID guard emits a published BackupErrorCode
     });
   }
 
-  it("boundary check: 25 and 40 hex chars are NOT rejected by the guard", async () => {
-    // Not a full-backup test — only that the guard passes these through, so the
-    // rejections above are the guard's doing and not a coincidence of length.
-    // `checkEncryptionStatus` then runs against mocked fs and the mock spawn; the
-    // result of that is not asserted here. `hex(25)` is not a real UDID format
-    // (traditional is 40, modern is 8-16 with a hyphen) but the length gate is
-    // the only one under test on this row, and format is asserted separately.
+  it("length boundary is inclusive at 25: 24/41 are rejected for length, 25 passes the length gate and is rejected for format", async () => {
+    // What this proves: the length gate's edges are 25 and 40 inclusive, so the
+    // length rejections above are the gate's doing and not a coincidence of the
+    // chosen sizes. `hex(25)` clears LENGTH and then fails FORMAT (no UDID pattern
+    // is 25 plain hex chars — traditional is 40, modern is 8-16 with a hyphen),
+    // which is exactly the message asserted below.
+    //
+    // Deliberately NOT exercised here: a 40-char valid UDID. That value passes the
+    // guard and proceeds into `checkEncryptionStatus` and a real process; this
+    // suite's `spawn: jest.fn()` returns `undefined` and cannot carry that run.
+    // The full path belongs to `backupService.test.ts`, whose spawn mock does.
     const isRejectedByGuard = async (udid: string): Promise<boolean> => {
       const r = await service.startBackup({ udid });
       return r.errorCode === "INVALID_UDID" && r.error === MSG_LENGTH;
     };
     expect(await isRejectedByGuard(hex(24))).toBe(true);
     expect(await isRejectedByGuard(hex(41))).toBe(true);
-    // 25 and 40 pass the LENGTH gate. 25 then fails FORMAT (no known pattern is 25
-    // plain hex chars); 40 is the traditional format and passes both.
+    // 25 passes the LENGTH gate and fails FORMAT — asserted, not assumed.
     const r25 = await service.startBackup({ udid: hex(25) });
     expect(r25.error).toBe(MSG_FORMAT);
     expect(r25.errorCode).toBe("INVALID_UDID");
