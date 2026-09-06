@@ -66,7 +66,7 @@ line, and replacing it beats waiving it.
 | Duration | auto-captured |
 | API Calls | auto-captured |
 
-**Agent ID:** `<the session id of the agent that cut this release>`
+**Agent ID:** `<the session id of the agent that cut this release>`   (pm_token_metrics linkage key)
 
 A release PR aggregates many agents' work, so the Agent ID above attributes the
 agent that cut the release, not the authors of what ships. Numeric metrics are

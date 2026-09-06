@@ -43,7 +43,7 @@ line. Prefer replacing it over waiving it.
      A PR body can be edited, but GitHub keeps every prior revision and shows it
      to anyone who can read the repo. A commit message cannot be edited at all,
      and a force-push does not remove it — GitHub still serves the orphaned
-     object by SHA, to unauthenticated clients. See BACKLOG-3133. -->
+     object by SHA, to anyone with the link. See BACKLOG-3133. -->
 
 ---
 
