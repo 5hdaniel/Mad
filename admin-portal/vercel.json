@@ -1,6 +1,19 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "ignoreCommand": "sh ../scripts/vercel-ignore-build.sh admin-portal",
+  "git": {
+    "deploymentEnabled": {
+      "**": false,
+      "main": true,
+      "develop": true,
+      "int/**": true,
+      "*-portal/**": true,
+      "portal/**": true,
+      "dependabot/**": true,
+      "hotfix/**": true,
+      "release/**": true
+    }
+  },
   "installCommand": "cd .. && npm ci --ignore-scripts --include=dev",
   "crons": [
     {
