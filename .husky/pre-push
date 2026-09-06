@@ -1,4 +1,17 @@
 #!/bin/sh
+# BACKLOG-3068: git executes this file DIRECTLY (core.hooksPath = .husky, the
+# tracked directory) rather than through husky's generated `_/h` wrapper, which
+# ran hooks as `sh -e`. Errexit used to arrive from outside the file; it now
+# lives in the file. See "Shell notes" below for what depends on it — 4 `|| true`
+# guards and 5 `|| exit_code=$?` runner calls, all of which become dead code
+# without it.
+set -e
+
+# husky's HUSKY=0 escape hatch, preserved (the wrapper used to provide it).
+# `git push --no-verify` remains the other way out.
+if [ "${HUSKY-}" = "0" ]; then
+  exit 0
+fi
 #
 # pre-push: run the tests affected by THE COMMITS BEING PUSHED.
 # Blocks the push if those tests fail. (BACKLOG-2573)
@@ -62,13 +75,22 @@
 #
 # ## Shell notes
 #
-# husky runs this as `sh -e` (.husky/_/h). Every command whose non-zero exit is
-# EXPECTED must be guarded with `|| true` or sit in an `if`, or the hook dies
-# mid-run. The runner calls use `|| exit_code=$?` so the hook can print its own
-# verdict; without that guard `set -e` aborts at the failing runner and the
-# "Push blocked" line never prints. The later stages stay skipped either way --
-# they gate on `[ $exit_code -eq 0 ]` (lines 109 / 117 / 133 of the pre-2573
-# file).
+# This hook runs under errexit. Until BACKLOG-3068 that came from husky, which
+# invoked it as `sh -e` (.husky/_/h); it now comes from the `set -e` at the top
+# of this file, because git executes the file directly and the shebang carries
+# no `-e`. The requirement below is unchanged either way.
+#
+# Every command whose non-zero exit is EXPECTED must be guarded with `|| true`
+# or sit in an `if`, or the hook dies mid-run. The runner calls use
+# `|| exit_code=$?` so the hook can print its own verdict; without that guard
+# errexit aborts at the failing runner and the "Push blocked" line never prints.
+# The later stages stay skipped either way -- they gate on
+# `[ $exit_code -eq 0 ]` (lines 109 / 117 / 133 of the pre-2573 file).
+#
+# Note for anyone adding `set -e` elsewhere: a failing test on the LEFT of `&&`
+# does NOT abort under errexit. POSIX exempts every command of an AND-OR list
+# except the last, so `[ x = y ] && exit 0` reaches the next line in sh, dash,
+# bash and zsh. The shape that aborts is an UNGUARDED failing command.
 
 banner() {
   echo ""

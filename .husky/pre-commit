@@ -1,4 +1,21 @@
 #!/bin/sh
+# BACKLOG-3068: git executes this file DIRECTLY (core.hooksPath = .husky, the
+# tracked directory) rather than through husky's generated `_/h` wrapper. That
+# wrapper invoked hooks as `sh -e`, so errexit arrived from outside the file.
+# It now lives in the file.
+#
+# Not cosmetic: the `grep -v` below has an EXPECTED non-zero exit (no non-md
+# files staged) and is guarded with `|| true`. Without errexit that guard is
+# dead code, and the difference only shows up as a hook that silently stops
+# checking. Same reasoning, at length, in .husky/pre-push's "Shell notes".
+set -e
+
+# husky's HUSKY=0 escape hatch, preserved (the wrapper used to provide it).
+# `git commit --no-verify` remains the other way out.
+if [ "${HUSKY-}" = "0" ]; then
+  exit 0
+fi
+
 # Skip type-check for docs/* branches (Option A)
 branch=$(git rev-parse --abbrev-ref HEAD)
 if [[ "$branch" == docs/* ]]; then
