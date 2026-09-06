@@ -3,9 +3,13 @@
  *
  * This file has NO imports on purpose. It is the leaf that both the main side
  * (the producer's `ImportProgressCallback`, the preload bridge, the IPC
- * contract) and the renderer (`messageService`, `ImportProgressModal`,
- * `MacOSMessagesImportSettings`, `useAuditCoverageCheck`) derive from, so the
- * declared union cannot drift from the one the producer emits.
+ * contract) and the renderer (`messageService`, `MacOSMessagesImportSettings`,
+ * `importPhaseDisplay`, `useAuditCoverageCheck`) derive from, so the declared
+ * union cannot drift from the one the producer emits.
+ *
+ * BACKLOG-3128 correction: this list named `ImportProgressModal` when it was
+ * written. That component is dead code — nothing imports it anywhere in `src/`
+ * or `electron/`, so it renders to nobody. BACKLOG-3131 owns its deletion.
  *
  * WHY THIS EXISTS: `window-api-messages.ts` declared `onImportProgress` with a
  * hand-written three-member union that omitted `"querying"` — a phase the
