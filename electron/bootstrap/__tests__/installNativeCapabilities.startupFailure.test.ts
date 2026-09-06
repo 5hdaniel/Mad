@@ -315,14 +315,22 @@ describe("composition root: the failure reaches Sentry before the app exits (BAC
     expect(probe.showErrorBox.mock.invocationCallOrder[0]).toBeLessThan(probe.exit.mock.invocationCallOrder[0]);
   });
 
-  it("a REJECTED flush still ends in the box and exit 1 — a transport failure must not leave the process windowless and alive", async () => {
+  it("a REJECTED flush still ends in the box and exit 1, and the failure is LOGGED — a transport failure must not leave the process windowless and alive, nor vanish without a local trace", async () => {
+    const flushError = new Error("transport: ENOTFOUND");
     const probe = loadCompositionRoot({
       install: false,
-      flush: { kind: "rejected", error: new Error("transport: ENOTFOUND") },
+      flush: { kind: "rejected", error: flushError },
     });
     await drain();
 
     expect(probe.showErrorBox).toHaveBeenCalledTimes(1);
     expect(probe.exit).toHaveBeenCalledWith(1);
+    // A rejected flush is the one case where this PR's promise — the event
+    // reached Sentry — has failed, so it is the one case that must not be
+    // silent. Call 1 is the fatal path's own `log.error` (the missing
+    // capability); call 2 is the flush failure. Identity, not just a count:
+    // the line has to carry THIS rejection, not merely be written.
+    expect(probe.logError).toHaveBeenCalledTimes(2);
+    expect(probe.logError.mock.calls[1][1]).toBe(flushError);
   });
 });

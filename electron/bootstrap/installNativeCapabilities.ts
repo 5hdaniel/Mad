@@ -63,9 +63,13 @@
  * fire a Sentry log?" — no, by construction: `Sentry.init` sat at `main.ts:223`,
  * after this module, and this `catch` never called it. Now `main.ts` imports
  * `./installSentry` ABOVE this module, and the `catch` captures the error and
- * waits for the flush before the box. Two consequences, both TRACED at
- * `139913c51` and neither measured on the binary — the founder's launch check
- * at promotion is the measurement:
+ * waits for the flush before the box. Two consequences, both traced at
+ * `139913c51` and since MEASURED on this repo's own binary at `a6afebc1c` by
+ * SR's review of PR #2535 (pm_comments `692ff00b`) — with a DSN the event
+ * lands in Sentry, `main.ts` evaluates to the end, and a Dock icon with NO
+ * window shows for ~1.5 s (box +1559 ms after the failure, after `ready`)
+ * before the box and `exit 1`; with no DSN the behaviour is identical to what
+ * the founder observed at `139913c51` (box +1130 ms, still before `ready`):
  *
  *   1. With Sentry ENABLED the box comes AFTER `ready`. The Electron transport
  *      sends only once `app.whenReady()` resolves (`@sentry/electron/main`
@@ -206,12 +210,16 @@ try {
   // event still inside the transport dies with it; the flush waits for it, up
   // to SENTRY_FLUSH_TIMEOUT_MS. This is module scope in CommonJS, so it cannot
   // `await`: the box and the exit move into the continuation. The `.catch`
-  // is what keeps a rejected flush from skipping them — a transport failure
-  // is Sentry's to log, not a reason to leave the process windowless and
+  // is what keeps a rejected flush from skipping them — and it LOGS, because a
+  // rejected flush is the one case where this file's promise (the event reached
+  // Sentry) has failed, and a missing event with no local line is
+  // undiagnosable. It is still not a reason to leave the process windowless and
   // alive. Box before exit within the continuation for the reason SR measured
   // on #2518: exiting first ends the process before the box is reached.
   void Sentry.flush(SENTRY_FLUSH_TIMEOUT_MS)
-    .catch(() => undefined)
+    .catch((flushError) => {
+      log.error("[FATAL] Sentry flush failed before exit:", flushError);
+    })
     .then(() => {
       dialog.showErrorBox(STARTUP_FAILURE_TITLE, message);
       app.exit(1);
