@@ -552,15 +552,16 @@ export async function createTransaction(
  * The synchronous core of `createTransaction` (BACKLOG-2538).
  *
  * WHY IT HAD TO BE SPLIT OUT — the same reason `updateContactSync` was
- * (BACKLOG-2496). Creating a deal and attaching its parties now run in ONE
- * transaction, and `dbTransaction` takes a SYNCHRONOUS callback. Calling the
- * `async` wrapper inside it would have been a silent atomicity hole: the body
- * is synchronous, but an `async` function turns a throw into a REJECTED
- * PROMISE rather than a synchronous throw, so `dbTransaction` would see the
- * callback return normally and COMMIT — with the failure surfacing later as an
- * unhandled rejection, after the write it was supposed to prevent had landed.
+ * (BACKLOG-2496). Creating a deal and attaching its parties run in ONE
+ * transaction, and `dbTransaction` takes a SYNCHRONOUS callback, so the
+ * composition needs a callee that is synchronous all the way down. What is at
+ * stake if a callee in that position is not synchronous is asserted, by name,
+ * in `db/__tests__/transactionDbService.atomicDealCreate-2538.test.ts`.
  *
- * The async wrapper stays because other callers await it.
+ * This function must stay synchronous. The promise-returning
+ * `createTransaction` above stays because other callers await it; it is NOT
+ * yet the plain shape BACKLOG-2960 rules for a seam export, and this file's
+ * five seam functions are a later round.
  */
 export function createTransactionSync(
   transactionData: NewTransaction,
