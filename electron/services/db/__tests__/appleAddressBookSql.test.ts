@@ -81,11 +81,11 @@ afterEach(() => {
 });
 
 describe("the result keys the parser reads", () => {
-  it("returns ROWID under the key `ROWID`, not `rowid`", () => {
+  it("returns ROWID under the key `ROWID`, not `rowid`", async () => {
     openBook("full");
     db.prepare("INSERT INTO ABPerson (First, Last) VALUES ('Ada', 'Lovelace')").run();
 
-    const row = prepareAbPersonStatements(db as never, present()).all.get() as Record<
+    const row = (await prepareAbPersonStatements(db as never, present())).all.get() as Record<
       string,
       unknown
     >;
@@ -97,13 +97,13 @@ describe("the result keys the parser reads", () => {
     expect(row).not.toHaveProperty("rowid");
   });
 
-  it("returns First / Last / Organization under their declared case", () => {
+  it("returns First / Last / Organization under their declared case", async () => {
     openBook("full");
     db.prepare(
       "INSERT INTO ABPerson (First, Last, Organization) VALUES ('Ada', 'Lovelace', 'AA')",
     ).run();
 
-    const row = prepareAbPersonStatements(db as never, present()).all.get() as Record<
+    const row = (await prepareAbPersonStatements(db as never, present())).all.get() as Record<
       string,
       unknown
     >;
@@ -112,13 +112,13 @@ describe("the result keys the parser reads", () => {
     expect(row.Organization).toBe("AA");
   });
 
-  it("emits NULL AS <col> for a column this backup does NOT have, so the shape is constant", () => {
+  it("emits NULL AS <col> for a column this backup does NOT have, so the shape is constant", async () => {
     // A minimal backup declares no optional columns. The parser must not have
     // to ask which ones it got — every key is present, missing ones are null.
     openBook("minimal");
     db.prepare("INSERT INTO ABPerson (First) VALUES ('Ada')").run();
 
-    const row = prepareAbPersonStatements(db as never, present()).all.get() as Record<
+    const row = (await prepareAbPersonStatements(db as never, present())).all.get() as Record<
       string,
       unknown
     >;
@@ -128,11 +128,11 @@ describe("the result keys the parser reads", () => {
     }
   });
 
-  it("returns the real value when the column IS present", () => {
+  it("returns the real value when the column IS present", async () => {
     openBook("full");
     db.prepare("INSERT INTO ABPerson (First, ExternalUUID) VALUES ('Ada', 'uuid-1')").run();
 
-    const row = prepareAbPersonStatements(db as never, present()).all.get() as Record<
+    const row = (await prepareAbPersonStatements(db as never, present())).all.get() as Record<
       string,
       unknown
     >;
@@ -141,7 +141,7 @@ describe("the result keys the parser reads", () => {
 });
 
 describe("prepareAbPersonStatements — the pair is built from ONE list", () => {
-  it("the by-id form returns the same keys as the all form", () => {
+  it("the by-id form returns the same keys as the all form", async () => {
     /**
      * BACKLOG-2407. `getContactById()` falls through to the by-id statement on
      * a cache miss, so a column list that widened only the first would leave
@@ -152,7 +152,7 @@ describe("prepareAbPersonStatements — the pair is built from ONE list", () => 
     openBook("full");
     db.prepare("INSERT INTO ABPerson (First, ExternalUUID) VALUES ('Ada', 'uuid-1')").run();
 
-    const { all, byId } = prepareAbPersonStatements(db as never, present());
+    const { all, byId } = await prepareAbPersonStatements(db as never, present());
     const fromAll = all.get() as Record<string, unknown>;
     const fromId = byId.get(1) as Record<string, unknown>;
 
@@ -160,12 +160,12 @@ describe("prepareAbPersonStatements — the pair is built from ONE list", () => 
     expect(fromId).toEqual(fromAll);
   });
 
-  it("orders the all form by ROWID, so an import is deterministic", () => {
+  it("orders the all form by ROWID, so an import is deterministic", async () => {
     openBook("full");
     for (const n of ["Cleo", "Ada", "Brin"])
       db.prepare("INSERT INTO ABPerson (First) VALUES (?)").run(n);
 
-    const rows = prepareAbPersonStatements(db as never, present()).all.all() as Array<{
+    const rows = (await prepareAbPersonStatements(db as never, present())).all.all() as Array<{
       ROWID: number;
     }>;
     expect(rows.map((r) => r.ROWID)).toEqual([1, 2, 3]);
