@@ -48,6 +48,12 @@ const NODE_SQLITE3_DATABASE_RULE = {
  * both spellings. It sees SYNTAX only: a non-async body that returns a promise
  * through a raw `.transaction(` is still invisible here, and is caught only at
  * `dbTransaction` (by the type) — one more reason those sites migrate.
+ *
+ * The `.transaction(` selector is RECEIVER-AGNOSTIC: any object's
+ * `.transaction(async …)` fires, not only a better-sqlite3 handle. Zero matches
+ * at 139913c51 (full lint). If a non-database API named `transaction` ever takes
+ * an async callback legitimately, that is the expected false positive — narrow
+ * the selector then, with the receiver named; do not disable the rule inline.
  */
 const ASYNC_TRANSACTION_BODY_RULES = [
   {

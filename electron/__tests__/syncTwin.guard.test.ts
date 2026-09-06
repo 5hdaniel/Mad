@@ -91,6 +91,12 @@
  *   not promise-returning and goes red under (ii). Annotate it — the ruled
  *   wrapper shape is `function x(): Promise<T> { return Promise.resolve(xSync()) }`.
  *
+ *   "Exported" is read from syntax too: `export function …` and `export const …`.
+ *   A name exported through an `export { fooSync }` list, an `export { x as
+ *   fooSync }` rename, or `export default` is NOT enumerated — it is neither a
+ *   candidate nor a sibling. No db/** module exports a function that way at
+ *   139913c51; a twin written that way would be invisible here, so do not.
+ *
  * Calibration against numbers this file did not produce (SR rulings 79c3aa69 /
  * ffc832ac, both measured with a type-checker-resolved graph): 37 transaction
  * bodies, 16 of them outside `db/**`; the SR-named twins `recordVerdict`,
