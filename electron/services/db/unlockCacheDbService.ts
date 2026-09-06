@@ -96,7 +96,7 @@ export function removeCachedUnlock(
  */
 export function clearUnlockCache(): void {
   dbRun(sql`DELETE FROM transaction_unlocks_cache`, []);
-  logService.info(
+  void logService.info(
     "[UnlockCache] Cleared all cached unlocks",
     "UnlockCacheDbService",
   );

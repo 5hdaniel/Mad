@@ -256,23 +256,25 @@ class GmailFetchService {
       });
 
       // Handle token refresh (session-only, no encryption needed)
-      oauth2Client.on("tokens", async (tokens) => {
-        logService.info("Tokens refreshed", "GmailFetch");
-        if (tokens.refresh_token) {
-          // Update refresh token in database (no encryption)
-          await databaseService.updateOAuthToken(tokenRecord.id, {
-            refresh_token: tokens.refresh_token,
-          });
-        }
-        if (tokens.access_token) {
-          // Update access token (no encryption)
-          await databaseService.updateOAuthToken(tokenRecord.id, {
-            access_token: tokens.access_token,
-            token_expires_at: new Date(
-              Date.now() + (tokens.expiry_date || 3600000),
-            ).toISOString(),
-          });
-        }
+      oauth2Client.on("tokens", (tokens) => {
+        void (async () => {
+          logService.info("Tokens refreshed", "GmailFetch");
+          if (tokens.refresh_token) {
+            // Update refresh token in database (no encryption)
+            await databaseService.updateOAuthToken(tokenRecord.id, {
+              refresh_token: tokens.refresh_token,
+            });
+          }
+          if (tokens.access_token) {
+            // Update access token (no encryption)
+            await databaseService.updateOAuthToken(tokenRecord.id, {
+              access_token: tokens.access_token,
+              token_expires_at: new Date(
+                Date.now() + (tokens.expiry_date || 3600000),
+              ).toISOString(),
+            });
+          }
+        })();
       });
 
       // Store client and initialize Gmail API

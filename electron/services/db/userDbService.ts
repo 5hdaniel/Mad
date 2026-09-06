@@ -256,7 +256,7 @@ export async function migrateUserIdForUnification(oldUserId: string, newUserId: 
       // Update the users_local table FIRST (the primary record)
       // With FK checks off, this won't cause issues
       db.prepare("UPDATE users_local SET id = ? WHERE id = ?").run(newUserId, oldUserId);
-      logService.info("[DB Migration] Updated users_local primary record", "userDbService");
+      void logService.info("[DB Migration] Updated users_local primary record", "userDbService");
 
       // Tables with user_id FK that need to be updated
       const tablesToUpdate = [
@@ -285,24 +285,24 @@ export async function migrateUserIdForUnification(oldUserId: string, newUserId: 
           if (hasUserId) {
             const result = db.prepare(`UPDATE ${table} SET user_id = ? WHERE user_id = ?`).run(newUserId, oldUserId);
             if (result.changes > 0) {
-              logService.info(`[DB Migration] Updated ${result.changes} rows in ${table}`, "userDbService");
+              void logService.info(`[DB Migration] Updated ${result.changes} rows in ${table}`, "userDbService");
             }
           }
         } catch (tableError) {
           // Table might not exist, skip it
-          logService.debug(`[DB Migration] Skipping table ${table}: ${tableError}`, "userDbService");
+          void logService.debug(`[DB Migration] Skipping table ${table}: ${tableError}`, "userDbService");
         }
       }
     });
 
     try {
       migrate();
-      logService.info("[DB Migration] User ID migration completed successfully", "userDbService", {
+      void logService.info("[DB Migration] User ID migration completed successfully", "userDbService", {
         oldId: oldUserId.substring(0, 8) + "...",
         newId: newUserId.substring(0, 8) + "...",
       });
     } catch (error) {
-      logService.error("[DB Migration] User ID migration failed, rolled back", "userDbService", {
+      void logService.error("[DB Migration] User ID migration failed, rolled back", "userDbService", {
         error: error instanceof Error ? error.message : String(error),
       });
       throw error;

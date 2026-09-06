@@ -223,7 +223,7 @@ export async function handleMicrosoftLogin(
     );
 
     // Process auth in background
-    setTimeout(async () => {
+    const processAuthInBackground = async () => {
       try {
         await logService.info(
           "Waiting for authorization code from local server...",
@@ -524,6 +524,9 @@ export async function handleMicrosoftLogin(
           });
         }
       }
+    };
+    setTimeout(() => {
+      void processAuthInBackground();
     }, 0);
 
     return { success: true, authUrl, scopes };
@@ -576,7 +579,7 @@ export async function handleMicrosoftConnectMailbox(
     // With system browser, the local server handles the callback directly.
     // No BrowserWindow navigation interception needed.
 
-    setTimeout(async () => {
+    const processAuthInBackground = async () => {
       try {
         const timeoutMs = 120000;
         const codeWithTimeout = Promise.race([
@@ -727,6 +730,9 @@ export async function handleMicrosoftConnectMailbox(
           });
         }
       }
+    };
+    setTimeout(() => {
+      void processAuthInBackground();
     }, 0);
 
     return { success: true, authUrl, scopes };
@@ -850,7 +856,7 @@ export async function handleMicrosoftConnectMailboxPending(
       }
     );
 
-    setTimeout(async () => {
+    const processAuthInBackground = async () => {
       try {
         const timeoutMs = 120000;
         const codeWithTimeout = Promise.race([
@@ -910,6 +916,9 @@ export async function handleMicrosoftConnectMailboxPending(
           });
         }
       }
+    };
+    setTimeout(() => {
+      void processAuthInBackground();
     }, 0);
 
     return { success: true };

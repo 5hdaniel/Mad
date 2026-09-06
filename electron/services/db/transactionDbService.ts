@@ -1003,7 +1003,7 @@ export async function updateTransaction(
         // it must be HUMAN (no raw snake_case column names). The precise frozen
         // field list stays in the log and on the typed error's `attemptedFields`
         // for developers/support; it is never dumped at the user.
-        logService.info(
+        void logService.info(
           "Blocked edit to frozen identity anchor(s) after export",
           "TransactionDbService",
           { transactionId, attemptedFrozen: changedFrozen },
@@ -1053,7 +1053,7 @@ export async function updateTransaction(
     // nothing, so a caller whose entire payload had been discarded — which is
     // exactly what happened to Reject — was told only that "no valid fields"
     // existed, with no way to see which fields it had sent.
-    logService.warn("Transaction update dropped every field", "TransactionDbService", {
+    void logService.warn("Transaction update dropped every field", "TransactionDbService", {
       transactionId,
       dropped,
     });
@@ -1070,7 +1070,7 @@ export async function updateTransaction(
     // Not silent: a partially-dropped payload says so, with the decision that
     // dropped it, so the next BACKLOG-2558 is visible in a log rather than
     // inferred from a stuck row.
-    logService.debug("Transaction update skipped non-writable keys", "TransactionDbService", {
+    void logService.debug("Transaction update skipped non-writable keys", "TransactionDbService", {
       transactionId,
       dropped,
     });
@@ -1081,14 +1081,14 @@ export async function updateTransaction(
   const statement = sql`UPDATE transactions SET ${assignmentList(columns)} WHERE id = ?`;
   const result = dbRun(statement, values);
 
-  logService.debug("Transaction update result", "TransactionDbService", {
+  void logService.debug("Transaction update result", "TransactionDbService", {
     transactionId,
     columns,
     rowsChanged: result.changes,
   });
 
   if (result.changes === 0) {
-    logService.warn("Transaction update changed 0 rows", "TransactionDbService", {
+    void logService.warn("Transaction update changed 0 rows", "TransactionDbService", {
       transactionId,
       columns,
     });

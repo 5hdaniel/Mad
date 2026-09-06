@@ -148,7 +148,7 @@ export function namesThatAreTheirOwnIdentity(userId: string): Set<string> {
      * proportionate — unlike the picker's crosswalk read, whose failure
      * duplicates the entire list, this one is invisible either way.
      */
-    logService.warn(
+    void logService.warn(
       `[Contacts] crosswalk unavailable for message-derived suppression; falling back to name-only matching: ${error}`,
       "ContactDbService",
     );
@@ -429,7 +429,7 @@ export async function createContact(
     }
 
     if (storedPhones.size > 0) {
-      logService.info(`[Contacts] Stored ${storedPhones.size} phone(s) for contact ${id}`, "Contacts");
+      void logService.info(`[Contacts] Stored ${storedPhones.size} phone(s) for contact ${id}`, "Contacts");
     }
 
     // Store ALL emails in contact_emails table
@@ -466,7 +466,7 @@ export async function createContact(
     }
 
     if (storedEmails.size > 0) {
-      logService.info(`[Contacts] Stored ${storedEmails.size} email(s) for contact ${id}`, "Contacts");
+      void logService.info(`[Contacts] Stored ${storedEmails.size} email(s) for contact ${id}`, "Contacts");
     }
 
     // LAST, AND INSIDE. Writing where the contact came from is part of creating
@@ -568,7 +568,7 @@ export function createContactsBatch(
         allEmails.push(contactData.email);
       }
       if (allEmails.length > 1) {
-        logService.warn(`[DIAG-1270] Batch create: ${contactData.display_name} → storing ${allEmails.length} emails: ${allEmails.join(', ')}`, 'ContactDbService');
+        void logService.warn(`[DIAG-1270] Batch create: ${contactData.display_name} → storing ${allEmails.length} emails: ${allEmails.join(', ')}`, 'ContactDbService');
       }
       const storedEmails = new Set<string>();
       let isFirstEmail = true;
@@ -584,7 +584,7 @@ export function createContactsBatch(
         );
         isFirstEmail = false;
       }
-      logService.warn(`[DIAG-1270] Batch create: ${contactData.display_name} → ${storedEmails.size} emails stored (from ${allEmails.length} input)`, 'ContactDbService');
+      void logService.warn(`[DIAG-1270] Batch create: ${contactData.display_name} → ${storedEmails.size} emails stored (from ${allEmails.length} input)`, 'ContactDbService');
 
       // INSIDE the batch transaction, with the contact it describes. Written
       // here rather than by the caller afterwards so that an interrupted import
@@ -976,7 +976,7 @@ export function backfillContactEmailsSync(
   // Get existing emails for this contact
   const existingSql = sql`SELECT LOWER(email) as email FROM contact_emails WHERE contact_id = ?`;
   const existingRows = dbAll<{ email: string }>(existingSql, [contactId]);
-  logService.warn(`[DIAG-1270] Backfill emails for ${contactId}: input=${emails.length} emails [${emails.join(', ')}], existing=${existingRows.length}`, 'ContactDbService');
+  void logService.warn(`[DIAG-1270] Backfill emails for ${contactId}: input=${emails.length} emails [${emails.join(', ')}], existing=${existingRows.length}`, 'ContactDbService');
   for (const row of existingRows) {
     storedEmails.add(row.email);
   }
@@ -1003,9 +1003,9 @@ export function backfillContactEmailsSync(
     }
   }
 
-  logService.warn(`[DIAG-1270] Backfill emails for ${contactId}: added=${added}`, 'ContactDbService');
+  void logService.warn(`[DIAG-1270] Backfill emails for ${contactId}: added=${added}`, 'ContactDbService');
   if (added > 0) {
-    logService.info(`[Contacts] Backfilled ${added} email(s) for contact ${contactId}`, "Contacts");
+    void logService.info(`[Contacts] Backfilled ${added} email(s) for contact ${contactId}`, "Contacts");
   }
 
   return added;
@@ -1070,7 +1070,7 @@ export function backfillContactPhonesSync(
   }
 
   if (added > 0) {
-    logService.info(`[Contacts] Backfilled ${added} phone(s) for contact ${contactId}`, "Contacts");
+    void logService.info(`[Contacts] Backfilled ${added} phone(s) for contact ${contactId}`, "Contacts");
   }
 
   return added;
@@ -1105,7 +1105,7 @@ export async function backfillContactCommunicationDates(userId: string): Promise
     [userId, userId]
   );
 
-  logService.info("Backfill: Found phone-message matches", "ContactDbService", {
+  void logService.info("Backfill: Found phone-message matches", "ContactDbService", {
     matchCount: phoneMessages.length,
     samples: phoneMessages.slice(0, 5).map(p => ({
       contactId: p.contact_id.substring(0, 8),
@@ -1136,7 +1136,7 @@ export async function backfillContactCommunicationDates(userId: string): Promise
   `;
   const debugContacts = dbAll<{ display_name: string; last_inbound_at: string | null }>(debugSql, [userId]);
 
-  logService.info("Backfill complete", "ContactDbService", {
+  void logService.info("Backfill complete", "ContactDbService", {
     userId,
     updatedCount,
     topContacts: debugContacts.map(c => ({
@@ -1274,7 +1274,7 @@ ${IMPORTED_CONTACT_ADDRESSES_SQL},
       return aName.localeCompare(bName);
     });
   } catch (error) {
-    logService.error("Error getting sorted contacts", "ContactDbService", {
+    void logService.error("Error getting sorted contacts", "ContactDbService", {
       error: (error as Error).message,
       userId,
     });
@@ -1532,7 +1532,7 @@ export async function getContactNamesByPhones(
         }
       }
     } catch (err) {
-      logService.warn("Failed to load macOS Contacts for fallback lookup", "Contacts", { err });
+      void logService.warn("Failed to load macOS Contacts for fallback lookup", "Contacts", { err });
     }
   }
 
@@ -1795,7 +1795,7 @@ export async function getTransactionsByContact(
       }
     });
   } catch (error) {
-    logService.warn(
+    void logService.warn(
       "json_each not supported, using LIKE fallback",
       "ContactDbService",
       { error: (error as Error).message },
@@ -1834,7 +1834,7 @@ export async function getTransactionsByContact(
           }
         }
       } catch (parseError) {
-        logService.error(
+        void logService.error(
           "Error parsing other_contacts JSON",
           "ContactDbService",
           { error: (parseError as Error).message },
@@ -2646,7 +2646,7 @@ export function searchContactsForSelection(
     // Return up to limit results
     return allResults.slice(0, limit);
   } catch (error) {
-    logService.error("Error searching contacts for selection", "ContactDbService", {
+    void logService.error("Error searching contacts for selection", "ContactDbService", {
       error: (error as Error).message,
       userId,
       query,
@@ -2666,7 +2666,7 @@ export function getContactEmailEntries(contactId: string): { id: string; email: 
     ORDER BY is_primary DESC, created_at ASC
   `;
   const rows = dbAll<{ id: string; email: string; is_primary: number }>(statement, [contactId]);
-  logService.warn(`[DIAG-1270] getContactEmailEntries(${contactId}): ${rows.length} emails found`, 'ContactDbService');
+  void logService.warn(`[DIAG-1270] getContactEmailEntries(${contactId}): ${rows.length} emails found`, 'ContactDbService');
   return rows.map(r => ({ id: r.id, email: r.email, is_primary: r.is_primary === 1 }));
 }
 

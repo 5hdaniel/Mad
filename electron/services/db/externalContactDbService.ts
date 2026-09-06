@@ -557,7 +557,7 @@ export function upsertFromMacOS(userId: string, contacts: MacOSContact[]): numbe
     }
   });
 
-  logService.info(`Upserted ${count} external contacts from macOS (${multiEmailCount} with multiple emails)`, 'ExternalContactDbService', { userId });
+  void logService.info(`Upserted ${count} external contacts from macOS (${multiEmailCount} with multiple emails)`, 'ExternalContactDbService', { userId });
 
   // BACKLOG-2474 — one of the THREE places a record can enter this table.
   // Signals Phase 2; does not run it. See contactLinkingScheduler.
@@ -624,7 +624,7 @@ export function upsertFromiPhone(userId: string, contacts: iPhoneContact[], sess
     }
   });
 
-  logService.info(`Upserted ${count} external contacts from iPhone`, 'ExternalContactDbService', { userId });
+  void logService.info(`Upserted ${count} external contacts from iPhone`, 'ExternalContactDbService', { userId });
 
   // BACKLOG-2474 — DELIBERATELY NOT SIGNALLED WHEN A SESSION IS OPEN.
   //
@@ -710,7 +710,7 @@ export function deleteBySessionId(userId: string, sessionId: string): number {
   // (BACKLOG-2530) rejects a new multi-write path that skips a transaction.
 
   if (result.changes > 0) {
-    logService.info(
+    void logService.info(
       `Deleted ${result.changes} external contacts for session ${sessionId} ` +
         `(and any crosswalk links and proposals that pointed at them)`,
       'ExternalContactDbService',
@@ -773,7 +773,7 @@ export function upsertExternalContacts(
     }
   });
 
-  logService.info(`Upserted ${count} external contacts from ${source}`, 'ExternalContactDbService', { userId });
+  void logService.info(`Upserted ${count} external contacts from ${source}`, 'ExternalContactDbService', { userId });
 
   // BACKLOG-2474 — the path that carries outlook, google_contacts and
   // android_sync. THIS is the line that closes the Windows hole: a user with
@@ -877,7 +877,7 @@ export function syncOutlookContacts(userId: string, outlookContacts: OutlookCont
     total: getCount(userId),
   };
 
-  logService.info('Outlook contacts sync complete', 'ExternalContactDbService', {
+  void logService.info('Outlook contacts sync complete', 'ExternalContactDbService', {
     userId,
     ...result,
   });
@@ -912,7 +912,7 @@ export function syncGoogleContacts(userId: string, googleContacts: ExternalConta
     total: getCount(userId),
   };
 
-  logService.info('Google contacts sync complete', 'ExternalContactDbService', {
+  void logService.info('Google contacts sync complete', 'ExternalContactDbService', {
     userId,
     ...result,
   });
@@ -951,7 +951,7 @@ export function syncContactsBySource(
         total: getCount(userId),
       };
 
-      logService.info(`${source} contacts sync complete`, 'ExternalContactDbService', {
+      void logService.info(`${source} contacts sync complete`, 'ExternalContactDbService', {
         userId,
         ...result,
       });
@@ -980,7 +980,7 @@ export function updateLastMessageAtFromLookupTable(userId: string): number {
 
   const result = db.prepare(EXTERNAL_CONTACT_RECENCY_UPDATE_SQL).run(userId);
 
-  logService.info(`Updated last_message_at for ${result.changes} external contacts`, 'ExternalContactDbService', { userId });
+  void logService.info(`Updated last_message_at for ${result.changes} external contacts`, 'ExternalContactDbService', { userId });
 
   return result.changes;
 }
@@ -1105,7 +1105,7 @@ export function deleteStaleContactsBySource(userId: string, source: ExternalCont
   );
 
   if (changes > 0) {
-    logService.info(`Deleted ${changes} stale ${source} external contacts`, 'ExternalContactDbService', { userId });
+    void logService.info(`Deleted ${changes} stale ${source} external contacts`, 'ExternalContactDbService', { userId });
   }
 
   return changes;
@@ -1146,7 +1146,7 @@ export function deleteBySource(userId: string, source: ExternalContactSource): n
     sql`user_id = ? AND source = ?`,
     [userId, source],
   );
-  logService.info(`Deleted ${changes} external contacts with source '${source}'`, 'ExternalContactDbService', { userId });
+  void logService.info(`Deleted ${changes} external contacts with source '${source}'`, 'ExternalContactDbService', { userId });
   return changes;
 }
 
@@ -1199,7 +1199,7 @@ export function clearRefetchableSourcesForUser(
   if (dropped.length > 0) {
     // Warn rather than throw. Dropping fails safe — those rows stay — whereas
     // rejecting the call would turn a defensive guard into a failed re-import.
-    logService.warn(
+    void logService.warn(
       `Force re-import asked to empty ${dropped.length} source(s) the desktop cannot ` +
         `re-fetch (${dropped.join(', ')}); their rows were left in place`,
       'ExternalContactDbService',
@@ -1219,7 +1219,7 @@ export function clearRefetchableSourcesForUser(
   // re-fetched ()", which reads like a failed delete rather than an empty
   // request.
   if (sources.length === 0) {
-    logService.info(
+    void logService.info(
       'Force re-import emptied nothing: no re-fetchable source was named',
       'ExternalContactDbService',
       { userId }
@@ -1235,7 +1235,7 @@ export function clearRefetchableSourcesForUser(
     [userId, ...sources],
   );
 
-  logService.info(
+  void logService.info(
     `Cleared ${changes} external contacts from the sources about to be re-fetched ` +
       `(${sources.join(', ')}); every other source was left in place`,
     'ExternalContactDbService',
