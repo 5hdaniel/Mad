@@ -119,6 +119,41 @@ describe("BACKLOG-3128 — every phase is named honestly", () => {
     }
   );
 
+  it("renders the literal finalizing copy — the derived list cannot pin this", async () => {
+    // BACKLOG-3132. The `it.each` above derives its expected label FROM the
+    // display map, which makes it tautological about COPY: change the map and
+    // the expectation changes with it. Measured — pointing `finalizing` at the
+    // importing copy left that suite 26/26 green.
+    //
+    // So the derived list is worth exactly what it is worth (a new phase is
+    // exercised at all, and renders something rather than crashing or leaking
+    // its identifier) and no more. The literal string a user reads is pinned
+    // here, by hand, because nothing else can pin it.
+    mockQueue = messagesQueue({ phase: "finalizing", indeterminate: true });
+
+    renderStrict(<MacOSMessagesImportSettings userId={USER_ID} />);
+
+    await waitFor(() =>
+      expect(screen.getByText("Saving imported messages...")).toBeInTheDocument()
+    );
+    // The label this phase used to wear, and the reason this item exists.
+    expect(screen.queryByText("Importing messages...")).not.toBeInTheDocument();
+    // No count: the save step has nothing to count and no knowable duration.
+    expect(screen.getByTestId("import-progress-indeterminate")).toBeInTheDocument();
+    expect(screen.queryByText(/%/)).not.toBeInTheDocument();
+  });
+
+  it("gives every phase its OWN copy — no two phases read alike", async () => {
+    // Derived, so it scales to a sixth phase, and it catches the mutation the
+    // derived `it.each` cannot: pointing one phase at another's copy. Two phases
+    // sharing a label is the exact defect BACKLOG-3128 fixed (querying fell
+    // through a ternary and wore the importing label), so it must not return.
+    const labels = IMPORT_PHASES.map((p) => IMPORT_PHASE_DISPLAY[p].label);
+    expect(new Set(labels).size).toBe(labels.length);
+    const pills = IMPORT_PHASES.map((p) => IMPORT_PHASE_DISPLAY[p].pill);
+    expect(new Set(pills).size).toBe(pills.length);
+  });
+
   it("renders an unknown phase as itself rather than borrowing another label", async () => {
     // The queue item types `phase` as a bare string (it carries iPhone and
     // export phases too). An unrecognised value must not be asserted into
