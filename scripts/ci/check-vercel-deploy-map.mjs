@@ -42,6 +42,20 @@ import { fileURLToPath } from 'node:url';
 const CATCH_ALL = '**';
 const FILES = ['broker-portal/vercel.json', 'admin-portal/vercel.json'];
 
+// Allows whose silent loss nobody is positioned to notice.
+//
+// Deleting "main" or "develop" stops production and staging deploying, and
+// because a branch the config denies posts NO commit status at all, there is
+// nothing to see: no red check, no error, no failed deployment. The live site
+// simply stops being updated, and that is found late and by accident.
+//
+// The line is drawn here deliberately rather than asserting every allow. For
+// int/**, dependabot/**, hotfix/**, release/** and the *-portal/** opt-in, a
+// person is waiting on a specific preview URL, finds out within minutes, and
+// the branch-naming docs name the first thing to check. main and develop are
+// the only entries where the deploy IS the product and nobody is waiting on it.
+const REQUIRED_TRUE = ['main', 'develop'];
+
 const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), '../..');
 const findings = [];
 let checked = 0;
@@ -83,6 +97,14 @@ for (const rel of FILES) {
   }
   if (map[CATCH_ALL] !== false) {
     findings.push(`${rel}: "${CATCH_ALL}" must be false, got ${JSON.stringify(map[CATCH_ALL])}.`);
+  }
+
+  for (const key of REQUIRED_TRUE) {
+    if (!Object.prototype.hasOwnProperty.call(map, key)) {
+      findings.push(`${rel}: "${key}" is missing from git.deploymentEnabled, so the "${CATCH_ALL}" catch-all denies it. That silently stops ${key === 'main' ? 'production' : 'staging'} deploying — a denied branch posts no commit status at all, so nothing goes red and the live site just stops updating.`);
+    } else if (map[key] !== true) {
+      findings.push(`${rel}: "${key}" must be true, got ${JSON.stringify(map[key])}. That silently stops ${key === 'main' ? 'production' : 'staging'} deploying.`);
+    }
   }
 
   const last = keys[keys.length - 1];
