@@ -758,9 +758,11 @@ export async function getTransactionById(
  * people, and marked nothing. It read as complete. Ranked third by damage in
  * the write-path audit (BACKLOG-2496).
  *
- * Both callees are the SYNC cores, deliberately. `dbTransaction` takes a
- * synchronous callback; calling the `async` facades here would let the
- * transaction commit over a rejected promise — see `createTransactionSync`.
+ * Both callees are the SYNC cores, deliberately: `dbTransaction` takes a
+ * synchronous callback, so this composition needs callees that are synchronous
+ * all the way down. What is at stake if either is replaced by a
+ * promise-returning facade is asserted, by name, in
+ * `db/__tests__/transactionDbService.atomicDealCreate-2538.test.ts`.
  *
  * Communication auto-linking is NOT in here. It is a long network-and-scan
  * operation, and holding the single SQLite write lock across it would block
