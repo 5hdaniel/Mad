@@ -13,6 +13,30 @@
 
 ---
 
+## Public Repository Notice
+
+<!-- LOCKED SECTION. `Validate PR Metrics` fails if the sentence below is missing
+     or altered by even one word. Do not reword it, do not "improve" it, do not
+     move it into a details block. Add your own notes underneath it instead. -->
+
+This repository is public. Do not describe vulnerabilities, addresses, credentials, endpoints, or network layout here. Link the backlog item.
+
+<!-- Why this is a fixed sentence and not a checkbox: on 2026-09-03 and again on
+     2026-09-06 an agent wrote accurate security detail into a commit message and
+     a PR body, both times having read the prose rule minutes earlier. A checkbox
+     gets ticked. A sentence that CI diffs cannot be ticked away.
+
+     Correcting a wrong public sentence about a live surface means DELETING it,
+     not replacing it with the accurate one. The accurate version is the more
+     dangerous of the two.
+
+     A PR body can be edited, but GitHub keeps every prior revision and shows it
+     to anyone who can read the repo. A commit message cannot be edited at all,
+     and a force-push does not remove it — GitHub still serves the orphaned
+     object by SHA, to unauthenticated clients. See BACKLOG-3133. -->
+
+---
+
 ## Engineer Pre-PR Checklist
 
 **REQUIRED: Complete ALL items before requesting review**
@@ -104,6 +128,12 @@ This PR will be automatically validated by CI for:
 - Presence of the Engineer Metrics section
 - Presence of an Agent ID (pm_token_metrics linkage key)
 - A TASK-#### or BACKLOG-#### cross-reference
+- The **Public Repository Notice** sentence, present and unaltered (BACKLOG-3133)
+
+Separately, the **Message Hygiene Gate** scans this PR's title, body and every
+commit message for addresses, credentials, privileged role names, admin
+endpoints and denylisted terms. It re-runs when the description is EDITED, not
+only when you push.
 
 PRs missing these elements will fail the PR Metrics Validation check.
 Numeric metrics are NOT validated in the PR body — they live in Supabase (BACKLOG-1873).

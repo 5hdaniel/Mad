@@ -1,0 +1,173 @@
+name: Message Hygiene
+
+# BACKLOG-3133 — scan the PR TITLE, the PR BODY and every COMMIT MESSAGE in the
+# PR for detail that must not be published to a public repository.
+#
+# ## Why this is its own workflow and not a job in ci.yml
+#
+# `ci.yml`'s `pull_request:` trigger declares no `types:`, so it defaults to
+# [opened, synchronize, reopened]. **`edited` is absent.** `synchronize` fires on
+# a push; nothing in ci.yml fires when someone rewrites a PR description without
+# pushing.
+#
+# That is exactly incident 2's path. On 2026-09-06 the body of PR #2524 was
+# EDITED to add accurate security detail — a privileged role name, a
+# no-credential endpoint and its response, and a statement that the mitigation
+# was not yet applied. No push accompanied it. Every check on that PR stayed
+# green, because none of them were listening for the event.
+#
+# Adding `edited` to ci.yml would re-run the macOS and Windows matrices on every
+# typo fix in a description — 12-18 minutes of macOS runner per edit. So this
+# gets its own file, and it is cheap: ubuntu, no build, no node_modules.
+#
+# ## No exemptions, no branch filter, no job-level `if:`
+#
+# - **No exemptions.** `pr-metrics-check.yml` skips int/*, squash/*, chore/ci-*
+#   and labelled PRs because those branches have no honest Agent ID to cite.
+#   That reasoning does not transfer: a PR body is world-readable whoever wrote
+#   it and whatever it targets.
+# - **No `branches:` filter.** A PR body is public whether it targets main,
+#   develop, an int/* branch or a feature branch.
+# - **No job-level `if:`.** BACKLOG-3075: a job that is skipped by an `if:` at
+#   workflow level never creates a check run, and a check run that is never
+#   created cannot be made a required check. This job must always run and always
+#   report.
+# - **One job, one name.** BACKLOG-2506: duplicated job names produced a status
+#   that reported on one leg and not the other, and it merged green. Do not add
+#   a second job called "Message Hygiene Gate".
+#
+# ## To be made a required check
+#
+# PM adds **Message Hygiene Gate** to the required status checks on `develop`
+# and `main` after this merges.
+
+on:
+  pull_request:
+    # `edited` is the whole point. Do not remove it.
+    types: [opened, edited, synchronize, reopened]
+
+permissions:
+  contents: read
+  pull-requests: read
+
+jobs:
+  message-hygiene:
+    name: Message Hygiene Gate
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          # The commit-message pass needs the range under review, so it needs
+          # history. A depth-1 checkout has no base commit to walk back to and
+          # the pass would silently scan one commit — the shape BACKLOG-2871
+          # already had to fix on the fixture scan.
+          fetch-depth: 0
+
+      - name: Setup Node.js 20.x
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: 20.x
+
+      # Untrusted PR-author input reaches the scanner through a FILE written
+      # from an env var, never through `${{ }}` interpolation into `run:`.
+      # A PR title containing a heredoc terminator or a shell metacharacter
+      # would otherwise execute — the same injection-safe pattern
+      # pr-metrics-check.yml uses, applied to a workflow whose entire input is
+      # attacker-controlled by construction.
+      - name: Materialise the PR title and body
+        env:
+          PR_TITLE: ${{ github.event.pull_request.title }}
+          PR_BODY: ${{ github.event.pull_request.body }}
+        run: |
+          set -u
+          mkdir -p "$RUNNER_TEMP/msg-hygiene"
+          printf '%s' "${PR_TITLE:-}" > "$RUNNER_TEMP/msg-hygiene/title.txt"
+          printf '%s' "${PR_BODY:-}" > "$RUNNER_TEMP/msg-hygiene/body.md"
+          echo "title bytes: $(wc -c < "$RUNNER_TEMP/msg-hygiene/title.txt")"
+          echo "body bytes:  $(wc -c < "$RUNNER_TEMP/msg-hygiene/body.md")"
+
+      # Three passes, each with its own exit code captured, so a failure in one
+      # cannot be masked by a later success and the summary can say WHICH.
+      # `set -e` is deliberately not used here: every pass must run, so that one
+      # report lists everything rather than making the author fix findings one
+      # round-trip at a time.
+      - name: Scan the PR title
+        id: title
+        run: |
+          node scripts/ci/check-message-hygiene.mjs \
+            --text-file "$RUNNER_TEMP/msg-hygiene/title.txt" --label "PR title"
+
+      - name: Scan the PR body
+        id: body
+        if: always()
+        run: |
+          node scripts/ci/check-message-hygiene.mjs \
+            --text-file "$RUNNER_TEMP/msg-hygiene/body.md" --label "PR body"
+
+      # The commit range under review. This is a pull_request event, so both
+      # SHAs are always present — unlike the fixture scan's push leg, there is
+      # no "range could not be derived" case to degrade into. If one is ever
+      # missing, that is a broken event and the job FAILS rather than warning:
+      # unlike the fixture scan, this job is not a notification behind a working
+      # hook. The hook it backs up runs from whatever the main repo has checked
+      # out (BACKLOG-3088), so it cannot be assumed to have run at all.
+      - name: Scan every commit message in the PR
+        id: commits
+        if: always()
+        env:
+          PR_BASE: ${{ github.event.pull_request.base.sha }}
+          PR_HEAD: ${{ github.event.pull_request.head.sha }}
+        run: |
+          set -u
+          if [ -z "${PR_BASE:-}" ] || [ -z "${PR_HEAD:-}" ]; then
+            echo "::error title=Message Hygiene Gate::No commit range on the pull_request event (base='${PR_BASE:-}' head='${PR_HEAD:-}'). Refusing to report green on a scan that checked nothing."
+            exit 1
+          fi
+          node scripts/ci/check-message-hygiene.mjs --range "$PR_HEAD --not $PR_BASE"
+
+      # BACKLOG-2871: a verification harness that never executes is
+      # indistinguishable from one that passes. 40 controls, each shown red by a
+      # targeted mutation of the guard during implementation.
+      - name: Verify the guard itself
+        if: always()
+        run: node scripts/__tests__/check-message-hygiene.verify.js
+
+      - name: Summary
+        if: always()
+        env:
+          TITLE_OUTCOME: ${{ steps.title.outcome }}
+          BODY_OUTCOME: ${{ steps.body.outcome }}
+          COMMITS_OUTCOME: ${{ steps.commits.outcome }}
+        run: |
+          {
+            echo "## Message Hygiene Gate"
+            echo ""
+            echo "| Pass | Result |"
+            echo "|---|---|"
+            echo "| PR title | ${TITLE_OUTCOME} |"
+            echo "| PR body | ${BODY_OUTCOME} |"
+            echo "| Commit messages | ${COMMITS_OUTCOME} |"
+            echo ""
+            if [ "$TITLE_OUTCOME" = "success" ] && [ "$BODY_OUTCOME" = "success" ] && [ "$COMMITS_OUTCOME" = "success" ]; then
+              echo "No findings."
+            else
+              echo "**Findings.** This repository is public."
+              echo ""
+              echo "State WHAT changed. Every WHY that touches security, customers,"
+              echo "addresses, credentials, endpoints or network layout goes to"
+              echo "\`pm_comments\`, with a link to the backlog item."
+              echo ""
+              echo "Correcting a wrong public sentence about a live surface means"
+              echo "**deleting** it, not replacing it with the accurate one."
+              echo ""
+              echo "The step log names the rule and the line. It does **not** print the"
+              echo "matched text: an Actions log on a public repo is world-readable, so"
+              echo "echoing it here would republish exactly what this gate blocked."
+              echo ""
+              echo "A PR body can be edited. A **commit message cannot be fixed forward**,"
+              echo "and a force-push does not remove the old object — GitHub still serves"
+              echo "it by SHA. Amend or rebase before the finding is in a merged branch."
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"

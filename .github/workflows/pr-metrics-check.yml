@@ -7,6 +7,9 @@ name: PR Metrics Validation
 # 1. Engineer Metrics section must be present
 # 2. Agent ID must be present (linkage key into pm_token_metrics)
 # 3. Task/Backlog cross-reference (TASK-#### or BACKLOG-####) must be present
+# 4. The Public Repository Notice must be present VERBATIM (BACKLOG-3133) --
+#    an exact-string test, because "try not to describe vulnerabilities" passes
+#    every keyword check and is not the rule.
 #
 # Numeric metrics (Total Tokens, Duration, API Calls, Variance) are NOT
 # validated in the PR body: they are auto-captured by the SubagentStop hook
@@ -142,6 +145,36 @@ jobs:
           fi
           echo "  [PASS] Task/Backlog cross-reference found"
 
+          # Check 4: the locked Public Repository Notice, VERBATIM (BACKLOG-3133)
+          #
+          # An EXACT-string test, not a keyword test. The point is that the
+          # sentence cannot be softened. "Try not to describe vulnerabilities"
+          # and "Do not describe vulnerabilities" both contain every word a
+          # keyword check would look for; only one of them is the rule.
+          #
+          # `grep -F` on a here-string rather than a bash `=~` match: the
+          # sentence contains no regex metacharacters today, but a future edit
+          # to it would silently turn one into a wildcard and weaken the check
+          # without anyone touching this file.
+          echo ""
+          echo "Check 4: Public Repository Notice (verbatim)..."
+          NOTICE='This repository is public. Do not describe vulnerabilities, addresses, credentials, endpoints, or network layout here. Link the backlog item.'
+          if ! printf '%s' "$PR_BODY" | grep -qF -- "$NOTICE"; then
+            echo "::error::PR body is missing the Public Repository Notice, or it has been altered"
+            echo "  The PR body must contain this sentence, exactly, unaltered:"
+            echo ""
+            echo "    $NOTICE"
+            echo ""
+            echo "  It is a fixed sentence and not a checkbox because a checkbox gets"
+            echo "  ticked. On 2026-09-03 and 2026-09-06 an agent wrote accurate security"
+            echo "  detail into a commit message and a PR body having read the prose rule"
+            echo "  minutes earlier (BACKLOG-3087, BACKLOG-3114)."
+            echo ""
+            echo "  Copy it from .github/PULL_REQUEST_TEMPLATE.md. Do not reword it."
+            exit 1
+          fi
+          echo "  [PASS] Public Repository Notice present and unaltered"
+
           echo ""
           echo "Note: numeric metrics are auto-captured to Supabase pm_token_metrics"
           echo "by the SubagentStop hook and are NOT validated in the PR body (BACKLOG-1873)."
@@ -185,6 +218,7 @@ jobs:
             echo "- [x] Engineer Metrics section" >> $GITHUB_STEP_SUMMARY
             echo "- [x] Agent ID (pm_token_metrics linkage key)" >> $GITHUB_STEP_SUMMARY
             echo "- [x] Task/Backlog cross-reference" >> $GITHUB_STEP_SUMMARY
+            echo "- [x] Public Repository Notice (verbatim)" >> $GITHUB_STEP_SUMMARY
             echo "" >> $GITHUB_STEP_SUMMARY
             echo "> Numeric metrics live in Supabase \`pm_token_metrics\` (auto-captured — BACKLOG-1873)." >> $GITHUB_STEP_SUMMARY
           else

@@ -52,6 +52,13 @@
 #                               what is being pushed. Never to get past a real
 #                               finding: this repo is PUBLIC and a pushed
 #                               commit cannot be unpublished.
+#   PREPUSH_SKIP_MSG_HYGIENE=1  skip the commit-MESSAGE hygiene scan. Same
+#                               warning, and a worse remedy if you are wrong: a
+#                               message cannot be corrected forward at all, and
+#                               a force-push does not remove the old object --
+#                               GitHub still serves it by SHA (measured on this
+#                               repo, BACKLOG-3133). Per-rule waivers exist so
+#                               you should never need this.
 #
 # ## Shell notes
 #
@@ -306,6 +313,63 @@ if [ "$total_commits" -gt 0 ] 2>/dev/null; then
     echo "[pre-push]   UUIDs  -> replace it, or waive it ON THE LINE with"
     echo "[pre-push]             // pii-allow-uuid: <why it is invented>"
     echo "[pre-push]             (bare-uuid is NOT baselineable -- BACKLOG-2871)"
+    exit 1
+  fi
+fi
+
+# --- MESSAGE hygiene scan: the surface the FILE scan cannot see ------------
+# (BACKLOG-3133)
+#
+# The scan above reads FILES. Two incidents in two days were both an agent
+# writing accurate security detail into a COMMIT MESSAGE and a PR body -- the
+# 2026-09-03 fixture leak (BACKLOG-3087) and the 2026-09-06 PR #2524 leak
+# (BACKLOG-3114). Neither surface was scanned by anything, anywhere.
+#
+# WHY THIS IS THE HARDER HALF. A file can be corrected forward: the tree scan's
+# message says amend-or-rebase because a follow-up commit leaves the offending
+# blob published, and that is bad enough. A MESSAGE cannot be corrected forward
+# AT ALL -- there is no later commit that changes an earlier message. The only
+# remedy is a rewrite, and a rewrite does not remove anything: measured on this
+# repo, GitHub still served an orphaned commit message at its SHA, to an
+# UNAUTHENTICATED client, seventy minutes after the force-push that orphaned it.
+# There is no self-service deletion; GitHub Support is the only documented path
+# and it declines non-sensitive data. So this stage is the gate, and there is no
+# second chance behind it.
+#
+# SAME RANGE, SAME GATE. `$push_tips --not $not_arg` is the identical exclusion
+# spec the file collection and the PII scan use, so the three stages can never
+# disagree about what "being pushed" means. Gated on total_commits so a
+# delete-ref or an up-to-date push still skips.
+#
+# FAIL CLOSED. The scanner exits 2 -- not 0 -- when it cannot resolve the range,
+# and any non-zero blocks. Pre-publication, so "could not check" must block.
+#
+# THE SCAN NEVER PRINTS WHAT IT MATCHED. Findings carry a rule, a location and a
+# masked value; denylist findings carry a location and nothing else. Run it by
+# hand with --reveal if you need the literal.
+if [ "$total_commits" -gt 0 ] 2>/dev/null; then
+  if [ -n "$PREPUSH_SKIP_MSG_HYGIENE" ]; then
+    banner "PREPUSH_SKIP_MSG_HYGIENE is set -- the message hygiene scan was SKIPPED." \
+           "This repository is PUBLIC and a commit message cannot be corrected" \
+           "forward, amended away, or removed by a force-push." \
+           "Per-rule waivers exist (hygiene-allow: <rule>: <why>). Use one instead."
+  elif ! (cd "$repo_root" && node scripts/ci/check-message-hygiene.mjs \
+            --range "$push_tips --not $not_arg"); then
+    echo ""
+    echo "[pre-push] Message hygiene scan failed. Push blocked."
+    echo "[pre-push] This repository is PUBLIC."
+    echo ""
+    echo "[pre-push] A commit message states WHAT changed. Every WHY that touches"
+    echo "[pre-push] security, customers, addresses, credentials, endpoints or"
+    echo "[pre-push] network layout goes to pm_comments, with a link."
+    echo ""
+    echo "[pre-push] AMEND or REBASE. A message cannot be fixed in a later commit,"
+    echo "[pre-push] and a force-push does NOT remove the old one -- GitHub still"
+    echo "[pre-push] serves it by SHA. See the findings above for rule and line."
+    echo ""
+    echo "[pre-push] To see the literal text a rule matched:"
+    echo "[pre-push]   node scripts/ci/check-message-hygiene.mjs --reveal \\"
+    echo "[pre-push]        --range \"$push_tips --not $not_arg\""
     exit 1
   fi
 fi

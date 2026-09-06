@@ -312,6 +312,8 @@ Keepr is an Electron-based desktop application for real estate transaction audit
 
 ## Git Workflow
 
+**`Keepr-Compliance/Mad` is PUBLIC. PR titles, PR bodies and commit messages state WHAT changed.** Every WHY that touches security, customers, addresses, credentials, endpoints or network layout goes to `pm_comments` with a link to the backlog item. Correcting a wrong public sentence about a live surface means **deleting** it, not replacing it with the accurate one — the accurate version is the more dangerous of the two. A PR body can be edited but GitHub keeps every prior revision; a commit message cannot be edited at all, and a force-push does not remove it (GitHub still serves the orphaned object by SHA, unauthenticated). Two incidents: **2026-09-03** (customer name and tenant id in a fixture, BACKLOG-3087) and **2026-09-06** (a live attack surface in a commit message and a PR body, BACKLOG-3114). Enforced mechanically by `scripts/ci/check-message-hygiene.mjs` — pre-push and the `Message Hygiene Gate` check (BACKLOG-3133).
+
 Before starting any work, confirm the correct branch. Check `git branch` and verify with the user if uncertain. Never commit to `claude/*` branches or wrong feature branches without explicit instruction.
 
 Use separate git worktrees for docs, plans, and sprint files to avoid polluting the user's active testing environment. Run `git worktree add ../worktree-name branch-name` when creating non-code deliverables.
