@@ -5,11 +5,15 @@
  * WHY THIS EXISTS
  * ---------------
  * BACKLOG-2961's compiler measurement (`pm_comments` `4c10fdb4` §4) enumerated
- * every Electron reach left in the extraction closure. Two of them are
+ * every Electron reach left in the extraction closure. Two of them WERE
  * `BrowserWindow.getAllWindows()` — `initializationBroadcaster.ts:167` and
- * `reviewStateService.ts:577` — and they are the ONLY reason those two modules
- * cannot be loaded by a non-Electron shell. Both are push-only: the core tells
- * the renderer something happened. Nothing in the core reads a window back.
+ * `reviewStateService.ts:577` — and they were the ONLY reason those two modules
+ * could not be loaded by a non-Electron shell. Both are push-only: the core
+ * tells the renderer something happened. Nothing in the core reads a window
+ * back, which is why one method is enough.
+ *
+ * Past tense on purpose: with this seam in place both modules load, and
+ * `coreLoadsWithoutElectron.test.ts` asserts it.
  *
  * WHAT THIS IS NOT
  * ----------------

@@ -159,12 +159,21 @@ describe("core modules load without Electron (BACKLOG-2962)", () => {
 
   it("autoLinkService loads with no Electron present", () => {
     // An extraction candidate whose own coupling was 12 `Sentry.*` calls and
-    // nothing else. It LOADS now — but BACKLOG-2961's closure still classifies
-    // it as transitively coupled, and both statements are true at once: its only
-    // remaining path to Electron is `await import("./reviewStateService")` at
-    // `:544` and `:915`, which the compiler counts as an edge and a load-time
-    // probe cannot reach. The two instruments measure different things, and
-    // neither is the other's substitute.
+    // nothing else.
+    //
+    // HISTORY, because this case is the tree's record of why two instruments are
+    // kept. After the Logger/ErrorReporter/AppPaths seams (PR #2523) it LOADED
+    // here while BACKLOG-2961's closure still classified it as transitively
+    // coupled — its only remaining path to Electron was
+    // `await import("./reviewStateService")` at `:544` and `:915`, which the
+    // compiler counts as an edge and a load-time probe cannot reach. Seams PR B
+    // freed `reviewStateService`, so that path is gone and the closure now reads
+    // it as platform-free too (63 modules, 0 coupled).
+    //
+    // The instruments AGREE at this head. They still MEASURE DIFFERENT THINGS,
+    // and neither is the other's substitute: this one cannot see an import the
+    // compiler elides, and the closure cannot see a `require` reached only at
+    // runtime. Do not delete one because they currently return the same answer.
     expect(() => loadWithoutElectron("../../services/autoLinkService")).not.toThrow();
   });
 
