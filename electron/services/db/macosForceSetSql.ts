@@ -244,9 +244,15 @@ export function macosForceReadView(
  * THE SYNCHRONOUS PRIMITIVE. Its one call path is the swap's transaction body
  * (`swapStagingIntoLive`'s `db.transaction()` body -> `forceSwapSteps.deleteLiveForceSet`), which is why
  * the three DELETEs are unwrapped here and exempted in `writeAtomicity.guard`:
- * nesting a transaction around them would make better-sqlite3 open a SAVEPOINT,
- * and a failure would then roll back to it and let the outer swap CONTINUE,
- * where today it aborts the whole swap and leaves the user's corpus untouched.
+ * nesting a transaction around them would be redundant, not merely stylistically
+ * wrong. better-sqlite3 implements a nested `db.transaction()` as a SAVEPOINT, so
+ * the failure semantics of THIS path are unchanged — measured on the real driver,
+ * an uncaught throw inside the inner transaction rolls back to the savepoint,
+ * rethrows, and aborts the outer swap, leaving the user's corpus untouched exactly
+ * as it does today. What nesting WOULD change is what a FUTURE caller could do: it
+ * makes a partial-swap-survives-an-error state reachable by catching, on the one
+ * path whose job is not to lose the user's messages. Transaction shape belongs to
+ * item 6, not to a text move.
  */
 export function deleteLiveForceSetSync(
   db: DatabaseType,

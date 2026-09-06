@@ -101,12 +101,15 @@ const EXEMPT: Record<string, string> = {
   // `swapStagingIntoLive` (forceStaging.ts:453). Verified by enumerating every
   // reference to the symbol, not by reading the nearest one.
   //
-  // WRAPPING IT WOULD BE WRONG, not merely redundant. better-sqlite3 implements a
-  // nested `db.transaction()` as a SAVEPOINT, so a failure inside these deletes
-  // would roll back to the savepoint and let the outer swap CONTINUE — where today
-  // it aborts the whole swap and leaves the user's corpus untouched. That changes
-  // the failure semantics of the one path whose job is not to lose the user's
-  // messages, and transaction shape belongs to item 6, not to a text move.
+  // WRAPPING IT WOULD BE REDUNDANT, not merely stylistically wrong. better-sqlite3
+  // implements a nested `db.transaction()` as a SAVEPOINT, so the failure semantics
+  // of THIS path are unchanged — measured on the real driver, an uncaught throw
+  // inside the inner transaction rolls back to the savepoint, rethrows, and aborts
+  // the outer swap, leaving the user's corpus untouched exactly as it does today.
+  // What nesting WOULD change is what a FUTURE caller could do: it makes a
+  // partial-swap-survives-an-error state reachable by catching, on the one path
+  // whose job is not to lose the user's messages. Transaction shape belongs to
+  // item 6, not to a text move.
   //
   // These three writes lived in `services/` before this chunk and were invisible
   // to a guard that enumerates `db/`. The move did not create the exposure; it
