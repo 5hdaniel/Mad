@@ -40,8 +40,9 @@
  * The three exports that EXECUTE — `deleteLiveForceSet`, `selectYieldedMessageIds`,
  * `insertStagedRows` — return promises. Each is a plain wrapper (NEVER `async`)
  * over a synchronous `*Sync` twin, and THE TWIN IS THE PRIMITIVE. The swap at
- * `macOSMessagesImportService/forceStaging.ts:453` is a raw `db.transaction()`
- * callback, which better-sqlite3 commits when it RETURNS, so everything called
+ * `macOSMessagesImportService/forceStaging.ts` is `swapStagingIntoLive`'s raw
+ * `db.transaction()` callback, which better-sqlite3 commits when it RETURNS
+ * (anchored by name, not by line — the line moves). So everything called
  * from inside it — `forceSwapSteps.deleteLiveForceSet` and `.insertFromStaging`,
  * and through them these three — takes the twin and stays synchronous.
  *
@@ -59,9 +60,13 @@
  *
  * WHAT THE TYPE SYSTEM CAN AND CANNOT SEE — measured, not assumed:
  *
- *   - a body that `await`s or RETURNS one of these is a compile error wherever
- *     the enclosing function has a non-promise return annotation (TS2345 for the
- *     await, TS2322 for the return);
+ *   - an `await` inside the synchronous body is `TS1308: 'await' expressions are
+ *     only allowed within async functions…`, and a step that RETURNS or ASSIGNS
+ *     one of these promises is an error against that step's OWN non-promise
+ *     return annotation — `TS2739`/`TS2740` where the target is an object type,
+ *     `TS2322` where it is a primitive. All four measured on this file's callers
+ *     in PR #2545; do not quote `dbTransaction`'s `TS2345` here, because that
+ *     diagnostic comes from a type this raw body never reaches;
  *   - a body that merely FLOATS the call is invisible to `tsc`. It is caught only
  *     by `@typescript-eslint/no-floating-promises`, which is scoped to `db/**` —
  *     so a floated call from a caller OUTSIDE `db/**` is caught by nothing in CI
@@ -237,7 +242,7 @@ export function macosForceReadView(
  * predicate stopped travelling as text.
  *
  * THE SYNCHRONOUS PRIMITIVE. Its one call path is the swap's transaction body
- * (`forceStaging.ts:453` -> `forceSwapSteps.deleteLiveForceSet`), which is why
+ * (`swapStagingIntoLive`'s `db.transaction()` body -> `forceSwapSteps.deleteLiveForceSet`), which is why
  * the three DELETEs are unwrapped here and exempted in `writeAtomicity.guard`:
  * nesting a transaction around them would make better-sqlite3 open a SAVEPOINT,
  * and a failure would then roll back to it and let the outer swap CONTINUE,
