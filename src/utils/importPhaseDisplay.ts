@@ -82,6 +82,18 @@ export const IMPORT_PHASE_DISPLAY: Record<ImportPhase, ImportPhaseDisplay> = {
     unit: "attachments",
     colour: "bg-green-500",
   },
+  finalizing: {
+    // BACKLOG-3132: the work after the last attachment — the stage-and-swap on a
+    // force re-import, the chat-thread-name sync on both paths. Deliberately not
+    // "Swapping": that is a mechanism word, and the swap is force-only while this
+    // phase is emitted on both paths.
+    label: "Saving imported messages...",
+    pill: "Saving",
+    // No count exists for this phase, so no unit. Surfaces render the
+    // indeterminate stripe (the producer emits total 0).
+    unit: "",
+    colour: "bg-indigo-500",
+  },
 };
 
 /**
