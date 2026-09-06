@@ -1065,3 +1065,92 @@ describe("BACKLOG-3128 — the attachments phase reports progress while skipping
     expect(events[events.length - 1]).toEqual({ current: 200, total: 200 });
   });
 });
+
+/**
+ * BACKLOG-3132 — the emitted phase SEQUENCE, asserted by identity.
+ *
+ * The importer used to end every run with a second `importing` event at 100%,
+ * arriving AFTER `attachments`. It was the "rebuild complete, about to save"
+ * signal wearing `importing` because no phase existed to name it. Two things
+ * followed: the Settings panel flipped its label back to "Importing
+ * messages..." at the end of every import, and the audit-coverage bar needed
+ * BACKLOG-2344's monotonic clamp to absorb the reversal.
+ *
+ * What makes this a sequence test rather than a set test: the defect was never
+ * a missing phase, it was an ORDER — `importing` appearing twice, the second
+ * time after `attachments`. A set-equality assertion over the phases would have
+ * passed throughout. The `lastIndexOf("importing") < indexOf("attachments")`
+ * assertion below is the one that reds when `:1043` reverts.
+ */
+describe("BACKLOG-3132 — phases are emitted in order, and saving is its own phase", () => {
+  /** Every phase the import emitted, in order, with adjacent repeats collapsed. */
+  async function emittedPhases(): Promise<{ all: string[]; steps: string[] }> {
+    const all: string[] = [];
+    await macOSMessagesImportService.importMessages(
+      USER,
+      (progress) => all.push(progress.phase),
+      testImportPlan({
+        mode: "delta",
+        storedFilters: { lookbackMonths: null, maxMessages: null },
+      })
+    );
+    const steps = all.filter((p, i) => i === 0 || p !== all[i - 1]);
+    return { all, steps };
+  }
+
+  beforeEach(async () => {
+    messageCount = 12;
+    attachmentCount = 12;
+    await writeAttachmentFixtures(12);
+  });
+
+  it("emits querying -> importing -> attachments -> finalizing, each once", async () => {
+    const { steps } = await emittedPhases();
+
+    expect(steps).toEqual(["querying", "importing", "attachments", "finalizing"]);
+  });
+
+  it("never returns to importing once attachments have started", async () => {
+    // CONTROL (b): revert the `:1043` emit to `phase: "importing"` and this reds.
+    // Stated as an order property rather than a count, because that is the
+    // promise — a phase the user has been shown as finished must not come back.
+    const { all } = await emittedPhases();
+
+    const lastImporting = all.lastIndexOf("importing");
+    const firstAttachments = all.indexOf("attachments");
+    expect(firstAttachments).toBeGreaterThan(-1);
+    expect(lastImporting).toBeGreaterThan(-1);
+    expect(lastImporting).toBeLessThan(firstAttachments);
+  });
+
+  it("ends on finalizing, and emits it exactly once with no count", async () => {
+    const seen: Array<{ phase: string; current: number; total: number }> = [];
+    messageCount = 12;
+    attachmentCount = 12;
+    await writeAttachmentFixtures(12);
+    await macOSMessagesImportService.importMessages(
+      USER,
+      (p) => seen.push({ phase: p.phase, current: p.current, total: p.total }),
+      testImportPlan({
+        mode: "delta",
+        storedFilters: { lookbackMonths: null, maxMessages: null },
+      })
+    );
+
+    const finalizing = seen.filter((e) => e.phase === "finalizing");
+    expect(finalizing).toHaveLength(1);
+    expect(seen[seen.length - 1].phase).toBe("finalizing");
+    // total 0 is what makes every surface render the indeterminate stripe: there
+    // is nothing to count and the duration is not knowable in advance.
+    expect(finalizing[0]).toEqual({ phase: "finalizing", current: 0, total: 0 });
+  });
+
+  it("reports finalizing on the DELTA path too, not only on a force re-import", async () => {
+    // The emit sits outside every staging guard on purpose. The swap it precedes
+    // is force-only, but `syncMacChatThreadNames` runs on both paths — which is
+    // why the copy says "Saving imported messages...", not "Swapping".
+    const { steps } = await emittedPhases();
+
+    expect(steps).toContain("finalizing");
+  });
+});

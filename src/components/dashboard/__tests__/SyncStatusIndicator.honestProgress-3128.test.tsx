@@ -33,6 +33,10 @@ import { render, screen } from "@testing-library/react";
 import "@testing-library/jest-dom";
 import { SyncStatusIndicator } from "../SyncStatusIndicator";
 import type { SyncItem, SyncType } from "../../../services/SyncOrchestratorService";
+// BACKLOG-3132: derived from the published tuple, not hand-written — a new
+// phase must be exercised here without anyone remembering to add it.
+import { IMPORT_PHASES } from "../../../../electron/types/ipc/importPhase";
+import { IMPORT_PHASE_DISPLAY } from "../../../utils/importPhaseDisplay";
 
 const mockIsAllowed = jest.fn();
 jest.mock("../../../hooks/useFeatureGate", () => ({
@@ -187,12 +191,11 @@ describe("BACKLOG-3128 — no fabricated percentage for the messages import", ()
 });
 
 describe("BACKLOG-3128 — the pill names the phase, not its identifier", () => {
-  it.each([
-    ["querying", "Messages - Reading messages"],
-    ["deleting", "Messages - Clearing"],
-    ["importing", "Messages - Importing"],
-    ["attachments", "Messages - Attachments"],
-  ])("renders %s as its label", (phase, expected) => {
+  it.each(
+    IMPORT_PHASES.map(
+      (p) => [p, `Messages - ${IMPORT_PHASE_DISPLAY[p].pill}`] as const
+    )
+  )("renders %s as its label", (phase, expected) => {
     mockUseSyncOrchestrator.mockReturnValue(
       orchestratorState(
         [syncItem("messages", "running", { phase, indeterminate: true })],

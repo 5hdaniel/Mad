@@ -77,6 +77,7 @@ describe("BACKLOG-2832: import progress phase union", () => {
     //   macOSMessagesImportService.ts:763, :915  -> "querying"
     //   macOSMessagesImportService.ts:1043, :1756 -> "importing"
     //   macOSMessagesImportService.ts:2200       -> "attachments"
+    //   macOSMessagesImportService.ts:1043      -> "finalizing" (BACKLOG-3132)
     // "deleting" is declared but emitted by nothing since 01b521eab
     // (stage-and-swap Force Re-import, BACKLOG-2790). It stays because
     // SyncOrchestratorService still branches on it. Tracked by BACKLOG-3122.
@@ -85,6 +86,7 @@ describe("BACKLOG-2832: import progress phase union", () => {
       "deleting",
       "importing",
       "attachments",
+      "finalizing",
     ]);
   });
 
@@ -107,6 +109,12 @@ describe("BACKLOG-2832: import progress phase union", () => {
     );
     expect(IMPORT_PHASES.indexOf("importing")).toBeLessThan(
       IMPORT_PHASES.indexOf("attachments")
+    );
+    // BACKLOG-3132: saving is last. It used to be emitted as a second
+    // "importing" event AFTER attachments, which is the reversal this ordering
+    // now forbids.
+    expect(IMPORT_PHASES.indexOf("attachments")).toBeLessThan(
+      IMPORT_PHASES.indexOf("finalizing")
     );
   });
 });

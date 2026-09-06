@@ -1038,12 +1038,38 @@ class MacOSMessagesImportService {
           return this.cancelledUnchangedResult(startTime);
         }
 
-        // Send final 100% progress to update UI
+        // BACKLOG-3132: the work after the last attachment gets its OWN phase.
+        //
+        // This emit used to say `phase: "importing", percent: 100` — a second
+        // `importing` event arriving AFTER `attachments`, because no phase
+        // existed to name what happens here. Two consequences, both real: the
+        // Settings panel flipped its label back to "Importing messages..." at the
+        // end of every run, and the audit-coverage bar needed BACKLOG-2344's
+        // monotonic clamp to stop the reversal dragging it backwards.
+        //
+        // What it actually signals: the rebuild is complete and the import is
+        // about to save. On a FORCE re-import that is the stage-and-swap below
+        // (~2 s on the founder's 34,547-message run); on BOTH paths it is the
+        // chat-thread-name sync that follows. This emit is deliberately outside
+        // any staging guard, so delta runs report the phase too.
+        //
+        // `current`/`total` are 0 because there is nothing to count and the
+        // duration is not knowable in advance — the listener forwards counts only
+        // when `total > 0`, so surfaces render the indeterminate stripe.
+        //
+        // `percent: 0`, NOT the 100 this line inherited. Nothing reads it on the
+        // Settings path (the orchestrator listener stopped forwarding `percent`
+        // in BACKLOG-3128), but `useAuditCoverageCheck` subscribes to this stream
+        // directly and maps `percent` across the phase's band. At 100 the bar
+        // would jump to 92 the instant saving began — and 92 is the ceiling
+        // BACKLOG-2344 reserved for the silent thread-expansion tail that runs
+        // after this returns. 0 holds the bar at the band's floor while the work
+        // is actually in progress, which is what is true.
         onProgress?.({
-          phase: "importing",
-          current: allMessages.length,
-          total: allMessages.length,
-          percent: 100,
+          phase: "finalizing",
+          current: 0,
+          total: 0,
+          percent: 0,
         });
 
         // BACKLOG-2790: THE SWAP. The rebuild is complete, so it is finally

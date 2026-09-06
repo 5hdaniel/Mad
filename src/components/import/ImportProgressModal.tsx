@@ -87,6 +87,13 @@ function getPhaseName(
       return "Importing messages";
     case "attachments":
       return "Processing attachments";
+    // BACKLOG-3132 / BACKLOG-3131: DEAD-CODE STOPGAP. Nothing imports this
+    // component — it renders to nobody, and BACKLOG-3131 owns deleting the file.
+    // This arm exists only because the switch has no `default`, so a new
+    // ImportPhase member breaks the build here. Do not maintain it as live copy;
+    // the copy users actually see is in `src/utils/importPhaseDisplay.ts`.
+    case "finalizing":
+      return "Saving imported messages";
   }
 }
 
@@ -105,6 +112,9 @@ function getItemLabel(
       return "messages imported";
     case "attachments":
       return "attachments processed";
+    // BACKLOG-3132 / BACKLOG-3131: dead-code stopgap — see getPhaseName above.
+    case "finalizing":
+      return "saved";
   }
 }
 
@@ -123,6 +133,9 @@ function getPhaseColor(
       return "bg-blue-500";
     case "attachments":
       return "bg-green-500";
+    // BACKLOG-3132 / BACKLOG-3131: dead-code stopgap — see getPhaseName above.
+    case "finalizing":
+      return "bg-indigo-500";
   }
 }
 

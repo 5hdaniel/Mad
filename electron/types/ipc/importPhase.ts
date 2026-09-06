@@ -34,6 +34,16 @@
 /**
  * Every phase the import progress stream can report.
  *
+ * NOTE ON `"finalizing"` (BACKLOG-3132): the work AFTER the last attachment —
+ * on a force re-import the stage-and-swap (~2 s on the founder's 34,547-message
+ * run), and on both paths the chat-thread-name sync. It used to be emitted as a
+ * second `"importing"` event at 100%, arriving after `"attachments"`, because no
+ * phase existed to name it; the panel duly flipped back to "Importing
+ * messages..." at the end of every run and the audit-coverage bar needed
+ * BACKLOG-2344's monotonic clamp to absorb the reversal. It reports no count —
+ * the duration is not knowable in advance — so surfaces show an indeterminate
+ * bar for it.
+ *
  * NOTE ON `"deleting"`: declared but emitted by nothing since `01b521eab`
  * (stage-and-swap Force Re-import, BACKLOG-2790) removed the delete-then-insert
  * pass. It stays because `SyncOrchestratorService.ts` still branches on it to
@@ -42,7 +52,12 @@
  * error and a change to progress weighting, neither of which belongs in a
  * type-correctness fix. Tracked by BACKLOG-3122.
  */
-export type ImportPhase = "querying" | "deleting" | "importing" | "attachments";
+export type ImportPhase =
+  | "querying"
+  | "deleting"
+  | "importing"
+  | "attachments"
+  | "finalizing";
 
 /**
  * Every phase, once, as data — for iteration and for the compile-time coverage
@@ -54,6 +69,7 @@ export const IMPORT_PHASES = [
   "deleting",
   "importing",
   "attachments",
+  "finalizing",
 ] as const;
 
 /**

@@ -113,7 +113,16 @@ const PHASE_BANDS: Record<ImportPhase, { start: number; end: number }> = {
   deleting: { start: 0, end: 5 },
   querying: { start: 5, end: 30 },
   importing: { start: 30, end: 75 },
-  attachments: { start: 75, end: 92 },
+  // BACKLOG-3132: attachments used to run 75->92, taking the bar to the ceiling.
+  // It now stops at 88 so `finalizing` has somewhere to sit. The two numbers mean
+  // different things: 88 is "every attachment is processed", 92 is "the import
+  // has saved and returned". Before this item they were the same number, which is
+  // why the end of a run looked finished while ~2 s of swap was still to come.
+  attachments: { start: 75, end: 88 },
+  // Unlike the others this phase does NOT sweep its band: the producer emits one
+  // event for it, so the bar steps 88 -> 88 and holds until the import returns.
+  // The band exists to separate the two meanings above, not to animate.
+  finalizing: { start: 88, end: 92 },
 };
 /** Overall ceiling while importing — the last 8% is the silent expansion tail. */
 const IMPORT_PROGRESS_CEILING = 92;
@@ -214,9 +223,19 @@ export function useAuditCoverageCheck(userId: string): UseAuditCoverageCheckResu
       const unsub = window.api.messages?.onImportProgress
         ? window.api.messages.onImportProgress((p) => {
             // BACKLOG-2344: map this phase's own 0→100 into its slice of the
-            // overall bar, then clamp so the bar only ever advances — no reset to
-            // 0 between phases, and a late "importing 100%" event (emitted AFTER
-            // attachments in the importer) can't drag it back down.
+            // overall bar, then clamp so the bar only ever advances.
+            //
+            // BACKLOG-3132 removed ONE of the two reasons this clamp existed. The
+            // importer used to emit a late "importing 100%" AFTER attachments —
+            // the swap signal, wearing the wrong phase — which mapped back down
+            // into the importing band and dragged the bar backwards. That event
+            // now has its own forward phase (`finalizing`), so it no longer
+            // reverses.
+            //
+            // The clamp STAYS, because its other reason is untouched: every phase
+            // still sweeps its own 0→100, so without `Math.max` the bar would
+            // reset to the next band's floor at each phase change. Pinned — remove
+            // the `Math.max` and this hook's suite goes red.
             const band = BAND_LOOKUP[p.phase];
             if (band) {
               const frac = Math.max(0, Math.min(100, p.percent)) / 100;

@@ -34,6 +34,11 @@ import "@testing-library/jest-dom";
 import { MacOSMessagesImportSettings } from "../MacOSMessagesImportSettings";
 import type { SyncItem } from "../../../services/SyncOrchestratorService";
 import { IMPORT_PHASE_DISPLAY } from "../../../utils/importPhaseDisplay";
+// BACKLOG-3132: the phase list is DERIVED from the published tuple, not
+// hand-written. A hand-written list meant a new phase got no render coverage
+// at all — the compiler forced copy into the map, and nothing forced the copy
+// to be rendered. Deriving it means a fifth phase is exercised here for free.
+import { IMPORT_PHASES } from "@electron/types/ipc/importPhase";
 
 jest.mock("../../../contexts/PlatformContext", () => ({
   usePlatform: jest.fn(() => ({ isMacOS: true })),
@@ -103,18 +108,16 @@ describe("BACKLOG-3128 — every phase is named honestly", () => {
     expect(screen.queryByText("Importing messages...")).not.toBeInTheDocument();
   });
 
-  it.each([
-    ["querying", "Reading messages from Messages.app..."],
-    ["deleting", "Clearing existing messages..."],
-    ["importing", "Importing messages..."],
-    ["attachments", "Processing attachments..."],
-  ])("labels the %s phase from the shared map", async (phase, label) => {
-    mockQueue = messagesQueue({ phase, indeterminate: true });
+  it.each(IMPORT_PHASES.map((p) => [p, IMPORT_PHASE_DISPLAY[p].label] as const))(
+    "labels the %s phase from the shared map",
+    async (phase, label) => {
+      mockQueue = messagesQueue({ phase, indeterminate: true });
 
-    renderStrict(<MacOSMessagesImportSettings userId={USER_ID} />);
+      renderStrict(<MacOSMessagesImportSettings userId={USER_ID} />);
 
-    await waitFor(() => expect(screen.getByText(label)).toBeInTheDocument());
-  });
+      await waitFor(() => expect(screen.getByText(label)).toBeInTheDocument());
+    }
+  );
 
   it("renders an unknown phase as itself rather than borrowing another label", async () => {
     // The queue item types `phase` as a bare string (it carries iPhone and
@@ -192,7 +195,7 @@ describe("BACKLOG-3128 — real counts, or none", () => {
 
 describe("BACKLOG-3128 — no percentage anywhere on this import", () => {
   /** CONTROL (d). Re-introducing any `%` render turns these red. */
-  it.each(["querying", "deleting", "importing", "attachments"])(
+  it.each(IMPORT_PHASES)(
     "renders no %% string during the %s phase",
     async (phase) => {
       mockQueue = messagesQueue({ phase, current: 500, total: 1000, progress: 50 });
