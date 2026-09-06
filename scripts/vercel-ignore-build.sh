@@ -79,7 +79,14 @@ if [ -z "$BASE" ]; then
   exit 1
 fi
 
-CHANGED=$(git diff --name-only "$BASE" HEAD --) || {
+# --no-renames matters. With rename detection on (git's default since 2.9) a moved
+# file is reported as its DESTINATION path only. A file moved out of a watched
+# directory -- say broker-portal/x.ts -> src/x.ts -- would then list only "src/x.ts",
+# match nothing, and skip the build, even though the portal just lost a file.
+# --no-renames reports the delete and the add separately, so the source path is
+# still seen. No such move exists in this repo's history yet; the flag closes the
+# class rather than a known instance.
+CHANGED=$(git diff --name-only --no-renames "$BASE" HEAD --) || {
   log "git diff against '$BASE' failed; building to be safe"
   exit 1
 }
