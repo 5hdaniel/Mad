@@ -70,21 +70,43 @@ jobs:
         with:
           node-version: 20.x
 
-      # Untrusted PR-author input reaches the scanner through a FILE written
-      # from an env var, never through `${{ }}` interpolation into `run:`.
-      # A PR title containing a heredoc terminator or a shell metacharacter
-      # would otherwise execute — the same injection-safe pattern
-      # pr-metrics-check.yml uses, applied to a workflow whose entire input is
-      # attacker-controlled by construction.
+      # The title and body are FETCHED here, not handed in through `env:`.
+      #
+      # `env:` is the documented injection-safe way to move untrusted event data
+      # into a step, and it is — for INJECTION. It is not safe for DISCLOSURE:
+      # the Actions runner prints the resolved `env:` block into the step log,
+      # so `PR_BODY: ${{ github.event.pull_request.body }}` republishes the
+      # entire PR description, verbatim, into a log that on a PUBLIC repository
+      # is world-readable, survives every later edit of that description, and is
+      # kept for the repository's retention window.
+      #
+      # MEASURED, not reasoned: an earlier revision of this very file did that,
+      # and its own control run printed the planted literal into the public log
+      # while the scanner beside it was correctly masking the same string. The
+      # guard would have been a second copy of the leak.
+      #
+      # MEASURED AGAIN, on the live repo: `pr-metrics-check.yml` had the same
+      # shape, and the Actions log for its 2026-09-06T02:46:13Z run on PR #2524
+      # still carries that PR's pre-rewrite body — the one the SR blocked on —
+      # with the run page reachable unauthenticated (HTTP 200). That is a FOURTH
+      # retention path, on top of the orphaned commit, the PR-description edit
+      # history and the branch tip. See BACKLOG-3133.
+      #
+      # `gh api` writes straight to a file. Only the PR NUMBER travels through
+      # `env:`, and a number in a log is not a disclosure. Injection safety is
+      # unchanged: nothing author-controlled is interpolated into `run:`.
       - name: Materialise the PR title and body
         env:
-          PR_TITLE: ${{ github.event.pull_request.title }}
-          PR_BODY: ${{ github.event.pull_request.body }}
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
         run: |
-          set -u
+          set -eu
           mkdir -p "$RUNNER_TEMP/msg-hygiene"
-          printf '%s' "${PR_TITLE:-}" > "$RUNNER_TEMP/msg-hygiene/title.txt"
-          printf '%s' "${PR_BODY:-}" > "$RUNNER_TEMP/msg-hygiene/body.md"
+          gh api "repos/$GITHUB_REPOSITORY/pulls/$PR_NUMBER" \
+            --jq '.title' > "$RUNNER_TEMP/msg-hygiene/title.txt"
+          gh api "repos/$GITHUB_REPOSITORY/pulls/$PR_NUMBER" \
+            --jq '.body // ""' > "$RUNNER_TEMP/msg-hygiene/body.md"
+          # Sizes only. Never the content.
           echo "title bytes: $(wc -c < "$RUNNER_TEMP/msg-hygiene/title.txt")"
           echo "body bytes:  $(wc -c < "$RUNNER_TEMP/msg-hygiene/body.md")"
 

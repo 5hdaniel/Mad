@@ -37,6 +37,10 @@ on:
     branches: [main, develop, 'int/**']
     types: [opened, edited, synchronize, reopened]
 
+permissions:
+  contents: read
+  pull-requests: read
+
 jobs:
   validate-metrics:
     name: Validate PR Metrics
@@ -65,10 +69,16 @@ jobs:
       - name: Check for skip flag
         id: skip-check
         env:
-          PR_TITLE: ${{ github.event.pull_request.title }}
+          # The TITLE is fetched too, for the same reason as the body below: a
+          # title can be edited, and the Actions log keeps the version that was
+          # current when the run happened. PR #2524's title was changed for
+          # exactly this reason on 2026-09-06. (BACKLOG-3133)
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
           HEAD_REF: ${{ github.head_ref }}
         run: |
           echo "Head branch: $HEAD_REF"
+          PR_TITLE="$(gh api "repos/$GITHUB_REPOSITORY/pulls/$PR_NUMBER" --jq '.title')"
 
           if [[ "$HEAD_REF" == int/* ]]; then
             echo "skip=true" >> $GITHUB_OUTPUT
@@ -105,12 +115,35 @@ jobs:
         id: validate
         if: steps.skip-check.outputs.skip != 'true'
         env:
-          # Untrusted input passed via env, never interpolated into run: —
-          # prevents GitHub Actions workflow injection (a PR body containing
-          # a heredoc terminator could otherwise execute arbitrary shell).
-          PR_BODY: ${{ github.event.pull_request.body }}
+          # The body is FETCHED, not handed in through `env:`. (BACKLOG-3133)
+          #
+          # This step used to carry `PR_BODY: ${{ github.event.pull_request.body }}`.
+          # That is injection-safe and DISCLOSURE-UNSAFE: the runner prints the
+          # resolved `env:` block into the step log, so the whole PR description
+          # was republished verbatim into a log that on this PUBLIC repository is
+          # world-readable and survives every later edit of that description.
+          #
+          # Measured: the log for this workflow's 2026-09-06T02:46:13Z run on
+          # PR #2524 still carries that PR's pre-rewrite body — the revision the
+          # SR blocked over — and the run page answers an unauthenticated GET
+          # with HTTP 200. Editing the description did not touch it. Deleting the
+          # workflow run is the self-service remedy, and that is the founder's
+          # call, not this workflow's.
+          #
+          # Injection safety is unchanged: only the PR number travels through
+          # `env:`, and nothing author-controlled is interpolated into `run:`.
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
         run: |
           echo "=== Validating PR Metrics ==="
+          echo ""
+
+          # Read the body from a file rather than an env var, so it never
+          # appears in the step's printed environment.
+          gh api "repos/$GITHUB_REPOSITORY/pulls/$PR_NUMBER" \
+            --jq '.body // ""' > "$RUNNER_TEMP/pr-body.txt"
+          PR_BODY="$(cat "$RUNNER_TEMP/pr-body.txt")"
+          echo "body bytes: $(wc -c < "$RUNNER_TEMP/pr-body.txt")"
           echo ""
 
           # Check 1: Engineer Metrics section exists
