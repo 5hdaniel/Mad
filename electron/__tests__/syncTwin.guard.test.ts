@@ -39,7 +39,7 @@
  * is not caught."
  *
  * ===========================================================================
- * THE RULE, AND WHY THE CANDIDATE SET IS "PAIRED OR REACHED"
+ * THE RULE, THE CANDIDATE SET, AND THE RATCHET
  * ===========================================================================
  * For every twin candidate in a `db/**` production module the guard asserts:
  *
@@ -48,7 +48,8 @@
  *   (iii) the twin itself is NOT promise-returning (the direction rule above);
  *   (iv)  it is REACHED from at least one transaction body through the
  *         synchronous call graph — a twin nobody calls from a body is dead
- *         weight and should not exist.
+ *         weight and should not exist. SKIPPED for a transaction-body OWNER,
+ *         which by construction is never called from inside a body.
  *
  * A "twin candidate" is an exported `*Sync` function that is PAIRED or REACHED.
  * Not simply every `*Sync` export — and this is a deliberate, measured
@@ -60,9 +61,32 @@
  * being called from one). "Every `*Sync` export must have a sibling" is red on
  * day one for those four, and the only ways out are a rename that ripples
  * across three services or an allow-list — the shape this guard exists to
- * avoid. "Paired or reached" selects exactly the six real twins and none of
- * the four, from source. An unpaired, unreached `*Sync` is therefore NOT a
- * finding here; an unpaired `*Sync` that a body DOES reach is.
+ * avoid.
+ *
+ * TWO STRUCTURAL CONSEQUENCES, BOTH REQUIRED (SR c4dbfc50):
+ *
+ *   A TRANSACTION-BODY OWNER IS NOT A DEAD TWIN. A function whose own body
+ *   CONTAINS `dbTransaction(() => …)` or `.transaction(() => …)` owns the
+ *   transaction. `db.transaction()` does not nest, so nothing calls an owner
+ *   from inside a body and clause (iv) can never be satisfied for one. Owners
+ *   are DERIVED — the parent chain from each body to its nearest named
+ *   function-like — never listed. Without this exclusion the ruled conversion
+ *   recipe applied to `applyContactBackfillSync` (wave 1, the largest wave-1
+ *   file) makes the guard report "a dead twin" on CORRECT code, whose only
+ *   outs are to edit this guard mid-train — the §6.2 failure it exists to
+ *   prevent — or to skip the wrapper.
+ *
+ *   THE RATCHET. "Paired or reached" alone CAN BE SILENCED BY DELETING THE
+ *   WRAPPER: take any twin the guard calls red, delete its sibling and its body
+ *   call, and it leaves the candidate set and the guard goes green — a red
+ *   cleared by making the code worse, the shape PR-SOP §6.2d forbids. So the
+ *   set of `*Sync` exports that are NEITHER paired NOR reached NOR an owner is
+ *   pinned, by name, to the two known nouns. This is not the allow-list §6.2.1
+ *   struck: a conversion PR following the recipe adds a PAIRED twin, and an
+ *   owner is excluded structurally — neither touches the list. It moves only
+ *   when someone introduces a FIFTH unpaired, unreached, non-owning `*Sync`,
+ *   which is exactly the event that should force a named decision instead of
+ *   passing silently. Same shape as the `sqlText.escapeSet` ratchet in tree.
  *
  * ===========================================================================
  * HOW REACHABILITY IS COMPUTED, AND ITS LIMITS — STATED, NOT IMPLIED
@@ -122,6 +146,9 @@ function productionSources(): Map<string, string> {
     try {
       entries = fs.readdirSync(dir, { withFileTypes: true });
     } catch {
+      // An unreadable directory under-scans silently. The PRECONDITION below
+      // (>300 files, both anchor bodies, dbConnection.ts present) catches a
+      // wholesale failure; a partial one would not be caught here.
       return;
     }
     for (const entry of entries) {
@@ -150,6 +177,12 @@ interface Analysis {
   bodies: string[];
   /** Every function name reachable from a transaction body through the sync call graph. */
   reached: Set<string>;
+  /**
+   * Named functions that CONTAIN a transaction body — transaction OWNERS. An
+   * owner is not a twin: `db.transaction()` does not nest, so no body can ever
+   * call it and clause (iv) is inapplicable. Derived, never listed.
+   */
+  bodyOwners: Set<string>;
   /** Exported `*Sync` functions of db/** modules, with the facts the rule needs. */
   syncExports: SyncExport[];
 }
@@ -161,6 +194,7 @@ interface SyncExport {
   siblingPromiseReturning: boolean;
   twinPromiseReturning: boolean;
   reached: boolean;
+  bodyOwner: boolean;
 }
 
 function isFnLike(n: ts.Node): n is FnNode {
@@ -190,6 +224,24 @@ function declaredName(n: FnNode): string | null {
   const p = n.parent;
   if (p && ts.isVariableDeclaration(p) && ts.isIdentifier(p.name)) return p.name.text;
   if (p && ts.isPropertyAssignment(p) && ts.isIdentifier(p.name)) return p.name.text;
+  return null;
+}
+
+/**
+ * The nearest NAMED function-like ancestor of a node — the owner of whatever
+ * the node is. Anonymous literals in the chain are stepped over, so a body
+ * inside `helper(() => { dbTransaction(() => …) })` is owned by the nearest
+ * named function, not by the anonymous callback.
+ */
+function enclosingNamedFn(n: ts.Node): string | null {
+  let p: ts.Node | undefined = n.parent;
+  while (p) {
+    if (isFnLike(p)) {
+      const name = declaredName(p);
+      if (name) return name;
+    }
+    p = p.parent;
+  }
   return null;
 }
 
@@ -245,6 +297,7 @@ function analyze(sources: Map<string, string>): Analysis {
   const declsByName = new Map<string, FnDecl[]>();
   const exportsByFile = new Map<string, Map<string, FnNode>>();
   const bodies: { at: string; node: FnNode }[] = [];
+  const bodyOwners = new Set<string>();
 
   for (const [file, text] of sources) {
     const sf = ts.createSourceFile(file, text, ts.ScriptTarget.ES2020, true);
@@ -266,6 +319,8 @@ function analyze(sources: Map<string, string>): Analysis {
         if (body) {
           const { line } = sf.getLineAndCharacterOfPosition(n.getStart());
           bodies.push({ at: `${file}:${line + 1}`, node: body });
+          const owner = enclosingNamedFn(n);
+          if (owner) bodyOwners.add(owner);
         }
       }
       ts.forEachChild(n, visit);
@@ -300,11 +355,12 @@ function analyze(sources: Map<string, string>): Analysis {
         siblingPromiseReturning: sibling !== undefined && isPromiseReturning(sibling),
         twinPromiseReturning: isPromiseReturning(node),
         reached: reached.has(name),
+        bodyOwner: bodyOwners.has(name),
       });
     }
   }
 
-  return { bodies: bodies.map((b) => b.at).sort(), reached, syncExports };
+  return { bodies: bodies.map((b) => b.at).sort(), reached, bodyOwners, syncExports };
 }
 
 /** Twin candidates: paired OR reached (see the header for why not "every `*Sync`"). */
@@ -319,8 +375,16 @@ function problemsOf(twin: SyncExport): string[] {
   if (!twin.paired) out.push(`${twin.file}: ${twin.name} is reached from a transaction body but the module exports no \`${base}\` — a twin without its promise-returning wrapper`);
   else if (!twin.siblingPromiseReturning) out.push(`${twin.file}: ${base} is not promise-returning (neither \`async\` nor annotated \`Promise<…>\`) — the wrapper must be the promise side`);
   if (twin.twinPromiseReturning) out.push(`${twin.file}: ${twin.name} returns a promise — the *Sync twin must be the synchronous primitive, never the wrapper`);
-  if (!twin.reached) out.push(`${twin.file}: ${twin.name} is not reached from any transaction body — a dead twin; delete it or call it where the transaction is`);
+  if (!twin.reached && !twin.bodyOwner) out.push(`${twin.file}: ${twin.name} is not reached from any transaction body — a dead twin; delete it or call it where the transaction is`);
   return out;
+}
+
+/** `*Sync` exports that are NEITHER paired NOR reached NOR a body owner. RATCHET. */
+function nonCandidates(analysis: Analysis): string[] {
+  return analysis.syncExports
+    .filter((s) => !s.paired && !s.reached && !analysis.bodyOwners.has(s.name))
+    .map((s) => `${s.file}: ${s.name}`)
+    .sort();
 }
 
 function offenders(analysis: Analysis): string[] {
@@ -338,6 +402,25 @@ describe("a sync twin is derived from source, never listed (BACKLOG-2960)", () =
    */
   it("every twin candidate in db/** is paired with a promise-returning sibling, is itself synchronous, and is reached from a transaction body", () => {
     expect(offenders(tree)).toEqual([]);
+  });
+
+  /**
+   * THE RATCHET — what closes the "silence it by deleting the wrapper" hole.
+   *
+   * The clause above only speaks about candidates, and a `*Sync` leaves the
+   * candidate set the moment its sibling and its body call are deleted. That
+   * would let a red be cleared by removing the very wrapper the guard exists to
+   * require. So the non-candidates are pinned by name. A conversion PR that
+   * follows the recipe adds a PAIRED twin and never touches this list; a
+   * transaction OWNER is excluded structurally and never touches it either. It
+   * moves only for a FIFTH unpaired, unreached, non-owning `*Sync` — which is a
+   * decision someone should have to make out loud.
+   */
+  it("RATCHET: the only unpaired, unreached, non-body-owning `*Sync` exports are the two known nouns", () => {
+    expect(nonCandidates(tree)).toEqual([
+      "electron/services/db/externalContactDbService.ts: classifyMacOSSync",
+      "electron/services/db/externalContactDbService.ts: fullSync",
+    ]);
   });
 
   /**
@@ -457,6 +540,32 @@ describe("a sync twin is derived from source, never listed (BACKLOG-2960)", () =
         svc("caller", `export function elsewhere(): void { fullSync(); }`),
       ]),
     ).toEqual([]);
+
+    // (h') A body OWNER, once converted by the ruled recipe, is clean: it is
+    //     paired, its wrapper is a promise, and clause (iv) does not apply to
+    //     it. This is `applyContactBackfillSync` in wave 1.
+    expect(
+      verdict([
+        db(
+          "h2",
+          `export function ownerSync(): void { dbTransaction(() => { doWork(); }); }\nexport async function owner(): Promise<void> { return ownerSync(); }`,
+        ),
+        svc("caller", `export async function elsewhere() { await owner(); }`),
+      ]),
+    ).toEqual([]);
+
+    // (h'') …and the exclusion is structural, not a name: a NON-owner that is
+    //     paired and unreached is still a dead twin (case (c) above), and an
+    //     owner is still held to clauses (i)-(iii) — here the sibling is sync.
+    expect(
+      verdict([
+        db(
+          "h3",
+          `export function ownerSync(): void { dbTransaction(() => { doWork(); }); }\nexport function owner(): void { ownerSync(); }`,
+        ),
+        svc("caller", `export function elsewhere(): void { owner(); }`),
+      ]),
+    ).toEqual([`${DB_LAYER}h3.ts: owner is not promise-returning (neither \`async\` nor annotated \`Promise<…>\`) — the wrapper must be the promise side`]);
 
     // (i) Outside db/** nothing is a candidate, whatever it is called.
     expect(
