@@ -22,6 +22,8 @@ import type {
   AuditCoverageResult,
   ExportCompletenessResult,
 } from "../../electron/types/auditCoverage";
+// BACKLOG-2832: the phase union, so a phase added without a band fails to compile.
+import type { ImportPhase } from "../../electron/types/ipc/importPhase";
 
 /** Progress shape as delivered by window.api.messages.onImportProgress. */
 export interface CoverageImportProgress {
@@ -107,7 +109,7 @@ export const IMPORT_HARD_CAP_MS = 10 * 60_000; // 10 min absolute ceiling
  * progress). That keeps the bar from ever showing 100% before the operation
  * truly resolves — honest completion, never faked.
  */
-const PHASE_BANDS: Record<string, { start: number; end: number }> = {
+const PHASE_BANDS: Record<ImportPhase, { start: number; end: number }> = {
   deleting: { start: 0, end: 5 },
   querying: { start: 5, end: 30 },
   importing: { start: 30, end: 75 },
@@ -115,6 +117,16 @@ const PHASE_BANDS: Record<string, { start: number; end: number }> = {
 };
 /** Overall ceiling while importing — the last 8% is the silent expansion tail. */
 const IMPORT_PROGRESS_CEILING = 92;
+/**
+ * BACKLOG-2832: the lookup view. `PHASE_BANDS` is exhaustive over `ImportPhase`
+ * so a new phase without a band is a compile error, but the value arriving over
+ * IPC is still typed `string` (CoverageImportProgress.phase) on purpose — the
+ * `else` branch below is the deliberate BACKLOG-2344 indeterminate fallback for
+ * a phase we have no honest band for. This alias keeps that lookup working with
+ * a string key and no cast; it is a reference copy, not a second table.
+ */
+const BAND_LOOKUP: Readonly<Record<string, { start: number; end: number } | undefined>> =
+  PHASE_BANDS;
 
 export function useAuditCoverageCheck(userId: string): UseAuditCoverageCheckResult {
   const [importing, setImporting] = useState<boolean>(false);
@@ -205,7 +217,7 @@ export function useAuditCoverageCheck(userId: string): UseAuditCoverageCheckResu
             // overall bar, then clamp so the bar only ever advances — no reset to
             // 0 between phases, and a late "importing 100%" event (emitted AFTER
             // attachments in the importer) can't drag it back down.
-            const band = PHASE_BANDS[p.phase];
+            const band = BAND_LOOKUP[p.phase];
             if (band) {
               const frac = Math.max(0, Math.min(100, p.percent)) / 100;
               const mapped = band.start + frac * (band.end - band.start);
