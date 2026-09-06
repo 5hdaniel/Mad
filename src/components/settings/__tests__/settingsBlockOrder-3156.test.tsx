@@ -140,6 +140,33 @@ describe("BACKLOG-3156 — Emails", () => {
     ]);
   });
 
+  /**
+   * The section heading and the dropdown label are renames this change makes,
+   * and NOTHING read either string before it. "Email Connections" appeared in
+   * one `describe()` name and in comments; the cache-duration control had no
+   * label at all, only a bare select. A rename nobody reads is a rename that
+   * drifts back, which is the shape of defect BACKLOG-3029 filed against this
+   * very panel's sibling.
+   */
+  it("is called Emails, and its history control carries a label outside the border", async () => {
+    render(<EmailSettings userId="u" initialPreferences={undefined as never} />);
+    await waitFor(() =>
+      expect(screen.getByTestId("emails-block-preferences")).toBeInTheDocument(),
+    );
+
+    expect(
+      screen.getByRole("heading", { level: 3, name: "Emails" }),
+    ).toBeInTheDocument();
+    expect(screen.queryByText("Email Connections")).not.toBeInTheDocument();
+
+    // The label is plain text OUTSIDE the control…
+    const label = screen.getByText("Import emails from");
+    expect(label.tagName).toBe("SPAN");
+    expect(label.closest("select")).toBeNull();
+    // …and the value reads the way both Messages filters read.
+    expect(screen.getByDisplayValue("Last 3 months")).toBeInTheDocument();
+  });
+
   it("puts the actions outside every card, primary before destructive", async () => {
     render(<EmailSettings userId="u" initialPreferences={undefined as never} />);
     const actions = await screen.findByTestId("emails-block-actions");
