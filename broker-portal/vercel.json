@@ -1,4 +1,6 @@
 {
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "ignoreCommand": "sh ../scripts/vercel-ignore-build.sh broker-portal",
   "framework": "nextjs",
   "buildCommand": "npm run build",
   "outputDirectory": ".next",
