@@ -97,14 +97,24 @@ export function deleteThreadNamesByIdsSync(
  * So `Promise.resolve(...)` over a synchronous primitive is the whole shape: the
  * work, and any throw, happen before the promise exists.
  *
- * WHAT IS NOT PROTECTED HERE, stated because the protections differ by call
- * site. The consuming body is a RAW `db.transaction(...)`, not `dbTransaction`,
- * so `dbTransaction`'s conditional return type cannot see it and no compile
- * error guards this pairing. What does guard it: `no-restricted-syntax` in
- * `eslint.config.js` rejects an `async` body passed to any `.transaction(...)`,
- * and `@typescript-eslint/no-floating-promises` is at zero for
- * `electron/services/db/**`. A floated call from a caller OUTSIDE `db/**` is
- * caught by neither (BACKLOG-3150).
+ * WHAT PROTECTS THE CALL SITE, AND WHAT DOES NOT. The consuming body is a RAW
+ * `db.transaction(...)`, not `dbTransaction`, so `dbTransaction`'s conditional
+ * return type cannot see it. Each of these was measured in PR #2546 against
+ * that body, which lives outside `db/**`:
+ *
+ *   - an `async` body -> REJECTED by `no-restricted-syntax` (eslint.config.js).
+ *   - a sync body doing `cleared += deleteThreadNamesByIds(...)` -> TS2365, but
+ *     only because that site consumes the count arithmetically. It is not a
+ *     general property of calling the wrapper from a body.
+ *   - a sync body that FLOATS the wrapper -> caught by NOTHING static. The rows
+ *     are still deleted, because a plain wrapper's work is synchronous; only the
+ *     returned count is lost. `tsc` is silent, `npm run lint` is silent
+ *     (`no-floating-promises` is scoped to `electron/services/db/**`, and this
+ *     body is not in it — BACKLOG-3150), and the sync-twin guard stays green
+ *     (its reachability walk stops at `async`, so it walks straight through a
+ *     plain `Promise<...>`-annotated wrapper to the twin). The only instrument
+ *     is the count assertion in
+ *     `services/__tests__/importHelpers.threadNameSync-2960.test.ts`.
  */
 export function deleteThreadNamesByIds(
   db: DatabaseType,
