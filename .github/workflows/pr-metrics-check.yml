@@ -77,8 +77,38 @@ jobs:
           PR_NUMBER: ${{ github.event.pull_request.number }}
           HEAD_REF: ${{ github.head_ref }}
         run: |
+          set -e
           echo "Head branch: $HEAD_REF"
-          PR_TITLE="$(gh api "repos/$GITHUB_REPOSITORY/pulls/$PR_NUMBER" --jq '.title')"
+
+          # THREE ATTEMPTS, then fail closed. `bash -e` makes a single transient
+          # 5xx or one rate-limit window red this PR with a message its author
+          # cannot act on, and a check whose failures are not actionable is the
+          # one people learn to ignore. Writes to a `.part` file and moves it
+          # only on success, so a half-written response is never read back.
+          gh_api_retry() {
+            dest="$1"
+            shift
+            attempt=0
+            while [ "$attempt" -lt 3 ]; do
+              attempt=$((attempt + 1))
+              if gh api "$@" > "$dest.part" 2> "$dest.err"; then
+                mv "$dest.part" "$dest"
+                return 0
+              fi
+              echo "gh api attempt $attempt of 3 failed."
+              # First line only, from gh's own stderr. An API error is
+              # 'gh: Not Found (HTTP 404)'-shaped; a whole response could carry
+              # the PR body, which is the thing BACKLOG-3133 keeps out of logs.
+              head -n 1 "$dest.err" || true
+              if [ "$attempt" -lt 3 ]; then sleep 5; fi
+            done
+            echo "::error title=Validate PR Metrics::Could not read the pull request from the API after 3 attempts. Infrastructure failure, not a metrics finding — re-run the job."
+            return 1
+          }
+
+          gh_api_retry "$RUNNER_TEMP/pr-title.txt" \
+            "repos/$GITHUB_REPOSITORY/pulls/$PR_NUMBER" --jq '.title'
+          PR_TITLE="$(cat "$RUNNER_TEMP/pr-title.txt")"
 
           if [[ "$HEAD_REF" == int/* ]]; then
             echo "skip=true" >> $GITHUB_OUTPUT
@@ -138,10 +168,36 @@ jobs:
           echo "=== Validating PR Metrics ==="
           echo ""
 
+          # THREE ATTEMPTS, then fail closed. `bash -e` makes a single transient
+          # 5xx or one rate-limit window red this PR with a message its author
+          # cannot act on, and a check whose failures are not actionable is the
+          # one people learn to ignore. Writes to a `.part` file and moves it
+          # only on success, so a half-written response is never read back.
+          gh_api_retry() {
+            dest="$1"
+            shift
+            attempt=0
+            while [ "$attempt" -lt 3 ]; do
+              attempt=$((attempt + 1))
+              if gh api "$@" > "$dest.part" 2> "$dest.err"; then
+                mv "$dest.part" "$dest"
+                return 0
+              fi
+              echo "gh api attempt $attempt of 3 failed."
+              # First line only, from gh's own stderr. An API error is
+              # 'gh: Not Found (HTTP 404)'-shaped; a whole response could carry
+              # the PR body, which is the thing BACKLOG-3133 keeps out of logs.
+              head -n 1 "$dest.err" || true
+              if [ "$attempt" -lt 3 ]; then sleep 5; fi
+            done
+            echo "::error title=Validate PR Metrics::Could not read the pull request from the API after 3 attempts. Infrastructure failure, not a metrics finding — re-run the job."
+            return 1
+          }
+
           # Read the body from a file rather than an env var, so it never
           # appears in the step's printed environment.
-          gh api "repos/$GITHUB_REPOSITORY/pulls/$PR_NUMBER" \
-            --jq '.body // ""' > "$RUNNER_TEMP/pr-body.txt"
+          gh_api_retry "$RUNNER_TEMP/pr-body.txt" \
+            "repos/$GITHUB_REPOSITORY/pulls/$PR_NUMBER" --jq '.body // ""'
           PR_BODY="$(cat "$RUNNER_TEMP/pr-body.txt")"
           echo "body bytes: $(wc -c < "$RUNNER_TEMP/pr-body.txt")"
           echo ""

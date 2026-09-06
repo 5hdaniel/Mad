@@ -59,6 +59,17 @@
  *   S4   one commit's waiver does not reach another commit -> RED
  *   S5   a MERGE commit message is scanned                -> RED
  *   N4   a 4-part string with an out-of-range octet       -> GREEN
+ *   P1   a UUID on a line naming pm_comments               -> GREEN (PM allowance)
+ *   P2   the same line in a PR body                        -> GREEN
+ *   P3   the same UUID with no pm_ table on the line       -> RED
+ *   P4   pm_projects (outside the closed set) + a UUID     -> RED
+ *   P5   pm_comments and the UUID on DIFFERENT lines       -> RED  (per-line)
+ *   X1   --new-to-head, head's own origin ref held out     -> RED
+ *   X2   the same commit already on another origin ref     -> GREEN + plain note
+ *   X3   the origin ref count appears in the output
+ *   X4   --new-to-head with no other origin refs           -> EXIT 2
+ *   X5   --new-to-head with --range                        -> EXIT 2
+ *   X6   --head-ref without --new-to-head                  -> EXIT 2
  */
 
 const { spawnSync, execFileSync } = require("child_process");
@@ -162,6 +173,41 @@ function scanMessages(messages, extraArgs = [], env = {}) {
   const out = r.stdout || "";
   const err = r.stderr || "";
   fs.rmSync(dir, { recursive: true, force: true });
+  return { code: r.status, out, err, all: out + err };
+}
+
+/**
+ * A throwaway repo whose planted commit sits on a branch that ALSO has a
+ * `refs/remotes/origin/<name>` ref, plus one other origin ref.
+ *
+ * Real `refs/remotes/origin/*` refs in a scratch repo, never in the shared one:
+ * `--new-to-head` reads the ref list from the repo it runs in, so a control that
+ * wrote fake refs into the working checkout would be editing the thing under
+ * test.
+ */
+function mkRepoWithOriginRefs(message, { headRefName, otherRefName }) {
+  const { dir, base, head } = mkRepoWithMessages([message]);
+  const env = {
+    ...process.env,
+    GIT_CONFIG_GLOBAL: "/dev/null",
+    GIT_CONFIG_SYSTEM: "/dev/null",
+  };
+  const git = (...args) =>
+    execFileSync("git", args, { cwd: dir, encoding: "utf8", env });
+  if (headRefName) git("update-ref", `refs/remotes/origin/${headRefName}`, head);
+  if (otherRefName) git("update-ref", `refs/remotes/origin/${otherRefName}`, base);
+  return { dir, base, head };
+}
+
+/** Run the gate in --new-to-head mode inside a scratch repo. */
+function runInRepo(dir, args) {
+  const r = spawnSync(process.execPath, [GATE, ...args], {
+    encoding: "utf8",
+    cwd: dir,
+    env: { ...process.env, CI: "", GITHUB_ACTIONS: "" },
+  });
+  const out = r.stdout || "";
+  const err = r.stderr || "";
   return { code: r.status, out, err, all: out + err };
 }
 
@@ -601,6 +647,156 @@ const DENY_MSG = `feat(import): handle the ${PH_DENY} export format`;
     "a 4-part string with an out-of-range octet -> GREEN",
     green(r),
     `code=${r.code} — 10.300.1.2 is not an address; the octet test is what makes it not a finding`,
+  );
+}
+
+// ---------------------------------------------------------------------------
+// P1-P5 — the PM-record-id allowance (BACKLOG-3133, PM ruling)
+//
+// The rule tells authors to put the WHY in pm_comments and link the item. The
+// link is a record id, so without this allowance the guard fires on compliance.
+// The allowance is a CLOSED SET of table names and it is PER-LINE; P3 and P4
+// are the two controls that say so, and both go green if the allowance is
+// widened to a `pm_` prefix or to whole-message scope.
+// ---------------------------------------------------------------------------
+
+{
+  const r = scanMessages(
+    [`docs: record the decision\n\nPlan posted to pm_comments (${PH_UUID}).`],
+    NO_DENYLIST,
+  );
+  record(
+    "P1",
+    "a UUID on a line naming pm_comments -> GREEN",
+    green(r),
+    `code=${r.code} — kills the allowance mutation: without it this is RED`,
+  );
+}
+{
+  const r = scanBlob(
+    `## Notes\n\nPlan posted to pm_comments (${PH_UUID}).\n`,
+    NO_DENYLIST,
+  );
+  record(
+    "P2",
+    "the same line in a PR BODY -> GREEN",
+    green(r),
+    `code=${r.code} — the body is the surface where 14 of 30 merged PRs were red`,
+  );
+}
+{
+  const r = scanMessages([`chore: retire the row ${PH_UUID}`], NO_DENYLIST);
+  record(
+    "P3",
+    "the SAME UUID with no pm_ table on the line -> RED",
+    red(r) && r.all.includes("[bare-uuid]"),
+    `code=${r.code} — the allowance must not clear every UUID`,
+  );
+}
+{
+  const r = scanMessages([`chore: retire the pm_projects row ${PH_UUID}`], NO_DENYLIST);
+  record(
+    "P4",
+    "pm_projects (outside the closed set) + UUID -> RED",
+    red(r) && r.all.includes("[bare-uuid]"),
+    `code=${r.code} — a pm_ PREFIX match would make this green`,
+  );
+}
+{
+  const r = scanMessages(
+    [`docs: record the decision\n\nSee pm_comments.\n\nThe row is ${PH_UUID}.`],
+    NO_DENYLIST,
+  );
+  record(
+    "P5",
+    "pm_comments on one line, the UUID on another -> RED",
+    red(r) && r.all.includes("[bare-uuid]"),
+    `code=${r.code} — per-LINE, like the pii-allow-uuid: waiver`,
+  );
+}
+
+// ---------------------------------------------------------------------------
+// X1-X4 — --new-to-head, the CI commit range
+//
+// The range is "reachable from the head, not reachable from any OTHER
+// refs/remotes/origin/* ref". X1 and X2 are the discriminating pair: the same
+// repo, the same planted commit, differing only in whether the head's own
+// origin ref is held out of the exclusion set. Drop that hold-out and X1 turns
+// green, which is a gate that scans nothing on every PR.
+// ---------------------------------------------------------------------------
+
+{
+  const { dir } = mkRepoWithOriginRefs(
+    `fix(nas): bind the stack to ${PH_CGNAT}`,
+    { headRefName: "feat", otherRefName: "develop" },
+  );
+  const r = runInRepo(dir, ["--new-to-head", "HEAD", "--head-ref", "feat", ...NO_DENYLIST]);
+  fs.rmSync(dir, { recursive: true, force: true });
+  record(
+    "X1",
+    "planted commit, head's own origin ref held out -> RED",
+    red(r) && r.all.includes("[cgnat]"),
+    `code=${r.code} — origin/feat points at the head; excluding it would scan nothing`,
+  );
+}
+{
+  const { dir } = mkRepoWithOriginRefs(
+    `fix(nas): bind the stack to ${PH_CGNAT}`,
+    { headRefName: "feat", otherRefName: "develop" },
+  );
+  const r = runInRepo(dir, ["--new-to-head", "HEAD", "--head-ref", "other", ...NO_DENYLIST]);
+  fs.rmSync(dir, { recursive: true, force: true });
+  record(
+    "X2",
+    "the SAME commit already on another origin ref -> GREEN, and says so",
+    green(r) && r.all.includes("0 commits are new to this head"),
+    `code=${r.code} — an empty range must not read as a bare "0 scanned"`,
+  );
+}
+{
+  const { dir } = mkRepoWithOriginRefs(
+    `fix(nas): bind the stack to ${PH_CGNAT}`,
+    { headRefName: "feat", otherRefName: "develop" },
+  );
+  const r = runInRepo(dir, ["--new-to-head", "HEAD", "--head-ref", "feat", ...NO_DENYLIST]);
+  fs.rmSync(dir, { recursive: true, force: true });
+  record(
+    "X3",
+    "the ref list is counted in the output",
+    /\d+ refs\/remotes\/origin\/\* ref\(s\) present; \d+ excluded/.test(r.all),
+    `code=${r.code} — a fetch that populated nothing must be visible in the log`,
+  );
+}
+{
+  const { dir } = mkRepoWithOriginRefs(
+    `fix(nas): bind the stack to ${PH_CGNAT}`,
+    { headRefName: null, otherRefName: null },
+  );
+  const r = runInRepo(dir, ["--new-to-head", "HEAD", "--head-ref", "feat", ...NO_DENYLIST]);
+  fs.rmSync(dir, { recursive: true, force: true });
+  record(
+    "X4",
+    "no other origin refs at all -> EXIT 2 (fails closed)",
+    usage(r) && r.all.includes("no other refs/remotes/origin/* refs"),
+    `code=${r.code} — an unfetched ref list must not read as "everything is new" or as "nothing is new"`,
+  );
+}
+{
+  const r = runGate(["--new-to-head", "HEAD", "--range", "HEAD~1..HEAD", ...NO_DENYLIST]);
+  record(
+    "X5",
+    "--new-to-head with --range -> EXIT 2",
+    usage(r),
+    `code=${r.code}`,
+  );
+}
+{
+  const r = runGate(["--head-ref", "feat", "--text-file", "/dev/null", ...NO_DENYLIST]);
+  record(
+    "X6",
+    "--head-ref without --new-to-head -> EXIT 2",
+    usage(r),
+    `code=${r.code} — a flag that silently does nothing is a flag someone trusts`,
   );
 }
 

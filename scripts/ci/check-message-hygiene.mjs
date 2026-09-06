@@ -150,6 +150,29 @@ const NIL_UUID = "00000000-0000-0000-0000-000000000000";
 const UUID_WAIVER_RE = /pii-allow-uuid:([^\r\n]*)/;
 
 /**
+ * A UUID on a line that names one of the PM tables needs no waiver.
+ *
+ * The rule this file enforces tells authors to put the WHY in `pm_comments` and
+ * link the item. That link IS a record id, so the rule as first written made 14
+ * of the last 30 merged PR bodies red for obeying it. A guard that fires on
+ * compliance is a guard that gets bypassed.
+ *
+ * A CLOSED SET of six table names, not a `pm_\w+` prefix. A prefix would let any
+ * future `pm_`-named thing silence the rule by accident, and the point of an
+ * exemption is that somebody chose it. `pm_projects` is deliberately absent.
+ *
+ * PER-LINE, exactly like the `pii-allow-uuid:` waiver above: the table name and
+ * the id must be on the SAME line, so a `pm_comments` mention in a heading does
+ * not clear every UUID in the body under it.
+ *
+ * Every OTHER bare UUID still needs `pii-allow-uuid: <why>` — a session id, an
+ * agent id and a customer row id are all still findings. PM ruling on
+ * BACKLOG-3133, reversible by the founder.
+ */
+const PM_TABLE_RE =
+  /\bpm_(?:comments|backlog_items|tasks|sprints|events|token_metrics)\b/;
+
+/**
  * `hygiene-allow: <rule-id>: <reason>` — PER-RULE, and the reason is REQUIRED.
  *
  * Per-rule on purpose. A blanket "this message is fine" trailer is exactly what
@@ -215,7 +238,7 @@ const RULE_HELP = {
   "security-phrase":
     "a phrase describing an authentication weakness. If it describes a LIVE surface, it belongs in pm_comments.",
   "bare-uuid":
-    "a bare UUID. If it is a live row id, replace it; if it is invented, waive it with pii-allow-uuid: <why>.",
+    "a bare UUID. A PM record id on a line naming pm_comments / pm_backlog_items / pm_tasks / pm_sprints / pm_events / pm_token_metrics needs no waiver. Any other id: replace it, or waive it with pii-allow-uuid: <why>.",
   denylist:
     "a term from your local denylist (~/.keepr/pii-denylist.txt). Not waivable, and not printed here.",
 };
@@ -302,6 +325,11 @@ function uuidWaived(text) {
   return m[1].trim().length > 0;
 }
 
+/** Does this ONE line name a PM table? The only place the allowance is applied. */
+function namesPmTable(line) {
+  return PM_TABLE_RE.test(line ?? "");
+}
+
 // ---------------------------------------------------------------------------
 // The scan
 // ---------------------------------------------------------------------------
@@ -355,8 +383,11 @@ export function scanText(text, where, denylistTerms) {
     const spRe = new RegExp(SECURITY_PHRASE_RE.source, SECURITY_PHRASE_RE.flags);
     while ((m = spRe.exec(line)) !== null) push("security-phrase", m[0]);
 
-    // bare-uuid keeps BACKLOG-2871's waiver, which is per-LINE, not per-message.
-    if (!uuidWaived(line)) {
+    // bare-uuid keeps BACKLOG-2871's waiver, which is per-LINE, not per-message,
+    // and adds the per-LINE PM-table allowance. Two separate conditions, each
+    // killable on its own: delete the first and the waiver controls go red,
+    // delete the second and the PM-record controls go red. One mechanism each.
+    if (!uuidWaived(line) && !namesPmTable(line)) {
       const uRe = new RegExp(UUID_RE.source, UUID_RE.flags);
       while ((m = uRe.exec(line)) !== null) {
         if (m[0].toLowerCase() === NIL_UUID) continue;
@@ -390,9 +421,7 @@ export function scanText(text, where, denylistTerms) {
  * delimiter — cannot split a record. A newline-delimited format here would let
  * a crafted commit message hide the next commit from the scan.
  */
-function commitMessages(rangeArgs) {
-  const args = [
-    "log",
+const LOG_ARGS = [
     // Merge commits INCLUDED. A sync-merge message is generated and harmless,
     // but a hand-written one is author prose like any other, and excluding
     // them opened a hole for the sake of nothing: measured across the last
@@ -401,28 +430,95 @@ function commitMessages(rangeArgs) {
     // positives. `check-fixture-pii.mjs` documents a merge gap it cannot close
     // because `git log -p` emits no patch for a merge; a MESSAGE has no such
     // problem.
-    "-z",
-    "--pretty=format:%H%x1f%B",
-    ...rangeArgs,
-  ];
-  let out;
+  "-z",
+  "--pretty=format:%H%x1f%B",
+];
+
+/** One git-log invocation and one failure path, shared by both range modes. */
+function runGitLog(args, input) {
+  const opts = { encoding: "utf8", maxBuffer: 64 * 1024 * 1024 };
+  if (input !== undefined) opts.input = input;
   try {
-    out = execFileSync("git", args, {
-      encoding: "utf8",
-      maxBuffer: 64 * 1024 * 1024,
-    });
+    return execFileSync("git", ["log", ...args], opts);
   } catch (err) {
     const msg = err && err.stderr ? String(err.stderr).trim() : String(err);
     console.error(`check-message-hygiene: git log failed for the given range.`);
     console.error(`  ${msg}`);
     process.exit(2);
   }
+}
+
+function parseCommitRecords(out) {
   const records = out.split("\0").filter((r) => r.length > 0);
   return records.map((r) => {
     const sep = r.indexOf("\x1f");
     if (sep === -1) return { sha: "(unknown)", message: r };
     return { sha: r.slice(0, sep), message: r.slice(sep + 1) };
   });
+}
+
+function commitMessages(rangeArgs) {
+  return parseCommitRecords(runGitLog([...LOG_ARGS, ...rangeArgs]));
+}
+
+/**
+ * Commits reachable from `headRev` and NOT reachable from any OTHER
+ * `refs/remotes/origin/*` ref — the CI mirror of the pre-push hook's
+ * `--not --remotes=origin`.
+ *
+ * WHY THE RANGE IS THIS AND NOT `head --not base`. `base.sha` on a
+ * `pull_request` event tracks the current tip of the TARGET branch, so for a
+ * feature PR the range is that PR's own commits — correct. But for an aggregate
+ * PR (`int/* -> develop`, `chore/release-* -> main`) it is every commit being
+ * merged, all of it merged history that nobody can amend. Measured on this repo:
+ * that shape made both classes permanently red with no author remedy, which is
+ * how a gate teaches bypass.
+ *
+ * A commit already reachable from another origin ref is already published. This
+ * gate is a PRE-publication gate; re-reporting a published commit gives the
+ * author nothing they can act on.
+ *
+ * The head's OWN origin ref is excluded from the exclusion set. After a push
+ * `refs/remotes/origin/<head-ref>` equals the PR head, so leaving it in would
+ * whitewash every PR to an empty range. A fork PR has no such ref, and then the
+ * full origin set applies — which is the correct answer for a fork.
+ *
+ * DEPENDS ON: branches are never deleted in this repo (CLAUDE.md). Deleting a
+ * merged branch can put its commits back in range on a later aggregate PR.
+ *
+ * Refs go in on STDIN, not argv: this repo has ~490 origin refs, ~28 KB of ref
+ * names.
+ */
+function commitMessagesNewToHead(headRev, excludeRefs) {
+  const input = [headRev, ...excludeRefs.map((r) => `^${r}`)].join("\n") + "\n";
+  return parseCommitRecords(runGitLog([...LOG_ARGS, "--stdin"], input));
+}
+
+/**
+ * Every `refs/remotes/origin/*` ref except `origin/HEAD` (a symref to another
+ * ref already in the list) and the PR's own head ref.
+ */
+function otherOriginRefs(headRef) {
+  let out;
+  try {
+    out = execFileSync(
+      "git",
+      ["for-each-ref", "--format=%(refname)", "refs/remotes/origin"],
+      { encoding: "utf8", maxBuffer: 16 * 1024 * 1024 },
+    );
+  } catch (err) {
+    const msg = err && err.stderr ? String(err.stderr).trim() : String(err);
+    console.error("check-message-hygiene: could not list refs/remotes/origin/*.");
+    console.error(`  ${msg}`);
+    process.exit(2);
+  }
+  const all = out
+    .split("\n")
+    .map((r) => r.trim())
+    .filter((r) => r.length > 0);
+  const skip = new Set(["refs/remotes/origin/HEAD"]);
+  if (headRef) skip.add(`refs/remotes/origin/${headRef}`);
+  return { total: all.length, others: all.filter((r) => !skip.has(r)) };
 }
 
 // ---------------------------------------------------------------------------
@@ -434,17 +530,24 @@ function usage(msg) {
   console.error("");
   console.error("Usage:");
   console.error('  check-message-hygiene.mjs --range "<rev-list args>"');
+  console.error("  check-message-hygiene.mjs --new-to-head <rev> [--head-ref <name>]");
   console.error("  check-message-hygiene.mjs --text-file <path> [--label <name>]");
   console.error("");
   console.error("Options:");
   console.error("  --denylist <path>   override ~/.keepr/pii-denylist.txt");
   console.error("  --reveal            print unmasked matches (refused under CI)");
+  console.error("");
+  console.error("--new-to-head scans commits reachable from <rev> and NOT from any");
+  console.error("other refs/remotes/origin/* ref. --head-ref names the PR's own");
+  console.error("branch so its origin ref does not exclude the whole range.");
   process.exit(2);
 }
 
 function main() {
   const argv = process.argv.slice(2);
   let range = null;
+  let newToHead = null;
+  let headRef = null;
   let textFile = null;
   let label = null;
   let denylistPath = DEFAULT_DENYLIST;
@@ -462,6 +565,16 @@ function main() {
       const spec = arg.slice("--range=".length).trim();
       if (spec.length === 0) usage("--range was empty.");
       range = spec.split(/\s+/);
+    } else if (arg === "--new-to-head") {
+      newToHead = argv[++i];
+      if (newToHead === undefined || newToHead.trim().length === 0) {
+        usage("--new-to-head needs a revision.");
+      }
+      newToHead = newToHead.trim();
+    } else if (arg === "--head-ref") {
+      headRef = argv[++i];
+      if (headRef === undefined) usage("--head-ref needs a branch name.");
+      headRef = headRef.trim().replace(/^refs\/heads\//, "");
     } else if (arg === "--text-file") {
       textFile = argv[++i];
       if (textFile === undefined) usage("--text-file needs a path.");
@@ -478,9 +591,13 @@ function main() {
     }
   }
 
-  if (range === null && textFile === null) usage("nothing to scan.");
-  if (range !== null && textFile !== null) {
-    usage("--range and --text-file are mutually exclusive; run it twice.");
+  const modes = [range, newToHead, textFile].filter((m) => m !== null);
+  if (modes.length === 0) usage("nothing to scan.");
+  if (modes.length > 1) {
+    usage("--range, --new-to-head and --text-file are mutually exclusive; run it twice.");
+  }
+  if (headRef !== null && newToHead === null) {
+    usage("--head-ref only means anything with --new-to-head.");
   }
 
   // `--reveal` is for a human at a terminal who already wrote the text. In CI
@@ -505,9 +622,41 @@ function main() {
 
   let findings = [];
   let scanned = 0;
+  let emptyRangeNote = null;
 
-  if (range !== null) {
-    const commits = commitMessages(range);
+  if (range !== null || newToHead !== null) {
+    let commits;
+    if (newToHead !== null) {
+      const refs = otherOriginRefs(headRef);
+      console.log(
+        `check-message-hygiene: ${refs.total} refs/remotes/origin/* ref(s) present; ` +
+          `${refs.others.length} excluded from the range` +
+          (headRef ? ` (the head's own ref, origin/${headRef}, is not one of them).` : "."),
+      );
+      // An empty exclusion set means the fetch did not populate the remote refs,
+      // NOT that every commit is new. Widening the range silently would re-red
+      // every aggregate PR on merged history; reporting green would scan the
+      // whole history against nothing. Neither is honest, so refuse.
+      if (refs.others.length === 0) {
+        console.error(
+          "check-message-hygiene: no other refs/remotes/origin/* refs are present.",
+        );
+        console.error(
+          "  The range cannot be narrowed against a ref list that was never fetched.",
+        );
+        console.error(
+          "  Run: git fetch origin '+refs/heads/*:refs/remotes/origin/*'",
+        );
+        process.exit(2);
+      }
+      commits = commitMessagesNewToHead(newToHead, refs.others);
+      if (commits.length === 0) {
+        emptyRangeNote =
+          "0 commits are new to this head; every commit is already on another origin ref.";
+      }
+    } else {
+      commits = commitMessages(range);
+    }
     scanned = commits.length;
     for (const c of commits) {
       findings = findings.concat(
@@ -535,6 +684,13 @@ function main() {
     : "no denylist file (optional — this is not an error)";
 
   if (findings.length === 0) {
+    if (emptyRangeNote !== null) {
+      // Not a bare "OK - 0 scanned". A reader must be able to tell "nothing to
+      // check" from "checked nothing" without opening the workflow file.
+      console.log(`check-message-hygiene: ${emptyRangeNote}`);
+      console.log(`check-message-hygiene: nothing to scan, ${denyNote}.`);
+      process.exit(0);
+    }
     console.log(
       `check-message-hygiene: OK — ${scanned} message(s)/blob(s) scanned, ${denyNote}.`,
     );
@@ -588,6 +744,10 @@ function main() {
   console.error("    If a finding is genuinely about code and not a live surface:");
   console.error("      hygiene-allow: <rule>: <why this one is safe>");
   console.error(`    Waivable: ${[...WAIVABLE].sort().join(", ")}.`);
+  console.error("    A PM record id needs no waiver when the line names its table");
+  console.error("    (pm_comments, pm_backlog_items, pm_tasks, pm_sprints,");
+  console.error("     pm_events, pm_token_metrics).");
+  console.error("");
   console.error("    NOT waivable: bare-uuid (use pii-allow-uuid: <why>), cgnat,");
   console.error("    denylist, rfc1918, tailnet-name.");
   console.error("");
