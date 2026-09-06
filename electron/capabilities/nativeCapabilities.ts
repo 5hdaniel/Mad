@@ -43,6 +43,9 @@
  * @module electron/capabilities/nativeCapabilities
  */
 
+import { isAppPathsInstalled } from "./appPathsProvider";
+import { isErrorReporterInstalled } from "./errorReporterProvider";
+import { isLoggerInstalled } from "./loggerProvider";
 import { isSecretStoreInstalled } from "./secretStoreProvider";
 
 /**
@@ -71,13 +74,23 @@ export interface NativeCapability {
 /**
  * Every capability the Electron shell must install before the core runs.
  *
- * ONE entry today. That is not an oversight: BACKLOG-2962's own capability
- * table names four (secret storage, file export/attachments, message ingestion,
- * notifications/update) and only secret storage has shipped behind an
- * interface. SR endorsed deferring the filesystem seam — its 42 files are
- * eleven distinct concerns, not one capability. A capability joins this list
- * when it has an interface, not before; adding a name here with no installer
- * takes both guards red, by design and by planted control.
+ * A capability joins this list when it has an interface, not before; adding a
+ * name here with no installer takes both guards red, by design and by planted
+ * control.
+ *
+ * WHAT IS HERE AND WHAT IS NOT
+ * ----------------------------
+ * `secretStore` shipped in PR #2487. `logger` is the first of the five seams
+ * BACKLOG-2961's compiler measurement (`pm_comments` `4c10fdb4`) named — Logger,
+ * ErrorReporter, AppPaths, Dialog, Window — which the founder assigned to this
+ * item on 2026-09-05. That measurement is also why they arrive in this order:
+ * enumerating all 31 subsets of the five showed four of them free ZERO modules
+ * on their own, and the 34-module payoff lands only at the conjunction of
+ * Logger + ErrorReporter + AppPaths. They ship as one PR for that reason.
+ *
+ * Still absent, and still deliberately: the filesystem seam (SR endorsed
+ * deferring it — its 42 files are eleven distinct concerns, not one
+ * capability), message ingestion, and notifications/update.
  */
 export const NATIVE_CAPABILITIES: readonly NativeCapability[] = [
   {
@@ -85,6 +98,24 @@ export const NATIVE_CAPABILITIES: readonly NativeCapability[] = [
     providerModule: "electron/capabilities/secretStoreProvider",
     installFunction: "installSecretStore",
     isInstalled: isSecretStoreInstalled,
+  },
+  {
+    name: "logger",
+    providerModule: "electron/capabilities/loggerProvider",
+    installFunction: "installLogger",
+    isInstalled: isLoggerInstalled,
+  },
+  {
+    name: "errorReporter",
+    providerModule: "electron/capabilities/errorReporterProvider",
+    installFunction: "installErrorReporter",
+    isInstalled: isErrorReporterInstalled,
+  },
+  {
+    name: "appPaths",
+    providerModule: "electron/capabilities/appPathsProvider",
+    installFunction: "installAppPaths",
+    isInstalled: isAppPathsInstalled,
   },
 ];
 
@@ -212,12 +243,30 @@ export class MissingNativeCapabilityError extends Error {
   readonly missing: readonly string[];
 
   constructor(missing: readonly string[]) {
+    // THIS TEXT REACHES THE FOUNDER, in the "Keepr cannot start" box, so it may
+    // only say what is true of EVERY registered capability.
+    //
+    // It used to end "each capability's provider throws on first use, so this
+    // fails during startup". That was true when `secretStore` was the only
+    // entry. It stopped being true the moment `logger` and `errorReporter` were
+    // registered: their defaults are silent BY DESIGN, because every call site
+    // they wrap sits inside a `catch` and a throwing default would escape from
+    // inside an error handler (see logger.ts / errorReporter.ts).
+    //
+    // The old sentence also inverted its own argument. For the two silent
+    // capabilities this check is not a nicety on top of a provider that would
+    // have thrown anyway — it is the ONLY thing that can notice they are
+    // missing. Whoever edits this next: if a future capability changes how its
+    // default behaves, nothing here needs to change, because the sentence no
+    // longer claims anything about defaults.
     super(
       `Native capability not installed: ${missing.join(", ")}. The host shell's ` +
         "composition root ran without supplying an implementation " +
-        `(Electron's is ${COMPOSITION_ROOT}.ts). Each capability's provider ` +
-        "throws on first use, so this fails during startup — before the window " +
-        "opens — rather than at whatever call site happens to reach it first.",
+        `(Electron's is ${COMPOSITION_ROOT}.ts). This check runs during startup — ` +
+        "before the window opens — so a missing capability is named here rather " +
+        "than surfacing later at whatever call site happens to reach it first. " +
+        "Some providers throw on first use and some are silent by design, which " +
+        "is why this check exists rather than being left to the first caller.",
     );
     this.name = "MissingNativeCapabilityError";
     this.missing = [...missing];

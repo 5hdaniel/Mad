@@ -75,6 +75,12 @@
 import { app, dialog } from "electron";
 import log from "electron-log";
 
+import { installLogger } from "../capabilities/loggerProvider";
+import { ElectronLogger } from "../capabilities/electron/electronLogger";
+import { installErrorReporter } from "../capabilities/errorReporterProvider";
+import { ElectronErrorReporter } from "../capabilities/electron/electronErrorReporter";
+import { installAppPaths } from "../capabilities/appPathsProvider";
+import { ElectronAppPaths } from "../capabilities/electron/electronAppPaths";
 import { installSecretStore } from "../capabilities/secretStoreProvider";
 import { ElectronSecretStore } from "../capabilities/electron/electronSecretStore";
 import { assertNativeCapabilitiesInstalled } from "../capabilities/nativeCapabilities";
@@ -82,6 +88,18 @@ import { assertNativeCapabilitiesInstalled } from "../capabilities/nativeCapabil
 /** Title of the error box shown when a capability is missing at launch. */
 export const STARTUP_FAILURE_TITLE = "Keepr cannot start";
 
+// Logger FIRST, so that anything a later installer's constructor might log
+// reaches the file transport rather than the silent default. Nothing logs
+// during construction today; installing first is what keeps that cheap to stay
+// true. `installAppDataPaths` (main.ts:6) has already pointed electron-log at
+// the right directory, so the first line written from here lands in the right
+// file.
+installLogger(new ElectronLogger());
+installErrorReporter(new ElectronErrorReporter());
+// `ElectronAppPaths` reads `app.getPath` per call, never at construction, so
+// installing it here does NOT freeze the value `installAppDataPaths`
+// (main.ts:6, which has already run) set. Rule E2 keeps that import first.
+installAppPaths(new ElectronAppPaths());
 installSecretStore(new ElectronSecretStore());
 
 // LAST — every capability above must now answer `isInstalled()`.

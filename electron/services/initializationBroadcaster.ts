@@ -9,8 +9,8 @@
  */
 
 import { BrowserWindow } from "electron";
-import log from "electron-log";
-import * as Sentry from "@sentry/electron/main";
+import { hostLogger } from "../capabilities/loggerProvider";
+import { hostErrorReporter } from "../capabilities/errorReporterProvider";
 
 // ============================================
 // TYPE DEFINITIONS
@@ -143,7 +143,7 @@ class InitializationBroadcaster {
     };
     this.history.push(historyEntry);
 
-    log.debug(
+    hostLogger.debug(
       `[InitBroadcaster] Stage: ${event.stage}${event.message ? ` — ${event.message}` : ""}`,
     );
 
@@ -172,7 +172,7 @@ class InitializationBroadcaster {
       }
     } catch (err) {
       // Window may not be ready during early initialization — this is expected
-      log.debug(
+      hostLogger.debug(
         `[InitBroadcaster] Could not broadcast to windows: ${err instanceof Error ? err.message : String(err)}`,
       );
     }
@@ -246,7 +246,7 @@ class InitializationBroadcaster {
           // to its transient/fallback path for this launch — worth knowing
           // about in aggregate, not just per-caller. One event here covers
           // every call site without threading telemetry through each of them.
-          Sentry.captureMessage("db_ready_timeout", {
+          hostErrorReporter.captureMessage("db_ready_timeout", {
             level: "warning",
             tags: { component: "startup", event: "db_ready_timeout" },
             extra: {

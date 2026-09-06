@@ -4,13 +4,13 @@
  * Keys are stored securely in the OS keychain (macOS Keychain, Windows DPAPI, Linux Secret Service)
  */
 
-import { app } from "electron";
+import { hostAppPaths } from "../capabilities/appPathsProvider";
 import type { SecretStore } from "../capabilities/secretStore";
 import { hostSecretStore } from "../capabilities/secretStoreProvider";
 import crypto from "crypto";
 import fs from "fs";
 import path from "path";
-import * as Sentry from "@sentry/electron/main";
+import { hostErrorReporter } from "../capabilities/errorReporterProvider";
 import logService from "./logService";
 
 /**
@@ -56,7 +56,7 @@ export class DatabaseEncryptionService {
    */
   async initialize(): Promise<void> {
     try {
-      const userDataPath = app.getPath("userData");
+      const userDataPath = hostAppPaths.userData();
       this.keyStorePath = path.join(userDataPath, this.KEY_STORE_FILENAME);
       await logService.info(
         "Database encryption service initialized",
@@ -68,7 +68,7 @@ export class DatabaseEncryptionService {
         "DatabaseEncryptionService",
         { error: error instanceof Error ? error.message : String(error) },
       );
-      Sentry.captureException(error, {
+      hostErrorReporter.captureException(error, {
         tags: { service: "database-encryption", operation: "initialize" },
       });
       throw error;
@@ -88,7 +88,7 @@ export class DatabaseEncryptionService {
         "DatabaseEncryptionService",
         { error: error instanceof Error ? error.message : String(error) },
       );
-      Sentry.captureException(error, {
+      hostErrorReporter.captureException(error, {
         tags: { service: "database-encryption", operation: "isEncryptionAvailable" },
       });
       return false;
@@ -163,7 +163,7 @@ export class DatabaseEncryptionService {
         "DatabaseEncryptionService",
         { error: error instanceof Error ? error.message : String(error) },
       );
-      Sentry.captureException(error, {
+      hostErrorReporter.captureException(error, {
         tags: { service: "database-encryption", operation: "generateNewKey" },
       });
       throw error;
@@ -212,7 +212,7 @@ export class DatabaseEncryptionService {
         "DatabaseEncryptionService",
         { error: error instanceof Error ? error.message : String(error) },
       );
-      Sentry.captureException(error, {
+      hostErrorReporter.captureException(error, {
         tags: { service: "database-encryption", operation: "getKeyFromStore" },
       });
       return null;
@@ -265,7 +265,7 @@ export class DatabaseEncryptionService {
         "DatabaseEncryptionService",
         { error: error instanceof Error ? error.message : String(error) },
       );
-      Sentry.captureException(error, {
+      hostErrorReporter.captureException(error, {
         tags: { service: "database-encryption", operation: "saveKeyToStore" },
       });
       throw error;
@@ -312,7 +312,7 @@ export class DatabaseEncryptionService {
           error: error instanceof Error ? error.message : String(error),
         },
       );
-      Sentry.captureException(error, {
+      hostErrorReporter.captureException(error, {
         tags: { service: "database-encryption", operation: "isDatabaseEncrypted" },
       });
       return false;
@@ -383,7 +383,7 @@ export class DatabaseEncryptionService {
     if (!this.keyStorePath) {
       // Service not initialized yet, check default path
       try {
-        const userDataPath = app.getPath("userData");
+        const userDataPath = hostAppPaths.userData();
         const defaultKeyStorePath = path.join(
           userDataPath,
           this.KEY_STORE_FILENAME,
@@ -415,7 +415,7 @@ export class DatabaseEncryptionService {
         "DatabaseEncryptionService",
         { error: error instanceof Error ? error.message : String(error) },
       );
-      Sentry.captureException(error, {
+      hostErrorReporter.captureException(error, {
         tags: { service: "database-encryption", operation: "getKeyMetadata" },
       });
       return null;

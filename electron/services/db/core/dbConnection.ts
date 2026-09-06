@@ -14,7 +14,7 @@ import Database from "better-sqlite3-multiple-ciphers";
 import type { Database as DatabaseType } from "better-sqlite3";
 import path from "path";
 import fs from "fs";
-import { app } from "electron";
+import { hostAppPaths } from "../../../capabilities/appPathsProvider";
 import { DatabaseError, QueryResult } from "../../../types";
 import type { SafeSql } from "./sqlText";
 import { databaseEncryptionService } from "../../databaseEncryptionService";
@@ -160,7 +160,7 @@ export function setEncryptionKey(key: string): void {
  */
 export async function initializePaths(): Promise<void> {
   // Get user data path
-  const userDataPath = app.getPath("userData");
+  const userDataPath = hostAppPaths.userData();
   dbPath = path.join(userDataPath, "mad.db");
 
   await logService.info("Initializing database paths", "DbConnection", {
