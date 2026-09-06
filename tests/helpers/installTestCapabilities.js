@@ -9,8 +9,8 @@
  * `electron/bootstrap/installNativeCapabilities.ts`; `tests/setup.js` says so
  * here. Without it, every suite that reaches a `hostLogger` call would exercise the
  * uninstalled default instead of the path it was written to test — 22 suites
- * assert on the `electron-log` mock and 6 on the `@sentry/electron` mock.
- * AppPaths joins this helper in the commit after this one.
+ * assert on the `electron-log` mock, 6 on the `@sentry/electron` mock, and 62
+ * mock `electron` with their own `getPath`.
  *
  * WHY IT RESOLVES THE SDK AT CALL TIME, WHEN `installTestSecretStore` DOES NOT
  * ---------------------------------------------------------------------------
@@ -34,8 +34,22 @@
  * provider returns a BRAND NEW module with nothing installed. No jest hook fires
  * after an in-test reset. Suites that reset and then reach one of these
  * capabilities must call this themselves afterwards — exactly as they already
- * do for `installTestSecretStore`.
+ * do for `installTestSecretStore`. That matters most for AppPaths, whose default
+ * throws — a path accessor has no honest no-op.
  */
+
+/** The `electron` mock's `app`. */
+function currentApp() {
+  const { app } = require("electron");
+  if (!app) {
+    throw new Error(
+      "installTestCapabilities(): the `electron` mock in force has no `app`. " +
+        "A suite that mocks `electron` with its own factory must include one, or " +
+        "install an AppPaths of its own via installAppPaths().",
+    );
+  }
+  return app;
+}
 
 /** The `@sentry/electron/main` namespace as the mock in force exposes it. */
 function currentSentry() {
@@ -55,6 +69,7 @@ function installTestCapabilities() {
   const {
     installErrorReporter,
   } = require("../../electron/capabilities/errorReporterProvider");
+  const { installAppPaths } = require("../../electron/capabilities/appPathsProvider");
 
   installLogger({
     debug: (message, ...args) => currentLog().debug(message, ...args),
@@ -72,6 +87,14 @@ function installTestCapabilities() {
     addBreadcrumb: (breadcrumb) => currentSentry().addBreadcrumb(breadcrumb),
     flush: (timeoutMs) => currentSentry().flush(timeoutMs),
     setUser: (user) => currentSentry().setUser(user),
+  });
+
+  // Resolved at call time for the same reason, and it matters more here: the
+  // default throws, and 62 suites supply their own `electron` mock with their
+  // own `getPath`. Binding one now would answer with the wrong directory for
+  // every one of them.
+  installAppPaths({
+    userData: () => currentApp().getPath("userData"),
   });
 }
 

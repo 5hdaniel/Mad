@@ -179,6 +179,7 @@ describe("composition-root guard: the real tree (BACKLOG-2962)", () => {
       "secretStore",
       "logger",
       "errorReporter",
+      "appPaths",
       "the runtime self-check",
     ]);
   });
@@ -192,16 +193,19 @@ describe("composition-root guard: the real tree (BACKLOG-2962)", () => {
       "secretStore",
       "logger",
       "errorReporter",
+      "appPaths",
     ]);
     expect(NATIVE_CAPABILITIES.map((c) => c.installFunction)).toEqual([
       "installSecretStore",
       "installLogger",
       "installErrorReporter",
+      "installAppPaths",
     ]);
     expect(NATIVE_CAPABILITIES.map((c) => c.providerModule)).toEqual([
       "electron/capabilities/secretStoreProvider",
       "electron/capabilities/loggerProvider",
       "electron/capabilities/errorReporterProvider",
+      "electron/capabilities/appPathsProvider",
     ]);
   });
 

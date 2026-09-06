@@ -4,7 +4,7 @@
  * Keys are stored securely in the OS keychain (macOS Keychain, Windows DPAPI, Linux Secret Service)
  */
 
-import { app } from "electron";
+import { hostAppPaths } from "../capabilities/appPathsProvider";
 import type { SecretStore } from "../capabilities/secretStore";
 import { hostSecretStore } from "../capabilities/secretStoreProvider";
 import crypto from "crypto";
@@ -56,7 +56,7 @@ export class DatabaseEncryptionService {
    */
   async initialize(): Promise<void> {
     try {
-      const userDataPath = app.getPath("userData");
+      const userDataPath = hostAppPaths.userData();
       this.keyStorePath = path.join(userDataPath, this.KEY_STORE_FILENAME);
       await logService.info(
         "Database encryption service initialized",
@@ -383,7 +383,7 @@ export class DatabaseEncryptionService {
     if (!this.keyStorePath) {
       // Service not initialized yet, check default path
       try {
-        const userDataPath = app.getPath("userData");
+        const userDataPath = hostAppPaths.userData();
         const defaultKeyStorePath = path.join(
           userDataPath,
           this.KEY_STORE_FILENAME,

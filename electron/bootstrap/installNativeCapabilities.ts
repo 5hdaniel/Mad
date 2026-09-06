@@ -79,6 +79,8 @@ import { installLogger } from "../capabilities/loggerProvider";
 import { ElectronLogger } from "../capabilities/electron/electronLogger";
 import { installErrorReporter } from "../capabilities/errorReporterProvider";
 import { ElectronErrorReporter } from "../capabilities/electron/electronErrorReporter";
+import { installAppPaths } from "../capabilities/appPathsProvider";
+import { ElectronAppPaths } from "../capabilities/electron/electronAppPaths";
 import { installSecretStore } from "../capabilities/secretStoreProvider";
 import { ElectronSecretStore } from "../capabilities/electron/electronSecretStore";
 import { assertNativeCapabilitiesInstalled } from "../capabilities/nativeCapabilities";
@@ -94,6 +96,10 @@ export const STARTUP_FAILURE_TITLE = "Keepr cannot start";
 // file.
 installLogger(new ElectronLogger());
 installErrorReporter(new ElectronErrorReporter());
+// `ElectronAppPaths` reads `app.getPath` per call, never at construction, so
+// installing it here does NOT freeze the value `installAppDataPaths`
+// (main.ts:6, which has already run) set. Rule E2 keeps that import first.
+installAppPaths(new ElectronAppPaths());
 installSecretStore(new ElectronSecretStore());
 
 // LAST — every capability above must now answer `isInstalled()`.

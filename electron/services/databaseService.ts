@@ -23,6 +23,7 @@ import path from "path";
 import fs from "fs";
 import crypto from "crypto";
 import { app, dialog } from "electron";
+import { hostAppPaths } from "../capabilities/appPathsProvider";
 import { hostErrorReporter } from "../capabilities/errorReporterProvider";
 import logService from "./logService";
 import {
@@ -200,7 +201,7 @@ class DatabaseService implements IDatabaseService {
     }
 
     try {
-      const userDataPath = app.getPath("userData");
+      const userDataPath = hostAppPaths.userData();
       this.dbPath = path.join(userDataPath, "mad.db");
 
       await logService.info("Initializing database", "DatabaseService", { path: this.dbPath });

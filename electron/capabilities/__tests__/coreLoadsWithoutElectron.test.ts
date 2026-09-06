@@ -131,6 +131,65 @@ describe("core modules load without Electron (BACKLOG-2962)", () => {
     expect(() => loadWithoutElectron("../../schemas/validate")).not.toThrow();
   });
 
+  it("appPathsProvider loads with no Electron present", () => {
+    expect(() => loadWithoutElectron("../appPathsProvider")).not.toThrow();
+  });
+
+  it("db/core/dbConnection loads with no Electron present", () => {
+    // THE ONE-LINE CUT. `app.getPath("userData")` at :163 was this module's only
+    // Electron reach, and BACKLOG-2961 measured 19 modules held in the coupled
+    // set by it alone — every `db/*DbService.ts` in the extraction closure, plus
+    // `messageMatchingService` and `llm/llmConfigService`. They are released by
+    // this line and not one PR earlier.
+    expect(() => loadWithoutElectron("../../services/db/core/dbConnection")).not.toThrow();
+  });
+
+  it("databaseEncryptionService loads with no Electron present", () => {
+    // It reached the platform three ways — `app.getPath` twice and
+    // `@sentry/electron/main` seven times — so it is the module that proves the
+    // three seams compose rather than merely coexist.
+    expect(() =>
+      loadWithoutElectron("../../services/databaseEncryptionService"),
+    ).not.toThrow();
+  });
+
+  it("db/maintenanceDbService loads with no Electron present", () => {
+    expect(() => loadWithoutElectron("../../services/db/maintenanceDbService")).not.toThrow();
+  });
+
+  it("autoLinkService loads with no Electron present", () => {
+    // An extraction candidate whose own coupling was 12 `Sentry.*` calls and
+    // nothing else. It LOADS now — but BACKLOG-2961's closure still classifies
+    // it as transitively coupled, and both statements are true at once: its only
+    // remaining path to Electron is `await import("./reviewStateService")` at
+    // `:544` and `:915`, which the compiler counts as an edge and a load-time
+    // probe cannot reach. The two instruments measure different things, and
+    // neither is the other's substitute.
+    expect(() => loadWithoutElectron("../../services/autoLinkService")).not.toThrow();
+  });
+
+  it("emailDeduplicationService STILL fails — and that is PR B's remainder, named", () => {
+    // Not a gap in this PR: `emailDeduplicationService.ts:21` statically imports
+    // `databaseService`, which keeps `import { app, dialog } from "electron"` for
+    // 7 `app.*` lifecycle calls and 3 `dialog.showMessageBox` calls — the Dialog
+    // and Window seams, deliberately out of scope here.
+    //
+    // Asserted as a THROW rather than left unwritten, so the boundary is a fact
+    // in the suite instead of an absence. When PR B lands, this case reds and
+    // whoever lands it flips it to `.not.toThrow()`.
+    expect(() =>
+      loadWithoutElectron("../../services/emailDeduplicationService"),
+    ).toThrow(NO_ELECTRON);
+  });
+
+  it("messageMatchingService loads with no Electron present", () => {
+    // A (b) module, coupled by nothing of its own — it was held only through
+    // `dbConnection` and `logService`. That it loads now is the transitive half
+    // of the payoff, and it would not have moved for any one of the three seams
+    // alone.
+    expect(() => loadWithoutElectron("../../services/messageMatchingService")).not.toThrow();
+  });
+
   describe("the probe is honest — one case per specifier in the coupling class", () => {
     // Without these, a replacement that silently stopped applying would make
     // every assertion above pass by doing nothing.

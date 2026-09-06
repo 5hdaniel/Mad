@@ -43,6 +43,7 @@
  * @module electron/capabilities/nativeCapabilities
  */
 
+import { isAppPathsInstalled } from "./appPathsProvider";
 import { isErrorReporterInstalled } from "./errorReporterProvider";
 import { isLoggerInstalled } from "./loggerProvider";
 import { isSecretStoreInstalled } from "./secretStoreProvider";
@@ -109,6 +110,12 @@ export const NATIVE_CAPABILITIES: readonly NativeCapability[] = [
     providerModule: "electron/capabilities/errorReporterProvider",
     installFunction: "installErrorReporter",
     isInstalled: isErrorReporterInstalled,
+  },
+  {
+    name: "appPaths",
+    providerModule: "electron/capabilities/appPathsProvider",
+    installFunction: "installAppPaths",
+    isInstalled: isAppPathsInstalled,
   },
 ];
 

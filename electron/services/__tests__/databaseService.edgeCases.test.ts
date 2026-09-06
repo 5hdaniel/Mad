@@ -111,6 +111,13 @@ describe("DatabaseService - Edge Cases", () => {
   beforeEach(async () => {
     jest.clearAllMocks();
     jest.resetModules();
+    // BACKLOG-2962: `resetModules` hands the module under test a FRESH capability
+    // provider with nothing installed, and no jest hook fires after an in-test
+    // reset. AppPaths' default THROWS (a path accessor has no honest no-op), so
+    // without this `databaseService.initialize()` dies on `hostAppPaths.userData()`.
+    // Same reason the six SecretStore suites call `installTestSecretStore()` here.
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    require("../../../tests/helpers/installTestCapabilities").installTestCapabilities();
 
     // Reset mock defaults
     mockStatement.get.mockReturnValue(undefined);
@@ -330,6 +337,9 @@ describe("DatabaseService - Edge Cases", () => {
 
     it("should handle pragma errors during initialization", async () => {
       jest.resetModules();
+      // BACKLOG-2962 — re-install after the reset; see the first one in this file.
+      // eslint-disable-next-line @typescript-eslint/no-var-requires
+      require("../../../tests/helpers/installTestCapabilities").installTestCapabilities();
 
       mockDb.pragma.mockImplementationOnce(() => {
         throw new Error("Pragma failed");
@@ -405,6 +415,9 @@ describe("DatabaseService - Edge Cases", () => {
   describe("isInitialized", () => {
     it("should return false before initialization", async () => {
       jest.resetModules();
+      // BACKLOG-2962 — re-install after the reset; see the first one in this file.
+      // eslint-disable-next-line @typescript-eslint/no-var-requires
+      require("../../../tests/helpers/installTestCapabilities").installTestCapabilities();
       const module = await import("../databaseService");
       const freshService = module.default;
 
