@@ -159,27 +159,78 @@ describe("core modules load without Electron (BACKLOG-2962)", () => {
 
   it("autoLinkService loads with no Electron present", () => {
     // An extraction candidate whose own coupling was 12 `Sentry.*` calls and
-    // nothing else. It LOADS now — but BACKLOG-2961's closure still classifies
-    // it as transitively coupled, and both statements are true at once: its only
-    // remaining path to Electron is `await import("./reviewStateService")` at
-    // `:544` and `:915`, which the compiler counts as an edge and a load-time
-    // probe cannot reach. The two instruments measure different things, and
-    // neither is the other's substitute.
+    // nothing else.
+    //
+    // HISTORY, because this case is the tree's record of why two instruments are
+    // kept. After the Logger/ErrorReporter/AppPaths seams (PR #2523) it LOADED
+    // here while BACKLOG-2961's closure still classified it as transitively
+    // coupled — its only remaining path to Electron was
+    // `await import("./reviewStateService")` at `:544` and `:915`, which the
+    // compiler counts as an edge and a load-time probe cannot reach. Seams PR B
+    // freed `reviewStateService`, so that path is gone and the closure now reads
+    // it as platform-free too (63 modules, 0 coupled).
+    //
+    // The instruments AGREE at this head. They still MEASURE DIFFERENT THINGS,
+    // and neither is the other's substitute: this one cannot see an import the
+    // compiler elides, and the closure cannot see a `require` reached only at
+    // runtime. Do not delete one because they currently return the same answer.
     expect(() => loadWithoutElectron("../../services/autoLinkService")).not.toThrow();
   });
 
-  it("emailDeduplicationService STILL fails — and that is PR B's remainder, named", () => {
-    // Not a gap in this PR: `emailDeduplicationService.ts:21` statically imports
-    // `databaseService`, which keeps `import { app, dialog } from "electron"` for
-    // 7 `app.*` lifecycle calls and 3 `dialog.showMessageBox` calls — the Dialog
-    // and Window seams, deliberately out of scope here.
-    //
-    // Asserted as a THROW rather than left unwritten, so the boundary is a fact
-    // in the suite instead of an absence. When PR B lands, this case reds and
-    // whoever lands it flips it to `.not.toThrow()`.
+  it("emailDeduplicationService loads with no Electron present — PR B's remainder, closed", () => {
+    // PR A left this case asserting a THROW, with the reason written down:
+    // `emailDeduplicationService.ts:21` statically imports `databaseService`,
+    // which kept `import { app, dialog } from "electron"`. That import is gone,
+    // so this case reds as a throw and is flipped here — which is the point of
+    // having written the boundary as an assertion rather than an absence.
     expect(() =>
       loadWithoutElectron("../../services/emailDeduplicationService"),
-    ).toThrow(NO_ELECTRON);
+    ).not.toThrow();
+  });
+
+  it("windowsProvider loads with no Electron present", () => {
+    // The Windows seam's own interface side (BACKLOG-2962, seams PR B).
+    expect(() => loadWithoutElectron("../windowsProvider")).not.toThrow();
+  });
+
+  it("initializationBroadcaster loads with no Electron present", () => {
+    // It reached the platform ONE way after PR A: `BrowserWindow.getAllWindows()`
+    // at :167, inside the broadcast every renderer surface listens to. It also
+    // named `BrowserWindow` as the TYPE of a write-only field, which a type-only
+    // import would have hidden from both this probe and the static gate; that
+    // type is now opaque, so the module compiles as well as loads without
+    // Electron.
+    expect(() =>
+      loadWithoutElectron("../../services/initializationBroadcaster"),
+    ).not.toThrow();
+  });
+
+  it("reviewStateService loads with no Electron present", () => {
+    // `BrowserWindow.getAllWindows()` at :577 was its ONLY Electron reach, and
+    // BACKLOG-2961's closure held `autoLinkService` in the transitively-coupled
+    // set for it alone — through the `await import("./reviewStateService")` at
+    // `autoLinkService.ts:544` and `:915` that a load-time probe cannot see and
+    // the compiler can.
+    expect(() => loadWithoutElectron("../../services/reviewStateService")).not.toThrow();
+  });
+
+  it("dialogProvider loads with no Electron present", () => {
+    // The Dialog seam's own interface side (BACKLOG-2962, seams PR B).
+    expect(() => loadWithoutElectron("../dialogProvider")).not.toThrow();
+  });
+
+  it("appLifecycleProvider loads with no Electron present", () => {
+    // The AppLifecycle seam's own interface side (BACKLOG-2962, seams PR B).
+    expect(() => loadWithoutElectron("../appLifecycleProvider")).not.toThrow();
+  });
+
+  it("databaseService loads with no Electron present", () => {
+    // THE LAST ONE. It was the only module left in BACKLOG-2961's extraction
+    // closure importing `electron`, and it held all four of the closure's
+    // transitively-coupled modules. 3 `dialog.showMessageBox` and 7
+    // `app.isPackaged`/`isReady`/`whenReady`/`quit`, on the terminal database
+    // paths where the app tells the user why it is about to stop.
+    expect(() => loadWithoutElectron("../../services/databaseService")).not.toThrow();
   });
 
   it("messageMatchingService loads with no Electron present", () => {

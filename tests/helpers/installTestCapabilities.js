@@ -57,6 +57,34 @@ function currentSentry() {
   return mod && mod.default && mod.default.captureException ? mod.default : mod;
 }
 
+/**
+ * The `electron` mock's `BrowserWindow`.
+ *
+ * NO friendly guard here, on purpose — unlike `currentApp()`. The shared
+ * `tests/__mocks__/electron.js` mocks `BrowserWindow` as a constructor with no
+ * `getAllWindows` static, so a suite that reaches a broadcast without supplying
+ * its own mock gets `TypeError: ...getAllWindows is not a function` from inside
+ * the caller's own `try` — which is exactly what it got before this seam
+ * existed, including the message `initializationBroadcaster` logs at debug.
+ * Replacing that with a nicer error would change a log line 20 suites can see.
+ */
+function currentBrowserWindow() {
+  const { BrowserWindow } = require("electron");
+  return BrowserWindow;
+}
+
+/**
+ * The `electron` mock's `dialog`.
+ *
+ * No friendly guard, for `currentBrowserWindow()`'s reason: a suite that reaches
+ * a message box without one gets exactly the TypeError it got before this seam,
+ * at the same place.
+ */
+function currentDialog() {
+  const { dialog } = require("electron");
+  return dialog;
+}
+
 /** `electron-log`'s default export, however the mock in force exposes it. */
 function currentLog() {
   const mod = require("electron-log");
@@ -70,6 +98,11 @@ function installTestCapabilities() {
     installErrorReporter,
   } = require("../../electron/capabilities/errorReporterProvider");
   const { installAppPaths } = require("../../electron/capabilities/appPathsProvider");
+  const { installWindows } = require("../../electron/capabilities/windowsProvider");
+  const { installDialog } = require("../../electron/capabilities/dialogProvider");
+  const {
+    installAppLifecycle,
+  } = require("../../electron/capabilities/appLifecycleProvider");
 
   installLogger({
     debug: (message, ...args) => currentLog().debug(message, ...args),
@@ -95,6 +128,42 @@ function installTestCapabilities() {
   // every one of them.
   installAppPaths({
     userData: () => currentApp().getPath("userData"),
+  });
+
+  // The loop is TRANSCRIBED from `electron/capabilities/electron/electronWindows.ts`,
+  // not paraphrased: ~20 suites supply their own `getAllWindows` and assert on
+  // `webContents.send`, and every one of them depends on the two skip guards
+  // behaving as they did when the loop sat inline in the two services. Resolved
+  // at call time for the same reason AppPaths is — a suite's own `electron`
+  // factory must win.
+  // Forwarded BY REFERENCE, matching `ElectronDialog`: five suites assert on the
+  // option object the production code builds, and a forwarder that rebuilt it
+  // would make those assertions describe this file instead.
+  installDialog({
+    showMessageBox: (request) => currentDialog().showMessageBox(request),
+  });
+
+  // `isPackaged` is a PROPERTY on Electron's `app` and on the mock, so it is
+  // read per call rather than bound — a suite that flips it between cases (the
+  // KEEPR_TEST_DB_DELAY seam's own suite does) must see the new value.
+  // `isReady` is deliberately NOT added to `tests/__mocks__/electron.js`: the
+  // shared mock has never had one, so a suite reaching that path without its own
+  // mock gets the same TypeError, in the same place, as it did before the seam.
+  installAppLifecycle({
+    isPackaged: () => currentApp().isPackaged,
+    isReady: () => currentApp().isReady(),
+    whenReady: () => currentApp().whenReady(),
+    quit: () => currentApp().quit(),
+  });
+
+  installWindows({
+    broadcast: (channel, payload) => {
+      for (const win of currentBrowserWindow().getAllWindows()) {
+        if (!win.isDestroyed() && win.webContents) {
+          win.webContents.send(channel, payload);
+        }
+      }
+    },
   });
 }
 

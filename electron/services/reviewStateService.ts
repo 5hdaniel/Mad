@@ -67,7 +67,7 @@
  */
 
 import crypto from "crypto";
-import { BrowserWindow } from "electron";
+import { hostWindows } from "../capabilities/windowsProvider";
 import { dbGet, dbAll, dbRun } from "./db/core/dbConnection";
 import {
   ADDRESS_MISSING_COMMUNICATIONS_BY_TRANSACTION_SQL,
@@ -574,11 +574,10 @@ export interface ReviewQueueChangedEvent {
  */
 function broadcastReviewQueueChanged(payload: ReviewQueueChangedEvent): void {
   try {
-    for (const win of BrowserWindow.getAllWindows()) {
-      if (!win.isDestroyed() && win.webContents) {
-        win.webContents.send("review:queue-changed", payload);
-      }
-    }
+    // BACKLOG-2962: the loop this used to run inline now lives in the Windows
+    // capability — `initializationBroadcaster.ts` ran the identical five lines.
+    // The channel name and the payload object are passed through untouched.
+    hostWindows.broadcast("review:queue-changed", payload);
   } catch {
     /* delivery is best-effort; the queue is already durable */
   }

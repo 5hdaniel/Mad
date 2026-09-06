@@ -43,10 +43,13 @@
  * @module electron/capabilities/nativeCapabilities
  */
 
+import { isAppLifecycleInstalled } from "./appLifecycleProvider";
 import { isAppPathsInstalled } from "./appPathsProvider";
+import { isDialogInstalled } from "./dialogProvider";
 import { isErrorReporterInstalled } from "./errorReporterProvider";
 import { isLoggerInstalled } from "./loggerProvider";
 import { isSecretStoreInstalled } from "./secretStoreProvider";
+import { isWindowsInstalled } from "./windowsProvider";
 
 /**
  * One native capability the core depends on and a host shell must supply.
@@ -80,13 +83,25 @@ export interface NativeCapability {
  *
  * WHAT IS HERE AND WHAT IS NOT
  * ----------------------------
- * `secretStore` shipped in PR #2487. `logger` is the first of the five seams
- * BACKLOG-2961's compiler measurement (`pm_comments` `4c10fdb4`) named — Logger,
- * ErrorReporter, AppPaths, Dialog, Window — which the founder assigned to this
- * item on 2026-09-05. That measurement is also why they arrive in this order:
- * enumerating all 31 subsets of the five showed four of them free ZERO modules
- * on their own, and the 34-module payoff lands only at the conjunction of
- * Logger + ErrorReporter + AppPaths. They ship as one PR for that reason.
+ * `secretStore` shipped in PR #2487. `logger`, `errorReporter` and `appPaths`
+ * are the first three of the five seams BACKLOG-2961's compiler measurement
+ * (`pm_comments` `4c10fdb4`) named — Logger, ErrorReporter, AppPaths, Dialog,
+ * Window — which the founder assigned to this item on 2026-09-05. That
+ * measurement is also why they arrived in that order: enumerating all 31 subsets
+ * of the five showed four of them free ZERO modules on their own, and the
+ * 34-module payoff lands only at the conjunction of Logger + ErrorReporter +
+ * AppPaths. They shipped as one PR (#2523) for that reason.
+ *
+ * `windows`, `dialog` and `appLifecycle` are the remainder, and there are THREE
+ * of them where the founder's decision named two. The reason is the twelve call
+ * expressions left after #2523, enumerated by the compiler: three
+ * `dialog.showMessageBox`, two `BrowserWindow.getAllWindows`, and SEVEN
+ * `app.isPackaged`/`isReady`/`whenReady`/`quit` in `databaseService.ts` that are
+ * neither a dialog nor a window. `4c10fdb4` §5 had them as one row named
+ * "AppLifecycle" covering `app.*` AND `dialog.showMessageBox`; splitting that row
+ * is what lets each interface describe one thing. Leaving the seven out would
+ * leave `import { app } from "electron"` in place and the extraction closure
+ * reading 1 rather than 0.
  *
  * Still absent, and still deliberately: the filesystem seam (SR endorsed
  * deferring it — its 42 files are eleven distinct concerns, not one
@@ -116,6 +131,24 @@ export const NATIVE_CAPABILITIES: readonly NativeCapability[] = [
     providerModule: "electron/capabilities/appPathsProvider",
     installFunction: "installAppPaths",
     isInstalled: isAppPathsInstalled,
+  },
+  {
+    name: "windows",
+    providerModule: "electron/capabilities/windowsProvider",
+    installFunction: "installWindows",
+    isInstalled: isWindowsInstalled,
+  },
+  {
+    name: "dialog",
+    providerModule: "electron/capabilities/dialogProvider",
+    installFunction: "installDialog",
+    isInstalled: isDialogInstalled,
+  },
+  {
+    name: "appLifecycle",
+    providerModule: "electron/capabilities/appLifecycleProvider",
+    installFunction: "installAppLifecycle",
+    isInstalled: isAppLifecycleInstalled,
   },
 ];
 

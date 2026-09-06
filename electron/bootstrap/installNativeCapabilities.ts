@@ -81,6 +81,12 @@ import { installErrorReporter } from "../capabilities/errorReporterProvider";
 import { ElectronErrorReporter } from "../capabilities/electron/electronErrorReporter";
 import { installAppPaths } from "../capabilities/appPathsProvider";
 import { ElectronAppPaths } from "../capabilities/electron/electronAppPaths";
+import { installWindows } from "../capabilities/windowsProvider";
+import { ElectronWindows } from "../capabilities/electron/electronWindows";
+import { installAppLifecycle } from "../capabilities/appLifecycleProvider";
+import { ElectronAppLifecycle } from "../capabilities/electron/electronAppLifecycle";
+import { installDialog } from "../capabilities/dialogProvider";
+import { ElectronDialog } from "../capabilities/electron/electronDialog";
 import { installSecretStore } from "../capabilities/secretStoreProvider";
 import { ElectronSecretStore } from "../capabilities/electron/electronSecretStore";
 import { assertNativeCapabilitiesInstalled } from "../capabilities/nativeCapabilities";
@@ -100,6 +106,22 @@ installErrorReporter(new ElectronErrorReporter());
 // installing it here does NOT freeze the value `installAppDataPaths`
 // (main.ts:6, which has already run) set. Rule E2 keeps that import first.
 installAppPaths(new ElectronAppPaths());
+// `ElectronWindows` calls `BrowserWindow.getAllWindows()` per broadcast and
+// holds no window handle, so installing it here — long before any window
+// exists — captures nothing that could go stale.
+installWindows(new ElectronWindows());
+// The `dialog.showErrorBox` in the catch below is NOT routed through this
+// capability, deliberately. This file is the shell: it runs before any
+// capability is trusted, and reporting "a capability is missing" through a
+// capability would be circular — the box would be the thing that failed. What
+// is established about `showErrorBox` working at this point in the lifecycle is
+// recorded in this file's header, and it is SR's measurement of Electron's own
+// default handler, not of this call site.
+installDialog(new ElectronDialog());
+// `ElectronAppLifecycle` reads `app.isPackaged` per call rather than at
+// construction, so installing it here — during `main.ts` evaluation, long before
+// `ready` — freezes nothing.
+installAppLifecycle(new ElectronAppLifecycle());
 installSecretStore(new ElectronSecretStore());
 
 // LAST — every capability above must now answer `isInstalled()`.

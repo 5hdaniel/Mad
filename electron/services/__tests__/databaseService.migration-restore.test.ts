@@ -475,9 +475,18 @@ describe("DatabaseService Migration Auto-Restore (TASK-2057)", () => {
       expect(result).toBe(true);
       expect(mockQuit).not.toHaveBeenCalled();
       expect(service.isInitialized()).toBe(true);
-      expect(mockShowMessageBox).toHaveBeenCalledWith(
-        expect.objectContaining({ type: "warning", title: "Database Update Notice" }),
-      );
+      // BACKLOG-2962, seams PR B: full object, not `objectContaining`. This box
+      // now reaches the platform through the Dialog capability, and a seam that
+      // dropped `detail` or `buttons` would have passed the partial match.
+      // Transcribed from `databaseService.ts:346-352`.
+      expect(mockShowMessageBox).toHaveBeenCalledWith({
+        type: "warning",
+        title: "Database Update Notice",
+        message: "A database update failed, but your data has been restored.",
+        detail:
+          "The app will continue with your existing data. Please contact support if this happens again.",
+        buttons: ["OK"],
+      });
     });
   });
 
@@ -503,6 +512,17 @@ describe("DatabaseService Migration Auto-Restore (TASK-2057)", () => {
           message: expect.stringContaining("could not be automatically fixed"),
         })
       );
+      // BACKLOG-2962, seams PR B: the three keys above were the whole assertion,
+      // so `buttons` and the exact headline were unpinned. Transcribed from
+      // `databaseService.ts:394-403`.
+      const fullArg = mockShowMessageBox.mock.calls[0][0] as {
+        message: string;
+        buttons: string[];
+      };
+      expect(fullArg.message).toBe(
+        "A database update failed and could not be automatically fixed.",
+      );
+      expect(fullArg.buttons).toEqual(["OK"]);
       // BACKLOG-2999 (Amendment 8): the copy still says "contact support /
       // manual recovery" -- deliberately NOT the cleanup scripts the
       // BACKLOG-2993 refusal points at, which would destroy data that may
