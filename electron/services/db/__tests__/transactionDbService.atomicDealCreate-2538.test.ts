@@ -336,15 +336,21 @@ describe("creating a deal with its parties is ONE write (BACKLOG-2538)", () => {
      *     not exported.
      *
      * Neither case reads production behaviour out of a docblock: each asserts
-     * `{ threw, deals, attached }` in one `expect`, so a failure prints all
-     * three facts together.
+     * `{ threw, rejected, deals, attached }` in ONE `expect`, so a failure
+     * prints all four facts together. Ids are asserted as sets, never counts —
+     * except the deal's own uuid, which is generated.
      */
     async function outcomeOf(
       attach: (
         dealId: string,
         party: ReturnType<typeof assignmentsFor>[number],
       ) => unknown,
-    ): Promise<{ threw: boolean; deals: string[]; attached: string[] }> {
+    ): Promise<{
+      threw: boolean;
+      rejected: string | null;
+      deals: string[];
+      attached: string[];
+    }> {
       const parties = assignmentsFor(PARTIES);
       let deferred: Promise<unknown> | null = null;
       let threw = false;
@@ -359,24 +365,28 @@ describe("creating a deal with its parties is ONE write (BACKLOG-2538)", () => {
         threw = true;
       }
 
-      // Only the `async` arm reaches this with a pending rejection. It is
-      // swallowed rather than asserted so the tuple below is what fails, and
-      // so the worker does not die on an unhandled rejection before any
-      // assertion is reported.
+      // Only the `async` arm reaches this with a pending rejection. Its message
+      // is captured into the tuple rather than left pending, and read off the
+      // value's own `.message` property rather than handed to a matcher
+      // (BACKLOG-3152).
+      let rejected: string | null = null;
       try {
         await deferred;
-      } catch {
-        /* see above */
+      } catch (e) {
+        rejected = (e as Error).message;
       }
 
-      return { threw, deals: dealIds(), attached: attachedContactIds() };
+      return { threw, rejected, deals: dealIds(), attached: attachedContactIds() };
     }
 
     it("the PLAIN seam facade: its throw aborts the transaction — no deal, no parties", async () => {
       armCrashOn("c-lender");
 
+      // Nothing is left pending: the throw happens before a promise exists, so
+      // `rejected` is null rather than carrying the crash message.
       expect(await outcomeOf(assignContactToTransaction)).toEqual({
         threw: true,
+        rejected: null,
         deals: [],
         attached: [],
       });
@@ -390,12 +400,16 @@ describe("creating a deal with its parties is ONE write (BACKLOG-2538)", () => {
         party: ReturnType<typeof assignmentsFor>[number],
       ) => assignContactToTransactionSync(dealId, party);
 
-      const outcome = await outcomeOf(asyncShim);
-
-      expect(outcome.threw).toBe(false);
-      expect(outcome.deals).toHaveLength(1);
-      expect(outcome.attached).not.toEqual([]);
-      expect(outcome.attached).not.toEqual([...PARTIES].sort());
+      // The transaction returned without seeing the failure; the crash message
+      // arrives afterwards, and the four parties written before `c-lender`
+      // survive on a deal that should not exist. The exact surviving set, not
+      // a count.
+      expect(await outcomeOf(asyncShim)).toEqual({
+        threw: false,
+        rejected: expect.stringMatching(/forced crash attaching c-lender/),
+        deals: [expect.any(String)],
+        attached: ["c-buyer", "c-escrow", "c-inspector", "c-seller"],
+      });
     });
   });
 });
