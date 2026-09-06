@@ -79,3 +79,18 @@ test-results/
 # Python bytecode (QA seeder tooling, BACKLOG-1851)
 __pycache__/
 *.pyc
+
+# Supabase local/NAS test stack (BACKLOG-3114)
+# baseline-*.sql is a pg_dump of production's schema. This repo is PUBLIC and the
+# file is one `git add .` from exposure; it lives at ~/.keepr/db-baseline/ instead.
+# `baseline*.sql` covers BOTH the dated name and the plain `supabase/baseline.sql`
+# that an earlier instruction on BACKLOG-3114 told the founder to dump to; the
+# `*.sql` line is the net for any other name (`prod-schema.sql`, ...). Nothing is
+# tracked at this depth -- every committed .sql lives under migrations/, seed/ or
+# tests/ -- so this ignores dumps without hiding anything real.
+supabase/baseline*.sql
+supabase/*.sql
+# `supabase link` writes the linked project ref and version pins here;
+# `supabase start` writes .branches/. Neither belongs in the repo.
+supabase/.temp/
+supabase/.branches/

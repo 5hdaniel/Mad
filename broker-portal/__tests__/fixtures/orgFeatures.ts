@@ -217,6 +217,16 @@ export function makeSupabaseStub(opts: StubOptions = {}) {
     if (table === 'organization_members') {
       return makeQuery({ data: opts.membership ?? null, error: null });
     }
+    // BACKLOG-3098: default to the transcribed 23 rows rather than the empty
+    // array below. Prod has 23 rows; an empty table would make every gated
+    // control hide in every test that never asked about is_built, which is a
+    // state the database is not in. Tests that want a broken or altered read
+    // pass `tables.feature_definitions` explicitly.
+    if (table === 'feature_definitions') {
+      return makeQuery(
+        opts.tables?.feature_definitions ?? { data: builtFlagRows(), error: null }
+      );
+    }
     return makeQuery(opts.tables?.[table] ?? { data: [], error: null });
   });
   return {
@@ -232,4 +242,90 @@ export function makeSupabaseStub(opts: StubOptions = {}) {
     rpc,
     from,
   };
+}
+
+// ---------------------------------------------------------------------------
+// feature_definitions rows — BACKLOG-3098
+// ---------------------------------------------------------------------------
+
+/**
+ * TRANSCRIBED, not composed.
+ *
+ * `select key, name, category, default_value from feature_definitions order by
+ * key` run over the Supabase MCP connection against prod on 2026-09-05. All 23
+ * rows, in the order returned, with nothing renamed and nothing dropped. No
+ * organization is involved — feature_definitions is global product state, so
+ * there is nothing here to redact.
+ *
+ * `is_built` is the one DERIVED field, and it is derived from the migration in
+ * this PR rather than observed: the column does not exist in prod yet. After
+ * 20260905_backlog_3098_feature_definitions_is_built.sql runs, the two keys
+ * named in its UPDATE read false and the other 21 take the column default of
+ * true. That is exactly what is written below.
+ */
+export interface FeatureDefinitionRow {
+  key: string;
+  name: string;
+  category: string;
+  default_value: string;
+  is_built: boolean;
+}
+
+const fd = (
+  key: string,
+  name: string,
+  category: string,
+  default_value: string,
+  is_built = true
+): FeatureDefinitionRow => ({ key, name, category, default_value, is_built });
+
+export const FEATURE_DEFINITION_ROWS: readonly FeatureDefinitionRow[] = [
+  fd('ai_detection', 'AI Detection', 'general', 'false'),
+  fd('broker_email_attachments', 'Broker Email Attachments', 'export', 'false'),
+  fd('broker_email_view', 'Broker Email View', 'export', 'true'),
+  fd('broker_portal_access', 'Broker Portal Access', 'access', 'false'),
+  fd('broker_submission', 'Broker Submission', 'access', 'false'),
+  fd('broker_text_attachments', 'Broker Text Attachments', 'export', 'false'),
+  fd('broker_text_view', 'Broker Text View', 'export', 'true'),
+  fd('call_log', 'Call Log Access', 'sync', 'false'),
+  fd('custom_retention', 'Custom Retention Period', 'compliance', 'false'),
+  fd('desktop_email_attachments', 'Desktop Email Attachments', 'export', 'false'),
+  fd('desktop_email_export', 'Desktop Email Export', 'export', 'false'),
+  fd('desktop_text_attachments', 'Desktop Text Attachments', 'export', 'false'),
+  fd('desktop_text_export', 'Desktop Text Export', 'export', 'false'),
+  fd('email_sync', 'Email Sync', 'sync', 'true'),
+  fd('iphone_sync', 'iPhone Sync', 'sync', 'true'),
+  fd('jit_provisioning', 'Just-in-Time Provisioning', 'access', 'false', false),
+  fd('max_seats', 'Maximum Seats', 'access', 'false'),
+  fd('max_transaction_size', 'Max Transaction Size', 'compliance', '10'),
+  fd('multi_seat', 'Multi-Seat', 'access', 'false'),
+  fd('scim_provisioning', 'SCIM Provisioning', 'access', 'false', false),
+  fd('sso_login', 'SSO Login', 'general', 'false'),
+  fd('team_management', 'Team Management', 'access', 'false'),
+  fd('voice_transcription', 'Voice Message Transcription', 'sync', 'false'),
+];
+
+/**
+ * Pre-registered counts. The fixture claims to be "all 23 rows, two of them
+ * unbuilt"; a silent edit that drops a row or flips a flag would otherwise
+ * weaken every assertion built on it without failing anything.
+ */
+export const FEATURE_DEFINITION_ROW_COUNT = 23;
+export const UNBUILT_FEATURE_ROW_COUNT = 2;
+
+/**
+ * What PostgREST returns for `.select('key, is_built')` — the projection, not
+ * the whole row. The portal asks for two columns and must be tested against two
+ * columns; handing it the full row would let a query that selected the wrong
+ * ones pass.
+ */
+export function builtFlagRows(
+  rows: readonly FeatureDefinitionRow[] = FEATURE_DEFINITION_ROWS
+): { key: string; is_built: boolean }[] {
+  return rows.map(({ key, is_built }) => ({ key, is_built }));
+}
+
+/** The same table with one key's is_built flipped. Used to prove the column drives the render. */
+export function withBuiltFlag(key: string, is_built: boolean): FeatureDefinitionRow[] {
+  return FEATURE_DEFINITION_ROWS.map((r) => (r.key === key ? { ...r, is_built } : r));
 }
