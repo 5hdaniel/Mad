@@ -12,6 +12,27 @@
  *       epic 9 add to it as they decouple modules. A module that comes off the
  *       list has regressed.
  *
+ *   R3  A module on the PORTABLE list may not value-import an Electron-CLASS
+ *       PACKAGE either — `electron-*` or `@sentry/electron**`.
+ *
+ * WHY R3 EXISTS, AND WHY IT IS SEPARATE FROM R2
+ * ---------------------------------------------
+ * BACKLOG-2961 measured the extraction closure with the compiler and defined
+ * Electron coupling as three specifiers, not one: `electron` PLUS
+ * `@sentry/electron/**` PLUS `electron-*` (`pm_comments` 4c10fdb4 §2). Of the
+ * ten closure modules that touched the platform at all, FOUR reached it only
+ * through `electron-log` and SIX only through `@sentry/electron/main` — none of
+ * which R2 can see. Until the seams PR, a module could satisfy R2 completely and
+ * still be unloadable by any non-Electron shell.
+ *
+ * It is a separate rule rather than a widening of R2 for two reasons. R2's
+ * message tells the reader to take the capability as a constructor parameter,
+ * which is the right advice for `safeStorage` and the wrong advice for a logger
+ * (the answer there is `hostLogger`). And a mutation that trips both would red
+ * two rules for one defect — this file's own convention is that one precisely
+ * named failure says more than two. `electron` belongs to R2 and to R2 alone;
+ * R3 covers the rest of the class and they do not overlap.
+ *
  * WHY AST AND NOT grep
  * --------------------
  * This item's own scope was mis-measured three times by line matching. The
@@ -66,9 +87,34 @@ const SAFE_STORAGE_HOME = "electron/capabilities/electron/";
  * that never runs that suite.
  */
 const PORTABLE = new Set([
+  // PR #2487 — decoupled from `safeStorage`.
   "electron/services/keychainGate.ts",
   "electron/services/tokenEncryptionService.ts",
+  // The seams PR (Logger + ErrorReporter + AppPaths). Each of these reached the
+  // platform ONLY through `electron-log`, `@sentry/electron/main` or a single
+  // `app.getPath("userData")`, and now takes the capability from a provider.
+  // BACKLOG-2961's instrument re-run on that branch: the closure's directly
+  // coupled set went 10 modules -> 3, and its platform-free set 81 -> 121.
+  "electron/services/logService.ts",
+  "electron/schemas/validate.ts",
+  "electron/services/db/core/dbConnection.ts",
+  "electron/services/databaseEncryptionService.ts",
+  "electron/services/db/maintenanceDbService.ts",
+  "electron/services/emailDeduplicationService.ts",
+  "electron/services/autoLinkService.ts",
 ]);
+
+/**
+ * The Electron-class PACKAGES R3 forbids a portable module to value-import.
+ *
+ * Bare `electron` is deliberately absent: it is R2's, and listing it here would
+ * red two rules for one mutation. Taken verbatim from BACKLOG-2961 §2's coupling
+ * class, minus that one specifier.
+ */
+function isElectronClassPackage(specifier) {
+  if (specifier === "electron") return false; // R2's, not R3's
+  return /^electron-/.test(specifier) || specifier.startsWith("@sentry/electron");
+}
 
 function enumerateFiles() {
   // Tracked + untracked-but-not-ignored, NUL-separated so paths with spaces survive.
@@ -220,6 +266,69 @@ function isRequireElectron(expr) {
   );
 }
 
+/**
+ * Every Electron-class PACKAGE this file imports in a way that survives to
+ * runtime, with a 1-based line.
+ *
+ * "Survives to runtime" is the whole point, and it is why this reads the same
+ * shapes `electronBindings` does rather than matching import lines: a type-only
+ * import emits no `require` and cannot couple anything, while a side-effect
+ * import (`import "electron-log";`) binds no name and couples completely.
+ * `coreLoadsWithoutElectron.test.ts` proved the first half by mutation — an
+ * unused import left that suite green.
+ */
+function electronClassPackageSites(sourceFile) {
+  const sites = [];
+  const at = (node) => sourceFile.getLineAndCharacterOfPosition(node.getStart(sourceFile)).line + 1;
+  const add = (node, specifier, form) => {
+    if (isElectronClassPackage(specifier)) sites.push({ line: at(node), specifier, form });
+  };
+
+  const visit = (node) => {
+    // import … from "pkg"  /  import "pkg"
+    if (ts.isImportDeclaration(node) && ts.isStringLiteral(node.moduleSpecifier)) {
+      const clause = node.importClause;
+      let emits;
+      if (!clause) {
+        emits = true; // side-effect import: no bindings, but the module IS loaded
+      } else if (clause.isTypeOnly) {
+        emits = false;
+      } else if (clause.name) {
+        emits = true; // default import
+      } else if (clause.namedBindings && ts.isNamespaceImport(clause.namedBindings)) {
+        emits = true;
+      } else if (clause.namedBindings) {
+        emits = clause.namedBindings.elements.some((el) => !el.isTypeOnly);
+      } else {
+        emits = false;
+      }
+      if (emits) add(node, node.moduleSpecifier.text, "import");
+    }
+
+    // import x = require("pkg")
+    if (
+      ts.isImportEqualsDeclaration(node) &&
+      ts.isExternalModuleReference(node.moduleReference) &&
+      ts.isStringLiteral(node.moduleReference.expression)
+    ) {
+      add(node, node.moduleReference.expression.text, "import =");
+    }
+
+    // require("pkg")  /  import("pkg") — bound or not, awaited or not
+    if (ts.isCallExpression(node) && node.arguments.length >= 1 && ts.isStringLiteralLike(node.arguments[0])) {
+      const isRequire = ts.isIdentifier(node.expression) && node.expression.text === "require";
+      const isDynamic = node.expression.kind === ts.SyntaxKind.ImportKeyword;
+      if (isRequire || isDynamic) {
+        add(node, node.arguments[0].text, isRequire ? 'require()' : 'import()');
+      }
+    }
+
+    ts.forEachChild(node, visit);
+  };
+  visit(sourceFile);
+  return sites;
+}
+
 /** Every place this file reaches `safeStorage` as a value, with a 1-based line. */
 function safeStorageSites(sourceFile, bindings) {
   const sites = [];
@@ -313,6 +422,21 @@ for (const rel of files) {
           `value-imports { ${reached.join(", ")} } from "electron" — this module is ` +
           "declared portable (BACKLOG-2962). Take the capability as a constructor " +
           "parameter instead of importing the platform.",
+      });
+    }
+
+    // R3 — …nor an Electron-class package
+    for (const site of electronClassPackageSites(sf)) {
+      violations.push({
+        rule: "R3",
+        file: rel,
+        line: site.line,
+        detail:
+          `${site.form} "${site.specifier}" — this module is declared portable ` +
+          "(BACKLOG-2962), and this package only runs under Electron. Use the " +
+          "matching capability instead: hostLogger for electron-log, " +
+          "hostErrorReporter for @sentry/electron. The Electron implementations " +
+          `live in ${SAFE_STORAGE_HOME}.`,
       });
     }
   }
