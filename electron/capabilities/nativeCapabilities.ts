@@ -43,6 +43,7 @@
  * @module electron/capabilities/nativeCapabilities
  */
 
+import { isLoggerInstalled } from "./loggerProvider";
 import { isSecretStoreInstalled } from "./secretStoreProvider";
 
 /**
@@ -71,13 +72,23 @@ export interface NativeCapability {
 /**
  * Every capability the Electron shell must install before the core runs.
  *
- * ONE entry today. That is not an oversight: BACKLOG-2962's own capability
- * table names four (secret storage, file export/attachments, message ingestion,
- * notifications/update) and only secret storage has shipped behind an
- * interface. SR endorsed deferring the filesystem seam — its 42 files are
- * eleven distinct concerns, not one capability. A capability joins this list
- * when it has an interface, not before; adding a name here with no installer
- * takes both guards red, by design and by planted control.
+ * A capability joins this list when it has an interface, not before; adding a
+ * name here with no installer takes both guards red, by design and by planted
+ * control.
+ *
+ * WHAT IS HERE AND WHAT IS NOT
+ * ----------------------------
+ * `secretStore` shipped in PR #2487. `logger` is the first of the five seams
+ * BACKLOG-2961's compiler measurement (`pm_comments` `4c10fdb4`) named — Logger,
+ * ErrorReporter, AppPaths, Dialog, Window — which the founder assigned to this
+ * item on 2026-09-05. That measurement is also why they arrive in this order:
+ * enumerating all 31 subsets of the five showed four of them free ZERO modules
+ * on their own, and the 34-module payoff lands only at the conjunction of
+ * Logger + ErrorReporter + AppPaths. They ship as one PR for that reason.
+ *
+ * Still absent, and still deliberately: the filesystem seam (SR endorsed
+ * deferring it — its 42 files are eleven distinct concerns, not one
+ * capability), message ingestion, and notifications/update.
  */
 export const NATIVE_CAPABILITIES: readonly NativeCapability[] = [
   {
@@ -85,6 +96,12 @@ export const NATIVE_CAPABILITIES: readonly NativeCapability[] = [
     providerModule: "electron/capabilities/secretStoreProvider",
     installFunction: "installSecretStore",
     isInstalled: isSecretStoreInstalled,
+  },
+  {
+    name: "logger",
+    providerModule: "electron/capabilities/loggerProvider",
+    installFunction: "installLogger",
+    isInstalled: isLoggerInstalled,
   },
 ];
 

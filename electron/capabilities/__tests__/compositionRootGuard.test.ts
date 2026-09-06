@@ -76,6 +76,30 @@ const REQUIRED: RequiredCall[] = [
   ...REQUIRED_COMPOSITION_ROOT_CALLS,
 ];
 
+/**
+ * `secretStore` + the runtime self-check — the pair the HAND-WRITTEN composition
+ * roots further down install.
+ *
+ * Those cases are about the guard's MATCHING SEMANTICS (a namespace import, an
+ * alias, a `require()` destructure, a same-named local function, a comment), not
+ * about registry completeness. Pinning them to one capability is what lets
+ * BACKLOG-2962's seams PR add three more entries without rewriting nine
+ * fixtures — and, more importantly, without any of them quietly becoming a test
+ * of "did I remember to paste the new install line into this fixture too".
+ *
+ * Registry completeness against the REAL composition root is asserted by the
+ * real-tree case at the top of this file, which uses the full {@link REQUIRED},
+ * and by the per-capability deletion case below.
+ */
+const SECRET_STORE_ONLY: RequiredCall[] = [
+  ...NATIVE_CAPABILITIES.filter((c) => c.name === "secretStore").map((c) => ({
+    name: c.name,
+    providerModule: c.providerModule,
+    installFunction: c.installFunction,
+  })),
+  ...REQUIRED_COMPOSITION_ROOT_CALLS,
+];
+
 const REAL_ENTRY_SOURCE = readRepo(SHELL_ENTRY);
 const REAL_ROOT_SOURCE = readRepo(`${COMPOSITION_ROOT}.ts`);
 
@@ -151,16 +175,26 @@ describe("composition-root guard: the real tree (BACKLOG-2962)", () => {
     // refactor empties NATIVE_CAPABILITIES, every C1 case in this file becomes
     // a no-op and the suite would still be green. This is that trip-wire.
     expect(NATIVE_CAPABILITIES.length).toBeGreaterThan(0);
-    expect(REQUIRED.map((r) => r.name)).toEqual(["secretStore", "the runtime self-check"]);
+    expect(REQUIRED.map((r) => r.name)).toEqual([
+      "secretStore",
+      "logger",
+      "the runtime self-check",
+    ]);
   });
 
   it("names the capabilities it is actually checking", () => {
     // Enumerated, not counted — a count cannot tell a renamed capability from a
-    // deleted one.
-    expect(NATIVE_CAPABILITIES.map((c) => c.name)).toEqual(["secretStore"]);
-    expect(NATIVE_CAPABILITIES.map((c) => c.installFunction)).toEqual(["installSecretStore"]);
+    // deleted one. BACKLOG-2962's seams PR adds to this list; the list is
+    // updated here rather than loosened to a length check, because the whole
+    // value of the case is that a silently DROPPED capability reds it.
+    expect(NATIVE_CAPABILITIES.map((c) => c.name)).toEqual(["secretStore", "logger"]);
+    expect(NATIVE_CAPABILITIES.map((c) => c.installFunction)).toEqual([
+      "installSecretStore",
+      "installLogger",
+    ]);
     expect(NATIVE_CAPABILITIES.map((c) => c.providerModule)).toEqual([
       "electron/capabilities/secretStoreProvider",
+      "electron/capabilities/loggerProvider",
     ]);
   });
 
@@ -339,14 +373,30 @@ describe("composition-root guard: must fire", () => {
     expect(findings[0].detail).toContain("statement 2 rather than the first");
   });
 
-  it("C1 — the install call is deleted from the composition root, and secretStore is named", () => {
-    const findings = check({
-      compositionRootSource: REAL_ROOT_SOURCE.split("\n")
-        .filter((l) => !l.trimStart().startsWith("installSecretStore("))
-        .join("\n"),
-    });
-    expect(subjects(findings)).toEqual(["secretStore"]);
-    expect(findings[0].rule).toBe("C1");
+  // Data-driven over the REGISTRY, not written per capability. BACKLOG-2962's
+  // seams PR added three entries after this case was written for one, and a
+  // hand-listed version would have grown a coverage hole every time the list
+  // did — silently, because a missing case cannot fail.
+  it.each(NATIVE_CAPABILITIES.map((c) => [c.name, c.installFunction]))(
+    "C1 — deleting %s's install call from the REAL composition root names it, and ONLY it",
+    (name, installFunction) => {
+      const findings = check({
+        compositionRootSource: REAL_ROOT_SOURCE.split("\n")
+          .filter((l) => !l.trimStart().startsWith(`${installFunction}(`))
+          .join("\n"),
+      });
+      expect(subjects(findings)).toEqual([name]);
+      expect(findings[0].rule).toBe("C1");
+    },
+  );
+
+  it("that deletion case is not vacuous: every install call it removes is really in the file", () => {
+    // If an `installFunction` were misspelled in the registry, the filter above
+    // would remove nothing, the guard would find nothing missing, and `toEqual`
+    // would red — but for a confusing reason. This says the real reason first.
+    for (const capability of NATIVE_CAPABILITIES) {
+      expect(REAL_ROOT_SOURCE).toContain(`${capability.installFunction}(`);
+    }
   });
 
   it("C1 — deleting the RUNTIME guard's own call is caught, so the guard guards its guard", () => {
@@ -368,6 +418,7 @@ describe("composition-root guard: must fire", () => {
         `installSecretStore(new ElectronSecretStore());`,
         `assertNativeCapabilitiesInstalled();`,
       ].join("\n"),
+      requiredCalls: SECRET_STORE_ONLY,
     });
     expect(subjects(findings)).toEqual(["secretStore"]);
   });
@@ -384,6 +435,7 @@ describe("composition-root guard: must fire", () => {
         `void note;`,
         `assertNativeCapabilitiesInstalled();`,
       ].join("\n"),
+      requiredCalls: SECRET_STORE_ONLY,
     });
     expect(subjects(findings)).toEqual(["secretStore"]);
   });
@@ -396,6 +448,7 @@ describe("composition-root guard: must fire", () => {
         `installSecretStore(null);`,
         `assertNativeCapabilitiesInstalled();`,
       ].join("\n"),
+      requiredCalls: SECRET_STORE_ONLY,
     });
     expect(subjects(findings)).toEqual(["secretStore"]);
   });
@@ -407,6 +460,7 @@ describe("composition-root guard: must fire", () => {
         `import { assertNativeCapabilitiesInstalled } from "../capabilities/nativeCapabilities";`,
         `assertNativeCapabilitiesInstalled();`,
       ].join("\n"),
+      requiredCalls: SECRET_STORE_ONLY,
     });
     expect(subjects(findings)).toEqual(["secretStore"]);
   });
@@ -533,6 +587,7 @@ describe("composition-root guard: must not fire", () => {
           `installSecretStore(new ElectronSecretStore());`,
           `assertNativeCapabilitiesInstalled();`,
         ].join("\n"),
+        requiredCalls: SECRET_STORE_ONLY,
         requiredEntryImports: APP_DATA_IMPORT,
       }),
     ).toEqual([]);
@@ -570,6 +625,7 @@ describe("composition-root guard: must not fire", () => {
           `provider.installSecretStore(new ElectronSecretStore());`,
           `caps.assertNativeCapabilitiesInstalled();`,
         ].join("\n"),
+        requiredCalls: SECRET_STORE_ONLY,
       }),
     ).toEqual([]);
   });
@@ -584,6 +640,7 @@ describe("composition-root guard: must not fire", () => {
           `install(new ElectronSecretStore());`,
           `verify();`,
         ].join("\n"),
+        requiredCalls: SECRET_STORE_ONLY,
       }),
     ).toEqual([]);
   });
@@ -597,6 +654,7 @@ describe("composition-root guard: must not fire", () => {
           `installSecretStore({});`,
           `caps.assertNativeCapabilitiesInstalled();`,
         ].join("\n"),
+        requiredCalls: SECRET_STORE_ONLY,
       }),
     ).toEqual([]);
   });
@@ -614,6 +672,7 @@ describe("composition-root guard: must not fire", () => {
           `try { installSecretStore(new ElectronSecretStore()); } catch { /* */ }`,
           `assertNativeCapabilitiesInstalled();`,
         ].join("\n"),
+        requiredCalls: SECRET_STORE_ONLY,
       }),
     ).toEqual([]);
   });

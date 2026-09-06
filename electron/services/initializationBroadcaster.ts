@@ -9,7 +9,7 @@
  */
 
 import { BrowserWindow } from "electron";
-import log from "electron-log";
+import { hostLogger } from "../capabilities/loggerProvider";
 import * as Sentry from "@sentry/electron/main";
 
 // ============================================
@@ -143,7 +143,7 @@ class InitializationBroadcaster {
     };
     this.history.push(historyEntry);
 
-    log.debug(
+    hostLogger.debug(
       `[InitBroadcaster] Stage: ${event.stage}${event.message ? ` — ${event.message}` : ""}`,
     );
 
@@ -172,7 +172,7 @@ class InitializationBroadcaster {
       }
     } catch (err) {
       // Window may not be ready during early initialization — this is expected
-      log.debug(
+      hostLogger.debug(
         `[InitBroadcaster] Could not broadcast to windows: ${err instanceof Error ? err.message : String(err)}`,
       );
     }

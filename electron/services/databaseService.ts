@@ -18,7 +18,7 @@
 
 import Database from "better-sqlite3-multiple-ciphers";
 import type { Database as DatabaseType } from "better-sqlite3";
-import log from "electron-log";
+import { hostLogger } from "../capabilities/loggerProvider";
 import path from "path";
 import fs from "fs";
 import crypto from "crypto";
@@ -307,7 +307,7 @@ class DatabaseService implements IDatabaseService {
         });
 
         // Migration failed -- attempt auto-restore from pre-migration backup
-        log.error("[DatabaseService] Migration FAILED:", migrationError instanceof Error ? migrationError.message : String(migrationError));
+        hostLogger.error("[DatabaseService] Migration FAILED:", migrationError instanceof Error ? migrationError.message : String(migrationError));
         await logService.error("Migration failed, attempting auto-restore", "DatabaseService", {
           error: migrationError instanceof Error ? migrationError.message : String(migrationError),
         });
@@ -602,7 +602,7 @@ class DatabaseService implements IDatabaseService {
       } catch {
         /* ignore */
       }
-      log.warn(
+      hostLogger.warn(
         "[BaselineFence] readonly open failed — deferring to the read-write open (cannot-open is not pre-reset):",
         openError instanceof Error ? openError.message : String(openError),
       );
@@ -679,7 +679,7 @@ class DatabaseService implements IDatabaseService {
             "have upgraded it no longer exists.";
         } else {
           if (version > baseline) {
-            log.warn(
+            hostLogger.warn(
               `[BaselineFence] database schema_version ${version} is ABOVE this build's ` +
                 `baseline ${baseline} — written by a newer build; proceeding.`,
             );
@@ -688,7 +688,7 @@ class DatabaseService implements IDatabaseService {
         }
       }
     } catch (readError) {
-      log.warn(
+      hostLogger.warn(
         `[BaselineFence] could not evaluate the baseline predicate via ${via} — ` +
           "neither refusing nor accepting; the existing open/migration pipeline decides:",
         readError instanceof Error ? readError.message : String(readError),
@@ -763,10 +763,10 @@ class DatabaseService implements IDatabaseService {
         CREATE INDEX IF NOT EXISTS idx_failure_log_timestamp ON failure_log(timestamp);
         CREATE INDEX IF NOT EXISTS idx_failure_log_acknowledged ON failure_log(acknowledged);
       `);
-      log.info("[DatabaseService] failure_log table safety check passed");
+      hostLogger.info("[DatabaseService] failure_log table safety check passed");
     } catch (err) {
       // Log but do not throw -- this is a safety net, not a hard requirement
-      log.warn(
+      hostLogger.warn(
         "[DatabaseService] failure_log safety check failed:",
         err instanceof Error ? err.message : String(err)
       );
