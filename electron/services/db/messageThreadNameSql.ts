@@ -39,7 +39,7 @@ export const SELECT_MACOS_THREAD_IDS_SQL = `SELECT thread_id FROM message_thread
             WHERE user_id = ? AND thread_id LIKE 'macos-chat-%'`;
 
 /**
- * Delete a specific set of thread names.
+ * Delete a specific set of thread names — THE SYNCHRONOUS PRIMITIVE.
  *
  * Takes the VALUES and derives the `IN` width from them, so a same-length
  * different-values divergence is unrepresentable rather than merely unlikely —
@@ -49,8 +49,16 @@ export const SELECT_MACOS_THREAD_IDS_SQL = `SELECT thread_id FROM message_thread
  * An empty set is answered without touching the database: `IN ()` is valid
  * SQLite that matches nothing, so building one would delete nothing by accident
  * rather than by design.
+ *
+ * WHY THIS ONE IS THE PRIMITIVE AND `deleteThreadNamesByIds` IS THE WRAPPER
+ * (BACKLOG-2960). Its only production caller is inside the `db.transaction(...)`
+ * body that `syncMacChatThreadNames` opens
+ * (`macOSMessagesImportService/importHelpers.ts`). `better-sqlite3` commits when
+ * that callback RETURNS, so the body must stay synchronous, and so must every
+ * `db/**` call it makes. Never the reverse: a wrapper that awaits cannot be
+ * called from a body at all.
  */
-export function deleteThreadNamesByIds(
+export function deleteThreadNamesByIdsSync(
   db: DatabaseType,
   userId: string,
   threadIds: readonly string[],
@@ -63,4 +71,45 @@ export function deleteThreadNamesByIds(
               WHERE user_id = ? AND thread_id IN (${placeholders})`,
     )
     .run(userId, ...threadIds).changes;
+}
+
+/**
+ * The seam export (BACKLOG-2960): promise-returning, so a caller outside this
+ * layer is written against an interface a non-`better-sqlite3` driver could
+ * also satisfy. Every caller must `await` it —
+ *
+ *     const cleared = await deleteThreadNamesByIds(db, userId, doomed);
+ *
+ * — except a caller inside a transaction body, which must call
+ * `deleteThreadNamesByIdsSync` instead.
+ *
+ * A PLAIN function, never `async`, and the difference is not cosmetic. Measured
+ * on the real driver for this module (PR #2546, control (c); the same pair was
+ * measured on `llmSettingsDbService` in the #2544 SR review):
+ *
+ *   - plain wrapper, floated inside a synchronous `db.transaction` body after an
+ *     in-body write, throwing from the driver -> the throw propagates out of the
+ *     body synchronously and the in-body write is ROLLED BACK.
+ *   - the same probe with this function made `async` -> the transaction sees no
+ *     error and COMMITS the in-body write; the failure arrives afterwards as a
+ *     rejection.
+ *
+ * So `Promise.resolve(...)` over a synchronous primitive is the whole shape: the
+ * work, and any throw, happen before the promise exists.
+ *
+ * WHAT IS NOT PROTECTED HERE, stated because the protections differ by call
+ * site. The consuming body is a RAW `db.transaction(...)`, not `dbTransaction`,
+ * so `dbTransaction`'s conditional return type cannot see it and no compile
+ * error guards this pairing. What does guard it: `no-restricted-syntax` in
+ * `eslint.config.js` rejects an `async` body passed to any `.transaction(...)`,
+ * and `@typescript-eslint/no-floating-promises` is at zero for
+ * `electron/services/db/**`. A floated call from a caller OUTSIDE `db/**` is
+ * caught by neither (BACKLOG-3150).
+ */
+export function deleteThreadNamesByIds(
+  db: DatabaseType,
+  userId: string,
+  threadIds: readonly string[],
+): Promise<number> {
+  return Promise.resolve(deleteThreadNamesByIdsSync(db, userId, threadIds));
 }
