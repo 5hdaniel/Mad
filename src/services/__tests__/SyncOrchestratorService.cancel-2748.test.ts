@@ -244,15 +244,42 @@ describe('BACKLOG-2776 — the reported progress freezes when the user asks to c
     };
   }
 
-  const messagesProgress = () =>
-    syncOrchestrator.getState().queue.find((item) => item.type === 'messages')?.progress;
+  const messagesItem = () =>
+    syncOrchestrator.getState().queue.find((item) => item.type === 'messages');
 
-  const emit = async (phase: string, percent: number) => {
-    progressHandler?.({ phase, percent });
+  /**
+   * BACKLOG-3128: what this suite watches freeze changed, because what the
+   * messages sync REPORTS changed.
+   *
+   * These two tests used to read `.progress` — the composite percentage the
+   * orchestrator synthesised by giving each phase an equal third of the bar.
+   * That number is gone: the phases do not take equal time, so it described the
+   * phase list rather than the work, and a value that is not known must not
+   * render as known (BACKLOG-2886). `progress` is now pinned at 0 for this
+   * source, which would make "did it advance?" trivially false for a reason
+   * unrelated to cancelling.
+   *
+   * The BACKLOG-2776 requirement is unchanged and still pinned here: once the
+   * user has asked to cancel, the orchestrator stops applying the run's
+   * continuing reports to the queue item. Only the observable moved — from the
+   * percentage to the phase and its counts, which are what the item carries now.
+   */
+  const messagesPhase = () => messagesItem()?.phase;
+  const messagesCounts = () => {
+    const item = messagesItem();
+    return { current: item?.current, total: item?.total };
+  };
+
+  const emit = async (
+    phase: string,
+    percent: number,
+    counts?: { current: number; total: number }
+  ) => {
+    progressHandler?.({ phase, percent, ...counts });
     await new Promise((resolve) => setTimeout(resolve, 0));
   };
 
-  it('stops advancing the percentage after markCancelRequested', async () => {
+  it('stops advancing the reported phase and counts after markCancelRequested', async () => {
     // The founder watched the percentage climb 34% -> 35% through a cancel he
     // had already pressed twice, while the service was inside an
     // uninterruptible 35-second delete. The work genuinely continues until the
@@ -260,37 +287,40 @@ describe('BACKLOG-2776 — the reported progress freezes when the user asks to c
     // ignored.
     const { finish } = await startPausedRun();
 
-    await emit('deleting', 34);
-    const atCancel = messagesProgress();
-    expect(atCancel).toBeGreaterThan(0);
+    await emit('deleting', 34, { current: 34, total: 100 });
+    const atCancel = messagesPhase();
+    const countsAtCancel = messagesCounts();
+    expect(atCancel).toBe('deleting');
+    expect(countsAtCancel.current).toBe(34);
 
     syncOrchestrator.markCancelRequested('messages');
-    expect(
-      syncOrchestrator.getState().queue.find((item) => item.type === 'messages')?.cancelRequested
-    ).toBe(true);
+    expect(messagesItem()?.cancelRequested).toBe(true);
 
     // The import keeps running and keeps reporting. The UI must not.
-    await emit('deleting', 99);
-    await emit('importing', 50);
+    await emit('deleting', 99, { current: 99, total: 100 });
+    await emit('importing', 50, { current: 50, total: 100 });
 
-    expect(messagesProgress()).toBe(atCancel);
+    expect(messagesPhase()).toBe(atCancel);
+    expect(messagesCounts()).toEqual(countsAtCancel);
 
     await finish();
   });
 
-  it('CONTROL: without the cancel the same events DO advance the percentage', async () => {
-    // The distinguishing input: if progress had simply stopped flowing — a
+  it('CONTROL: without the cancel the same events DO advance the report', async () => {
+    // The distinguishing input: if reports had simply stopped flowing — a
     // detached listener, a dropped event shape — the test above would be green
     // for a reason that has nothing to do with cancelling.
     const { finish } = await startPausedRun();
 
-    await emit('deleting', 34);
-    const first = messagesProgress();
+    await emit('deleting', 34, { current: 34, total: 100 });
+    const firstPhase = messagesPhase();
+    const firstCounts = messagesCounts();
 
-    await emit('deleting', 99);
-    await emit('importing', 50);
+    await emit('deleting', 99, { current: 99, total: 100 });
+    await emit('importing', 50, { current: 50, total: 100 });
 
-    expect(messagesProgress()).not.toBe(first);
+    expect(messagesPhase()).not.toBe(firstPhase);
+    expect(messagesCounts()).not.toEqual(firstCounts);
 
     await finish();
   });
