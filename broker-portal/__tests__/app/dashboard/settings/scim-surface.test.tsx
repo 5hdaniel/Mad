@@ -92,10 +92,15 @@ describe('Settings page — SCIM card', () => {
     expect(screen.queryByText(CARD_TEXT)).not.toBeInTheDocument();
   });
 
-  it('does NOT gray the card — an unbuilt feature is absent, never upsold', async () => {
-    // If SCIM ever fell out of UNBUILT_FEATURES the page gate would hand this
-    // component 'grayed', and a grayed card would advertise a purchase for an
-    // endpoint that returns 404. Rendering nothing is the only safe answer.
+  it('renders a grayed card, because the decision is not this component\'s', async () => {
+    // Handed 'grayed', this component renders. That is deliberate: whether SCIM
+    // may ever be grayed is decided upstream, from
+    // feature_definitions.is_built (BACKLOG-3098) — while that column reads
+    // false the page gate produces 'hidden' and this input never occurs, and
+    // the day SCIM ships it flips to true and a grayed card becomes the honest
+    // render. Pinning it here proves the component holds no per-key opinion of
+    // its own; org-settings-gate.test.tsx proves the gate produces the right
+    // input.
     render(<OrgSettingsClient features={view('grayed')} />);
     await screen.findByText(SETTLED_MARKER);
     expect(screen.queryByText(CARD_TEXT)).toBeInTheDocument();
