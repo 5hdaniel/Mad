@@ -38,6 +38,7 @@ import {
   TransactionFrozenError,
   FROZEN_IDENTITY_FIELDS,
 } from "../transactionFreezePolicy";
+import { TransactionStatusSchema } from "../../schemas/transaction";
 import { assignmentList, columnList } from "./core/columnSql";
 import { placeholderList } from "./core/sqlFragments";
 import { joinFragments } from "./core/sqlFragments";
@@ -512,14 +513,26 @@ function bindValue(
 
 /**
  * Valid transaction status values.
- * These are the only values allowed in the database.
+ *
+ * DERIVED, not restated (BACKLOG-2755). This used to be a hand-written array,
+ * and it was one of four copies of the same domain on the transaction path —
+ * the others being two lists in `utils/validation.ts` and a literal in the
+ * bulk-status IPC handler, which had drifted from the column's CHECK in both
+ * directions. `TransactionStatusSchema` is pinned to that CHECK, as exact
+ * sets in both directions, by `schemas/__tests__/transactionSchemaParity.test.ts`,
+ * which reads the domain out of a real migrated database.
+ *
+ * The `readonly TransactionStatus[]` annotation is kept deliberately: it is a
+ * one-direction compile check that the schema's members are all members of the
+ * union in `types/models.ts`. Nothing checks the reverse, which is why that
+ * union is named as a remaining copy in BACKLOG-3180.
+ *
+ * The order is the schema's declaration order and matches the CHECK, so the
+ * order-sensitive assertion in `__tests__/transactionDbService.test.ts` still
+ * describes the same list.
  */
-export const VALID_TRANSACTION_STATUSES: readonly TransactionStatus[] = [
-  "pending",
-  "active",
-  "closed",
-  "rejected",
-] as const;
+export const VALID_TRANSACTION_STATUSES: readonly TransactionStatus[] =
+  TransactionStatusSchema.options;
 
 /**
  * Validate and return a transaction status value.
