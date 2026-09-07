@@ -74,7 +74,24 @@ interface AllowedEvolution {
   ref: string;
 }
 
-const ALLOWED_EVOLUTION: AllowedEvolution[] = [];
+const ALLOWED_EVOLUTION: AllowedEvolution[] = [
+  {
+    key: "COLUMN:attachments.provider_attachment_id",
+    what: "New nullable TEXT column on `attachments`.",
+    why:
+      "BACKLOG-2551: the provider's own attachment id, so a re-sync can identify " +
+      "THIS attachment rather than guessing by filename. Two attachments in one " +
+      "email may legitimately share a filename (image001.png across Outlook " +
+      "signature chains), so filename cannot be an identity key. Migration v71 " +
+      "adds the same column to existing databases and creates the partial unique " +
+      "index; the index is deliberately NOT in schema.sql (a standalone CREATE " +
+      "INDEX naming this column aborts schema.sql's unconditional exec on every " +
+      "pre-v71 database). NOTE: the 2839 CHECK on message_thread_names.display_name " +
+      "produces NO divergence key -- schemaFingerprint reads tables via PRAGMA " +
+      "table_info, which cannot see CHECK. A green run here is not evidence for it.",
+    ref: "BACKLOG-2551",
+  },
+];
 
 const ALLOWED_KEYS = new Set(ALLOWED_EVOLUTION.map((d) => d.key));
 
