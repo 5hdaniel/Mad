@@ -98,9 +98,37 @@ function ContactFormModal({
 
   const hasEmailEntries = (formData.emails || []).some(e => e.email.trim());
   const hasPhoneEntries = (formData.phones || []).some(p => p.phone.trim());
-  const hasContactInfo = hasEmailEntries || hasPhoneEntries;
 
-  const showMissingInfoWarning = isExternalContact && !hasContactInfo;
+  /**
+   * =========================================================================
+   * BACKLOG-2707 — THE "MISSING CONTACT INFORMATION" BANNER IS DELETED
+   * =========================================================================
+   * It read `isExternalContact && !hasContactInfo` and rendered an amber
+   * "Please add an email address or phone number to import this contact".
+   *
+   * IT IS UNREACHABLE AFTER THIS ITEM. It only ever showed for an EXTERNAL
+   * record, and the two ways one could reach this form are both closed:
+   * `Contacts.tsx` no longer diverts an incomplete record here, and
+   * `ContactPreview` renders its Edit arm only when `isExternal` is false — so
+   * the pane for an external record offers no Edit button at all. Enumerated
+   * across all four non-test mounts and driven, not read.
+   *
+   * AND IT CARRIED A CONTRADICTION THIS PR WOULD HAVE INTRODUCED. Rendered
+   * directly with an external company-only record, measured at both SHAs:
+   *
+   *   base   banner shown = true   Save disabled = true    (consistent)
+   *   head   banner shown = true   Save disabled = false   (banner demands an
+   *                                email or phone; Save works anyway)
+   *
+   * Two surfaces disagreeing about whether the same record is acceptable — the
+   * exact shape this item exists to remove, in the very destination the
+   * deleted diversion used to land in. It also said "to import this contact"
+   * on a form that creates.
+   *
+   * Deleted rather than reworded because there is no reachable record for a
+   * reworded version to speak to. If an external record is ever routed here
+   * again, it needs an affordance written for that flow, not this one revived.
+   */
 
   /**
    * =========================================================================
@@ -351,14 +379,6 @@ function ContactFormModal({
         {/* Form (scrollable) */}
         <div className="p-3 sm:p-6 space-y-4 overflow-y-auto flex-1">
           {/* Missing contact info warning */}
-          {showMissingInfoWarning && (
-            <div className="p-3 bg-amber-50 border border-amber-200 rounded-lg">
-              <p className="text-sm text-amber-800">
-                <span className="font-medium">Missing contact information:</span> Please add an email address or phone number to import this contact.
-              </p>
-            </div>
-          )}
-
           {/* Name */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">

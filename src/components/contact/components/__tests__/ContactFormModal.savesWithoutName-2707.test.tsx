@@ -117,6 +117,77 @@ describe("the Add Contact form saves what the handler accepts (BACKLOG-2707)", (
   });
 
   /**
+   * =========================================================================
+   * EDIT MODE — CLEARING A NAME NOW SAVES. STATED, BECAUSE IT IS A WIDENING.
+   * =========================================================================
+   * `handleSave`'s old `if (!formData.name.trim())` served Add AND Edit, so
+   * relaxing it changed both. SR measured the difference at the two SHAs:
+   *
+   *   base   Save disabled = true   (refused, as it always had)
+   *   head   Save disabled = false  -> update called with name: ""
+   *
+   * It is CONSISTENT — `contacts:update` never required a name, and the
+   * NOT NULL column is safe because the validator resolves every spelling of
+   * "no name" to `""` rather than `null`. It is also a behaviour change on a
+   * surface no ruling named and no test pinned, and this item is the standing
+   * proof of what an unstated renderer rule costs in either direction.
+   *
+   * Pinned here so it is a decision. If it should be stricter on Edit than on
+   * Add, that is PM's call to make explicitly — and this test is what goes red.
+   */
+  it("clearing the Name on an EXISTING contact saves, with an empty name", async () => {
+    const updateMock = jest.mocked((window as any).api.contacts.update);
+    updateMock.mockResolvedValue({ success: true });
+
+    render(
+      <ContactFormModal
+        userId="user-2707"
+        contact={
+          {
+            id: "c-existing",
+            name: "Dana Whitlock",
+            display_name: "Dana Whitlock",
+            phone: "+14155550142",
+          } as any
+        }
+        onClose={jest.fn()}
+        onSuccess={jest.fn()}
+      />,
+    );
+
+    const nameBox = await screen.findByDisplayValue("Dana Whitlock");
+    await userEvent.clear(nameBox);
+
+    // The contact still has a phone, so `hasNothingToSave` is false and Save
+    // stays live — the record is not being emptied, only unnamed.
+    expect(saveButton()).toBeEnabled();
+    await userEvent.click(saveButton());
+
+    await waitFor(() => expect(updateMock).toHaveBeenCalled());
+    expect(updateMock.mock.calls[0][1].name).toBe("");
+  });
+
+  /**
+   * The other half of the same surface: emptying an existing contact entirely
+   * is still refused. Relaxing the name rule must not become "anything goes"
+   * on Edit any more than it did on Add.
+   */
+  it("but emptying an existing contact completely is still refused", async () => {
+    render(
+      <ContactFormModal
+        userId="user-2707"
+        contact={{ id: "c-bare", name: "Dana Whitlock", display_name: "Dana Whitlock" } as any}
+        onClose={jest.fn()}
+        onSuccess={jest.fn()}
+      />,
+    );
+
+    await userEvent.clear(await screen.findByDisplayValue("Dana Whitlock"));
+
+    expect(saveButton()).toBeDisabled();
+  });
+
+  /**
    * The affordance has to agree with the rule. A red asterisk on Name claimed a
    * requirement the form no longer enforces and `contacts:create` never had —
    * the same defect as a disabled button stating an untrue reason, which is
