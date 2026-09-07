@@ -124,9 +124,10 @@ describe("database time is non-zero and bounded by the span", () => {
     // cancels. The previous form asserted `dbMs >= wallMs * 0.5` — a claim about
     // how much of a span this HOST spends inside SQLite rather than in the JS
     // loop, jest instrumentation and the OS scheduler. It measured 37% on a
-    // shared Windows runner and reds every PR into int; it also measures
-    // 0.416-0.507 on the founder's own idle machine, so it never had margin
-    // anywhere.
+    // shared Windows runner and reds every PR into int. On an idle M-series Mac
+    // the same loop measures 0.658-0.773 over eight trials: it passes there, but
+    // on 1.3-1.5x margin against a threshold that has nothing to do with the
+    // code under test.
     //
     // Comparing the two TOTALS does not work either, and the reason is worth
     // recording so it is not reintroduced: a `Date.now()` accumulator charges a
