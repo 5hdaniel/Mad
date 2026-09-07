@@ -1180,7 +1180,15 @@ class TransactionService {
         started_at,
         closed_at,
         closing_deadline,
-        closing_date_verified: property_coordinates ? true : false,
+        // BACKLOG-2756: `false`, not `property_coordinates ? true : false`.
+        // Coordinates are a fact about the ADDRESS. This column means "a person
+        // confirmed the closing date", and the only thing that legitimately
+        // sets it is the export flow (ExportModal's `handleExport`), where the
+        // user is shown the dates and confirms them. Nothing has been confirmed
+        // at create time, so this states the same fact as the other creating
+        // paths. Stated rather than omitted: the value is a fact about this
+        // deal, not an absence.
+        closing_date_verified: false,
         export_status: "not_exported",
         export_count: 0,
         communications_scanned: 0,
