@@ -681,10 +681,23 @@ class DatabaseService implements IDatabaseService {
             `schema baseline (version ${baseline}). The migration chain that could ` +
             "have upgraded it no longer exists.";
         } else {
-          if (version > baseline) {
+          // BACKLOG-2551: compare against the LATEST version this build ships, not
+          // the baseline. The two were the same only while MIGRATIONS was empty.
+          // Once v71 ships, every database sits at 71 with the baseline still 70,
+          // so a `version > baseline` test would fire on EVERY launch for EVERY
+          // user and say something untrue ("written by a newer build") — polluting
+          // the exact support diagnostics this line exists to serve.
+          //
+          // The REFUSAL predicate above (`version < baseline`) is deliberately
+          // untouched: that is the load-bearing half, and it must keep refusing
+          // pre-reset databases. This changes only when the warning speaks, making
+          // the predicate four-way: below baseline refuse, baseline..latest silent,
+          // above latest warn. That is what the warning always meant.
+          const latest = this.getLatestSchemaVersion();
+          if (version > latest) {
             hostLogger.warn(
               `[BaselineFence] database schema_version ${version} is ABOVE this build's ` +
-                `baseline ${baseline} — written by a newer build; proceeding.`,
+                `latest schema version ${latest} — written by a newer build; proceeding.`,
             );
           }
           return;
