@@ -34,7 +34,10 @@ import logService from "../services/logService";
 import * as externalContactDb from "../services/db/externalContactDbService";
 import type { ExternalContactSource } from "../services/db/externalContactDbService";
 import { recordPicker, recordLinks } from "../services/contactIngestionFunnel";
-import { toPersistedContactSource } from "../utils/contactSourceVocabulary";
+import {
+  toPersistedContactSource,
+  toStorableContactSource,
+} from "../utils/contactSourceVocabulary";
 import {
   cancelPendingContactLinking,
   configureContactLinking,
@@ -1960,13 +1963,54 @@ export function registerContactHandlers(mainWindow: BrowserWindow): void {
           const validatedData = validateContactData(sanitizedContact, false);
           const sourceIdentities = toSourceIdentities(sanitizedContact);
 
+          /**
+           * BACKLOG-2481 — THE DOOR BOTH LIVE SCREENS USE, AND THE ONE THAT
+           * COULD NOT STORE A PERSON FROM A TEXT THREAD.
+           *
+           * This handler had no allow-list at all. `source` went straight into
+           * the insert, so a message-derived record — which carries
+           * `source: "messages"`, a SELECT-time label the `contacts.source`
+           * CHECK has never admitted — took the whole call down with it: no
+           * contact row, no origin link, nothing saved.
+           *
+           * DECIDED ONCE, HERE, rather than at each of the two writes below, so
+           * the create branch and the `markContactAsImported` branch cannot
+           * disagree about the same record.
+           *
+           * `null` means the value is neither storable nor a synthetic one this
+           * vocabulary knows how to place. THAT IS REFUSED, NOT DEFAULTED, and
+           * the refusal is deliberate: on this door an unrecognised string is
+           * refused TODAY (measured — it reaches the CHECK and the batch fails),
+           * and defaulting it to `contacts_app` would silently start claiming
+           * that every unknown record came out of the macOS address book. The
+           * outcome is unchanged; only the message improves — a stated reason
+           * instead of a raw SQLite constraint error.
+           *
+           * REFUSES THE WHOLE BATCH, like every other refusal in this loop. See
+           * the note above `importRefusalReason`.
+           */
+          const storableSource = toStorableContactSource(
+            sanitizedContact.source,
+            "contacts_app",
+          );
+          if (storableSource === null) {
+            throw new ValidationError(
+              `Record ${index + 1}: "${sanitizedContact.source}" is not a contact source this app can store`,
+              "contactsToImport",
+            );
+          }
+
           if (
             sanitizedContact.isFromDatabase &&
             sanitizedContact.id &&
             !sanitizedContact.id.startsWith("contacts-app-")
           ) {
             logService.warn(`[DIAG-1270] Import path: ${sanitizedContact.name || validatedData.name} → existingDB, allEmails=[${(sanitizedContact.allEmails || []).join(', ')}]`, 'Contacts');
-            existingDbContacts.push({ id: sanitizedContact.id, contact: sanitizedContact });
+            existingDbContacts.push({
+              id: sanitizedContact.id,
+              contact: sanitizedContact,
+              source: storableSource,
+            });
           } else {
             logService.warn(`[DIAG-1270] Import path: ${sanitizedContact.name || validatedData.name} → newCreate, allEmails=[${(sanitizedContact.allEmails || []).join(', ')}]`, 'Contacts');
             newContactsToCreate.push({
@@ -1990,7 +2034,8 @@ export function registerContactHandlers(mainWindow: BrowserWindow): void {
               phone: validatedData.phone ?? undefined,
               company: validatedData.company ?? undefined,
               title: validatedData.title ?? undefined,
-              source: sanitizedContact.source || "contacts_app",
+              // BACKLOG-2481: the value decided above, not the raw input.
+              source: storableSource,
               is_imported: true,
               allPhones: sanitizedContact.allPhones || [],
               allEmails: sanitizedContact.allEmails || [],
@@ -2003,9 +2048,22 @@ export function registerContactHandlers(mainWindow: BrowserWindow): void {
 
         // Mark existing DB contacts as imported and backfill any missing emails/phones
         // Also update source to "contacts_app" when importing from macOS Contacts
-        for (const { id, contact } of existingDbContacts) {
+        for (const { id, contact, source: storedSource } of existingDbContacts) {
           logService.warn(`[DIAG-1270] DB contact backfill: ${contact.name}, contact.allEmails=[${(contact.allEmails || []).join(', ')}], contact.allPhones=[${(contact.allPhones || []).join(', ')}]`, 'Contacts');
-          await databaseService.markContactAsImported(id, contact.source || "contacts_app");
+          /**
+           * BACKLOG-2481 — the THIRD write of `contacts.source`, and the third
+           * that could hit the CHECK. This is an `UPDATE contacts SET source = ?`
+           * (`contactDbService.markContactAsImported`), so a raw `messages` here
+           * would throw exactly as the insert did.
+           *
+           * It takes the value decided in the loop above rather than re-reading
+           * `contact.source`, so there is no second rule to drift. It is not
+           * reachable by a message-derived record today — that path needs
+           * `isFromDatabase`, which the pseudo-contact does not carry — and it is
+           * changed anyway, because a value no door may store should not be
+           * storable through a door nobody is currently looking at.
+           */
+          await databaseService.markContactAsImported(id, storedSource);
 
           // BACKLOG-2401 / BACKLOG-2458: record WHERE this contact came from, at
           // the one moment the answer is known for certain, for EVERY source
@@ -2538,14 +2596,28 @@ export function registerContactHandlers(mainWindow: BrowserWindow): void {
          * required argument and writes it in the same transaction.
          */
 
-        // Extract source from input data (falls back to "manual" if not provided)
-        // BACKLOG-1900 (P0.1): allow distinct per-origin sources so an inbound
-        // 'iphone'/'outlook'/'android_sync' value is preserved, not coerced to "manual".
-        const validSources: ContactSource[] = ["manual", "email", "sms", "messages", "contacts_app", "inferred", "google_contacts", "outlook", "android_sync", "iphone"];
+        /**
+         * Extract source from input data.
+         *
+         * BACKLOG-1900 (P0.1): allow distinct per-origin sources so an inbound
+         * 'iphone'/'outlook'/'android_sync' value is preserved, not coerced to
+         * "manual".
+         *
+         * BACKLOG-2481 — THE ALLOW-LIST THAT USED TO BE HERE ADMITTED A VALUE
+         * THE DATABASE REFUSES. It was a hand-copied second enumeration of the
+         * vocabulary, and it had drifted: it listed `messages`, which is a
+         * SELECT-time label and has never been in the `contacts.source` CHECK.
+         * So a contact whose source was `messages` did not arrive mislabelled —
+         * `createContact` threw on the CHECK and NO CONTACT WAS CREATED.
+         *
+         * `toStorableContactSource` is that enumeration's only copy now, beside
+         * the constant it is derived from. `null` back means "not storable"; on
+         * THIS door that folds to `manual`, which is exactly what the old
+         * allow-list did with an unrecognised value, so nothing else changes.
+         */
         const inputSource = (contactData as { source?: string })?.source;
-        const source: ContactSource = validSources.includes(inputSource as ContactSource)
-          ? (inputSource as ContactSource)
-          : "manual";
+        const source: ContactSource =
+          toStorableContactSource(inputSource, "manual") ?? "manual";
         const contact = await databaseService.createContact(
           {
             user_id: validatedUserId,
