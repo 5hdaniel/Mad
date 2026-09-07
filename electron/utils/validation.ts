@@ -4,6 +4,62 @@
  * Prevents injection attacks, type errors, and invalid data processing
  */
 
+import type { z } from "zod/v4";
+
+import {
+  TransactionTypeSchema,
+  TransactionStatusSchema,
+} from "../schemas/transaction";
+
+/**
+ * The transaction value domains, DERIVED — not restated.
+ *
+ * ===========================================================================
+ * BACKLOG-2755 — THE VALIDATOR AND THE DATABASE HAD DIFFERENT IDEAS OF LEGAL
+ * ===========================================================================
+ * These two enums used to be hand-written arrays here, and they had drifted
+ * from the `transactions` CHECK constraints in BOTH directions. Measured on
+ * develop before this change:
+ *
+ *   - the validator ACCEPTED `lease`, `refinance` and `cancelled`, which the
+ *     CHECK rejects — so a payload passed validation and then died at the
+ *     database with a raw constraint error instead of a clean message;
+ *   - the validator REJECTED `status: "rejected"`, which the CHECK accepts —
+ *     blocking a legal state transition outright.
+ *
+ * The fix is not "correct the arrays". It is to stop having arrays. These
+ * types and the runtime sets below both come from `schemas/transaction.ts`,
+ * whose enums are pinned to the column's real CHECK list, as exact SETS in
+ * both directions, by `schemas/__tests__/transactionSchemaParity.test.ts`
+ * (`declares enum members that equal the column's CHECK list, as SETS`) —
+ * which reads the domains out of a REAL migrated database, not out of
+ * `schema.sql`. Change the CHECK and that test goes red until the schema
+ * follows; change the schema and every consumer here follows automatically.
+ *
+ * The types come from the SCHEMA, deliberately, and not from the equivalent
+ * unions in `types/models.ts`. Those unions are a separate hand-written copy
+ * of the same domain (BACKLOG-3180 territory); typing the guards from them
+ * would let the declared type and the runtime set drift apart, which is the
+ * defect this item exists to remove.
+ */
+type TransactionTypeValue = z.infer<typeof TransactionTypeSchema>;
+type TransactionStatusValue = z.infer<typeof TransactionStatusSchema>;
+
+/**
+ * `Array.prototype.includes` on a `readonly ["purchase", "sale", "other"]`
+ * tuple rejects a plain `string` argument, so the widening cast lives here,
+ * once, instead of at each call site.
+ */
+function isTransactionType(value: string): value is TransactionTypeValue {
+  return (TransactionTypeSchema.options as readonly string[]).includes(value);
+}
+
+export function isTransactionStatus(
+  value: string,
+): value is TransactionStatusValue {
+  return (TransactionStatusSchema.options as readonly string[]).includes(value);
+}
+
 /**
  * Validation error class
  */
@@ -458,8 +514,8 @@ export interface ValidatedTransactionData {
   property_state?: string | null;
   property_zip?: string | null;
   property_coordinates?: string | null;
-  transaction_type?: string;
-  status?: string;
+  transaction_type?: TransactionTypeValue;
+  status?: TransactionStatusValue;
   sale_price?: number;
   listing_price?: number;
   closing_date_verified?: number;
@@ -588,16 +644,15 @@ export function validateTransactionData(
     }
   }
 
-  // Transaction type
+  // Transaction type — domain derived, see TransactionTypeValue above.
   if (data.transaction_type !== undefined) {
-    const validTypes = ["purchase", "sale", "lease", "refinance", "other"];
     const type =
       typeof data.transaction_type === "string"
         ? data.transaction_type.toLowerCase()
         : "";
-    if (!validTypes.includes(type)) {
+    if (!isTransactionType(type)) {
       throw new ValidationError(
-        `Transaction type must be one of: ${validTypes.join(", ")}`,
+        `Transaction type must be one of: ${TransactionTypeSchema.options.join(", ")}`,
         "transaction_type",
       );
     }
@@ -620,14 +675,13 @@ export function validateTransactionData(
     }
   }
 
-  // Status
+  // Status — domain derived, see TransactionStatusValue above.
   if (data.status !== undefined) {
-    const validStatuses = ["active", "pending", "closed", "cancelled"];
     const status =
       typeof data.status === "string" ? data.status.toLowerCase() : "";
-    if (!validStatuses.includes(status)) {
+    if (!isTransactionStatus(status)) {
       throw new ValidationError(
-        `Status must be one of: ${validStatuses.join(", ")}`,
+        `Status must be one of: ${TransactionStatusSchema.options.join(", ")}`,
         "status",
       );
     }
