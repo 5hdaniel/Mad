@@ -225,21 +225,12 @@ export function AndroidMessagesSettings({ userId }: AndroidMessagesSettingsProps
        The anchor id stays on the root so the Contacts screen's "Go to Android
        Companion re-import" still scrolls to the whole panel. */
     <div id="settings-android-companion" className="space-y-4">
-      {/* Panel identity — which of the two mutually exclusive Messages panels
-          is on screen. Not a block eyebrow; it sits on the page, above them. */}
+      {/* BACKLOG-3156 stage E: THE PANEL IDENTITY HEADER IS GONE — the icon and
+          `<h4>Android Companion</h4>`. Emails and Contacts carry no such header
+          and the shared shape does not have a slot for one; the import-source
+          radio directly above already says `Android Companion`. It held no
+          state — see the same deletion on `MacOSMessagesImportSettings`. */}
       <div>
-      <div className="flex items-center justify-between mb-1">
-        <div className="flex items-center gap-2">
-          <svg className="w-5 h-5 text-green-500" viewBox="0 0 24 24" fill="currentColor">
-            <path d="M17.6 9.48l1.84-3.18c.16-.31.04-.69-.26-.85-.29-.15-.65-.06-.83.22l-1.88 3.24a11.463 11.463 0 00-8.94 0L5.65 5.67c-.19-.29-.54-.38-.84-.22-.3.16-.42.54-.26.85L6.4 9.48A10.78 10.78 0 002 18h20a10.78 10.78 0 00-4.4-8.52zM7 15.25a1.25 1.25 0 110-2.5 1.25 1.25 0 010 2.5zm10 0a1.25 1.25 0 110-2.5 1.25 1.25 0 010 2.5z" />
-          </svg>
-          <h4 className="text-sm font-medium text-gray-900">Android Companion</h4>
-        </div>
-      </div>
-      <p className="text-xs text-gray-600">
-        Sync SMS messages from your Android phone over WiFi using the Keepr Companion app.
-      </p>
-
       {/* Sync status display */}
       {loading ? (
         <div className="mt-1 text-xs text-gray-500">Loading sync status...</div>
@@ -286,6 +277,12 @@ export function AndroidMessagesSettings({ userId }: AndroidMessagesSettingsProps
       >
       <p className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-2">
         Import Preferences
+      </p>
+      {/* BACKLOG-3156 stage E: the panel's description, moved into the block's
+          description slot when the identity header above it was deleted — the
+          same move as on the macOS panel. Sentence unchanged. */}
+      <p className="text-xs text-gray-600 mb-3">
+        Sync SMS messages from your Android phone over WiFi using the Keepr Companion app.
       </p>
         {/* Date Range Filter */}
         <div className="flex items-center justify-between mb-2">

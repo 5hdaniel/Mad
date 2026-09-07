@@ -251,15 +251,31 @@ function auditScreen(
     expect(actions.querySelector("h1,h2,h3,h4,h5,h6")).toBeNull();
   }
 
+  // 8. NO PANEL IDENTITY HEADER. Outside the cards, the only heading a screen
+  //    may carry is its own section title — an `<h3>`. An `<h4>`/`<h5>` out
+  //    there is a panel header, which Messages had (`macOS Messages`,
+  //    `Android Companion`) and Emails and Contacts did not. Recorded as well
+  //    as asserted, so the cross-screen test below reds on it by name.
+  const panelHeadings = Array.from(
+    container.querySelectorAll("h1,h2,h4,h5,h6"),
+  )
+    .filter((h) => cardAncestor(h) === null)
+    .map((h) => (h.textContent ?? "").trim());
+  headersOutsideCards.set(screenName, panelHeadings);
+  expect(`${screenName}: headings outside its cards = ${JSON.stringify(panelHeadings)}`).toBe(
+    `${screenName}: headings outside its cards = []`,
+  );
+
   return classNames;
 }
 
 /**
- * Collected across every screen. The suite's last test asserts they are all the
- * same string — the assertion that reds when the four screens diverge, which is
- * the failure this whole item is about.
+ * Collected across every screen. The suite's last tests assert these agree —
+ * the assertions that red when the four screens diverge, which is the failure
+ * this whole item is about.
  */
 const cardStyles = new Map<string, string>();
+const headersOutsideCards = new Map<string, string[]>();
 
 function recordStyles(screenName: string, classNames: string[]): void {
   classNames.forEach((cls, i) => cardStyles.set(`${screenName} #${i}`, cls));
@@ -417,7 +433,8 @@ describe("BACKLOG-3156 stage E — Messages (macOS)", () => {
           {
             testId: "messages-block-preferences",
             label: "Import Preferences",
-            description: null,
+            description:
+              "Import messages from the macOS Messages app to enable linking with your transactions.",
           },
         ],
         "messages-block-actions",
@@ -426,11 +443,19 @@ describe("BACKLOG-3156 stage E — Messages (macOS)", () => {
   });
 
   /**
-   * The root still carries the testid and `aria-disabled` BACKLOG-2335 put
-   * there, and removing the card must not have taken them with it: every
-   * existing query and the disabled semantics reach the whole panel.
+   * THE DISABLED CUES THAT OUTLIVED THE DELETED HEADING.
+   *
+   * That `<h4>macOS Messages</h4>` was not plain: it greyed to `text-gray-400`
+   * when another message source was active, so deleting it removed one visual
+   * signal that the panel is inactive. It was safe to delete only because three
+   * stronger signals remain, and "remain" is a claim a comment cannot carry —
+   * so each is asserted here, in the disabled state.
+   *
+   * The note is `{!enabled && ...}` with a `?? ` fallback for `disabledReason`,
+   * so there is no disabled path on which it fails to render; that is asserted
+   * with no reason passed, which is the path that used the fallback.
    */
-  it("keeps the root's testid and aria-disabled after the card came off", async () => {
+  it("still says it is inactive three ways with the greyed heading gone", async () => {
     render(
       <PlatformProvider>
         <MacOSMessagesImportSettings userId="u" enabled={false} />
@@ -438,10 +463,45 @@ describe("BACKLOG-3156 stage E — Messages (macOS)", () => {
     );
     const root = await screen.findByTestId("macos-messages-import");
 
+    // 1. The root is marked disabled — BACKLOG-2335 semantics, whole panel.
     expect(root).toHaveAttribute("aria-disabled", "true");
+
+    // 2. The reason is stated in words, not just colour.
+    expect(screen.getByTestId("macos-import-disabled-note")).toHaveTextContent(
+      /not your active message source/i,
+    );
+
+    // 3. The controls are muted, and the muting reaches BOTH the preferences
+    //    block and the actions — not one of them.
+    const preferences = screen.getByTestId("messages-block-preferences");
+    const actions = screen.getByTestId("messages-block-actions");
+    expect(preferences.closest(".opacity-60")).not.toBeNull();
+    expect(actions.closest(".opacity-60")).not.toBeNull();
+
+    // …and the panel is still one stack, not a card.
     expect(isCard(root)).toBe(false);
-    expect(root.contains(screen.getByTestId("messages-block-preferences"))).toBe(true);
-    expect(root.contains(screen.getByTestId("messages-block-actions"))).toBe(true);
+    expect(root.contains(preferences)).toBe(true);
+    expect(root.contains(actions)).toBe(true);
+  });
+
+  /**
+   * The panel is NOT muted when it is the active source — otherwise the check
+   * above would pass against a panel that is permanently greyed.
+   */
+  it("is not muted when it is the active source", async () => {
+    render(
+      <PlatformProvider>
+        <MacOSMessagesImportSettings userId="u" enabled />
+      </PlatformProvider>,
+    );
+    const preferences = await screen.findByTestId("messages-block-preferences");
+
+    expect(preferences.closest(".opacity-60")).toBeNull();
+    expect(screen.queryByTestId("macos-import-disabled-note")).not.toBeInTheDocument();
+    expect(screen.getByTestId("macos-messages-import")).toHaveAttribute(
+      "aria-disabled",
+      "false",
+    );
   });
 
   /**
@@ -476,7 +536,8 @@ describe("BACKLOG-3156 stage E — Messages (Android)", () => {
           {
             testId: "android-block-preferences",
             label: "Import Preferences",
-            description: null,
+            description:
+              "Sync SMS messages from your Android phone over WiFi using the Keepr Companion app.",
           },
         ],
         "android-block-actions",
@@ -631,6 +692,39 @@ describe("BACKLOG-3156 stage E — the four screens agree", () => {
         null,
         1,
       )}`,
+    );
+  });
+
+  /**
+   * THE SECOND WAY THESE SCREENS DIVERGED. Messages opened each of its two
+   * panels with an icon and an `<h4>` naming it — `macOS Messages`,
+   * `Android Companion` — while Emails and Contacts opened straight onto their
+   * first card. On macOS the `<h4>` also printed the same words as the radio
+   * option selected in the Sources card directly above it.
+   *
+   * Neither header held anything a reader could not get elsewhere: the only
+   * state in the macOS one was its `enabled` colouring, which the
+   * `macos-import-disabled-note` states in a sentence and the `opacity-60`
+   * muting shows on every control.
+   *
+   * A screen growing one back fails HERE, naming the screen and the heading —
+   * which is what the per-screen audits alone could not do, since each screen
+   * would only be measured against itself.
+   */
+  it("lets no screen carry a heading outside its cards", () => {
+    expect([...headersOutsideCards.keys()].sort()).toEqual([
+      "Contacts",
+      "Emails",
+      "Messages (Android)",
+      "Messages (macOS)",
+      "Messages (sources)",
+    ]);
+
+    const offenders = Object.fromEntries(
+      [...headersOutsideCards].filter(([, hs]) => hs.length > 0),
+    );
+    expect(`screens carrying a panel header: ${JSON.stringify(offenders)}`).toBe(
+      "screens carrying a panel header: {}",
     );
   });
 });

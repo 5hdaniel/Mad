@@ -1385,35 +1385,24 @@ export function MacOSMessagesImportSettings({
       aria-disabled={!enabled}
       data-testid="macos-messages-import"
     >
-      {/* Panel identity. This is NOT a block eyebrow — it says which of the two
-          mutually exclusive Messages panels is on screen (this one or the
-          Android companion), so it sits on the page above the blocks, the way
-          a section heading does. */}
+      {/* BACKLOG-3156 stage E: THE PANEL IDENTITY HEADER IS GONE — the icon and
+          `<h4>macOS Messages</h4>` that used to open this panel.
+          ────────────────────────────────────────────────────────────────────
+          Emails and Contacts have no such header, so carrying one here was the
+          divergence the shared shape forbids; and on macOS it printed
+          `macOS Messages` a few lines below the radio option of that exact name
+          in the Sources card above, which is the same doubling as
+          `Import Preferences` over `Import Filters`.
+
+          Nothing was load-bearing in it. Its only state was the `enabled`
+          colouring, and that fact reaches the reader twice over and louder: the
+          `macos-import-disabled-note` says WHY the panel is inactive in a
+          sentence, and every control below is muted to `opacity-60`.
+
+          `settingsBlockShape-3156` asserts that no screen carries a heading
+          outside its cards other than its own section `<h3>`, so neither panel
+          can grow one back. */}
       <div>
-      <div className="flex items-center justify-between mb-1">
-        <div className="flex items-center gap-2">
-          <svg
-            className={`w-5 h-5 ${enabled ? "text-green-600" : "text-gray-400"}`}
-            fill="none"
-            stroke="currentColor"
-            viewBox="0 0 24 24"
-          >
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              strokeWidth={2}
-              d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"
-            />
-          </svg>
-          <h4
-            className={`text-sm font-medium ${
-              enabled ? "text-gray-900" : "text-gray-400"
-            }`}
-          >
-            macOS Messages
-          </h4>
-        </div>
-      </div>
 
       {/* BACKLOG-2335: Explain why the panel is inactive when another message
           source is active, so the disabled controls don't read as a bug. */}
@@ -1430,11 +1419,6 @@ export function MacOSMessagesImportSettings({
       {/* BACKLOG-2335: Mute the controls region while inactive (the note above
           stays full-strength so the reason is always legible). */}
       <div className={enabled ? "" : "opacity-60"}>
-      <p className="text-xs text-gray-600">
-        Import messages from the macOS Messages app to enable linking with your
-        transactions.
-      </p>
-
       {/* Import status display */}
       {importStatus && (
         <div className="mt-1 text-xs text-gray-500">
@@ -1466,6 +1450,16 @@ export function MacOSMessagesImportSettings({
       >
       <p className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-2">
         Import Preferences
+      </p>
+      {/* BACKLOG-3156 stage E: the panel's description, moved into the block's
+          description slot when the identity header above it was deleted. The
+          sentence is unchanged — it states what this panel imports, which is
+          the scope of every preference below it. Every other block on these
+          four screens that has a description puts it exactly here, between the
+          label and the controls. */}
+      <p className="text-xs text-gray-600 mb-3">
+        Import messages from the macOS Messages app to enable linking with your
+        transactions.
       </p>
         {/* Date Range Filter */}
         <div className="flex items-center justify-between mb-2">

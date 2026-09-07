@@ -1249,18 +1249,31 @@ describe("Settings", () => {
 
       // ...but the Messages section + Android device/status management remain.
       expect(container.querySelector("#settings-messages")).toBeInTheDocument();
-      // BACKLOG-2468: scoped to the HEADING, not bare text. "Android Companion" appears TWICE
-      // inside #settings-messages — AndroidMessagesSettings.tsx:174 renders it as the <h4> section
-      // header (what this assertion is about), and ImportSourceSettings.tsx:308 renders it as the
-      // label of the import-source radio. Whether the radio renders depends on `usePlatform()`, so
-      // a bare findByText passed under plain-node jest and threw "Found multiple elements" under
-      // ELECTRON_RUN_AS_NODE — the route the pre-push hook picks when the native module rests on
-      // the Electron ABI. The <h4> is the only heading with this name anywhere in src/, so the
-      // role-scoped query names the device/status section in either runtime. Scoped rather than
-      // widened to getAllByText on purpose: a length assertion would encode a count nobody chose.
+      // BACKLOG-2468 scoped this to the HEADING rather than bare text, because
+      // "Android Companion" appeared TWICE inside #settings-messages: as the
+      // panel's own <h4> (what this assertion is about) and as the label of the
+      // import-source radio. Whether the radio renders depends on
+      // `usePlatform()`, so a bare findByText passed under plain-node jest and
+      // threw "Found multiple elements" under ELECTRON_RUN_AS_NODE — the route
+      // the pre-push hook picks when the native module rests on the Electron
+      // ABI. The <h4> was the only heading with the name, so the role-scoped
+      // query worked in either runtime.
+      //
+      // BACKLOG-3156 stage E deleted that <h4>: Emails and Contacts open
+      // straight onto their first card, and carrying a panel header on Messages
+      // alone was the divergence the shared shape forbids. The words now appear
+      // exactly ONCE on the screen — on the radio — so neither the heading query
+      // nor a text query can name the panel any more.
+      //
+      // The anchor moves to the panel's own testids, which is what the claim was
+      // always about: the Android device/status management rendered. Both are
+      // checked, and both are absent whenever the panel is absent, in either
+      // runtime and regardless of what the radio does.
       expect(
-        await screen.findByRole("heading", { name: "Android Companion" }),
+        await screen.findByTestId("android-block-preferences"),
       ).toBeInTheDocument();
+      expect(screen.getByTestId("android-block-actions")).toBeInTheDocument();
+      expect(container.querySelector("#settings-android-companion")).toBeInTheDocument();
     });
 
     it("does NOT render the wizard for a non-Android import source either", async () => {
