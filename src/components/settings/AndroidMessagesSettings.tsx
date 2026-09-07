@@ -218,7 +218,11 @@ export function AndroidMessagesSettings({ userId }: AndroidMessagesSettingsProps
        contact re-import. The working control is this panel's Force Re-import;
        the Contacts screen links here rather than duplicating a destructive call
        the desktop cannot undo (see the DECISION on BACKLOG-3001). */
-    <div id="settings-android-companion" className="p-4 bg-gray-50 rounded-lg border border-gray-200">
+    /* BACKLOG-3156 stage A: the panel is a card PLUS a bare action row beneath
+       it. The anchor id stays on the root so the Contacts screen's "Go to
+       Android Companion re-import" still scrolls to the whole panel. */
+    <div id="settings-android-companion" className="space-y-3">
+    <div className="p-4 bg-gray-50 rounded-lg border border-gray-200">
       <div className="flex items-center justify-between mb-2">
         <div className="flex items-center gap-2">
           <svg className="w-5 h-5 text-green-500" viewBox="0 0 24 24" fill="currentColor">
@@ -262,6 +266,14 @@ export function AndroidMessagesSettings({ userId }: AndroidMessagesSettingsProps
         </div>
       )}
 
+      {/* BACKLOG-3156 stage A: block 2 of the shared shape — Import Preferences.
+          Block 1 (Sources) is the import-source picker `Settings.tsx` renders
+          directly above this panel. Both labels below are already plain text
+          OUTSIDE the control, with the border wrapping only the value. */}
+      <div data-testid="android-block-preferences">
+      <p className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-2">
+        Import Preferences
+      </p>
       {/* Import Filters */}
       <div className="mb-3 p-3 bg-white rounded border border-gray-200">
         <h5 className="text-xs font-medium text-gray-700 mb-2">
@@ -329,6 +341,7 @@ export function AndroidMessagesSettings({ userId }: AndroidMessagesSettingsProps
           </p>
         )}
       </div>
+      </div>{/* /BACKLOG-3156 Import Preferences block */}
 
       {/* BACKLOG-2347: sync is automatic once paired — the old "tap Sync Now"
           how-to was misleading (and duplicated the source-picker instructions).
@@ -341,15 +354,23 @@ export function AndroidMessagesSettings({ userId }: AndroidMessagesSettingsProps
         </p>
       </div>
 
-      {/* Force Re-import Button */}
-      <button
-        onClick={() => setShowForceWarning(true)}
-        disabled={resetting}
-        className="w-full px-3 py-2 bg-gray-200 hover:bg-gray-300 text-gray-700 text-sm font-medium rounded transition-all disabled:opacity-50 disabled:cursor-not-allowed"
-        title="Reset sync timestamp so the companion app re-sends all messages"
-      >
-        {resetting ? "Resetting..." : "Force Re-import"}
-      </button>
+      </div>
+
+      {/* BACKLOG-3156 stage A: the actions, BARE — no card and no heading. This
+          panel has no primary: Android sync is automatic once paired, so the
+          re-import is the only action there is. It stops being full-width on a
+          row of its own, which is what made it the odd one out.
+          `disabled={resetting}` is unchanged. */}
+      <div data-testid="android-block-actions" className="flex gap-2">
+        <button
+          onClick={() => setShowForceWarning(true)}
+          disabled={resetting}
+          className="px-3 py-2 bg-gray-200 hover:bg-gray-300 text-gray-700 text-sm font-medium rounded transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+          title="Reset sync timestamp so the companion app re-sends all messages"
+        >
+          {resetting ? "Resetting..." : "Force Re-import"}
+        </button>
+      </div>
 
       {/* Force re-import warning confirmation */}
       {showForceWarning && (

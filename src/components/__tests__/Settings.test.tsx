@@ -4,7 +4,7 @@
  */
 
 import React from "react";
-import { render, screen, waitFor } from "@testing-library/react";
+import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import "@testing-library/jest-dom";
 import Settings from "../Settings";
@@ -208,12 +208,22 @@ describe("Settings", () => {
     });
   });
 
-  describe("Email Connections", () => {
+  /**
+   * BACKLOG-3156 stage A: the section heading is now "Emails", and the panel
+   * carries a "Stored on this computer" grid whose cells are labelled Gmail and
+   * Outlook. That makes a bare getByText("Gmail") ambiguous, so these queries
+   * are scoped to the Sources block — which asserts MORE than before: the
+   * provider label is in the sources block specifically, not merely somewhere
+   * on the page.
+   */
+  const sources = () => within(screen.getByTestId("emails-block-sources"));
+
+  describe("Emails", () => {
     it("should show Gmail connection status", async () => {
       await renderSettings({ userId: mockUserId, onClose: mockOnClose });
 
       await waitFor(() => {
-        expect(screen.getByText("Gmail")).toBeInTheDocument();
+        expect(sources().getByText("Gmail")).toBeInTheDocument();
       });
 
       expect(screen.getAllByText("Not Connected").length).toBeGreaterThan(0);
@@ -223,7 +233,7 @@ describe("Settings", () => {
       await renderSettings({ userId: mockUserId, onClose: mockOnClose });
 
       await waitFor(() => {
-        expect(screen.getByText("Outlook")).toBeInTheDocument();
+        expect(sources().getByText("Outlook")).toBeInTheDocument();
       });
     });
 
@@ -273,7 +283,7 @@ describe("Settings", () => {
       await renderSettings({ userId: mockUserId, onClose: mockOnClose });
 
       await waitFor(() => {
-        expect(screen.getByText("Gmail")).toBeInTheDocument();
+        expect(sources().getByText("Gmail")).toBeInTheDocument();
       });
 
       const connectGmailButton = screen.getByRole("button", {
@@ -290,7 +300,7 @@ describe("Settings", () => {
       await renderSettings({ userId: mockUserId, onClose: mockOnClose });
 
       await waitFor(() => {
-        expect(screen.getByText("Outlook")).toBeInTheDocument();
+        expect(sources().getByText("Outlook")).toBeInTheDocument();
       });
 
       const connectOutlookButton = screen.getByRole("button", {
@@ -451,7 +461,7 @@ describe("Settings", () => {
         await renderSettings({ userId: mockUserId, onClose: mockOnClose });
 
         await waitFor(() => {
-          expect(screen.getByText("Gmail")).toBeInTheDocument();
+          expect(sources().getByText("Gmail")).toBeInTheDocument();
         });
         expect(screen.getAllByText("Not Connected").length).toBeGreaterThan(0);
         // A never-connected provider offers Connect, NOT Reconnect.

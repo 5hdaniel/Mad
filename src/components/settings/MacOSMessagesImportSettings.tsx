@@ -1325,11 +1325,16 @@ export function MacOSMessagesImportSettings({
   }
 
   return (
+    /* BACKLOG-3156 stage A: the panel is a card PLUS a bare action row beneath
+       it. The testid and `aria-disabled` stay on the root so every existing
+       query and the BACKLOG-2335 disabled semantics reach the whole panel, not
+       just the card. */
     <div
-      className="p-4 bg-gray-50 rounded-lg border border-gray-200"
+      className="space-y-3"
       aria-disabled={!enabled}
       data-testid="macos-messages-import"
     >
+    <div className="p-4 bg-gray-50 rounded-lg border border-gray-200">
       <div className="flex items-center justify-between mb-2">
         <div className="flex items-center gap-2">
           <svg
@@ -1385,6 +1390,15 @@ export function MacOSMessagesImportSettings({
         </div>
       )}
 
+      {/* BACKLOG-3156 stage A: block 2 of the shared shape — Import Preferences.
+          Block 1 (Sources) is the import-source picker `Settings.tsx` renders
+          directly above this panel. The label/border split the other two
+          sections adopt was already this panel's shape: both labels below are
+          plain text OUTSIDE the control, and the border wraps only the value. */}
+      <div data-testid="messages-block-preferences">
+      <p className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-2">
+        Import Preferences
+      </p>
       {/* TASK-1952: Import Filters */}
       <div id="settings-import-filters" className="mb-3 p-3 bg-white rounded border border-gray-200">
         <h5 className="text-xs font-medium text-gray-700 mb-2">
@@ -1557,6 +1571,7 @@ export function MacOSMessagesImportSettings({
           Import message text only (no attachment files)
         </label>
       </div>
+      </div>{/* /BACKLOG-3156 Import Preferences block */}
 
       {/* BACKLOG-2743: The attachment copy does not fit.
           ────────────────────────────────────────────────────────────────
@@ -1795,7 +1810,15 @@ export function MacOSMessagesImportSettings({
           />
         )}
 
-      <div className="flex gap-2">
+      </div>{/* /BACKLOG-2335 muted controls region */}
+      </div>{/* /BACKLOG-3156 card — the actions sit below it, on the page */}
+
+      {/* BACKLOG-3156 stage A: the actions, BARE — no card, no heading, primary
+          then destructive. Still muted with the rest of the controls when this
+          is not the active source (BACKLOG-2335), and neither `disabled`
+          expression changed: both remain `controlsDisabled || spaceBlocked`. */}
+      <div className={enabled ? "" : "opacity-60"}>
+      <div data-testid="messages-block-actions" className="flex gap-2">
         <button
           // BACKLOG-2749: ONE gate. It decides which surface the click reaches
           // — the space refusal, the cap choice, or the run itself — so the two
