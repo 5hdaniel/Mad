@@ -158,22 +158,34 @@ describe("database time is non-zero and bounded by the span", () => {
     // Bounds set AFTER a probe, not pre-registered like the rest of this file:
     // measured 2000/2000 and 1-2/2000 over five trials, then given 10x slack on
     // each side. Both are one-sided in the direction a SLOWER host moves them.
+    //
+    // What this rests on is CLOCK GRANULARITY, not statement speed: a statement
+    // registers iff it outlasts one `performance.now()` tick. On the runner that
+    // reported the original failure the statements ran 1.79 us (its own 3.5767 ms
+    // over 2000) against a 100 ns tick — every figure in that output lands on a
+    // 0.0001 ms grid — so roughly 18x. A slower host lengthens the statement and
+    // leaves the tick alone, which is why this direction is the safe one.
     expect(chargedByInstrument).toBeGreaterThanOrEqual(SAMPLES * 0.9);
 
     // Fixture validity, not a second control. It establishes that the statements
     // really are sub-millisecond, which is the precondition for the assertion
     // above to mean anything: on a host slow enough to push a `SELECT 1` past
     // 1 ms, BOTH clocks would charge every statement and the case above would go
-    // green under a planted `Date.now()`. The residual host assumption is that a
-    // prepared `SELECT 1` takes well under 100 us — measured 0.5 us here and
-    // 1.79 us on the Windows runner that reported the original failure.
+    // green under a planted `Date.now()`. Same 1.79 us against the 100 us per
+    // statement this bound permits.
     expect(chargedByMillisecondClock).toBeLessThanOrEqual(SAMPLES * 0.1);
 
     // `expect(dbMs).toBeGreaterThan(0.5)` stood here and was deleted rather than
-    // lowered. It did not discriminate — a `Date.now()` accumulator totals 1-2 ms
-    // over this loop and passes it — and it was the same flake in miniature,
-    // asserting the host is slower than a threshold with 1.3x headroom. The
-    // count above entails it.
+    // lowered, because it never discriminated: across 20 planted cold runs it
+    // returned the same verdict as the ratio in every row, and both were falsely
+    // GREEN in 16 of the 20. It was also the same flake in miniature, asserting
+    // the host is slower than a threshold — the tightest of 12 unplanted trials
+    // came in at 0.5932 ms, a 1.19x margin.
+    //
+    // Nothing is lost by removing it, which is a weaker statement than the one
+    // that stood here before: the count above does NOT entail it. 1800 charges of
+    // one 100 ns tick total 0.18 ms, which is under 0.5. The count entails
+    // `dbMs > 0`, and it discriminates the two clocks, which `> 0.5` did not.
   });
 });
 
