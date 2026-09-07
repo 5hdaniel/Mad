@@ -41,6 +41,13 @@ module.exports = {
     '^mammoth$': '<rootDir>/tests/__mocks__/mammoth.js',
     // Sentry - crashes in Jest because process.versions.electron is undefined
     '^@sentry/electron(.*)$': '<rootDir>/tests/__mocks__/sentry-electron.js',
+    // BACKLOG-3192: scripts/notarize.js requires this REAL npm package, but the
+    // `^@electron/(.*)` path alias below rewrites it to <rootDir>/electron/notarize,
+    // which does not exist. Resolution fails inside the mapper, before any
+    // jest.mock can apply, so the hook cannot be required at all without this.
+    // MUST stay ABOVE that alias — moduleNameMapper is evaluated in insertion
+    // order and the first match wins. Sole consumer: scripts/notarize.js.
+    '^@electron/notarize$': '<rootDir>/tests/__mocks__/electron-notarize.js',
     // Path aliases from tsconfig
     '^@/(.*)$': '<rootDir>/src/$1',
     '^@electron/(.*)$': '<rootDir>/electron/$1',
