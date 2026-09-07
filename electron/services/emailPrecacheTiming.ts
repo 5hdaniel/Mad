@@ -91,6 +91,20 @@ export interface EmailPrecacheTimingRecord {
   /** App version, or "unknown" when it cannot be read (tests, pre-init). The
    *  build the number belongs to; a duration without one cannot be compared. */
   build: string;
+  /** Milliseconds this run spent INSIDE the database — the summed time of the
+   *  driver calls the run made, across the conduits and the raw-handle holders
+   *  alike, over the same span `elapsedMs` covers.
+   *
+   *  Present because `elapsedMs` alone cannot carry the acceptance bound: the
+   *  run is dominated by network fetch, which is what varies (40% spread across
+   *  four identical force re-caches — pm_comments `ac7a6f40`), while the
+   *  promise-conversion changes the data layer. This is the figure the bound is
+   *  meant to apply to.
+   *
+   *  Process-wide accounting, not run-scoped: any other main-process database
+   *  work overlapping the span is included. A comparison run wants the app
+   *  otherwise idle. */
+  dbMs: number;
 }
 
 /**
@@ -118,6 +132,11 @@ export function formatEmailPrecacheTimingLine(
     ...(record.inserted === undefined ? [] : [`inserted=${record.inserted}`]),
     `elapsedMs=${record.elapsedMs}`,
     `build=${record.build}`,
+    // APPENDED, never inserted. The founder reads this line by grepping the tag
+    // and cutting fields positionally; putting a new field anywhere but the end
+    // would shift every field after it and silently break notes already taken
+    // against earlier runs.
+    `dbMs=${record.dbMs}`,
   ];
 
   return parts.join(" ");
