@@ -371,6 +371,56 @@ describe("contacts:create still refuses a record with nothing on it (BACKLOG-270
     expect(outcome.error).not.toMatch(/cannot read propert/i);
   });
 
+  /**
+   * SR Required Change A. A non-string FIELD is the second axis of the same
+   * defect the non-object payload tests above cover — `hasNothingToImport`
+   * assumes both that its argument is an object and that every field it reads
+   * is a string, because `realContactName` is `(name || "").trim()`.
+   *
+   * Running the predicate BEFORE the validator turned a clean
+   * `name must be a string` into `(name || "").trim is not a function` on a
+   * live channel. Measured through the registered handler, not read.
+   *
+   * `{allPhones: [42]}` is the case that must stay REFUSED rather than merely
+   * stop crashing: with the guard absent it created a row, which is the hole
+   * the guard exists to close.
+   */
+  it.each([
+    ["a number name", { name: 42 }, /name must be a string/i],
+    ["an object name", { name: {} }, /name must be a string/i],
+    ["an array name", { name: ["Rosalind"] }, /name must be a string/i],
+    [
+      "a number name alongside a real phone",
+      { name: 42, phone: "+14155550142" },
+      /name must be a string/i,
+    ],
+    [
+      "a non-string entry in allPhones and nothing else",
+      { allPhones: [42] },
+      /needs at least a name, company, phone, or email/i,
+    ],
+  ])("refuses %s with a real message, never a TypeError", async (_label, payload, expected) => {
+    const outcome = await createContact(payload);
+
+    expect(outcome.refused).toBe(true);
+    expect(outcome.error).toMatch(expected);
+    expect(outcome.error).not.toMatch(/is not a function/i);
+    expect(outcome.error).not.toMatch(/cannot read propert/i);
+    expect(rows()).toHaveLength(0);
+  });
+
+  /**
+   * The array filter must not turn an empty record into a full one. A record
+   * whose ONLY identifier is a real string still imports; one whose only
+   * identifier was a number does not.
+   */
+  it("keeps a real phone that sits beside a non-string entry", async () => {
+    const outcome = await createContact({ allPhones: [42, "+14155550142"] });
+
+    expect(outcome.refused).toBe(false);
+    expect(rows()[0].display_name).toBe("");
+  });
+
   it("accepts a nameless record that has a phone, and stores no name", async () => {
     const outcome = await createContact({ name: null, phone: "+14155550151" });
 

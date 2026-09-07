@@ -1100,6 +1100,34 @@ describe("validateContactData — a missing name is not a validation failure (BA
       expect(() => validateContactData({ name: value }, isUpdate)).toThrow(ValidationError);
     });
 
+    /**
+     * PRE-EXISTING, PINNED, NOT FIXED HERE — BACKLOG-3186.
+     *
+     * `validateString` returns early on `!value`, so a FALSY non-string is not
+     * a "no name" spelling and is not a throw either: it comes back as `null`,
+     * silently. BACKLOG-2707 did not cause this — the base validator does the
+     * same — and did not fix it. It is pinned so that whoever does fix it sees
+     * this file go red rather than discovering the change downstream, and so
+     * the "non-strings throw" reading of the guard above cannot re-form.
+     *
+     * `null` is the value that matters: on `contacts:update` it survives the
+     * handler's `undefined`-only filter and fails the NOT NULL column. The
+     * create and import paths are safe from it only because of the `?? ""` at
+     * their two `display_name` sites.
+     */
+    it.each([
+      ["zero", 0],
+      ["false", false],
+      ["NaN", NaN],
+    ])("returns null for %s rather than throwing (BACKLOG-3186)", (_spelling, value) => {
+      const validated = validateContactData({ name: value }, isUpdate);
+
+      expect(validated.name).toBeNull();
+      // NOT `""` — stating the difference from the four handled spellings, so
+      // this test cannot be read as endorsing the behaviour.
+      expect(validated.name).not.toBe("");
+    });
+
     it("still enforces the length ceiling", () => {
       expect(() =>
         validateContactData({ name: "R".repeat(201) }, isUpdate),

@@ -514,10 +514,28 @@ export function validateContactData(
    * closes the second one; relaxing `required` alone would not have.
    *
    * FOUR SPELLINGS OF "NO NAME" — absent, `null`, `""`, whitespace — now reach
-   * ONE outcome. A NON-STRING STILL THROWS: the `typeof` test guards only the
-   * whitespace case, so a number or an object still reaches `validateString`
-   * and raises exactly as it does today. Turning that into silence is the
-   * direction PR #2563 argued against when it deleted the `amount` check.
+   * ONE outcome.
+   *
+   * A NON-STRING MOSTLY STILL THROWS, AND THE EXCEPTION IS THE PART WORTH
+   * KNOWING. The `typeof` test below guards only the whitespace case, so a
+   * non-string still reaches `validateString` — but `validateString` returns
+   * early on `!value`, so only the TRUTHY ones raise. Measured, both paths:
+   *
+   *   42 / {} / []        -> THREW "name must be a string"
+   *   0 / false / NaN     -> OK, name = null      <- silently, no error
+   *
+   * That `null` is PRE-EXISTING — the same three values return `null` on the
+   * base validator, so BACKLOG-2707 neither caused it nor fixed it. It is
+   * filed as BACKLOG-3186, where it crashes `contacts:update`: `null` survives
+   * that handler's `undefined`-only filter and fails the NOT NULL column.
+   *
+   * **The create and import paths are safe from it only because of the `?? ""`
+   * at their two `display_name` sites in `contactHandlers.ts`.** A future tidy
+   * turning either `??` back into `||` would look like a cleanup and would be
+   * a break; that is why this paragraph names them.
+   *
+   * Turning the truthy cases into silence would be the direction PR #2563
+   * argued against when it deleted the `amount` check, so they still raise.
    *
    * -------------------------------------------------------------------------
    * THE OUTCOME IS `""`, NOT `null`, AND THAT IS LOAD-BEARING

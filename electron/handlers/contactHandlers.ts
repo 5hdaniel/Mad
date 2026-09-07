@@ -2406,11 +2406,13 @@ export function registerContactHandlers(mainWindow: BrowserWindow): void {
             error: "No valid user found in database",
           };
         }
+        const validatedData = validateContactData(contactData, false);
+
         /**
          * BACKLOG-2707 — THE DOOR STILL REFUSES A RECORD WITH NOTHING ON IT.
          *
          * `validateContactData` no longer requires a name (see its comment), so
-         * without this line `contacts:create` would accept `{}` and mint a row
+         * without this block `contacts:create` would accept `{}` and mint a row
          * with no name, no company, no phone and no email — the exact state
          * BACKLOG-2684 put this predicate on `contacts:import` to prevent.
          *
@@ -2421,34 +2423,69 @@ export function registerContactHandlers(mainWindow: BrowserWindow): void {
          * call), and a renderer guard cannot protect a caller that does not go
          * through the renderer — which is the whole reason BACKLOG-2684 exists.
          *
-         * BEFORE `validateContactData`, mirroring the import loop: "nothing to
-         * make a contact out of" is the true reason, and describing the missing
-         * `name` field would be a narrower and less accurate one.
-         *
          * ITS OWN MESSAGE. `NOTHING_TO_IMPORT_REASON` says "nothing to import",
          * which is not what a contact form is doing, and that string is held
          * identical to the renderer's by a parity test — so it is reused where
          * it is true and not borrowed where it is not.
          *
-         * SHAPE FIRST. `hasNothingToImport` reads fields off its argument, so
-         * running it on a `null` — or on a string — raises a TypeError and
-         * reports "cannot read properties of null", which is a WORSE error than
-         * the "Contact data must be an object" it would be replacing. Non-object
-         * payloads fall through to `validateContactData`, which already says
-         * exactly that, and says it first.
+         * -------------------------------------------------------------------
+         * TYPES FIRST, THEN EMPTINESS — AND THE ORDER IS THE WHOLE FIX
+         * -------------------------------------------------------------------
+         * This ran BEFORE the validator in the first cut of BACKLOG-2707, on
+         * the argument that "nothing to make a contact out of" is the truer
+         * reason than a missing `name` field. That was wrong, in two axes, and
+         * both were measured through the registered handler rather than read:
+         *
+         *   createContact(null)        -> "Cannot read properties of null"
+         *   createContact({name: 42})  -> "(name || \"\").trim is not a function"
+         *   createContact({allPhones: [42]})  -> the same TypeError
+         *
+         * `hasNothingToImport` reads fields off its argument and hands each to
+         * `realContactName`, which is `(name || "").trim()`. It therefore
+         * assumes BOTH that the payload is an object AND that every field it
+         * reads is a string. Neither is guaranteed at an IPC boundary. Asking
+         * "is this record empty?" of a record whose fields are not strings is
+         * not a question with an answer — the type check is the prior question,
+         * and `validateContactData` already asks it and answers it well
+         * ("Contact data must be an object", "name must be a string").
+         *
+         * So the predicate now runs SECOND, on values the validator has already
+         * proven are strings or null. The plural arrays are the one thing the
+         * validator does not inspect, so non-string entries are dropped here
+         * rather than handed to `.trim()`: an entry that is not a string is not
+         * a usable identifier, so removing it cannot make an empty record look
+         * full. `{allPhones: [42]}` is still refused, with the message below.
+         *
+         * NOT FIXED HERE, and not claimed to be: `contacts:import` calls this
+         * same predicate with the same hazard at its own site above, and
+         * `sanitizeObject` copies values without coercing them, so it does not
+         * protect that path either. Pre-existing since BACKLOG-2684. Recorded
+         * for filing in the SR review of this PR (pm_comments `965a95f0`) —
+         * "recorded", not "filed", because at the time of writing no item
+         * exists for it and a comment that promises one is how a hazard gets
+         * considered handled.
          */
+        const rawContact = contactData as Record<string, unknown>;
+        const usableStrings = (value: unknown): string[] =>
+          Array.isArray(value)
+            ? value.filter((entry): entry is string => typeof entry === "string")
+            : [];
+
         if (
-          contactData &&
-          typeof contactData === "object" &&
-          hasNothingToImport(contactData as ImportableRecordParts)
+          hasNothingToImport({
+            name: validatedData.name,
+            company: validatedData.company,
+            phone: validatedData.phone,
+            email: validatedData.email,
+            allPhones: usableStrings(rawContact.allPhones),
+            allEmails: usableStrings(rawContact.allEmails),
+          } satisfies ImportableRecordParts)
         ) {
           throw new ValidationError(
             "A contact needs at least a name, company, phone, or email",
             "contactData",
           );
         }
-
-        const validatedData = validateContactData(contactData, false);
 
         /**
          * CREATING A CONTACT CREATES A CONTACT (BACKLOG-2617).
