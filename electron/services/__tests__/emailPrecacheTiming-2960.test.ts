@@ -54,6 +54,7 @@ const FORCE_RUN: EmailPrecacheTimingRecord = {
   inserted: 33637,
   elapsedMs: 812345,
   build: "1.4.2",
+  dbMs: 91204,
 };
 
 /** An ordinary incremental run over a mailbox that already held mail. */
@@ -65,6 +66,7 @@ const INCREMENTAL_RUN: EmailPrecacheTimingRecord = {
   written: 3,
   elapsedMs: 2104,
   build: "1.4.2",
+  dbMs: 418,
 };
 
 describe("BACKLOG-2960 — email pre-cache timing line", () => {
@@ -79,7 +81,8 @@ describe("BACKLOG-2960 — email pre-cache timing line", () => {
   it("renders every field of a completed force re-cache", () => {
     expect(formatEmailPrecacheTimingLine(FORCE_RUN)).toBe(
       "[PRECACHE-TIMING] mode=force outcome=success providers=outlook+gmail " +
-        "checked=33637 written=33637 inserted=33637 elapsedMs=812345 build=1.4.2",
+        "checked=33637 written=33637 inserted=33637 elapsedMs=812345 build=1.4.2 " +
+        "dbMs=91204",
     );
   });
 
@@ -105,9 +108,60 @@ describe("BACKLOG-2960 — email pre-cache timing line", () => {
     const line = formatEmailPrecacheTimingLine(INCREMENTAL_RUN);
     expect(line).toBe(
       "[PRECACHE-TIMING] mode=re-cache outcome=success providers=outlook " +
-        "checked=12 written=3 elapsedMs=2104 build=1.4.2",
+        "checked=12 written=3 elapsedMs=2104 build=1.4.2 dbMs=418",
     );
     expect(line).not.toContain("inserted");
+  });
+
+  /**
+   * Control 4 (BACKLOG-2960, database time). THE PREFIX IS FROZEN.
+   *
+   * `dbMs` was ADDED to this line, not folded into it. The founder and the PM
+   * both read `[PRECACHE-TIMING]` by grepping the tag and cutting fields by
+   * position, and runs measured before this change are still the comparison
+   * baseline — so every field that existed must keep its text AND its position.
+   * These two strings are the pre-change lines, transcribed from this file's own
+   * assertions at commit `5b5a3a18b` (PR #2519), and the claim is that the new
+   * line still starts with them exactly.
+   *
+   * Inserting `dbMs` anywhere but the end fails this and passes the whole-string
+   * controls above, which is precisely the mistake worth catching.
+   */
+  it("leaves every pre-existing field byte-identical, in its original position", () => {
+    const PRE_CHANGE_FORCE =
+      "[PRECACHE-TIMING] mode=force outcome=success providers=outlook+gmail " +
+      "checked=33637 written=33637 inserted=33637 elapsedMs=812345 build=1.4.2";
+    const PRE_CHANGE_INCREMENTAL =
+      "[PRECACHE-TIMING] mode=re-cache outcome=success providers=outlook " +
+      "checked=12 written=3 elapsedMs=2104 build=1.4.2";
+
+    expect(formatEmailPrecacheTimingLine(FORCE_RUN).startsWith(PRE_CHANGE_FORCE)).toBe(true);
+    expect(
+      formatEmailPrecacheTimingLine(INCREMENTAL_RUN).startsWith(PRE_CHANGE_INCREMENTAL),
+    ).toBe(true);
+  });
+
+  /**
+   * Control 5. `dbMs` is the field the acceptance bound moves to.
+   *
+   * Named as its own claim for the same reason `elapsedMs` is: `elapsedMs` on
+   * this run is dominated by network fetch, which varied 40% across four
+   * identical force re-caches (pm_comments `ac7a6f40`). Dropping `dbMs` from the
+   * formatter should fail a test whose name says what the line stopped
+   * reporting, not only a long string comparison.
+   */
+  it("carries the database time separately from the total elapsed", () => {
+    const line = formatEmailPrecacheTimingLine(FORCE_RUN);
+    expect(line).toContain("dbMs=91204");
+    expect(line).toContain("elapsedMs=812345");
+    // Two distinct figures, not one relabelled.
+    expect(line).not.toContain("dbMs=812345");
+  });
+
+  /** Control 6. Database time is the LAST field, so no existing cut position moves. */
+  it("appends database time at the end of the line", () => {
+    expect(formatEmailPrecacheTimingLine(FORCE_RUN).split(" ").pop()).toBe("dbMs=91204");
+    expect(formatEmailPrecacheTimingLine(INCREMENTAL_RUN).split(" ").pop()).toBe("dbMs=418");
   });
 
   /** Control 3. The mirror: a run that DID swap carries it. */
@@ -152,6 +206,7 @@ describe("BACKLOG-2960 — email pre-cache timing line", () => {
       "inserted",
       "elapsedMs",
       "build",
+      "dbMs",
     ]);
     expect(keys(INCREMENTAL_RUN)).toEqual([
       "mode",
@@ -161,6 +216,7 @@ describe("BACKLOG-2960 — email pre-cache timing line", () => {
       "written",
       "elapsedMs",
       "build",
+      "dbMs",
     ]);
   });
 

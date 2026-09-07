@@ -9,7 +9,7 @@ name: CI/CD
 
 on:
   push:
-    branches: [main, develop, 'feature/**', 'fix/**', 'claude/**', 'docs/**']
+    branches: [main, develop, 'feature/**', 'fix/**', 'claude/**', 'docs/**', 'portal/**', '*-portal/**']
   pull_request:
     branches: [main, develop, 'int/**']
 

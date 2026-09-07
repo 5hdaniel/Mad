@@ -29,6 +29,9 @@ import { useSyncOrchestrator } from "../../hooks/useSyncOrchestrator";
 import type { SyncType, SyncItemStatus, ReconnectProvider } from "../../services/SyncOrchestratorService";
 import logger from "../../utils/logger";
 import { openEmailSettings } from "../../utils/openEmailSettings";
+// BACKLOG-3128: the macOS Messages phase vocabulary, shared with the Settings
+// panel so the pill and the panel cannot disagree about what is happening.
+import { importPhaseDisplayFor } from "../../utils/importPhaseDisplay";
 
 interface SyncStatusIndicatorProps {
   /** Pending transaction count (shown in completion message) */
@@ -566,13 +569,39 @@ export function SyncStatusIndicator({
 
   // Get the currently running non-external sync's progress for percentage display
   const runningInternalItem = queue.find(item => item.status === 'running' && !item.external);
-  const activeProgress = runningInternalItem?.progress ?? null;
+  // BACKLOG-3128: an item that reports no honest percentage must render NO
+  // number here.
+  //
+  // `runningInternalItem?.progress ?? null` is not enough, and the difference is
+  // not stylistic: `??` only catches null/undefined, and an indeterminate item
+  // carries `progress: 0`. `0 ?? null` is `0`, so the guard below at
+  // `activeProgress !== null` would pass and this indicator would pin a hard
+  // "0%" on the dashboard for the entire macOS Messages import — a fabricated
+  // known value, which is the exact defect BACKLOG-3128 exists to remove, and
+  // worse than the composite it replaced because it would not even move.
+  //
+  // Gate on the FLAG, never on the number.
+  const activeProgress =
+    runningInternalItem && !runningInternalItem.indeterminate
+      ? runningInternalItem.progress
+      : null;
 
   // Render a status pill for each sync item in queue order
   const renderPill = (type: SyncType, status: SyncItemStatus, progress: number, error?: string, phase?: string, cancelRequested?: boolean, coalesced?: boolean) => {
     const baseLabel = getLabelForType(type);
-    // Show phase for running syncs (e.g., "Messages - querying", "iPhone - Exporting")
-    const friendlyPhase = phase ? ({
+    // Show phase for running syncs (e.g., "Messages - Reading messages",
+    // "iPhone - Exporting").
+    //
+    // BACKLOG-3128: TWO vocabularies, two maps, chosen by item type. The record
+    // below lists iPhone phases only, so before this change every macOS Messages
+    // phase fell through its `?? phase` fallback and the pill rendered the raw
+    // internal string — "Messages - querying". Merging the two into one
+    // string-keyed record would recreate exactly the untyped map this item
+    // exists to replace; `renderPill` already takes `type`, so discriminating
+    // costs nothing.
+    const friendlyPhase = type === 'messages'
+      ? (importPhaseDisplayFor(phase)?.pill ?? phase)
+      : phase ? ({
       backing_up: 'Exporting',
       preparing: 'Preparing',
       extracting: 'Reading messages',
