@@ -21,6 +21,7 @@
 import fs from "fs";
 import path from "path";
 import type { Database as DatabaseType } from "better-sqlite3";
+import { V71_SELECT_DUPLICATE_ATTACHMENTS_SQL } from "../db/migrationV71Sql";
 
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 const RealDatabase = require(
@@ -279,9 +280,51 @@ describe("migration v71 — the dedup", () => {
     db = v70Fixture();
     seedDedupFixture(db);
     runV71(db);
-    // ul1 precedes ul2 by rowid; both are 'user'. Without ORDER BY loser.rowid the
-    // winner would depend on scan order and this assertion would not be reproducible.
+    // ul1 precedes ul2 by rowid; both are 'user', so whichever the loop reaches
+    // first wins and the other's triple is refused by the precedence guard.
+    //
+    // WHAT THIS CONTROL CAN AND CANNOT SEE (SR review af45b174 §2). It reds when
+    // the order is REVERSED (ORDER BY ... DESC -> survivor becomes 'addendum'), so
+    // it does discriminate direction. It does NOT red when the clause is DELETED:
+    // on a plain table scan SQLite happens to return ascending rowid anyway, so
+    // the assertion passes through the exact removal it is named for. The missing
+    // property is not "this run came out ascending" but "the statement is not free
+    // to choose", and no single execution can observe that. The control below
+    // covers it on the statement itself.
     expect(row(db, "uk")).toMatchObject({ dt: "contract", dc: 0.9, ds: "user", tc: "TEXT-A" });
+  });
+
+  describe("the losers query is deterministic by construction", () => {
+    // Asserting on SQL text is normally the weak instrument -- an earlier control
+    // in this PR matched the word "unlinks" in its own comment prose and was
+    // replaced with a behavioural one. It is the RIGHT instrument here, for a
+    // reason that does not apply there: determinism is a property of the
+    // STATEMENT, not of an execution. A run that comes out ordered proves nothing
+    // about whether the engine was obliged to order it. And this is no longer a
+    // scan of a function body -- the statement is a named exported constant with
+    // its own contract, so this reads that contract.
+    it("specifies ORDER BY loser.rowid, so two 'user' losers cannot resolve differently on two machines", () => {
+      const sql = V71_SELECT_DUPLICATE_ATTACHMENTS_SQL;
+      expect(sql).toMatch(/ORDER\s+BY\s+loser\.rowid/i);
+      // Ascending, explicitly: DESC would make the LATEST correction win, which is
+      // the opposite of the documented "earliest wins" rule and of the keeper's own
+      // MIN(rowid) selection.
+      expect(sql).not.toMatch(/ORDER\s+BY\s+loser\.rowid\s+DESC/i);
+      // And the keeper is chosen by the same rule, so keeper and losers agree.
+      expect(sql).toMatch(/MIN\(k\.rowid\)/);
+    });
+
+    it("returns a multi-loser group in ascending rowid order", () => {
+      db = v70Fixture();
+      seedDedupFixture(db);
+      const losers = db
+        .prepare(V71_SELECT_DUPLICATE_ATTACHMENTS_SQL)
+        .all() as Array<{ loser: string; keep: string }>;
+      const multi = losers.filter((l) => l.keep === "uk").map((l) => l.loser);
+      expect(multi).toEqual(["ul1", "ul2"]); // insertion order == rowid order
+      // Every loser resolves to exactly one keeper, and never to itself.
+      expect(losers.every((l) => l.loser !== l.keep)).toBe(true);
+    });
   });
 
   it("CONTROL 3: sync_session_id is NOT copied — a keeper is never enrolled in a session it was not part of", () => {
