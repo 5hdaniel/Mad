@@ -14,8 +14,12 @@
  * PLAIN, NOT `async`, IS A RULE, NOT A STYLE. It is set by the seam ruling
  * (`5687984d`) and the measurements behind it are recorded in the SR reviews
  * of PRs #2544 (§2), #2545 (§5.3) and #2546 (§3) — three modules, one result.
- * This file's own conversion adds no new evidence for it: there is no
- * transaction body here (see below).
+ *
+ * For these seven the rule is asserted in
+ * `db/__tests__/communicationDbService.plainShape-2960.test.ts`, one case per
+ * export, each named for the export it holds. That suite, not this paragraph,
+ * is where the claim lives; its header says what it measured and why it is
+ * needed.
  *
  * TWO PRIVATE SYNCHRONOUS CORES. `updateTransactionThreadCount` needs the
  * thread count synchronously, may not `await`, and has eight callers inside
