@@ -26,7 +26,7 @@
  */
 
 import React from "react";
-import { render, screen, waitFor } from "@testing-library/react";
+import { render, screen, waitFor, fireEvent } from "@testing-library/react";
 import "@testing-library/jest-dom";
 import { EmailSettings } from "../EmailSettings";
 import { MacOSMessagesImportSettings } from "../MacOSMessagesImportSettings";
@@ -166,9 +166,14 @@ describe("BACKLOG-3156 — Emails", () => {
 
   /**
    * SR found an `<h4>Import Emails</h4>` sitting directly above the `Import
-   * Emails` button — the same words twice in one column. Stage B moves this
-   * prose into the `?` popup and the card goes away; until then the heading is
-   * gone, and this keeps it gone.
+   * Emails` button — the same words twice in one column. Stage A dropped the
+   * heading; STAGE B moved the prose it headed into the `?` popup and deleted
+   * the card, so the resting page now says "Import Emails" exactly once and the
+   * description is one `mouseDown` away rather than one line away.
+   *
+   * Both halves are asserted, because either alone passes on a mistake: the
+   * count alone passes if the prose was simply DELETED, and the popup check
+   * alone passes if the card was left on the page as well.
    */
   it("does not print the primary's name twice in the same column", async () => {
     render(<EmailSettings userId="u" initialPreferences={undefined as never} />);
@@ -176,11 +181,17 @@ describe("BACKLOG-3156 — Emails", () => {
       expect(screen.getByTestId("emails-block-actions")).toBeInTheDocument(),
     );
 
-    // Exactly one thing on the page says "Import Emails", and it is the button.
+    // Exactly one thing on the resting page says "Import Emails", and it is the
+    // button.
     const hits = screen.getAllByText("Import Emails");
     expect(hits).toHaveLength(1);
     expect(hits[0].tagName).toBe("BUTTON");
-    // The description it used to head is still there, unchanged in what it claims.
+    // …and the prose is not on the page beside it any more.
+    expect(screen.queryByTestId("recache-description")).not.toBeInTheDocument();
+    expect(screen.queryByText(/Fetches new mail/i)).not.toBeInTheDocument();
+
+    // It is in the popup, unchanged in what it claims.
+    fireEvent.mouseDown(screen.getByTestId("emails-import-info-button"));
     expect(screen.getByTestId("recache-description")).toHaveTextContent(
       /Fetches new mail/i,
     );
