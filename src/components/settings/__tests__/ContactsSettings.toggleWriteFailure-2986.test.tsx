@@ -42,7 +42,7 @@
  */
 
 import React from "react";
-import { render, screen, fireEvent, waitFor } from "@testing-library/react";
+import { render, screen, fireEvent, waitFor, within } from "@testing-library/react";
 import "@testing-library/jest-dom";
 import { ContactsSettings } from "../ContactsSettings";
 import { PlatformProvider } from "../../../contexts/PlatformContext";
@@ -273,18 +273,28 @@ describe("BACKLOG-2986 — the banner is where the click was", () => {
     //
     // (a) The alert precedes the switch it is about.
     expect(alert.compareDocumentPosition(screen.getByLabelText(ANDROID_SWITCH)) & 4).toBeTruthy();
-    // (b) And it sits INSIDE the import panel — after that panel's own heading,
-    //     immediately above the source toggle group. The old position was
-    //     between the section's <h3> and this panel, which satisfied (a) while
-    //     being a scroll away from every switch.
+    // (b) And it sits INSIDE the Sources block — after that block's label and
+    //     its description, immediately above the source toggle group. The old
+    //     position was between the section's <h3> and this panel, which
+    //     satisfied (a) while being a scroll away from every switch.
     //
-    //     BACKLOG-3156 stage A renamed that group's heading from "Import From"
-    //     to "Sources" — the same three-block shape Emails and Messages now use.
-    //     Only the string this reaches for changed; the position it asserts is
-    //     the one this test was written to pin.
-    const panelHeading = screen.getByRole("heading", { level: 4, name: "Contacts" });
-    expect(panelHeading.compareDocumentPosition(alert) & 4).toBeTruthy();
-    expect(alert.compareDocumentPosition(screen.getByText("Sources")) & 4).toBeTruthy();
+    //     BACKLOG-3156 stage E deleted the panel's `<h4>Contacts</h4>` (it
+    //     repeated the section's own <h3> one line above it) and made each
+    //     block its own card with its eyebrow as the card's first child. So the
+    //     anchor moves from that heading to the Sources CARD, and the claim
+    //     gets STRONGER rather than weaker: the alert must be a descendant of
+    //     that card, below its label and description, and above the first
+    //     switch. Anchoring on the section's <h3> instead would have been
+    //     vacuous — "after the <h3>" is exactly what the rejected position was.
+    const sourcesCard = screen.getByTestId("contacts-block-sources");
+    expect(sourcesCard.contains(alert)).toBe(true);
+
+    const label = within(sourcesCard).getByText("Sources");
+    const description = within(sourcesCard).getByText(
+      "Manage contact sources and import contacts for transaction assignment.",
+    );
+    expect(label.compareDocumentPosition(alert) & 4).toBeTruthy();
+    expect(description.compareDocumentPosition(alert) & 4).toBeTruthy();
   });
 });
 

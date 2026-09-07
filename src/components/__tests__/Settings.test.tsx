@@ -619,16 +619,46 @@ describe("Settings", () => {
       expect(within(sourcesBlock).getByText("Sources")).toBeInTheDocument();
     });
 
-    it("labels the block Sources, and the label sits above the Import Source card", async () => {
+    /**
+     * BACKLOG-3156 stage E rewrote what this asserts, because the thing it
+     * reached for is gone.
+     *
+     * It used to pin `Sources` (the eyebrow) above `Import Source` (an `<h4>`
+     * inside the card) — two headings for one block, which is the doubling the
+     * founder reported on the shipped screen. The `<h4>` was deleted, so an
+     * assertion naming it could only be deleted or rewritten; deleting it would
+     * leave the block's shape unasserted, which is how this file has drifted
+     * three times.
+     *
+     * The shape it holds instead is the one the approved artifact draws: the
+     * block IS the card, the eyebrow is that card's FIRST CHILD, and the
+     * description is the line under it — the slot the `<h4>` used to occupy. It
+     * is asserted here rather than in the panel's own suite for the reason the
+     * surrounding describe() gives: this is the real composition from
+     * `Settings.tsx`, not a fixture the test assembled.
+     */
+    it("makes the Sources block one card whose first line is its own label", async () => {
       await renderSettings({ userId: mockUserId, onClose: mockOnClose });
 
-      const sourcesBlock = await screen.findByTestId("messages-block-sources");
-      const eyebrow = within(sourcesBlock).getByText("Sources");
-      const card = within(sourcesBlock).getByText("Import Source");
+      const card = await screen.findByTestId("messages-block-sources");
 
-      expect(
-        `eyebrow then card: ${(eyebrow.compareDocumentPosition(card) & 4) !== 0}`,
-      ).toBe("eyebrow then card: true");
+      // The block and the card are the same element — nothing wraps it.
+      expect(card.className).toMatch(/(^|\s)rounded-lg(\s|$)/);
+      expect(card.className).toMatch(/(^|\s)border(\s|$)/);
+
+      // The eyebrow is the card's first child, INSIDE it.
+      const eyebrow = within(card).getByText("Sources");
+      expect(card.firstElementChild).toBe(eyebrow);
+
+      // The description is the next line, still inside the same card.
+      const description = within(card).getByText(
+        "Choose where to import your text messages from.",
+      );
+      expect(eyebrow.nextElementSibling).toBe(description);
+
+      // …and the card opens with the eyebrow, not with a heading repeating it.
+      expect(card.querySelector("h1,h2,h3,h4,h5,h6")).toBeNull();
+      expect(within(card).queryByText("Import Source")).toBeNull();
     });
   });
 
@@ -1219,18 +1249,31 @@ describe("Settings", () => {
 
       // ...but the Messages section + Android device/status management remain.
       expect(container.querySelector("#settings-messages")).toBeInTheDocument();
-      // BACKLOG-2468: scoped to the HEADING, not bare text. "Android Companion" appears TWICE
-      // inside #settings-messages — AndroidMessagesSettings.tsx:174 renders it as the <h4> section
-      // header (what this assertion is about), and ImportSourceSettings.tsx:308 renders it as the
-      // label of the import-source radio. Whether the radio renders depends on `usePlatform()`, so
-      // a bare findByText passed under plain-node jest and threw "Found multiple elements" under
-      // ELECTRON_RUN_AS_NODE — the route the pre-push hook picks when the native module rests on
-      // the Electron ABI. The <h4> is the only heading with this name anywhere in src/, so the
-      // role-scoped query names the device/status section in either runtime. Scoped rather than
-      // widened to getAllByText on purpose: a length assertion would encode a count nobody chose.
+      // BACKLOG-2468 scoped this to the HEADING rather than bare text, because
+      // "Android Companion" appeared TWICE inside #settings-messages: as the
+      // panel's own <h4> (what this assertion is about) and as the label of the
+      // import-source radio. Whether the radio renders depends on
+      // `usePlatform()`, so a bare findByText passed under plain-node jest and
+      // threw "Found multiple elements" under ELECTRON_RUN_AS_NODE — the route
+      // the pre-push hook picks when the native module rests on the Electron
+      // ABI. The <h4> was the only heading with the name, so the role-scoped
+      // query worked in either runtime.
+      //
+      // BACKLOG-3156 stage E deleted that <h4>: Emails and Contacts open
+      // straight onto their first card, and carrying a panel header on Messages
+      // alone was the divergence the shared shape forbids. The words now appear
+      // exactly ONCE on the screen — on the radio — so neither the heading query
+      // nor a text query can name the panel any more.
+      //
+      // The anchor moves to the panel's own testids, which is what the claim was
+      // always about: the Android device/status management rendered. Both are
+      // checked, and both are absent whenever the panel is absent, in either
+      // runtime and regardless of what the radio does.
       expect(
-        await screen.findByRole("heading", { name: "Android Companion" }),
+        await screen.findByTestId("android-block-preferences"),
       ).toBeInTheDocument();
+      expect(screen.getByTestId("android-block-actions")).toBeInTheDocument();
+      expect(container.querySelector("#settings-android-companion")).toBeInTheDocument();
     });
 
     it("does NOT render the wizard for a non-Android import source either", async () => {
