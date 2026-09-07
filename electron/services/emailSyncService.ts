@@ -362,6 +362,14 @@ interface AttachmentMetaLite {
   filename: string;
   mimeType: string | null;
   size: number | null;
+  /**
+   * BACKLOG-2551: the provider's own attachment id. Both providers supply one —
+   * Gmail as `part.body.attachmentId`, Outlook Graph as `id` — and this normaliser
+   * used to DISCARD it, which is why the column could not be populated at all.
+   * Whether it is then STORED is decided by the gate in
+   * persistEmailAttachmentMetadata, not here.
+   */
+  providerAttachmentId: string | null;
 }
 
 /**
@@ -378,6 +386,8 @@ function normalizeAttachmentMeta(
     mimeType?: string | null;
     contentType?: string | null;
     size?: number | null;
+    attachmentId?: string | null;
+    id?: string | null;
   }>,
 ): AttachmentMetaLite[] {
   const out: AttachmentMetaLite[] = [];
@@ -388,6 +398,8 @@ function normalizeAttachmentMeta(
       filename,
       mimeType: a.mimeType ?? a.contentType ?? null,
       size: typeof a.size === "number" ? a.size : null,
+      // Gmail parses `attachmentId`; Outlook Graph carries `id`.
+      providerAttachmentId: a.attachmentId ?? a.id ?? null,
     });
   }
   return out;
@@ -413,6 +425,8 @@ function normalizeAttachmentMeta(
 async function persistEmailAttachmentMetadata(args: {
   emailsToInsert: StoreableEmail[];
   insertedEmailMap: Map<string, string>;
+  /** BACKLOG-2551: which provider this batch came from — see the gate below. */
+  provider: "outlook" | "gmail";
   getAttachmentsFn?: (
     messageId: string,
   ) => Promise<
@@ -426,7 +440,20 @@ async function persistEmailAttachmentMetadata(args: {
    */
   force?: EmailForceStaging;
 }): Promise<void> {
-  const { emailsToInsert, insertedEmailMap, getAttachmentsFn, force } = args;
+  const { emailsToInsert, insertedEmailMap, provider, getAttachmentsFn, force } = args;
+
+  // BACKLOG-2551 — THE sync-side gate, the counterpart to the one inside
+  // emailAttachmentService.downloadEmailAttachments. Two chokepoints, both of
+  // which every write path must pass through; the decision is never replicated
+  // out to individual call sites, where missing one would be silent.
+  //
+  // Gmail stores NULL: Google documents `partId` as immutable and documents NO
+  // stability property for `attachmentId`, so it is not used as an identity key.
+  // Gmail rows stay out of idx_attachments_email_provider and take step 4 of the
+  // lookup order — pre-v71 behaviour exactly. Outlook ids are INFERRED stable per
+  // message, not verified. See BACKLOG-3187.
+  const providerIdFor = (m: AttachmentMetaLite): string | null =>
+    provider === "gmail" ? null : m.providerAttachmentId;
 
   for (const email of emailsToInsert) {
     const internalId = insertedEmailMap.get(email.id);
@@ -451,6 +478,7 @@ async function persistEmailAttachmentMetadata(args: {
           filename: m.filename,
           mimeType: m.mimeType,
           fileSizeBytes: m.size,
+          providerAttachmentId: providerIdFor(m),
         };
         if (force) {
           force.attachmentMeta.push(row);
@@ -894,6 +922,7 @@ async function fetchStoreAndDedup(params: {
       // here so filenames are searchable after a normal sync. Runs after the insert
       // transaction, is idempotent, and never downloads bytes.
       await persistEmailAttachmentMetadata({
+        provider,
         emailsToInsert,
         insertedEmailMap,
         getAttachmentsFn,

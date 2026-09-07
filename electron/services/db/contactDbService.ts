@@ -372,7 +372,25 @@ export async function createContact(
     const params = [
       id,
       contactData.user_id,
-      contactData.display_name || "Unknown",
+      /**
+       * BACKLOG-2707 — THE WRITER NO LONGER OVERRULES ITS CALLER.
+       *
+       * This was `|| "Unknown"`. It is the reason a validator-only fix for
+       * BACKLOG-2707 was vacuous: the handler could forward `""` all it liked
+       * and this line put the literal back. Measured before the fix — real
+       * `createContactsBatch`, real transaction, real SQLite, then a `SELECT`:
+       * `{display_name: ""}` stored `"Unknown"`.
+       *
+       * `""` is what "no name" means for this column: `display_name` is
+       * `TEXT NOT NULL`, so writing nothing was never available, and writing a
+       * label is forbidden by `contactDisplayLabel.ts` — a persisted fallback
+       * freezes a phone number as somebody's name (BACKLOG-2464). `""` is read
+       * as "no name" by `realContactName`, which is what makes the display
+       * chain render the phone at READ time instead.
+       *
+       * `??` not `||`, so the caller's value is honoured whatever it is.
+       */
+      contactData.display_name ?? "",
       contactData.company || null,
       contactData.title || null,
       contactSource,
@@ -533,7 +551,10 @@ export function createContactsBatch(
         [
           id,
           contactData.user_id,
-          contactData.display_name || "Unknown",
+          // BACKLOG-2707 — see `createContact` above for why this is `?? ""`
+          // and not `|| "Unknown"`. THIS is the line `contacts:import` reaches,
+          // and the one that made a validator-only fix vacuous.
+          contactData.display_name ?? "",
           contactData.company || null,
           contactData.title || null,
           contactData.source || "contacts_app",
