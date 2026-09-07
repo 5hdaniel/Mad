@@ -182,7 +182,36 @@ export const SYNTHETIC_SOURCE_DESTINATION: Readonly<
  * for an ABSENT source, `null` means NOT STORABLE, and each door keeps the answer
  * it already gives.
  *
- * @param inbound  the caller-supplied `source`, unvalidated.
+ * ===========================================================================
+ * THE COMPARISON IS EXACT. NO TRIMMING, NO CASE FOLDING — ON PURPOSE.
+ * ===========================================================================
+ * The first draft of this function normalised its input with
+ * `.trim().toLowerCase()`. It looked like tidiness and it was a widening of the
+ * import door, which is the one thing the paragraph above exists to prevent.
+ * Caught in SR review; measured on the real driver, parent `25577b648` against
+ * that draft, one record per call:
+ *
+ *     "SMS"          import   REFUSED, 0 rows   ->  accepted, stored "sms"
+ *     "Contacts_App" import   REFUSED, 0 rows   ->  accepted, stored "contacts_app"
+ *     " manual "     import   REFUSED, 0 rows   ->  accepted, stored "manual"
+ *     "SMS"          create   stored "manual"   ->  stored "sms"
+ *
+ * Six of ten probe rows changed answer, and no test in the suite could see it —
+ * deleting the normalisation left all 32 green. The `"SMS"` row is the one that
+ * matters: a stored `sms` contact matches NO filter leaf (see
+ * `SYNTHETIC_SOURCE_DESTINATION` above), so the normalisation turned a loud
+ * refusal into exactly the silent failure the destination decision rejects.
+ *
+ * Latent rather than live — every contact-source producer in the tree emits
+ * canonical lower-case, swept across `src/` and `electron/`. Removed anyway: a
+ * promise the code does not keep is a defect waiting for its first caller, and
+ * `contacts:import` is a door that should refuse what it does not recognise.
+ * `contact-handlers.messagesSource-2481.test.ts` pins the six rows above so the
+ * normalisation cannot come back unnoticed.
+ *
+ * @param inbound  the caller-supplied `source`, unvalidated and NOT normalised.
+ *   Compared exactly, so `"SMS"` is not `sms` and `" manual "` is not `manual`;
+ *   both are unrecognised, and each door answers that as it always has.
  * @param fallbackWhenAbsent  what to store when there is no source at all —
  *   `manual` for `contacts:create`, `contacts_app` for `contacts:import`. These
  *   deliberately differ; merging them would be a behaviour change.
@@ -191,7 +220,7 @@ export function toStorableContactSource(
   inbound: string | null | undefined,
   fallbackWhenAbsent: PersistedContactSource,
 ): PersistedContactSource | null {
-  const value = typeof inbound === "string" ? inbound.trim().toLowerCase() : "";
+  const value = typeof inbound === "string" ? inbound : "";
   if (value.length === 0) return fallbackWhenAbsent;
 
   const persisted = PERSISTED_CONTACT_SOURCES as readonly string[];

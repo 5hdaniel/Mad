@@ -519,3 +519,65 @@ describe("after the import, is the same person still offered as unsaved? (BACKLO
     expect(real.getMessageDerivedContacts(USER)).toEqual([]);
   });
 });
+
+/* ==========================================================================
+ * C8 — the boundary compares EXACTLY. No trimming, no case folding.
+ * ==========================================================================
+ * This item's first draft normalised the inbound value with
+ * `.trim().toLowerCase()`, and no test in this suite could tell whether it was
+ * there or not — deleting it left all 32 green. It was a widening of the import
+ * door arriving as a side effect of a refactor, which is the one thing the
+ * `null`-not-fallback design exists to prevent.
+ *
+ * The row that matters is `"SMS"`: under the normalisation `contacts:import`
+ * stopped refusing it and stored `sms` — and a stored `sms` contact matches no
+ * filter leaf, so a loud refusal became the silent failure this item's
+ * destination decision was chosen to avoid.
+ *
+ * These are the six probe rows that changed answer, pinned as assertions so the
+ * normalisation cannot return unnoticed. Latent, not live: every contact-source
+ * producer in the tree emits canonical lower-case today.
+ */
+describe("the write boundary compares exactly (BACKLOG-2481, SR required change A)", () => {
+  it.each([
+    ["SMS — the row that would become an invisible contact", "SMS"],
+    ["Contacts_App", "Contacts_App"],
+    ["Messages — the synthetic value in the wrong case", "Messages"],
+    ["' manual ' — untrimmed", " manual "],
+    ["MANUAL", "MANUAL"],
+  ])("contacts:import refuses %s, and lands nothing", async (_label, source) => {
+    const outcome = await importRecords([{ ...MESSAGE_DERIVED, source }]);
+
+    expect(outcome.refused).toBe(true);
+    expect(rows()).toEqual([]);
+    expect(originLinks()).toEqual([]);
+  });
+
+  it.each([
+    ["SMS", "SMS"],
+    ["Contacts_App", "Contacts_App"],
+    ["' manual '", " manual "],
+  ])("contacts:create folds %s to manual, as an unrecognised value", async (_label, source) => {
+    const outcome = await createContact({ ...MESSAGE_DERIVED, id: undefined, source });
+
+    expect(outcome).toEqual({ refused: false, error: null });
+    expect(rows()).toEqual([
+      { id: expect.any(String), display_name: "Rosalind Quill", source: "manual" },
+    ]);
+  });
+
+  /**
+   * The positive control. Without it, every assertion above is satisfied by a
+   * boundary that refuses EVERYTHING, and the suite would be proving nothing
+   * about case sensitivity.
+   */
+  it("CONTROL: the canonical lower-case spelling is still accepted on both doors", async () => {
+    expect(await importRecords([{ ...MESSAGE_DERIVED, source: "sms" }])).toEqual({
+      refused: false,
+      error: null,
+    });
+    expect(rows()).toEqual([
+      { id: expect.any(String), display_name: "Rosalind Quill", source: "sms" },
+    ]);
+  });
+});
