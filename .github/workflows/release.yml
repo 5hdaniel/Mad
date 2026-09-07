@@ -232,8 +232,18 @@ jobs:
             FOUND=$((FOUND+1))
             echo "::group::$APP"
             codesign --verify --deep --strict --verbose=2 "$APP"
-            codesign -dv --verbose=4 "$APP" 2>&1 | grep -q "Notarization Ticket=stapled" \
-              || { echo "::error::$APP has no stapled notarisation ticket"; exit 1; }
+            # Capture first, match second -- do NOT pipe into `grep -q`. grep -q
+            # exits at its first match and closes the pipe, so codesign can take
+            # SIGPIPE (141); under `set -o pipefail` that becomes the pipeline's
+            # status and this reports "not notarised" for an app that IS
+            # notarised. The ticket line is not codesign's last output, so the
+            # race is real, and it would fail the release on a correct build.
+            INFO=$(codesign -dv --verbose=4 "$APP" 2>&1)
+            grep -q "Notarization Ticket=stapled" <<<"$INFO" || {
+              echo "::error::$APP has no stapled notarisation ticket"
+              echo "$INFO"
+              exit 1
+            }
             xcrun stapler validate "$APP"
             spctl -a -t exec -vv "$APP"
             echo "::endgroup::"
