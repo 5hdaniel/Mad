@@ -73,6 +73,6 @@ export function CountModeToggle({ activeMode }: { activeMode: CountMode }) {
  */
 export function countModeCaption(mode: CountMode, unit: 'version' | 'platform'): string {
   return mode === 'cumulative'
-    ? `Counting every ${unit} a user has an active device on — someone running two ${unit === 'version' ? 'versions' : 'platforms'} is counted under both, so the total exceeds 100%.`
+    ? `Counting every ${unit} a user has an active device on — someone running two ${unit === 'version' ? 'versions' : 'platforms'} is counted under both, so the total can exceed 100%.`
     : `Counting each user once, under the ${unit} of their most recently seen active device.`;
 }
