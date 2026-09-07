@@ -508,53 +508,6 @@ class TransactionService {
   }
 
   /**
-   * Create transaction from extracted summary
-   */
-  private async _createTransactionFromSummary(
-    userId: string,
-    summary: { propertyAddress: string; transactionType?: "purchase" | "sale"; closingDate?: Date | string; communicationsCount: number; confidence?: number; firstCommunication: Date | string; lastCommunication: Date | string; salePrice?: number },
-  ): Promise<string> {
-    const addressParts = this._parseAddress(summary.propertyAddress);
-
-    const toISOString = (date: string | Date | number | null | undefined): string | undefined => {
-      if (!date) return undefined;
-      if (date instanceof Date) return date.toISOString();
-      if (typeof date === "string") return date;
-      if (typeof date === "number") return new Date(date).toISOString();
-      return undefined;
-    };
-
-    const transactionData: Partial<NewTransaction> = {
-      user_id: userId,
-      property_address: summary.propertyAddress,
-      property_street: addressParts.street || undefined,
-      property_city: addressParts.city || undefined,
-      property_state: addressParts.state || undefined,
-      property_zip: addressParts.zip || undefined,
-      transaction_type: summary.transactionType,
-      status: "active",
-      closed_at: toISOString(summary.closingDate),
-      closing_date_verified: false,
-      communications_scanned: summary.communicationsCount || 0,
-      extraction_confidence: summary.confidence,
-      first_communication_date: toISOString(summary.firstCommunication),
-      last_communication_date: toISOString(summary.lastCommunication),
-      total_communications_count: summary.communicationsCount || 0,
-      sale_price:
-        typeof summary.salePrice === "number" ? summary.salePrice : undefined,
-      export_status: "not_exported",
-      export_count: 0,
-      offer_count: 0,
-      failed_offers_count: 0,
-    };
-
-    const transaction = await databaseService.createTransaction(
-      transactionData as NewTransaction,
-    );
-    return transaction.id;
-  }
-
-  /**
    * Save communications to database and link to transaction
    */
   private async _saveCommunications(
