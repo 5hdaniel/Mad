@@ -25,6 +25,7 @@ import userEvent from "@testing-library/user-event";
 import "@testing-library/jest-dom";
 import TransactionDetails from "../TransactionDetails";
 import type { Transaction } from "../../../electron/types/models";
+import type { ImportPhase } from "../../../electron/types/ipc/importPhase";
 
 jest.mock("../../contexts/LicenseContext", () => ({
   useLicense: () => ({
@@ -77,7 +78,7 @@ jest.mock("../transactionDetailsModule/components/TransactionMessagesTab", () =>
 /* eslint-enable @typescript-eslint/no-explicit-any */
 
 interface ImportProgress {
-  phase: "deleting" | "importing" | "attachments";
+  phase: ImportPhase;
   current: number;
   total: number;
   percent: number;

@@ -894,7 +894,13 @@ export class BackupService extends EventEmitter {
         success: false,
         backupPath: null,
         error: error instanceof ValidationError ? error.message : "Invalid device UDID",
-        errorCode: "BACKUP_FAILED" as BackupErrorCode,
+        // BACKLOG-2953: was the string "BACKUP_FAILED" cast to BackupErrorCode — a value
+        // outside the union, smuggled past `tsc` by the cast. `validateDeviceUdid` throws only
+        // `ValidationError` (electron/utils/validation.ts), so the second arm is
+        // unreachable today; it exists so that if anything else ever escapes, the
+        // code says "unknown" rather than claiming a specific cause it cannot vouch
+        // for — the BACKLOG-2913 defect, not repeated here.
+        errorCode: error instanceof ValidationError ? "INVALID_UDID" : "UNKNOWN_ERROR",
         duration: 0,
         deviceUdid: options.udid,
         isIncremental: false,
@@ -915,7 +921,7 @@ export class BackupService extends EventEmitter {
         success: false,
         backupPath: null,
         error: "Backup password required",
-        errorCode: "PASSWORD_REQUIRED" as BackupErrorCode,
+        errorCode: "PASSWORD_REQUIRED",
         duration: 0,
         deviceUdid: options.udid,
         isIncremental: false,
@@ -1242,7 +1248,7 @@ export class BackupService extends EventEmitter {
               success: false,
               backupPath: deviceBackupPath,
               error: "Backup password required",
-              errorCode: "PASSWORD_REQUIRED" as BackupErrorCode,
+              errorCode: "PASSWORD_REQUIRED",
               duration: Date.now() - this.startTime,
               deviceUdid: options.udid,
               isIncremental: this.resolveIsIncremental(previousBackupExists, options),
@@ -1287,8 +1293,8 @@ export class BackupService extends EventEmitter {
                 error: decryptionResult.error || "Decryption failed",
                 errorCode:
                   decryptionResult.error === "Incorrect password"
-                    ? ("INCORRECT_PASSWORD" as BackupErrorCode)
-                    : ("DECRYPTION_FAILED" as BackupErrorCode),
+                    ? "INCORRECT_PASSWORD"
+                    : "DECRYPTION_FAILED",
                 duration: Date.now() - this.startTime,
                 deviceUdid: options.udid,
                 isIncremental: this.resolveIsIncremental(previousBackupExists, options),
