@@ -431,20 +431,27 @@ export class iOSMessagesParser {
   }
 
   /**
-   * Get messages for a specific chat (sync version - may block UI for large chats)
+   * Messages in one chat, oldest first.
+   *
+   * BACKLOG-2960: `async` because `db/appleSmsDbSql.selectChatMessages` returns a
+   * promise at the export.
+   *
    * @param chatId The chat ID to get messages for
    * @param limit Optional limit on number of messages (for pagination)
    * @param offset Optional offset for pagination
-   * @deprecated Use getMessagesAsync() for large message counts
-   * @note This sync version does NOT parse attributedBody (async operation)
+   * @deprecated Prefer `getMessagesAsync`.
    */
-  getMessages(chatId: number, limit?: number, offset?: number): iOSMessage[] {
+  async getMessages(
+    chatId: number,
+    limit?: number,
+    offset?: number,
+  ): Promise<iOSMessage[]> {
     this.ensureOpen();
 
     try {
       // Page bounds BIND as clamped integers; the clamp and the bind are
       // computed together in db/ so they cannot drift apart.
-      const rows = selectChatMessages<RawMessageRow>(
+      const rows = await selectChatMessages<RawMessageRow>(
         this.db!,
         this.checkAudioTranscriptColumn(),
         chatId,
@@ -464,9 +471,12 @@ export class iOSMessagesParser {
   }
 
   /**
-   * Get messages for a specific chat (async version with yielding)
-   * Yields to event loop periodically to prevent blocking the UI
-   * Parses attributedBody when text field is empty
+   * Messages in one chat, oldest first, pre-parsing `attributedBody` where the
+   * text column is empty and yielding to the event loop between batches.
+   *
+   * Already `async` before BACKLOG-2960 — this method is edited, not flipped:
+   * the seam call below gained an `await`.
+   *
    * @param chatId The chat ID to get messages for
    * @param limit Optional limit on number of messages (for pagination)
    * @param offset Optional offset for pagination
@@ -481,7 +491,7 @@ export class iOSMessagesParser {
     try {
       // Page bounds BIND as clamped integers; the clamp and the bind are
       // computed together in db/ so they cannot drift apart.
-      const rows = selectChatMessages<RawMessageRow>(
+      const rows = await selectChatMessages<RawMessageRow>(
         this.db!,
         this.checkAudioTranscriptColumn(),
         chatId,
@@ -586,12 +596,15 @@ export class iOSMessagesParser {
   }
 
   /**
-   * Search messages across all conversations
+   * Messages whose text matches a query, newest first, across every conversation.
+   *
+   * BACKLOG-2960: `async` because `db/appleSmsDbSql.searchMessagesByText` returns
+   * a promise at the export.
+   *
    * @param query The search query string
    * @param limit Optional limit on results
-   * @note This sync version does NOT parse attributedBody (async operation)
    */
-  searchMessages(query: string, limit?: number): iOSMessage[] {
+  async searchMessages(query: string, limit?: number): Promise<iOSMessage[]> {
     this.ensureOpen();
 
     if (!query || query.trim().length === 0) {
@@ -600,7 +613,7 @@ export class iOSMessagesParser {
 
     try {
       const searchPattern = `%${query}%`;
-      const rows = searchMessagesByText<RawMessageRow>(
+      const rows = await searchMessagesByText<RawMessageRow>(
         this.db!,
         this.checkAudioTranscriptColumn(),
         searchPattern,
@@ -638,13 +651,16 @@ export class iOSMessagesParser {
   }
 
   /**
-   * Get conversation with messages populated
+   * One conversation with its messages populated.
+   *
+   * BACKLOG-2960: `async` because it reads through `getMessages`, which the
+   * conversion made promise-returning.
    */
-  getConversationWithMessages(
+  async getConversationWithMessages(
     chatId: number,
     limit?: number,
     offset?: number,
-  ): iOSConversation | null {
+  ): Promise<iOSConversation | null> {
     this.ensureOpen();
 
     try {
@@ -657,7 +673,7 @@ export class iOSMessagesParser {
       }
 
       const participants = this.getParticipants(chatId);
-      const messages = this.getMessages(chatId, limit, offset);
+      const messages = await this.getMessages(chatId, limit, offset);
 
       const lastMessageDate =
         messages.length > 0 ? messages[messages.length - 1].date : new Date(0);
