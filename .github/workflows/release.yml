@@ -39,11 +39,7 @@ jobs:
       - name: Import Apple Certificate
         id: import-cert
         env:
-          # TEMPORARY -- BACKLOG-3192 step 9. Reverted in the immediately
-          # following commit. An explicit empty literal, so the disabled state is
-          # stated in the file rather than inferred from an absent secret. No
-          # repository secret is modified by this.
-          MACOS_CERTIFICATE: ''
+          MACOS_CERTIFICATE: ${{ secrets.MACOS_CERTIFICATE }}
           MACOS_CERTIFICATE_PASSWORD: ${{ secrets.MACOS_CERTIFICATE_PASSWORD }}
         run: |
           if [ -z "$MACOS_CERTIFICATE" ]; then
