@@ -474,12 +474,21 @@ const INSERTABLE_COLUMNS: readonly TransactionColumn[] = TABLE_FIELDS.transactio
  * boolean throws, so the coercion below is what lets a hard-coded INSERT become
  * a derived one without every caller being rewritten to pass 0/1.
  *
- * This is not hypothetical on the UPDATE path: `NewTransaction` declares
- * `closing_date_verified` as a `boolean` and that column is `writable` on
- * update, so a boolean reaches this function from a real caller. On the INSERT
- * path no `writable` column is boolean-typed today, and the coercion is
- * defensive — deliberately, since which columns are insertable is derived from
- * the policy table above and changes when an entry changes.
+ * The boolean case is reachable BY TYPE on the UPDATE path, though no caller
+ * exercises it today. `updateTransaction` takes `Partial<Transaction>`, and
+ * `Transaction` declares `closing_date_verified` as a `boolean` — the only
+ * boolean-typed column on either payload type — so a main-process caller can
+ * hand this function a boolean and the compiler will accept it. In practice
+ * none does: the one real writer, `ExportModal`'s `handleExport`, sends `1`,
+ * and the IPC validator coerces with `Number()` before the value arrives. The
+ * freeze-override sentinel is the only boolean literal in any update payload,
+ * and it is deleted from the record before the column loop runs.
+ *
+ * On the INSERT path no `writable` column is boolean-typed at all.
+ *
+ * So the coercion is defensive on both paths — deliberately, since which
+ * columns are insertable is derived from the policy table above and changes
+ * when an entry changes.
  */
 function bindValue(
   column: TransactionColumn,
