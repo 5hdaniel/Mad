@@ -104,10 +104,10 @@ function timed<T>(fn: () => T): T {
 }
 
 /**
- * Give `wrapper` the own enumerable properties of the function it replaces.
+ * Give `wrapper` the own properties of the function it replaces — every own key,
+ * not only the enumerable ones.
  *
- * A native better-sqlite3 method has none, so this is a no-op against the real
- * driver. A `jest.fn()` carries its whole configuration surface there —
+ * A `jest.fn()` carries its whole configuration surface —
  * `mockReturnValue`, `mock.calls`, `mockImplementation` — and suites that hand
  * `setDb()` a mock database keep configuring and asserting on those methods
  * after the handle is instrumented. Replacing a method outright would strip them

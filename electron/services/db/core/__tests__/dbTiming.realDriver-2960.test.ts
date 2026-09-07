@@ -335,7 +335,6 @@ describe("installation is safe to repeat and safe on partial handles", () => {
 
     instrumentDatabaseTiming(proxy);
 
-    // Untouched: still the trap's function, and still working.
     expect(synthesised).toBeGreaterThan(0);
     proxy.prepare("INSERT INTO t (a, b) VALUES (?, ?)").run(1, "via-proxy");
     expect(db.prepare("SELECT count(*) AS c FROM t").get()).toEqual({ c: 1 });
