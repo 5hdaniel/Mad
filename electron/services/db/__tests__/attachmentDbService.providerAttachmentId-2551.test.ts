@@ -34,6 +34,16 @@ import {
   findEmailAttachmentRow,
   setEmailAttachmentStorage,
 } from "../attachmentDbService";
+// BACKLOG-2551: the fixture below builds the post-v71 shape from the SAME constants
+// migration v71 executes, rather than transcribing them. A hand-typed copy would
+// keep this suite green while the migration's own definition drifted away from it —
+// which is precisely the defect class this PR exists to remove, so it has no place
+// in this PR's own tests. (The migration's index is separately exercised in
+// databaseService.migration-v71.test.ts; this removes the second, silent copy.)
+import {
+  V71_ADD_PROVIDER_COLUMN_SQL,
+  V71_CREATE_PROVIDER_INDEX_SQL,
+} from "../migrationV71Sql";
 
 const FROZEN = fs.readFileSync(
   path.join(__dirname, "..", "..", "__tests__", "fixtures", "chain-v69-schema.sql"),
@@ -46,11 +56,9 @@ function postV71Db(): DatabaseType {
   d.exec(FROZEN);
   d.exec(`INSERT INTO users_local (id,email,oauth_provider,oauth_id)
             VALUES ('u1','synthetic@example.test','google','oid-1');
-          INSERT INTO emails (id,user_id) VALUES ('e1','u1');
-          ALTER TABLE attachments ADD COLUMN provider_attachment_id TEXT;
-          CREATE UNIQUE INDEX idx_attachments_email_provider
-            ON attachments(email_id, provider_attachment_id)
-            WHERE provider_attachment_id IS NOT NULL;`);
+          INSERT INTO emails (id,user_id) VALUES ('e1','u1');`);
+  d.exec(V71_ADD_PROVIDER_COLUMN_SQL);
+  d.exec(V71_CREATE_PROVIDER_INDEX_SQL);
   return d;
 }
 
