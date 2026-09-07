@@ -993,14 +993,14 @@ function loadItem(id: string): ReviewItem | undefined {
  *    Removed section renders these and a duplicate would be a second card with
  *    a second Restore for one email.
  */
-function resolveLegacyTwins(
+async function resolveLegacyTwins(
   emailId: string | null,
   transactionId: string,
   verb: "approve" | "reject",
-): void {
+): Promise<void> {
   if (!emailId) return;
   if (verb === "approve") {
-    confirmEmailLinksByEmailIds([emailId], transactionId);
+    await confirmEmailLinksByEmailIds([emailId], transactionId);
     return;
   }
   dbRun(
@@ -1025,7 +1025,7 @@ export async function approveReviewItems(itemIds: string[]): Promise<{ approved:
 
     if (item.origin === "legacy") {
       if (!item.email_id) continue;
-      confirmEmailLinksByEmailIds([item.email_id], item.transaction_id);
+      await confirmEmailLinksByEmailIds([item.email_id], item.transaction_id);
       approved++;
       continue;
     }
@@ -1042,7 +1042,7 @@ export async function approveReviewItems(itemIds: string[]): Promise<{ approved:
       // does, the call above returned "already_linked" without promoting the
       // existing row, so without this the approved email stays address_missing —
       // i.e. still in review, still gating Complete.
-      resolveLegacyTwins(item.email_id, item.transaction_id, "approve");
+      await resolveLegacyTwins(item.email_id, item.transaction_id, "approve");
     } else if (item.thread_id) {
       const txn = getTransactionRow(item.transaction_id);
       if (!txn) continue;
@@ -1108,7 +1108,7 @@ export async function rejectReviewItems(itemIds: string[]): Promise<{ rejected: 
       // means "not part of this deal", so that link goes too — otherwise the
       // rejected email came straight back as its legacy self, still in review
       // and still in the audit.
-      resolveLegacyTwins(item.email_id, item.transaction_id, "reject");
+      await resolveLegacyTwins(item.email_id, item.transaction_id, "reject");
     }
     rejected++;
   }

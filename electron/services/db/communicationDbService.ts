@@ -1,6 +1,39 @@
 /**
  * Communication Database Service
  * Handles all communication-related database operations (emails, etc.)
+ *
+ * BACKLOG-2960 (wave 1, lane B round 4) — SEVEN EXPORTS RETURN PROMISES.
+ *
+ * `confirmEmailLinksByEmailIds`, the three `getIgnored*ForTransaction` sets,
+ * `countTextThreadsForTransaction`, `updateTransactionThreadCount` and
+ * `backfillAllTransactionThreadCounts` were the file's only synchronous
+ * exports; each is now `Promise`-returning. Every one is a PLAIN function —
+ * never `async` — and the driver call is evaluated before `Promise.resolve`
+ * wraps its value.
+ *
+ * PLAIN, NOT `async`, IS A RULE, NOT A STYLE. It is set by the seam ruling
+ * (`5687984d`) and the measurements behind it are recorded in the SR reviews
+ * of PRs #2544 (§2), #2545 (§5.3) and #2546 (§3) — three modules, one result.
+ *
+ * For these seven the rule is asserted in
+ * `db/__tests__/communicationDbService.plainShape-2960.test.ts`, one case per
+ * export, each named for the export it holds. That suite, not this paragraph,
+ * is where the claim lives; its header says what it measured and why it is
+ * needed.
+ *
+ * TWO PRIVATE SYNCHRONOUS CORES. `updateTransactionThreadCount` needs the
+ * thread count synchronously, may not `await`, and has eight callers inside
+ * this file. `countTextThreadsForTransactionInternal` and
+ * `updateTransactionThreadCountInternal` hold the work; the two exports are
+ * wrappers over them, and the in-file callers call the cores. The intent is
+ * that the conversion leaves this file's internal control flow alone rather
+ * than threading eight new `await`s through it; the PR body carries the
+ * comment-stripped base-vs-head diff so a reader can check that rather than
+ * take it.
+ *
+ * They are deliberately NOT named `*Sync`. That suffix belongs to a twin a
+ * transaction body calls, and this file contains no transaction body — neither
+ * core is a twin, and the name would say it was.
  */
 
 import crypto from "crypto";
@@ -124,12 +157,12 @@ export async function createCommunication(
       [communicationData.message_id]
     );
     if (message?.channel && isTextMessage({ channel: message.channel })) {
-      updateTransactionThreadCount(communicationData.transaction_id);
+      updateTransactionThreadCountInternal(communicationData.transaction_id);
     }
   }
   // Thread-based linking is always for text messages
   if (communicationData.transaction_id && communicationData.thread_id) {
-    updateTransactionThreadCount(communicationData.transaction_id);
+    updateTransactionThreadCountInternal(communicationData.transaction_id);
   }
 
   return communication;
@@ -274,14 +307,15 @@ export async function updateCommunication(
  * section and into Linked. Thread-aware: the caller passes every email id in
  * the confirmed conversation. Idempotent — re-confirming is a harmless no-op.
  *
- * @returns the number of link rows updated
+ * @returns a promise of the number of link rows updated. BACKLOG-2960: the
+ * UPDATE has already run when the promise is handed back.
  */
 export function confirmEmailLinksByEmailIds(
   emailIds: string[],
   transactionId: string,
-): number {
+): Promise<number> {
   const ids = emailIds.filter((id): id is string => typeof id === "string" && id.length > 0);
-  if (ids.length === 0) return 0;
+  if (ids.length === 0) return Promise.resolve(0);
 
   const placeholders = placeholderList(ids.length);
   const statement = sql`
@@ -290,7 +324,7 @@ export function confirmEmailLinksByEmailIds(
      WHERE transaction_id = ?
        AND email_id IN (${placeholders})
   `;
-  return dbRun(statement, [transactionId, ...ids]).changes ?? 0;
+  return Promise.resolve(dbRun(statement, [transactionId, ...ids]).changes ?? 0);
 }
 
 /**
@@ -311,7 +345,7 @@ export async function deleteCommunication(communicationId: string): Promise<void
   if (comm?.transaction_id) {
     // Thread-based link is always for text messages
     if (comm.thread_id) {
-      updateTransactionThreadCount(comm.transaction_id);
+      updateTransactionThreadCountInternal(comm.transaction_id);
     }
     // Message-based link - check if the message is a text type
     else if (comm.message_id) {
@@ -320,7 +354,7 @@ export async function deleteCommunication(communicationId: string): Promise<void
         [comm.message_id]
       );
       if (message?.channel && isTextMessage({ channel: message.channel })) {
-        updateTransactionThreadCount(comm.transaction_id);
+        updateTransactionThreadCountInternal(comm.transaction_id);
       }
     }
   }
@@ -348,7 +382,7 @@ export async function deleteCommunicationByMessageId(messageId: string): Promise
       [messageId]
     );
     if (message?.channel && isTextMessage({ channel: message.channel })) {
-      updateTransactionThreadCount(comm.transaction_id);
+      updateTransactionThreadCountInternal(comm.transaction_id);
     }
   }
 }
@@ -587,13 +621,13 @@ export async function removeIgnoredCommunication(ignoredCommId: string): Promise
  */
 export function getIgnoredEmailIdsForTransaction(
   transactionId: string,
-): Set<string> {
+): Promise<Set<string>> {
   const statement = sql`
     SELECT email_id FROM ignored_communications
     WHERE transaction_id = ? AND email_id IS NOT NULL
   `;
   const rows = dbAll<{ email_id: string }>(statement, [transactionId]);
-  return new Set(rows.map((r) => r.email_id));
+  return Promise.resolve(new Set(rows.map((r) => r.email_id)));
 }
 
 /**
@@ -602,7 +636,7 @@ export function getIgnoredEmailIdsForTransaction(
  */
 export function getIgnoredThreadIdsForTransaction(
   transactionId: string,
-): Set<string> {
+): Promise<Set<string>> {
   const statement = sql`
     SELECT thread_id FROM ignored_communications
     WHERE transaction_id = ? AND thread_id IS NOT NULL
@@ -614,7 +648,7 @@ export function getIgnoredThreadIdsForTransaction(
     transactionId, count: result.size, ids: Array.from(result)
   });
 
-  return result;
+  return Promise.resolve(result);
 }
 
 /**
@@ -624,13 +658,13 @@ export function getIgnoredThreadIdsForTransaction(
  */
 export function getIgnoredCommunicationIdsForTransaction(
   transactionId: string,
-): Set<string> {
+): Promise<Set<string>> {
   const statement = sql`
     SELECT original_communication_id FROM ignored_communications
     WHERE transaction_id = ? AND original_communication_id IS NOT NULL
   `;
   const rows = dbAll<{ original_communication_id: string }>(statement, [transactionId]);
-  return new Set(rows.map((r) => r.original_communication_id));
+  return Promise.resolve(new Set(rows.map((r) => r.original_communication_id)));
 }
 
 // ============================================
@@ -742,7 +776,7 @@ export async function createCommunicationReference(
     [data.message_id]
   );
   if (message?.channel && isTextMessage({ channel: message.channel })) {
-    updateTransactionThreadCount(data.transaction_id);
+    updateTransactionThreadCountInternal(data.transaction_id);
   }
 
   return communication;
@@ -1010,7 +1044,7 @@ export async function createThreadCommunicationReference(
   dbRun(statement, params);
 
   // BACKLOG-396: Thread-based linking is always for text messages, update count
-  updateTransactionThreadCount(transactionId);
+  updateTransactionThreadCountInternal(transactionId);
 
   return id;
 }
@@ -1035,7 +1069,7 @@ export async function deleteCommunicationByThread(
   dbRun(statement, [threadId, transactionId]);
 
   // BACKLOG-396: Thread-based unlinking is always for text messages, update count
-  updateTransactionThreadCount(transactionId);
+  updateTransactionThreadCountInternal(transactionId);
 }
 
 /**
@@ -1133,7 +1167,19 @@ function getThreadKey(msg: { thread_id?: string | null; participants?: string | 
  * BACKLOG-396: This is the source of truth for text thread counts.
  * BACKLOG-506 (TASK-1307): Updated for pure junction table (no communication_type column).
  */
-export function countTextThreadsForTransaction(transactionId: string): number {
+export function countTextThreadsForTransaction(transactionId: string): Promise<number> {
+  return Promise.resolve(countTextThreadsForTransactionInternal(transactionId));
+}
+
+/**
+ * The synchronous core of `countTextThreadsForTransaction`.
+ *
+ * BACKLOG-2960: `updateTransactionThreadCountInternal` needs this count in the
+ * same tick and the export may not be `async`, so the work lives here and the
+ * export is a wrapper over it. Private on purpose — this is not a seam export
+ * and not a transaction twin.
+ */
+function countTextThreadsForTransactionInternal(transactionId: string): number {
   // Get all text communications linked to this transaction
   // BACKLOG-506: Since communications is now a pure junction table, we ONLY check
   // m.channel from the messages table. Thread-based links (c.thread_id) are always
@@ -1174,8 +1220,21 @@ export function countTextThreadsForTransaction(transactionId: string): number {
  *
  * BACKLOG-396: Ensures TransactionCard displays the correct thread count.
  */
-export function updateTransactionThreadCount(transactionId: string): void {
-  const threadCount = countTextThreadsForTransaction(transactionId);
+export function updateTransactionThreadCount(transactionId: string): Promise<void> {
+  return Promise.resolve(updateTransactionThreadCountInternal(transactionId));
+}
+
+/**
+ * The synchronous core of `updateTransactionThreadCount`.
+ *
+ * BACKLOG-2960: this file's own write paths call it eight times, each one
+ * immediately after a junction-table write. Keeping those calls synchronous is
+ * why the core exists — the alternative was eight new `await`s inside
+ * `createCommunication`, `deleteCommunication` and their siblings. Private on
+ * purpose: not a seam export, not a transaction twin.
+ */
+function updateTransactionThreadCountInternal(transactionId: string): void {
+  const threadCount = countTextThreadsForTransactionInternal(transactionId);
 
   const statement = sql`UPDATE transactions SET text_thread_count = ? WHERE id = ?`;
   dbRun(statement, [threadCount, transactionId]);
@@ -1187,7 +1246,7 @@ export function updateTransactionThreadCount(transactionId: string): void {
  *
  * BACKLOG-396: Migration helper for existing transactions.
  */
-export function backfillAllTransactionThreadCounts(): { updated: number; errors: number } {
+export function backfillAllTransactionThreadCounts(): Promise<{ updated: number; errors: number }> {
   // BACKLOG-1095: Single GROUP BY query replaces N+1 per-transaction queries.
   const threadCountsSql = sql`
     SELECT c.transaction_id, COUNT(DISTINCT COALESCE(m.thread_id, m.id)) as thread_count
@@ -1224,5 +1283,5 @@ export function backfillAllTransactionThreadCounts(): { updated: number; errors:
     }
   }
 
-  return { updated, errors };
+  return Promise.resolve({ updated, errors });
 }

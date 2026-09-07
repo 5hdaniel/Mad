@@ -840,10 +840,10 @@ export async function autoLinkCommunicationsForContact(
 
     // 5b. BACKLOG-1560: Filter out emails and threads that the user previously unlinked.
     // This prevents deleted conversations from reappearing after re-sync.
-    const ignoredEmailIds = getIgnoredEmailIdsForTransaction(transactionId);
-    const ignoredThreadIds = getIgnoredThreadIdsForTransaction(transactionId);
+    const ignoredEmailIds = await getIgnoredEmailIdsForTransaction(transactionId);
+    const ignoredThreadIds = await getIgnoredThreadIdsForTransaction(transactionId);
     // BACKLOG-1560: Per-message suppression for messages without a valid thread_id
-    const ignoredCommIds = getIgnoredCommunicationIdsForTransaction(transactionId);
+    const ignoredCommIds = await getIgnoredCommunicationIdsForTransaction(transactionId);
 
     await logService.debug("[BACKLOG-1560] Auto-link suppression sets", "AutoLinkService", {
       transactionId,
@@ -1586,8 +1586,8 @@ export async function expandAttachedThreadsForUser(
       // 6. Suppression sets for THIS transaction — identical to the ones
       //    autoLinkCommunicationsForContact honors. A conversation/message the
       //    user removed stays removed.
-      const ignoredThreadIds = getIgnoredThreadIdsForTransaction(transactionId);
-      const ignoredCommIds = getIgnoredCommunicationIdsForTransaction(transactionId);
+      const ignoredThreadIds = await getIgnoredThreadIdsForTransaction(transactionId);
+      const ignoredCommIds = await getIgnoredCommunicationIdsForTransaction(transactionId);
 
       // messageId -> thread_id, deduped across sibling discovery.
       const candidates = new Map<string, string | null>();
@@ -1708,7 +1708,7 @@ export async function expandAttachedThreadsForUser(
       //    attach ultimately relies on). Recomputed from the junction, so it is
       //    idempotent across re-runs.
       if (linkedForTxn > 0) {
-        updateTransactionThreadCount(transactionId);
+        await updateTransactionThreadCount(transactionId);
       }
     }
 
