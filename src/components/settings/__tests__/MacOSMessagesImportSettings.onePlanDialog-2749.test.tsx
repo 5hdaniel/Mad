@@ -600,6 +600,22 @@ describe("BACKLOG-2749 — no surface says 'up to 50,000' while another says 62,
 
     renderStrict(<MacOSMessagesImportSettings userId={USER_ID} />);
 
+    /*
+     * BACKLOG-2812 — this wait IS the resolved-state gate, not a redundant one.
+     * The anchor /Auto-importing messages back to/ matches the PRE-estimate
+     * fallback and the resolved text alike: the component renders
+     * ", up to ${maxMessages} messages" as the else arm of ONE ternary
+     * (MacOSMessagesImportSettings.tsx:1499), so findByText on its own settles
+     * on the fallback render and this test passed even when the estimate never
+     * resolved (measured: 2 passed under a never-resolving getImportCount).
+     * The Import button stays disabled until estimateStatus === "ready"
+     * (component :722 / :754 / :760 / :1854), so waiting for it to enable is
+     * the only thing that proves the assertions below read the RESOLVED state.
+     * Do not delete this as "a redundant wait" — it is what makes the test
+     * non-vacuous. See also the file's own openDialog() helper, same idiom.
+     */
+    await waitFor(() => expect(importButton()).toBeEnabled());
+
     const indicator = await screen.findByText(/Auto-importing messages back to/);
     expect(indicator).toHaveTextContent("up to 50,000 messages");
     expect(indicator).not.toHaveTextContent(/covering/i);
@@ -620,6 +636,22 @@ describe("BACKLOG-2749 — no surface says 'up to 50,000' while another says 62,
     });
 
     renderStrict(<MacOSMessagesImportSettings userId={USER_ID} />);
+
+    /*
+     * BACKLOG-2812 — this wait IS the resolved-state gate, not a redundant one.
+     * The anchor /Auto-importing messages back to/ matches the PRE-estimate
+     * fallback and the resolved text alike: the component renders
+     * ", up to ${maxMessages} messages" as the else arm of ONE ternary
+     * (MacOSMessagesImportSettings.tsx:1499), so findByText on its own settles
+     * on the fallback render and this test passed even when the estimate never
+     * resolved (measured: 2 passed under a never-resolving getImportCount).
+     * The Import button stays disabled until estimateStatus === "ready"
+     * (component :722 / :754 / :760 / :1854), so waiting for it to enable is
+     * the only thing that proves the assertions below read the RESOLVED state.
+     * Do not delete this as "a redundant wait" — it is what makes the test
+     * non-vacuous. See also the file's own openDialog() helper, same idiom.
+     */
+    await waitFor(() => expect(importButton()).toBeEnabled());
 
     const indicator = await screen.findByText(/Auto-importing messages back to/);
     expect(indicator).toHaveTextContent("up to 50,000 messages");

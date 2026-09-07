@@ -67,6 +67,29 @@ export interface SyncItem {
   error?: string;
   /** Optional phase label for display (e.g., "querying", "attachments") */
   phase?: string;
+  /**
+   * BACKLOG-3128: real counts from the producer for the CURRENT phase, when
+   * that phase has them. Absent means "this phase reports no count" — surfaces
+   * must then show an indeterminate bar, never a number.
+   */
+  current?: number;
+  total?: number;
+  /**
+   * BACKLOG-3128: this item has no honest percentage, so no surface may render
+   * one for it.
+   *
+   * The macOS Messages import sets it for the whole run. It used to synthesise
+   * a composite percent by giving each phase a fixed third of the bar
+   * (`stepIndex * (100/n) + percent/n`), which produced 0 -> 33 -> 67 -> 100
+   * with nothing in between: the phases do not take equal time, so the number
+   * described the phase list rather than the work. A value that is not known
+   * must never render as known (BACKLOG-2886).
+   *
+   * NOTE FOR CONSUMERS: `progress` stays 0 for such an item, so
+   * `item.progress ?? null` does NOT filter it out — `0 ?? null` is `0`. Gate
+   * on THIS flag. See `SyncStatusIndicator`.
+   */
+  indeterminate?: boolean;
   /** Optional warning message (e.g., message cap exceeded) */
   warning?: string;
   /**
@@ -188,7 +211,12 @@ export interface SyncResult {
  */
 type SyncFunction = (
   userId: string,
-  onProgress: (percent: number, phase?: string) => void,
+  onProgress: (
+    percent: number,
+    phase?: string,
+    /** BACKLOG-3128: real counts, and whether this item has an honest percent. */
+    detail?: { current?: number; total?: number; indeterminate?: boolean }
+  ) => void,
   options?: SyncRequest['options'],
   signal?: AbortSignal
 ) => Promise<string | void | SyncResult>;
@@ -575,29 +603,44 @@ class SyncOrchestratorServiceClass {
           return;
         }
 
-        // Phase order and weighted progress calculation
-        // Dynamically detect if 'deleting' phase is present (forceReimport mode)
-        let hasDeletePhase = false;
-
+        // BACKLOG-3128: this import reports its PHASE and its REAL COUNTS, and
+        // no percentage at all.
+        //
+        // What used to be here: a composite percent that gave each phase a fixed
+        // equal share of the bar — `stepIndex * (100/n) + data.percent / n` over
+        // ['querying','importing','attachments'] (four with 'deleting'). The
+        // phases do not take equal time. On a small delta import the querying
+        // pass finishes in well under a second, so the founder saw 0 -> 33 -> 67
+        // -> 100 with nothing in between; the number described the phase list,
+        // not the work. It could also move BACKWARDS: the producer emits a late
+        // `importing`/100% AFTER attachments (macOSMessagesImportService.ts:1043,
+        // a "rebuild complete, about to swap" signal), which the thirds math
+        // mapped back down to 67 at the very end of every run.
+        //
+        // A value that is not known must never render as known (BACKLOG-2886),
+        // so the composite is gone rather than re-weighted. `current`/`total`
+        // ARE known per phase, and those travel instead.
+        //
         // IPC listener OWNED here - not in consumers
         const cleanup = window.api.messages.onImportProgress((data) => {
-          // Detect if we're in forceReimport mode (has deleting phase)
-          if (data.phase === 'deleting') {
-            hasDeletePhase = true;
-          }
-
-          // Use 4 phases if deleting is present, otherwise 3
-          const phases = hasDeletePhase
-            ? ['querying', 'deleting', 'importing', 'attachments']
-            : ['querying', 'importing', 'attachments'];
-          const n = phases.length;
-
-          // Calculate weighted progress: step_index * (100/n) + ipc_progress / n
-          const stepIndex = phases.indexOf(data.phase);
-          const weightedProgress = stepIndex >= 0
-            ? Math.round(stepIndex * (100 / n) + data.percent / n)
-            : data.percent;
-          onProgress(weightedProgress, data.phase);
+          const hasCounts = data.total > 0;
+          onProgress(0, data.phase, {
+            current: hasCounts ? data.current : undefined,
+            total: hasCounts ? data.total : undefined,
+            // ALWAYS true for this source, for the whole run — this flag is a
+            // claim about the ITEM ("has no honest percentage"), not about the
+            // EVENT ("this phase reports counts"). It first read `!hasCounts`,
+            // which conflated the two: the producer sends counts on nearly every
+            // event, so the flag went false for almost the entire import, the
+            // dashboard's gate let `progress` through, and it pinned a hard "0%"
+            // — the exact defect this item exists to remove.
+            //
+            // Counts are NOT the same signal. They flow on regardless, and they
+            // drive the Settings panel's determinate bar fill. "We know how many
+            // messages this phase has read" and "we know how far through the
+            // import we are" are different claims, and only the first is true.
+            indeterminate: true,
+          });
         });
 
         try {
@@ -1318,7 +1361,7 @@ class SyncOrchestratorServiceClass {
 
         try {
           // Run the sync with progress callback and abort signal
-          const rawResult = await syncFn(userId, (percent, phase) => {
+          const rawResult = await syncFn(userId, (percent, phase, detail) => {
             // BACKLOG-2776: once the user has pressed Cancel the displayed
             // progress is frozen. The run keeps going until it reaches a point
             // where it can stop, and reporting that continuing work as a rising
@@ -1326,7 +1369,16 @@ class SyncOrchestratorServiceClass {
             if (this.state.queue.find((item) => item.type === type)?.cancelRequested) {
               return;
             }
-            this.updateQueueItem(type, { progress: percent, phase });
+            // BACKLOG-3128: `current`/`total`/`indeterminate` ride alongside the
+            // percent so a source that has real counts can report them, and one
+            // with no honest percent can say so rather than inventing a number.
+            this.updateQueueItem(type, {
+              progress: percent,
+              phase,
+              current: detail?.current,
+              total: detail?.total,
+              indeterminate: detail?.indeterminate,
+            });
             this.updateOverallProgress();
           }, request.options, this.abortController?.signal);
 

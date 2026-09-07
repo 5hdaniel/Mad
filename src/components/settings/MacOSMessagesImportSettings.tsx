@@ -26,6 +26,13 @@ import {
   type CapFittingRange,
 } from "./ImportPlanDialog";
 import type { MessageImportPlanFacts } from "@electron/types/ipc/window-api-messages";
+// BACKLOG-2832: this local shape also omitted "querying", so the panel could
+// never name the phase it was actually in during the query pass.
+// BACKLOG-3128: ONE exhaustive phase vocabulary, shared with the dashboard pill.
+import {
+  importPhaseDisplayFor,
+  type ImportPhaseDisplay,
+} from "../../utils/importPhaseDisplay";
 import { usePlatform } from "../../contexts/PlatformContext";
 import { useSyncOrchestrator } from "../../hooks/useSyncOrchestrator";
 import { settingsService } from '../../services';
@@ -93,12 +100,23 @@ export function stripStaleCapClause(
   return stripped.length > 0 ? stripped : undefined;
 }
 
-/** Import progress state for inline display */
+/**
+ * Import progress state for inline display.
+ *
+ * BACKLOG-3128: `percent` is gone. The macOS Messages import has no honest
+ * single number — see the orchestrator listener — so this panel renders the
+ * phase, and real counts when the phase has them.
+ *
+ * `display` is `undefined` for a phase this panel has no copy for; the render
+ * then shows the raw phase text and an indeterminate bar rather than borrowing
+ * another phase's label. `current`/`total` are optional for the same reason:
+ * absent means "this phase reports no count", not "zero".
+ */
 interface ImportProgressState {
-  phase: "deleting" | "attachments" | "importing";
-  current: number;
-  total: number;
-  percent: number;
+  phase: string;
+  display: ImportPhaseDisplay | undefined;
+  current?: number;
+  total?: number;
 }
 
 interface MacOSMessagesImportSettingsProps {
@@ -163,13 +181,39 @@ export function MacOSMessagesImportSettings({
   const cancelAvailable =
     messagesItem?.status === 'running' || messagesItem?.status === 'pending';
 
-  // Derive progress from orchestrator queue item
-  const importProgress = isImporting && messagesItem?.phase ? {
-    phase: messagesItem.phase as ImportProgressState['phase'],
-    current: 0,
-    total: 0,
-    percent: messagesItem.progress,
-  } : null;
+  // Derive progress from orchestrator queue item.
+  //
+  // BACKLOG-3128: this used to hard-code `current: 0, total: 0` AND render them,
+  // so every import displayed a literal "0 / 0 messages" — a value presented as
+  // known that never was (BACKLOG-2886). The producer has always sent real
+  // per-phase counts; they had nowhere to ride until the queue item gained
+  // `current`/`total`.
+  //
+  // The blind `as` cast is gone too: an unrecognised phase now resolves to
+  // `display: undefined` and renders honestly, instead of being asserted into a
+  // union it may not belong to.
+  const importProgress: ImportProgressState | null =
+    isImporting && messagesItem?.phase
+      ? {
+          phase: messagesItem.phase,
+          display: importPhaseDisplayFor(messagesItem.phase),
+          current: messagesItem.current,
+          total: messagesItem.total,
+        }
+      : null;
+
+  // BACKLOG-3128: counts are shown only when the phase actually reports them.
+  // The test is `total > 0`, not `total != null` — a zero total cannot produce a
+  // fraction, and "0 of 0" is exactly the fabricated value this item removes.
+  const hasCounts =
+    importProgress?.current !== undefined &&
+    importProgress?.total !== undefined &&
+    importProgress.total > 0;
+  const countFraction =
+    hasCounts && importProgress
+      ? Math.min(100, Math.max(0, (importProgress.current! / importProgress.total!) * 100))
+      : 0;
+
   const [lastResult, setLastResult] = useState<{
     success: boolean;
     messagesImported: number;
@@ -1325,11 +1369,16 @@ export function MacOSMessagesImportSettings({
   }
 
   return (
+    /* BACKLOG-3156 stage A: the panel is a card PLUS a bare action row beneath
+       it. The testid and `aria-disabled` stay on the root so every existing
+       query and the BACKLOG-2335 disabled semantics reach the whole panel, not
+       just the card. */
     <div
-      className="p-4 bg-gray-50 rounded-lg border border-gray-200"
+      className="space-y-3"
       aria-disabled={!enabled}
       data-testid="macos-messages-import"
     >
+    <div className="p-4 bg-gray-50 rounded-lg border border-gray-200">
       <div className="flex items-center justify-between mb-2">
         <div className="flex items-center gap-2">
           <svg
@@ -1385,6 +1434,15 @@ export function MacOSMessagesImportSettings({
         </div>
       )}
 
+      {/* BACKLOG-3156 stage A: block 2 of the shared shape — Import Preferences.
+          Block 1 (Sources) is the import-source picker `Settings.tsx` renders
+          directly above this panel. The label/border split the other two
+          sections adopt was already this panel's shape: both labels below are
+          plain text OUTSIDE the control, and the border wraps only the value. */}
+      <div data-testid="messages-block-preferences">
+      <p className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-2">
+        Import Preferences
+      </p>
       {/* TASK-1952: Import Filters */}
       <div id="settings-import-filters" className="mb-3 p-3 bg-white rounded border border-gray-200">
         <h5 className="text-xs font-medium text-gray-700 mb-2">
@@ -1557,6 +1615,7 @@ export function MacOSMessagesImportSettings({
           Import message text only (no attachment files)
         </label>
       </div>
+      </div>{/* /BACKLOG-3156 Import Preferences block */}
 
       {/* BACKLOG-2743: The attachment copy does not fit.
           ────────────────────────────────────────────────────────────────
@@ -1795,7 +1854,15 @@ export function MacOSMessagesImportSettings({
           />
         )}
 
-      <div className="flex gap-2">
+      </div>{/* /BACKLOG-2335 muted controls region */}
+      </div>{/* /BACKLOG-3156 card — the actions sit below it, on the page */}
+
+      {/* BACKLOG-3156 stage A: the actions, BARE — no card, no heading, primary
+          then destructive. Still muted with the rest of the controls when this
+          is not the active source (BACKLOG-2335), and neither `disabled`
+          expression changed: both remain `controlsDisabled || spaceBlocked`. */}
+      <div className={enabled ? "" : "opacity-60"}>
+      <div data-testid="messages-block-actions" className="flex gap-2">
         <button
           // BACKLOG-2749: ONE gate. It decides which surface the click reaches
           // — the space refusal, the cap choice, or the run itself — so the two
@@ -1909,37 +1976,39 @@ export function MacOSMessagesImportSettings({
         <div className="mt-3">
           {importProgress ? (
             <>
+              {/* BACKLOG-3128: ONE exhaustive map, not three ternary chains whose
+                  `else` arm labelled every unnamed phase "Importing messages...".
+                  No percentage is rendered — this import has no honest one. */}
               <div className="flex justify-between text-xs text-gray-600 mb-1">
-                <span>
-                  {importProgress.phase === "deleting"
-                    ? "Clearing existing messages..."
-                    : importProgress.phase === "attachments"
-                      ? "Processing attachments..."
-                      : "Importing messages..."}
-                </span>
-                <span>{importProgress.percent}%</span>
+                <span>{importProgress.display?.label ?? importProgress.phase}</span>
               </div>
-              <div className="w-full bg-gray-200 rounded-full h-2">
-                <div
-                  className={`h-2 rounded-full transition-all duration-300 ${
-                    importProgress.phase === "deleting"
-                      ? "bg-orange-500"
-                      : importProgress.phase === "attachments"
-                        ? "bg-green-500"
-                        : "bg-blue-500"
-                  }`}
-                  style={{ width: `${importProgress.percent}%` }}
-                />
+              <div className="w-full bg-gray-200 rounded-full h-2 overflow-hidden">
+                {hasCounts ? (
+                  <div
+                    className={`h-2 rounded-full transition-all duration-300 ${
+                      importProgress.display?.colour ?? "bg-blue-500"
+                    }`}
+                    style={{ width: `${countFraction}%` }}
+                    data-testid="import-progress-bar"
+                  />
+                ) : (
+                  /* No count for this phase — an indeterminate stripe, because a
+                     bar at any width would be a claim about how far along we are. */
+                  <div
+                    className={`h-2 rounded-full w-1/3 animate-pulse ${
+                      importProgress.display?.colour ?? "bg-blue-500"
+                    }`}
+                    data-testid="import-progress-indeterminate"
+                  />
+                )}
               </div>
-              <p className="text-xs text-gray-500 mt-1">
-                {importProgress.current.toLocaleString()} /{" "}
-                {importProgress.total.toLocaleString()}
-                {importProgress.phase === "deleting"
-                  ? " cleared"
-                  : importProgress.phase === "attachments"
-                    ? " attachments"
-                    : " messages"}
-              </p>
+              {hasCounts && (
+                <p className="text-xs text-gray-500 mt-1">
+                  {importProgress.current!.toLocaleString()} of{" "}
+                  {importProgress.total!.toLocaleString()}{" "}
+                  {importProgress.display?.unit ?? ""}
+                </p>
+              )}
             </>
           ) : (
             <div className="flex items-center gap-2 text-sm text-gray-500">
