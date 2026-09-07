@@ -52,6 +52,40 @@
  *   7. Give the Google cell back `bg-green-50 border-green-200`
  *   8. Drop `opacity-50` from the disabled treatment
  *   9. Delete the `onExternalSyncComplete` subscription
+ *
+ * ===========================================================================
+ * PART 3: BACKLOG-3175 — THE GATE THAT WAITED FOR NOTHING
+ * ===========================================================================
+ * Every case below used to open with `waitFor(() => cells().length > 1)` and
+ * then read the DOM. That gate is a NO-OP. The cells are gated on `isMacOS`,
+ * `isMicrosoftConnected` and `isGoogleConnected` — none of which depend on
+ * `sourceStats` — so three cells exist on the FIRST synchronous render, and
+ * `waitFor` runs its callback inline once before installing any timer or
+ * observer. `3 > 1` was true immediately; the gate returned without yielding,
+ * and every assertion after it sampled whichever render happened to be current.
+ *
+ * For the class-based cases that was harmless: hue tokens and `opacity-50` do
+ * not vary with the counts. For the `0`-not-em-dash case it was the whole
+ * defect. `sourceStats` starts `null` and EVERY count cell renders `—` until
+ * the read lands, so an unsynchronised read of the Google cell sees `—Google`
+ * — which is exactly what `Test & Lint (windows-latest, 20.x)` reported.
+ * Nothing about Windows changes the output; it changes which render is current
+ * when the assertion runs.
+ *
+ * THE FIXTURE IS NOW ADVERSARIAL ON PURPOSE. `getSourceStats` returns a
+ * DEFERRED promise that resolves only when `releaseStats()` is called, so the
+ * pre-load window is deterministic instead of a timing accident. An assertion
+ * that forgets to wait does not race — it reads stats that have not arrived and
+ * cannot arrive, and reds on every platform rather than being green by luck on
+ * one. A delay expressed as a timeout was rejected: a 0 ms timer fires inside
+ * `act`'s own macrotask yield on exit and reds nothing, and any larger constant
+ * is a number that means nothing on a host that is not this one.
+ *
+ * `loaded()` anchors on the OUTLOOK cell showing `34`, deliberately NOT on the
+ * Google cell under test. One `setSourceStats` sets all five keys at once, so
+ * Outlook-loaded implies Google-loaded, and the Google assertion stays
+ * independent. Waiting on the Google cell to stop showing `—` would make the
+ * assertion that follows it tautological.
  */
 
 import React from "react";
@@ -102,9 +136,19 @@ const HUE_TOKENS = [
 let getSourceStats: jest.Mock;
 /** Captured `contacts:external-sync-complete` subscribers. */
 let syncCompleteSubscribers: Array<() => void>;
+/**
+ * Settles the in-flight `getSourceStats` call. Until this runs, the counts grid
+ * is in its `null` state and every cell shows `—`. See PART 3 above.
+ */
+let releaseStats: () => void;
 
 function installApi(stats: Record<string, number>): void {
-  getSourceStats = jest.fn().mockResolvedValue({ success: true, stats });
+  getSourceStats = jest.fn().mockImplementation(
+    () =>
+      new Promise((resolve) => {
+        releaseStats = () => resolve({ success: true, stats });
+      }),
+  );
   syncCompleteSubscribers = [];
   Object.defineProperty(window, "api", {
     value: {
@@ -179,6 +223,19 @@ function cells(): HTMLElement[] {
   return Array.from((grid as HTMLElement).children) as HTMLElement[];
 }
 
+/**
+ * Releases the deferred stats read and waits for the grid to actually show
+ * them. Anchored on Outlook's `34` — a value only the resolved fixture can
+ * produce — so this returns on the LOADED render, not on whatever render is
+ * current. Every case below must go through it before reading the DOM.
+ */
+async function loaded(): Promise<void> {
+  releaseStats();
+  await waitFor(() =>
+    expect(cells().find((c) => c.textContent?.includes("Outlook"))?.textContent).toContain("34"),
+  );
+}
+
 beforeEach(() => {
   installApi({ macos: 12, iphone: 0, outlook: 34, google_contacts: 0, android_sync: 0 });
 });
@@ -194,7 +251,8 @@ afterEach(() => {
 describe("BACKLOG-3156 stage C — the counts grid wears one treatment", () => {
   it("renders more than one cell, so the comparisons below are not vacuous", async () => {
     renderContacts();
-    await waitFor(() => expect(cells().length).toBeGreaterThan(1));
+    await loaded();
+    expect(cells().length).toBeGreaterThan(1);
   });
 
   it.each([
@@ -202,7 +260,7 @@ describe("BACKLOG-3156 stage C — the counts grid wears one treatment", () => {
     ["every source switched on", ALL_ON],
   ])("carries no hue anywhere in the grid — %s", async (_label, direct) => {
     renderContacts(direct as Record<string, boolean> | undefined);
-    await waitFor(() => expect(cells().length).toBeGreaterThan(1));
+    await loaded();
 
     const classes = cells()
       .flatMap((cell) => [cell, ...Array.from(cell.querySelectorAll("*"))])
@@ -222,7 +280,7 @@ describe("BACKLOG-3156 stage C — the counts grid wears one treatment", () => {
    */
   it("lights every cell when every source is switched on", async () => {
     renderContacts(ALL_ON);
-    await waitFor(() => expect(cells().length).toBeGreaterThan(1));
+    await loaded();
 
     const dimmed = cells().filter((c) =>
       (c.getAttribute("class") ?? "").includes("opacity-50"),
@@ -233,7 +291,7 @@ describe("BACKLOG-3156 stage C — the counts grid wears one treatment", () => {
 
   it("gives every enabled cell the SAME treatment, and every disabled cell one other", async () => {
     renderContacts();
-    await waitFor(() => expect(cells().length).toBeGreaterThan(1));
+    await loaded();
 
     const dimmed = cells().filter((c) => (c.getAttribute("class") ?? "").includes("opacity-50"));
     const lit = cells().filter((c) => !(c.getAttribute("class") ?? "").includes("opacity-50"));
@@ -256,7 +314,7 @@ describe("BACKLOG-3156 stage C — the counts grid wears one treatment", () => {
    */
   it("still dims a source whose import is switched off", async () => {
     renderContacts();
-    await waitFor(() => expect(cells().length).toBeGreaterThan(1));
+    await loaded();
 
     const google = cells().find((c) => c.textContent?.includes("Google"));
     const outlook = cells().find((c) => c.textContent?.includes("Outlook"));
@@ -271,7 +329,7 @@ describe("BACKLOG-3156 stage C — the counts grid wears one treatment", () => {
    */
   it("shows 0, not an em-dash, for a connected source with no rows", async () => {
     renderContacts();
-    await waitFor(() => expect(cells().length).toBeGreaterThan(1));
+    await loaded();
 
     const google = cells().find((c) => c.textContent?.includes("Google"));
     expect(google?.textContent).toContain("0");
@@ -282,20 +340,36 @@ describe("BACKLOG-3156 stage C — the counts grid wears one treatment", () => {
 describe("BACKLOG-3156 stage C — the grid refreshes when the main process imports", () => {
   it("re-reads the counts when contacts:external-sync-complete fires", async () => {
     renderContacts();
-    await waitFor(() => expect(getSourceStats).toHaveBeenCalled());
     await waitFor(() => expect(syncCompleteSubscribers.length).toBeGreaterThan(0));
+    // Settle the FIRST read before the baseline, or `before` is captured with it
+    // still in flight and the "it re-read" claim below counts the mount call.
+    await loaded();
 
     const before = getSourceStats.mock.calls.length;
-    getSourceStats.mockResolvedValue({
-      success: true,
-      stats: { macos: 12, iphone: 0, outlook: 34, google_contacts: 900, android_sync: 0 },
-    });
+    let releaseSecond!: () => void;
+    getSourceStats.mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          releaseSecond = () =>
+            resolve({
+              success: true,
+              stats: { macos: 12, iphone: 0, outlook: 34, google_contacts: 900, android_sync: 0 },
+            });
+        }),
+    );
 
     await act(async () => {
       syncCompleteSubscribers.forEach((notify) => notify());
     });
 
     expect(getSourceStats.mock.calls.length).toBeGreaterThan(before);
+
+    // The refetch is in flight and deliberately unsettled: 900 CANNOT be on
+    // screen yet, so the wait below cannot pass on the mount-time render.
+    const googleMidFlight = cells().find((c) => c.textContent?.includes("Google"));
+    expect(googleMidFlight?.textContent).not.toContain("900");
+
+    releaseSecond();
     await waitFor(() => {
       const google = cells().find((c) => c.textContent?.includes("Google"));
       expect(google?.textContent).toContain("900");
