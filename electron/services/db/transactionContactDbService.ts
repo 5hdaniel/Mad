@@ -267,9 +267,7 @@ export async function linkContactToTransaction(
  *
  * Duplicate assignments are resolved inside the sync core, which probes for an
  * existing (transaction, contact) row and UPDATEs it. There is no
- * `INSERT OR REPLACE` on this path — BACKLOG-2366 revives the tombstoned row
- * rather than replacing it, which is what preserves its `created_at` and its
- * history.
+ * `INSERT OR REPLACE` on this path.
  */
 export function assignContactToTransaction(
   transactionId: string,

@@ -346,14 +346,21 @@ describe("creating a deal with its parties is ONE write (BACKLOG-2538)", () => {
         party: ReturnType<typeof assignmentsFor>[number],
       ) => unknown,
     ): Promise<{
-      threw: boolean;
+      threw: string | null;
       rejected: string | null;
       deals: string[];
       attached: string[];
     }> {
       const parties = assignmentsFor(PARTIES);
       let deferred: Promise<unknown> | null = null;
-      let threw = false;
+
+      // The synchronous throw is captured by MESSAGE, not as a flag. A bare
+      // boolean passes on ANY throw from the callee, including one that has
+      // nothing to do with the armed crash — so it could not tell the rollback
+      // it exists for from an unrelated failure on the same path. Read off the
+      // value's own `.message` and asserted as a string, never handed to a
+      // matcher as an Error (BACKLOG-3152).
+      let threw: string | null = null;
 
       try {
         dbTransaction(() => {
@@ -361,8 +368,8 @@ describe("creating a deal with its parties is ONE write (BACKLOG-2538)", () => {
           deferred = Promise.all(parties.map((p) => attach(deal.id, p)));
           return deal;
         });
-      } catch {
-        threw = true;
+      } catch (e) {
+        threw = (e as Error).message;
       }
 
       // Only the `async` arm reaches this with a pending rejection. Its message
@@ -385,7 +392,7 @@ describe("creating a deal with its parties is ONE write (BACKLOG-2538)", () => {
       // Nothing is left pending: the throw happens before a promise exists, so
       // `rejected` is null rather than carrying the crash message.
       expect(await outcomeOf(assignContactToTransaction)).toEqual({
-        threw: true,
+        threw: expect.stringMatching(/forced crash attaching c-lender/),
         rejected: null,
         deals: [],
         attached: [],
@@ -405,7 +412,7 @@ describe("creating a deal with its parties is ONE write (BACKLOG-2538)", () => {
       // survive on a deal that should not exist. The exact surviving set, not
       // a count.
       expect(await outcomeOf(asyncShim)).toEqual({
-        threw: false,
+        threw: null,
         rejected: expect.stringMatching(/forced crash attaching c-lender/),
         deals: [expect.any(String)],
         attached: ["c-buyer", "c-escrow", "c-inspector", "c-seller"],

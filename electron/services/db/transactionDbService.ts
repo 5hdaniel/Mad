@@ -561,7 +561,7 @@ export async function createTransaction(
  * This function must stay synchronous. The promise-returning
  * `createTransaction` above stays because other callers await it; it is NOT
  * yet the plain shape BACKLOG-2960 rules for a seam export, and this file's
- * five seam functions are a later round.
+ * seven seam functions are a later round.
  */
 export function createTransactionSync(
   transactionData: NewTransaction,
@@ -761,7 +761,7 @@ export async function getTransactionById(
  *
  * Both callees are the SYNC cores, deliberately: `dbTransaction` takes a
  * synchronous callback, so this composition needs callees that are synchronous
- * all the way down. What is at stake if either is replaced by a
+ * all the way down. What is at stake if the assign callee is replaced by a
  * promise-returning facade is asserted, by name, in
  * `db/__tests__/transactionDbService.atomicDealCreate-2538.test.ts`.
  *
