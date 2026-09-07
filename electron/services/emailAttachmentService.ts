@@ -186,6 +186,15 @@ class EmailAttachmentService {
     // UNIQUE index is a durability commitment; it is not built on that. Outlook
     // Graph ids are INFERRED stable per message — inferred, not verified.
     // See BACKLOG-3187.
+    //
+    // THE LIMIT OF THIS GATE: it is only as good as `source`, and `source` is not
+    // always derived. At one of the nine call sites
+    // (transactionService.ts, BACKLOG-3189) the provider is GUESSED from the
+    // sender's address rather than read from the mailbox the message came from, so
+    // an Outlook message from a gmail.com sender arrives here as "gmail" and has
+    // its provider id nulled. Nothing goes red -- the union member is valid either
+    // way. Pre-existing and out of scope here; do not read this gate as evidence
+    // the provider is reliably known.
     const providerAttachmentIdFor = (meta: EmailAttachmentMeta): string | null =>
       source === "gmail" ? null : (meta.attachmentId ?? null);
 
