@@ -1902,9 +1902,24 @@ export function MacOSMessagesImportSettings({
             that actually runs is decided in `Settings.tsx`, which is how a
             derived list goes false. `settingsPopupCopy-3156` pins that.
 
-            The force claim is the confirmation dialog's own, in shorter form:
-            the clear + re-import cascade-deletes the conversation↔transaction
-            junction, so attached conversations become unlinked (BACKLOG-2331). */}
+            The force claim names WHAT IS DELETED, scoped (SR `972e37ea`). The
+            first draft of this sentence said "the messages stored on this
+            computer", which is false and was the BACKLOG-3029 shape on a string
+            written the same day: the wipe is SCOPED. `forceSetMessages`
+            (`electron/services/db/macosForceSetSql.ts`) predicates the delete on
+            `json_extract(metadata, '$.source') = 'macos_messages'`, and that is
+            the only bulk `DELETE FROM messages` on the force path — so iPhone
+            and Android rows, and their transaction links, survive it.
+            BACKLOG-2796 scoped it for exactly that reason.
+
+            So this states the RULE — what Keepr imported from your selected
+            source — rather than the unscoped total or a list of sources.
+            `settingsPopupCopy-3156` pins both halves: the scoping phrase must
+            be present, and the unscoped phrasings must be absent.
+
+            The unlink half is the confirmation dialog's own claim in shorter
+            form: the clear + re-import cascade-deletes the
+            conversation↔transaction junction (BACKLOG-2331). */}
         <ImportInfoPopover
           testId="messages-import-info"
           entries={[
@@ -1914,7 +1929,7 @@ export function MacOSMessagesImportSettings({
             },
             {
               heading: "Force Re-import",
-              body: "Deletes the messages stored on this computer and imports them again from scratch. This unlinks attached conversations from their transactions. Use if messages look wrong or incomplete.",
+              body: "Deletes the messages Keepr imported from your selected source and imports them again from scratch. This unlinks attached conversations from their transactions. Use if messages look wrong or incomplete.",
             },
           ]}
         />

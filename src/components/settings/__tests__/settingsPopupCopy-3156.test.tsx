@@ -41,6 +41,10 @@
  *   - Change the Messages primary copy to name macOS/iPhone/Android instead of
  *     "your selected source" -> the Messages rule test reds.
  *   - Restore "every source" in the Contacts force copy -> the Contacts test reds.
+ *   - Restore "Deletes the messages stored on this computer" in the Messages
+ *     force copy -> the Messages scope test reds. This is the one the suite
+ *     originally MISSED: it pinned the false sentence, and SR caught it against
+ *     the SQL rather than against the design.
  *   - Remove the second `mouseDown` handler so the popup cannot be shut
  *     -> all three toggle tests red.
  */
@@ -110,6 +114,30 @@ const EVERY_SOURCE_CLAIMS = [
   /all\s+cached\s+contacts/i,
   /from\s+every\s+source/i,
   /all\s+sources/i,
+];
+
+/**
+ * The SAME failure, caught by SR on a string written the same day as this suite
+ * (review `972e37ea`) — and this suite had pinned the false version, which is
+ * how a test can make a falsehood harder to correct instead of easier.
+ *
+ * The Messages force copy first read "Deletes the messages stored on this
+ * computer". The wipe is SCOPED: `forceSetMessages`
+ * (`electron/services/db/macosForceSetSql.ts`) predicates the only bulk
+ * `DELETE FROM messages` on the force path with
+ * `json_extract(metadata, '$.source') = 'macos_messages'`, so iPhone-sync and
+ * Android-companion rows and their transaction links survive. BACKLOG-2796
+ * scoped it deliberately.
+ *
+ * The error over-warned, so nothing was at risk — but "false in the safe
+ * direction" is still false, and it is the direction that teaches people to
+ * discount the warning. These are the phrasings that claim an unscoped wipe.
+ */
+const UNSCOPED_WIPE_CLAIMS = [
+  /messages stored on this computer/i,
+  /all\s+(your\s+)?messages/i,
+  /every\s+message/i,
+  /entire\s+message\s+history/i,
 ];
 
 /**
@@ -348,6 +376,18 @@ describe("BACKLOG-3156 stage B — the Messages popup", () => {
     expect(force.body).toMatch(/unlinks/i);
     expect(force.body).toMatch(/conversations/i);
     expect(force.body).toMatch(/delet/i);
+  });
+
+  it("scopes what the force run deletes, and does not claim an unscoped wipe", async () => {
+    renderMessages();
+    const [, force] = entriesOf(await openPopup("messages"));
+
+    // The rule, stated: what Keepr imported from the source you selected. Not
+    // the unscoped total, and not a list of sources.
+    expect(force.body).toMatch(/from your selected source/i);
+    for (const claim of UNSCOPED_WIPE_CLAIMS) {
+      expect(force.body).not.toMatch(claim);
+    }
   });
 
   it("names the RULE, not the sources — which source runs is decided outside this panel", async () => {
