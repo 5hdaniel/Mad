@@ -151,6 +151,7 @@ jest.mock("../logService", () => ({
 
 import emailSyncService from "../emailSyncService";
 import { EMAIL_PRECACHE_TIMING_TAG } from "../emailPrecacheTiming";
+import { instrumentDatabaseTiming } from "../db/core/dbTiming";
 
 const SCHEMA = nodePath.join(__dirname, "..", "..", "database", "schema.sql");
 const USER = "user-timing";
@@ -224,6 +225,21 @@ const sleep = (ms: number): Promise<void> =>
   new Promise((resolve) => setTimeout(resolve, ms));
 
 /**
+ * Milliseconds the next `db.prepare` should block for. Set by a test, consumed
+ * once. Blocking rather than awaiting because a database call is synchronous —
+ * an `await` would move the delay out of the region being measured, which is the
+ * distinction these controls exist to test.
+ */
+let plantedDbDelayMs = 0;
+
+function busyWait(ms: number): void {
+  const until = performance.now() + ms;
+  while (performance.now() < until) {
+    /* spin */
+  }
+}
+
+/**
  * Every `logService.info` line carrying the timing tag.
  *
  * Collected by TAG, not by call index, because the run emits a dozen info lines
@@ -250,12 +266,12 @@ function field(line: string, key: string): string {
   return match[1];
 }
 
-beforeEach(() => {
-  jest.clearAllMocks();
-  db = new Database(":memory:") as unknown as DatabaseType;
-  loadSchema(db);
-  seedParents();
-
+/**
+ * The suite's default network + reprocess behaviour, named so a test that needs
+ * a SECOND pre-cache run can restore it after `jest.clearAllMocks()`. Extracted
+ * verbatim from `beforeEach`; changing one changes both.
+ */
+function restoreProviderMocks(): void {
   mockGetOAuthToken.mockImplementation(async (_u: string, provider: string) =>
     provider === "microsoft" ? OUTLOOK_TOKEN : null,
   );
@@ -273,6 +289,47 @@ beforeEach(() => {
     cancelled: false,
     skippedNeedsRefetch: false,
   });
+}
+
+/**
+ * Build a fresh in-memory database, instrumented exactly the way production
+ * instruments the live handle. Called from `beforeEach`, and again by the
+ * database-time controls, which need two runs from an IDENTICAL starting state
+ * for their comparison to mean anything.
+ */
+function freshDatabase(): void {
+  db = new Database(":memory:") as unknown as DatabaseType;
+
+  // BACKLOG-2960 — this stands in for `setDb()`, which is where production
+  // installs database-time accounting. The topology is the same one the app
+  // has: ONE handle, instrumented once, reached both through the conduits (the
+  // `dbConnection` mock above calls `db.prepare` on it) and through
+  // `getRawDatabase()`. Without this the suite would exercise an uninstrumented
+  // handle and every `dbMs` would be 0 — green, and proving nothing.
+  //
+  // The delay plant is installed UNDERNEATH the instrument on purpose: a
+  // busy-wait here is inside the measured region, which is what lets a test
+  // plant database time without a contrived SQL function.
+  plantedDbDelayMs = 0;
+  const rawPrepare = db.prepare.bind(db);
+  db.prepare = ((sql: string) => {
+    if (plantedDbDelayMs > 0) {
+      const ms = plantedDbDelayMs;
+      plantedDbDelayMs = 0; // one-shot: a fixed total, not a per-call tax
+      busyWait(ms);
+    }
+    return rawPrepare(sql);
+  }) as unknown as DatabaseType["prepare"];
+  instrumentDatabaseTiming(db);
+
+  loadSchema(db);
+  seedParents();
+}
+
+beforeEach(() => {
+  jest.clearAllMocks();
+  freshDatabase();
+  restoreProviderMocks();
 });
 
 afterEach(() => {
@@ -577,5 +634,141 @@ describe("BACKLOG-2960 — the counts on the line are the run's own", () => {
     } finally {
       if (previous !== undefined) process.env.npm_package_version = previous;
     }
+  });
+});
+
+describe("BACKLOG-2960 — database time is reported separately from total elapsed", () => {
+  /**
+   * -------------------------------------------------------------------------
+   * WHY THESE CONTROLS, AND WHY DIFFERENTIAL
+   * -------------------------------------------------------------------------
+   * `elapsedMs` cannot carry the conversion's acceptance bound. Four force
+   * re-caches of unchanged code on the founder's machine ran 56,553 / 43,363 /
+   * 39,326 / 42,478 ms — 40% spread, 9.5% excluding the first-after-launch
+   * (pm_comments `ac7a6f40`). The run is dominated by fetching mail over the
+   * network; the promise-conversion changes the data layer. `dbMs` exists so the
+   * bound applies to the half that actually moves when the conversion regresses.
+   *
+   * "It reports a number" is worth nothing here — 0 is a number, and so is a
+   * relabelled `elapsedMs`. Each control below plants a delay in a KNOWN place
+   * and asserts which figure moves. Tolerances are pre-registered: the planted
+   * delay is 250 ms, "rose" means >= 200, "did not rise" means < 60.
+   */
+  const PLANTED_MS = 250;
+  const ROSE = 200;
+  const DID_NOT_RISE = 60;
+
+  /**
+   * A batch big enough that the run's database work exceeds the line's
+   * millisecond resolution. With an empty mailbox the whole run costs well under
+   * 0.5 ms of SQL and rounds to `dbMs=0` — honest, but it cannot carry a
+   * differential control.
+   */
+  const BATCH = Array.from({ length: 60 }, (_, i) => providerEmail(i + 1));
+
+  /**
+   * Rebuild the database, reset the mocks, run one pre-cache, read its one line.
+   *
+   * The full reset is the point: these are two-run comparisons, and a second run
+   * against a mailbox the first run just filled does completely different
+   * database work (lookups instead of inserts). Only an identical starting state
+   * makes the delta attributable to the planted delay.
+   */
+  async function runAndRead(
+    configure: () => void = () => {},
+  ): Promise<{ elapsedMs: number; dbMs: number }> {
+    jest.clearAllMocks();
+    freshDatabase();
+    restoreProviderMocks();
+    mockOutlookSearch.mockResolvedValue(BATCH);
+    configure();
+
+    await emailSyncService.precacheEmails(USER, undefined, { force: false });
+    const line = theTimingLine();
+    return {
+      elapsedMs: Number(field(line, "elapsedMs")),
+      dbMs: Number(field(line, "dbMs")),
+    };
+  }
+
+  /**
+   * CONTROL (a) — the figure is real, and it is strictly smaller than the total.
+   *
+   * The run is given a network leg (30 ms parked in the provider's `initialize`)
+   * because without one the inequality is not meaningful HERE: against an
+   * in-memory database with mocked providers, essentially all of the elapsed
+   * time IS database time, and both figures round to the same millisecond. A
+   * real re-cache is the opposite shape — tens of seconds of network around a
+   * much smaller core of SQL — so the control reproduces that shape rather than
+   * asserting a strict inequality the harness cannot honestly produce.
+   *
+   * The third assertion is what stops this being satisfied by rounding: the
+   * network leg must be MISSING from `dbMs`, not merely smaller than the total.
+   */
+  const NETWORK_LEG_MS = 30;
+
+  it("reports a non-zero database time strictly below the total elapsed", async () => {
+    const { elapsedMs, dbMs } = await runAndRead(() => {
+      mockOutlookInit.mockImplementation(async () => {
+        await sleep(NETWORK_LEG_MS);
+        return true;
+      });
+    });
+
+    expect(dbMs).toBeGreaterThan(0);
+    expect(dbMs).toBeLessThan(elapsedMs);
+    expect(elapsedMs - dbMs).toBeGreaterThanOrEqual(NETWORK_LEG_MS - 5);
+  });
+
+  /**
+   * CONTROL (b) — a delay INSIDE the data layer moves BOTH figures, together.
+   *
+   * The plant sits under the instrument in `beforeEach`, so this is database
+   * time by construction. A blocking wait also stalls the event loop, so the
+   * wall clock must absorb the same 250 ms: the two rises match.
+   */
+  it("raises database time, and the total with it, when the delay is inside the data layer", async () => {
+    const baseline = await runAndRead();
+    const delayed = await runAndRead(() => {
+      plantedDbDelayMs = PLANTED_MS;
+    });
+
+    expect(plantedDbDelayMs).toBe(0); // the plant actually fired
+
+    const dbRise = delayed.dbMs - baseline.dbMs;
+    const elapsedRise = delayed.elapsedMs - baseline.elapsedMs;
+
+    expect(dbRise).toBeGreaterThanOrEqual(ROSE);
+    expect(elapsedRise).toBeGreaterThanOrEqual(ROSE);
+    // And by the SAME amount — a blocking wait inside the database stalls the
+    // event loop too, so the whole delay lands in both figures. Asserting only
+    // that each rose would also pass an instrument that charged some unrelated
+    // extra work to `dbMs`.
+    expect(Math.abs(elapsedRise - dbRise)).toBeLessThan(DID_NOT_RISE);
+  });
+
+  /**
+   * CONTROL (c) — THE ONE THAT MATTERS MOST.
+   *
+   * A delay OUTSIDE the data layer — parked in the provider's `initialize`,
+   * which is the network leg — must move the total and leave database time
+   * alone. This is the whole premise: `dbMs` is worth adding only if it does not
+   * inherit the variance that made `elapsedMs` unusable as a bound.
+   *
+   * An instrument that charged the whole span, or the gaps between calls, passes
+   * (a) and (b) and fails here.
+   */
+  it("leaves database time flat when the delay is outside the data layer", async () => {
+    const baseline = await runAndRead();
+    const delayed = await runAndRead(() => {
+      mockOutlookInit.mockImplementation(async () => {
+        await sleep(PLANTED_MS);
+        return true;
+      });
+    });
+
+    expect(mockOutlookInit).toHaveBeenCalledTimes(1); // the delay actually ran
+    expect(delayed.elapsedMs - baseline.elapsedMs).toBeGreaterThanOrEqual(ROSE);
+    expect(delayed.dbMs - baseline.dbMs).toBeLessThan(DID_NOT_RISE);
   });
 });
