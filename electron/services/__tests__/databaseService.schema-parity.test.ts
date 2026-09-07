@@ -253,6 +253,23 @@ describe("schema baseline parity — schema.sql vs frozen chain-v69 transcript (
   // asserting the invariant for every migration that ever ships.
   // -------------------------------------------------------------------------
   describe("fresh install and upgraded database converge (BACKLOG-2551 control 4)", () => {
+    /**
+     * The REAL upgrade sequence, in the real order: runMigrations() execs
+     * schema.sql unconditionally and THEN runs the versioned migrations
+     * (databaseService.ts, `currentDb.exec(schemaSql); await
+     * this._runVersionedMigrations();`).
+     *
+     * Execing schema.sql here is what makes this control able to catch the
+     * hazard it exists for. schema.sql is fully IF NOT EXISTS, so on an existing
+     * database it adds nothing -- which is exactly why a standalone CREATE INDEX
+     * naming a migration-added column throws `no such column` and aborts the
+     * whole file. Without this line the upgraded side never reads schema.sql and
+     * the control would stay green through precisely that mistake.
+     */
+    function execSchemaSqlAsRunMigrationsDoes(db: DatabaseType): void {
+      db.exec(fs.readFileSync(SCHEMA_SQL_PATH, "utf8"));
+    }
+
     /** Every migration above the on-disk version, run the way the runner runs them. */
     function applyMigrations(db: DatabaseType, fromVersion: number): void {
       // eslint-disable-next-line @typescript-eslint/no-require-imports
@@ -284,6 +301,7 @@ describe("schema baseline parity — schema.sql vs frozen chain-v69 transcript (
       applyMigrations(fresh, 70); // fresh seeds schema_version at BASELINE, then migrates
 
       const upgraded = replayFrozen();
+      execSchemaSqlAsRunMigrationsDoes(upgraded); // the real order: schema.sql first
       applyMigrations(upgraded, 70);
 
       const divergences = diffFingerprints(
@@ -301,6 +319,7 @@ describe("schema baseline parity — schema.sql vs frozen chain-v69 transcript (
         ["upgraded", replayFrozen],
       ] as const) {
         const db = build();
+        if (label === "upgraded") execSchemaSqlAsRunMigrationsDoes(db);
         applyMigrations(db, 70);
 
         // The partial unique index exists ONLY because the migration made it.
