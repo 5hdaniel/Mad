@@ -458,6 +458,33 @@ export function ContactsImportSettings({
   const hasMacOS = isMacOS;
   const hasOutlook = isMicrosoftConnected;
   const hasGoogle = isGoogleConnected;
+
+  /*
+    BACKLOG-3202 — how a connection-gated switch is DRAWN.
+
+    These four rows used to draw their switch from the stored preference alone,
+    while `disabled` came from the connection. Nothing made the two agree, so a
+    stored `true` with no connection rendered a blue, checked, right-positioned
+    switch beside the row's own "(not connected)" label — on a control that was
+    greyed out and so could not be clicked to correct it. Screen readers got the
+    worst of it, announcing "switch, checked" for a source the user had never
+    connected and could not uncheck.
+
+    Display only. `disabled`, the BACKLOG-2142 title and the value handed to
+    `onToggleSource` all still read the raw preference, so a dropped connection
+    writes nothing and the switch comes back on by itself when the provider
+    returns.
+
+    This is not a new rule for this file — it is the rule the file already
+    applies everywhere else it consults a source. `noSourcesSelected` below ANDs
+    reachability with the preference, and the stored-counts block draws a
+    provider's cell only when that provider is connected. The switch was the
+    last place that asked one question and displayed the answer to the other.
+  */
+  const outlookContactsSwitchOn = outlookContactsEnabled && hasOutlook;
+  const googleContactsSwitchOn = googleContactsEnabled && hasGoogle;
+  const outlookEmailsSwitchOn = outlookEmailsInferred && hasOutlook;
+  const gmailEmailsSwitchOn = gmailEmailsInferred && hasGoogle;
   // BACKLOG-2486: `showIphoneContacts` counts as a source. Without it, a Windows
   // user with an iPhone and no mailbox connected hit the "no sources" placeholder
   // below and never saw the one switch that governs their only contact source.
@@ -621,15 +648,15 @@ export function ContactsImportSettings({
               // BACKLOG-2142: explain why a disabled import toggle is grayed out.
               title={!isMicrosoftConnected ? "Connect email to enable import" : undefined}
               className={`ml-4 relative inline-flex h-6 w-11 items-center rounded-full transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${
-                outlookContactsEnabled ? "bg-blue-500" : "bg-gray-300"
+                outlookContactsSwitchOn ? "bg-blue-500" : "bg-gray-300"
               }`}
               role="switch"
-              aria-checked={outlookContactsEnabled}
+              aria-checked={outlookContactsSwitchOn}
               aria-label="Outlook Contacts import"
             >
               <span
                 className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
-                  outlookContactsEnabled ? "translate-x-6" : "translate-x-1"
+                  outlookContactsSwitchOn ? "translate-x-6" : "translate-x-1"
                 }`}
               />
             </button>
@@ -649,15 +676,15 @@ export function ContactsImportSettings({
               // BACKLOG-2142: explain why a disabled import toggle is grayed out.
               title={!isGoogleConnected ? "Connect email to enable import" : undefined}
               className={`ml-4 relative inline-flex h-6 w-11 items-center rounded-full transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${
-                googleContactsEnabled ? "bg-blue-500" : "bg-gray-300"
+                googleContactsSwitchOn ? "bg-blue-500" : "bg-gray-300"
               }`}
               role="switch"
-              aria-checked={googleContactsEnabled}
+              aria-checked={googleContactsSwitchOn}
               aria-label="Google Contacts import"
             >
               <span
                 className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
-                  googleContactsEnabled ? "translate-x-6" : "translate-x-1"
+                  googleContactsSwitchOn ? "translate-x-6" : "translate-x-1"
                 }`}
               />
             </button>
@@ -798,15 +825,15 @@ export function ContactsImportSettings({
               // BACKLOG-2142: explain why a disabled import toggle is grayed out.
               title={!isMicrosoftConnected ? "Connect email to enable import" : undefined}
               className={`ml-4 relative inline-flex h-6 w-11 items-center rounded-full transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${
-                outlookEmailsInferred ? "bg-blue-500" : "bg-gray-300"
+                outlookEmailsSwitchOn ? "bg-blue-500" : "bg-gray-300"
               }`}
               role="switch"
-              aria-checked={outlookEmailsInferred}
+              aria-checked={outlookEmailsSwitchOn}
               aria-label="Outlook emails auto-discover"
             >
               <span
                 className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
-                  outlookEmailsInferred ? "translate-x-6" : "translate-x-1"
+                  outlookEmailsSwitchOn ? "translate-x-6" : "translate-x-1"
                 }`}
               />
             </button>
@@ -826,15 +853,15 @@ export function ContactsImportSettings({
               // BACKLOG-2142: explain why a disabled import toggle is grayed out.
               title={!isGoogleConnected ? "Connect email to enable import" : undefined}
               className={`ml-4 relative inline-flex h-6 w-11 items-center rounded-full transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${
-                gmailEmailsInferred ? "bg-blue-500" : "bg-gray-300"
+                gmailEmailsSwitchOn ? "bg-blue-500" : "bg-gray-300"
               }`}
               role="switch"
-              aria-checked={gmailEmailsInferred}
+              aria-checked={gmailEmailsSwitchOn}
               aria-label="Gmail emails auto-discover"
             >
               <span
                 className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
-                  gmailEmailsInferred ? "translate-x-6" : "translate-x-1"
+                  gmailEmailsSwitchOn ? "translate-x-6" : "translate-x-1"
                 }`}
               />
             </button>
