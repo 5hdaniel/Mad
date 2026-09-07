@@ -8,7 +8,8 @@
  *
  * The reference string is copied from EmailSettings.tsx's `force-recache-emails`
  * button (int/epic9-close @ c81aabfa9). EmailSettings.tsx is not edited by this
- * stage; the tokens below are the contract between the three call sites.
+ * stage, and this suite does not render it — the tokens below are asserted on
+ * the two buttons it does render.
  *
  * The negative half of the assertion matters as much as the positive half: a
  * positive-only check passes on a button that merely GAINED classes. The
