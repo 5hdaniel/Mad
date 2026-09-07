@@ -240,6 +240,48 @@ describe("the audio_transcript projection", () => {
   });
 });
 
+describe("the wrapper shape: PLAIN, not async (BACKLOG-2960)", () => {
+  /** A driver handle whose `prepare` throws, where a real one would fail. */
+  const throwingDb = {
+    prepare() {
+      throw new Error("prepare failed");
+    },
+  } as never;
+
+  /**
+   * Call `fn` and report, as plain values, whether it threw before returning.
+   *
+   * A returned promise is settled and its rejection swallowed, so a wrapper that
+   * defers its failure produces an assertion diff here rather than an unhandled
+   * rejection that takes the worker down with it.
+   */
+  const calledSynchronously = (
+    fn: () => unknown,
+  ): { threw: boolean; message: string | null } => {
+    try {
+      const value = fn();
+      void Promise.resolve(value).catch(() => undefined);
+      return { threw: false, message: null };
+    } catch (e) {
+      return { threw: true, message: e instanceof Error ? e.message : String(e) };
+    }
+  };
+
+  it("selectChatMessages: a driver failure unwinds BEFORE the promise is constructed", () => {
+    expect(calledSynchronously(() => selectChatMessages(throwingDb, false, CHAT))).toEqual({
+      threw: true,
+      message: "prepare failed",
+    });
+  });
+
+  it("searchMessagesByText: a driver failure unwinds BEFORE the promise is constructed", () => {
+    expect(calledSynchronously(() => searchMessagesByText(throwingDb, false, "%body%"))).toEqual({
+      threw: true,
+      message: "prepare failed",
+    });
+  });
+});
+
 describe("the static statements", () => {
   beforeEach(() => {
     openSmsDb(true);

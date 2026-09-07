@@ -434,21 +434,12 @@ export class iOSMessagesParser {
    * Messages in one chat, oldest first.
    *
    * BACKLOG-2960: `async` because `db/appleSmsDbSql.selectChatMessages` returns a
-   * promise at the export. The read underneath is unchanged, and so is the
-   * projection — what a caller gets back is the same list it got before, reached
-   * with an `await`. `ensureOpen()` still guards the call, and its failure now
-   * reaches a caller as a rejection rather than a synchronous throw.
-   *
-   * The whole of this docblock was rewritten with the conversion: the previous
-   * text described this method as the synchronous one and pointed at
-   * `getMessagesAsync` as the async alternative, which stopped being the
-   * distinction between them.
+   * promise at the export.
    *
    * @param chatId The chat ID to get messages for
    * @param limit Optional limit on number of messages (for pagination)
    * @param offset Optional offset for pagination
-   * @deprecated Prefer `getMessagesAsync`. Read both bodies before choosing —
-   *   they differ in what they do with `attributedBody`, not in when they return.
+   * @deprecated Prefer `getMessagesAsync`.
    */
   async getMessages(
     chatId: number,
@@ -484,11 +475,7 @@ export class iOSMessagesParser {
    * text column is empty and yielding to the event loop between batches.
    *
    * Already `async` before BACKLOG-2960 — this method is edited, not flipped:
-   * the seam call below gained an `await` and nothing else about it moved.
-   *
-   * The line that named this "the async version" was removed with the
-   * conversion. It is no longer what separates this method from `getMessages`;
-   * the `attributedBody` handling is.
+   * the seam call below gained an `await`.
    *
    * @param chatId The chat ID to get messages for
    * @param limit Optional limit on number of messages (for pagination)
@@ -612,13 +599,7 @@ export class iOSMessagesParser {
    * Messages whose text matches a query, newest first, across every conversation.
    *
    * BACKLOG-2960: `async` because `db/appleSmsDbSql.searchMessagesByText` returns
-   * a promise at the export. The search underneath is unchanged, `ensureOpen()`
-   * still guards the call, and the empty-query short-circuit below still returns
-   * an empty list without touching the database.
-   *
-   * The docblock's previous `@note` called this "this sync version", which the
-   * conversion made wrong; the whole block was rewritten rather than the one
-   * line patched.
+   * a promise at the export.
    *
    * @param query The search query string
    * @param limit Optional limit on results
@@ -673,9 +654,7 @@ export class iOSMessagesParser {
    * One conversation with its messages populated.
    *
    * BACKLOG-2960: `async` because it reads through `getMessages`, which the
-   * conversion made promise-returning. Nothing else about the shape moved — the
-   * chat row, the participants and the group-chat rule are the same reads they
-   * were, and a missing chat still yields `null`.
+   * conversion made promise-returning.
    */
   async getConversationWithMessages(
     chatId: number,

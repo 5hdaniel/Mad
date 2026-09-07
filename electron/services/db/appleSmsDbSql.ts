@@ -31,11 +31,11 @@
  * built from its result.
  *
  * `async` is deliberately not used, and that is a rule for this whole layer
- * rather than a preference in this file: it keeps a failure synchronous at the
- * call site instead of arriving after a `better-sqlite3` transaction callback
- * has already returned. The reasoning and the runs behind it are SR ruling
- * `79c3aa69` §2a and its corrections `5687984d`. Read those before converting
- * either function here to `async`.
+ * rather than a preference in this file. The reasoning and the runs behind it
+ * are SR ruling `79c3aa69` §2a and its corrections `5687984d`. Read those before
+ * converting either function here to `async`; the shape both functions must keep
+ * is pinned by `the wrapper shape: PLAIN, not async (BACKLOG-2960)` in
+ * `__tests__/appleSmsDbSql.test.ts`.
  */
 
 import type { Database as DatabaseType, Statement } from "better-sqlite3";

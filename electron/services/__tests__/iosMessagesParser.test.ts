@@ -37,8 +37,7 @@ import { iOSMessagesParser, convertAppleTimestamp } from "../iosMessagesParser";
  * Settle a promise by hand and hand back plain values.
  *
  * BACKLOG-3152: no `Error` object is passed to a matcher — the message is
- * captured as a string first — so an assertion written this way behaves the same
- * whether its suite runs alone or after another suite in the same process.
+ * captured as a string first.
  */
 const settle = async (
   p: Promise<unknown>,
