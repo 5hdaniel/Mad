@@ -272,19 +272,16 @@ describe("Transaction Validation", () => {
       expect("notes" in validated).toBe(false);
     });
 
-    it("still REJECTS a malformed notes value even though it is not forwarded", () => {
-      // The check must not have been deleted along with the forwarding — that
-      // would turn today's ValidationError into silence.
-      expect(() =>
-        validateTransactionData({ notes: "x".repeat(10001) }, true),
-      ).toThrow();
-    });
-
-    it("still REJECTS a malformed amount even though it is not forwarded", () => {
-      expect(() => validateTransactionData({ amount: -5 }, true)).toThrow(
-        "Amount must be a non-negative number",
-      );
-    });
+    // BACKLOG-2755: two tests stood here — "still REJECTS a malformed notes
+    // value even though it is not forwarded" and the same for `amount`. They
+    // pinned a deliberate BACKLOG-2558 decision to keep validating two keys
+    // that belong to no table. That decision is REPLACED, not quietly dropped:
+    // `RawTransactionData` is now keyed off the real column set, so `amount`
+    // and `notes` cannot be read here at all and a re-added check is a compile
+    // error rather than a runtime one. What is traded away is the error a
+    // caller got for `amount: -5`; no caller sends it. The replacement
+    // guarantee is asserted in
+    // `electron/utils/__tests__/validationFieldSet-2560.test.ts`.
 
     it("forwards suggested_contacts, which the review UI sends as its only key", () => {
       // BACKLOG-2737/2558 (F6): stripped here before the fix, so dismissing a
