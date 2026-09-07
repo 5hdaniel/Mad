@@ -4,13 +4,11 @@ name: Release
 on:
   push:
     branches: [main]
+  # No inputs. A dispatch behaves exactly like a push to main: what gets
+  # published is decided by the create-release job's github.ref guard alone.
+  # The former `publish` input was declared and read nowhere, so it read as a
+  # safety control while being none (BACKLOG-3192).
   workflow_dispatch:
-    inputs:
-      publish:
-        description: 'Publish release (true/false)'
-        required: true
-        default: 'true'
-        type: boolean
 
 # Required permissions for creating releases
 permissions:
@@ -449,8 +447,16 @@ jobs:
     name: Create GitHub Release
     needs: [release-macos, release-windows]
     runs-on: ubuntu-latest
-    # Create release if at least one platform succeeded
-    if: always() && (needs.release-macos.result == 'success' || needs.release-windows.result == 'success')
+    # BACKLOG-3192. Two guards, both load-bearing:
+    #  - github.ref: this job publishes a draft AND mirrors assets to the public
+    #    releases repo, where an upload for an existing tag runs with --clobber.
+    #    A dispatch from any other branch must never reach those steps.
+    #  - BOTH platforms must succeed. This was `||`, so a run with one platform
+    #    dead still drafted a release advertising downloads that did not exist.
+    if: >-
+      always() && github.ref == 'refs/heads/main' &&
+      needs.release-macos.result == 'success' &&
+      needs.release-windows.result == 'success'
 
     steps:
       - name: Checkout code
