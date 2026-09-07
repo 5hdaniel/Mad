@@ -68,11 +68,26 @@ export const PERSISTED_CONTACT_SOURCES = [
  * Source values produced at SELECT time that are never written to any column.
  *
  * `messages` is the only one: `contactDbService` synthesises it for contacts
- * derived from text threads. Deliberately absent from the `contacts.source`
- * CHECK — see the note beside that CHECK in `schema.sql` — which is precisely
- * why a vocabulary list built only from the CHECK would miss it.
+ * derived from text threads (`contactDbService.ts:273` and `:2594`).
+ *
+ * It is ABSENT FROM THE `contacts.source` CHECK, and that absence is correct
+ * rather than an oversight — which is precisely why a vocabulary list built only
+ * from the CHECK would miss it. `schema.sql:398` is a BARE CHECK carrying no
+ * note; the statement lives here, beside the enumeration. (An earlier version of
+ * this comment pointed the reader at a note in `schema.sql` that has never
+ * existed — corrected by BACKLOG-2481.)
+ *
+ * A synthetic value arriving at a WRITE is not a value to store. See
+ * `toStorableContactSource` below, which is the one place the two vocabularies
+ * meet.
  */
 export const SYNTHETIC_CONTACT_SOURCES = ["messages"] as const;
+
+/** Exactly the values the `contacts.source` CHECK admits. */
+export type PersistedContactSource = (typeof PERSISTED_CONTACT_SOURCES)[number];
+
+/** Exactly the values produced at SELECT time and never stored. */
+export type SyntheticContactSource = (typeof SYNTHETIC_CONTACT_SOURCES)[number];
 
 /**
  * Everything the filter can be handed. The union the coverage test asserts over.
@@ -98,6 +113,95 @@ export const MESSAGE_DERIVED_ONLY_SOURCES: readonly string[] = [
   "messages",
   "inferred",
 ];
+
+/**
+ * WHERE A SYNTHETIC SOURCE IS STORED WHEN ITS ROW IS SAVED (BACKLOG-2481)
+ *
+ * ===========================================================================
+ * WHY THIS IS AN EXPLICIT MAP AND NOT A FALLBACK
+ * ===========================================================================
+ * `messages` cannot be stored — the CHECK refuses it, and the whole write fails
+ * with it. So pressing Import on a person from a text thread created NO CONTACT
+ * AT ALL. The fix has to send that value somewhere, and WHERE is a decision with
+ * a wrong answer that looks right.
+ *
+ * The obvious spelling — let the value fall through to whatever fallback the
+ * calling door already uses — was measured and REJECTED. The live door
+ * (`contacts:import`) falls back to `contacts_app`, so a text-derived person
+ * would have been filed as a macOS address-book card they have never been in,
+ * and `('macos','origin')` written into the crosswalk as if that were known.
+ *
+ * `sms` — the value the item was originally briefed to use — was measured and
+ * REJECTED for a worse reason. Every SAVED contact reaches the source filter with
+ * `is_message_derived = 0`, hard-coded in the projection
+ * (`services/db/contactProjectionSql.ts:117`), and the Inferred>From Texts leaf
+ * requires that flag. So a stored `sms` contact matches NO leaf: invisible under
+ * the default filter, invisible with every box ticked, and not found by searching
+ * its own name — while `contactSourceLabel('sms')` cheerfully labels it
+ * "From Texts", a leaf that cannot find it. Today the import fails loudly; that
+ * spelling would have made it fail silently, which is worse.
+ *
+ * `manual` is what is left, and it is a TRUE statement about the action: the user
+ * pressed Import on one specific row. It round-trips — stored `manual` writes
+ * `('manual','origin')` to `contact_source_links`, `toPersistedContactSource`
+ * maps that back to `manual`, the Manual leaf matches it, and that leaf is in
+ * `DEFAULT_SOURCE_SELECTION`, so the contact is on screen where the user expects
+ * it. The provenance is un-indexed, not destroyed: the participant string is
+ * still in the `messages` table, so a future item can add a leaf of its own and
+ * backfill membership.
+ *
+ * KEYED BY THE SYNTHETIC UNION, so adding a second synthetic source without
+ * deciding where it is stored does not compile. That is the whole reason this is
+ * a typed record and not an `if`.
+ */
+export const SYNTHETIC_SOURCE_DESTINATION: Readonly<
+  Record<SyntheticContactSource, PersistedContactSource>
+> = Object.freeze({
+  messages: "manual",
+});
+
+/**
+ * THE ONE WRITE BOUNDARY FOR `contacts.source` (BACKLOG-2481)
+ *
+ * Returns the value to STORE, or `null` when the input is one this vocabulary
+ * cannot place.
+ *
+ * ===========================================================================
+ * WHY `null` RATHER THAN A FALLBACK FOR AN UNRECOGNISED STRING
+ * ===========================================================================
+ * The two doors do not agree today, and they should not be quietly made to.
+ * Measured on the real driver at `25577b648`, one record per call:
+ *
+ *     contacts:create  source "not_a_source"  -> accepted, stored "manual"
+ *     contacts:import  source "not_a_source"  -> REFUSED, zero rows
+ *
+ * A single `fallback` parameter covering the unrecognised case would have made
+ * `contacts:import` ACCEPT any string and store `contacts_app` — the same false
+ * provenance claim rejected above, generalised to every unknown value, arriving
+ * as a side effect of a refactor. So the two cases are separated: `fallback` is
+ * for an ABSENT source, `null` means NOT STORABLE, and each door keeps the answer
+ * it already gives.
+ *
+ * @param inbound  the caller-supplied `source`, unvalidated.
+ * @param fallbackWhenAbsent  what to store when there is no source at all —
+ *   `manual` for `contacts:create`, `contacts_app` for `contacts:import`. These
+ *   deliberately differ; merging them would be a behaviour change.
+ */
+export function toStorableContactSource(
+  inbound: string | null | undefined,
+  fallbackWhenAbsent: PersistedContactSource,
+): PersistedContactSource | null {
+  const value = typeof inbound === "string" ? inbound.trim().toLowerCase() : "";
+  if (value.length === 0) return fallbackWhenAbsent;
+
+  const persisted = PERSISTED_CONTACT_SOURCES as readonly string[];
+  if (persisted.includes(value)) return value as PersistedContactSource;
+
+  const synthetic = SYNTHETIC_SOURCE_DESTINATION as Readonly<
+    Record<string, PersistedContactSource | undefined>
+  >;
+  return synthetic[value] ?? null;
+}
 
 /**
  * BACKLOG-1900 (P0.2): Map a shadow-table `ExternalContactSource` to the
