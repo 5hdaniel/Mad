@@ -1263,7 +1263,185 @@ class DatabaseService implements IDatabaseService {
    * (databaseService.schema-parity.test.ts) — see BACKLOG-2551 / BACKLOG-2807
    * for the pattern.
    */
-  static readonly MIGRATIONS: MigrationEntry[] = [];
+  static readonly MIGRATIONS: MigrationEntry[] = [
+    {
+      version: 71,
+      description:
+        "BACKLOG-2551 attachments.provider_attachment_id + partial unique index (dedup on storage_path); " +
+        "BACKLOG-2839 message_thread_names non-blank display_name CHECK (table rebuild)",
+      // Runs SYNCHRONOUSLY inside currentDb.transaction(...), so this body uses raw
+      // d.prepare / d.exec only and never calls a db/ service. foreign_keys is OFF
+      // for the whole loop (see _runVersionedMigrations) -- which is why the
+      // classification_feedback re-point below is explicit rather than left to
+      // ON DELETE SET NULL.
+      migrate: (d) => {
+        // ------------------------------------------------------------------
+        // BACKLOG-2551
+        // ------------------------------------------------------------------
+        // Guarded: a FRESH install already has the column from schema.sql and
+        // still runs v71 (schema_version is seeded at BASELINE 70), so this must
+        // be a no-op there. Also makes the whole migration re-runnable.
+        const hasCol = (
+          d.prepare("PRAGMA table_info(attachments)").all() as Array<{ name: string }>
+        ).some((c) => c.name === "provider_attachment_id");
+        if (!hasCol) {
+          d.exec("ALTER TABLE attachments ADD COLUMN provider_attachment_id TEXT");
+        }
+
+        // Dedup keys on storage_path, NEVER on filename: the on-disk file is named
+        // by content hash, so two rows sharing (email_id, storage_path) are ONE
+        // file downloaded twice. Two rows with different storage_path are
+        // different files and both stay, even when identically named.
+        //
+        // `storage_path IS NOT NULL` is load-bearing: SQLite groups NULLs
+        // together, so without it every metadata-only row of an email collapses
+        // into one group and legitimate rows are deleted.
+        //
+        // ORDER BY loser.rowid makes "earliest wins" true for losers as well as
+        // for the keeper. Without it a group with two 'user' losers has an
+        // unspecified survivor -- and a control asserting one is not reproducible.
+        const losers = d
+          .prepare(
+            `SELECT loser.id AS loser, keeper.id AS keep
+               FROM attachments loser
+               JOIN attachments keeper
+                 ON keeper.email_id = loser.email_id
+                AND keeper.storage_path = loser.storage_path
+                AND keeper.rowid = (SELECT MIN(k.rowid) FROM attachments k
+                                     WHERE k.email_id = loser.email_id
+                                       AND k.storage_path = loser.storage_path)
+              WHERE loser.storage_path IS NOT NULL
+                AND loser.email_id IS NOT NULL
+                AND loser.rowid <> keeper.rowid
+              ORDER BY loser.rowid`,
+          )
+          .all() as Array<{ loser: string; keep: string }>;
+
+        // Five INERT DESCRIPTIVE columns. Both rows point at the same
+        // content-hash-named file, so each value was equally true of the survivor.
+        //
+        // sync_session_id is DELIBERATELY ABSENT. It is a lifecycle tag that
+        // drives a destructive rollback: deleteAttachmentsBySessionId
+        // (db/syncDbService.ts) deletes by it and returns storage_paths no row
+        // references any more, which iPhoneSyncStorageService then unlinks from
+        // disk. Copying it would enrol the keeper in a session it was never part
+        // of. LATENT today -- neither INSERT INTO attachments in this codebase
+        // writes that column on an email_id row, so the coalesce would always
+        // have copied NULL -- but it is one future writer away from live.
+        // RULE: coalesce columns that DESCRIBE the file; never columns that ENROL
+        // the row in a process. If a column appears in the WHERE of any DELETE,
+        // it is not copied.
+        const coalesce = d.prepare(
+          `UPDATE attachments SET
+             mime_type           = COALESCE(mime_type,           (SELECT mime_type           FROM attachments WHERE id = ?)),
+             file_size_bytes     = COALESCE(file_size_bytes,     (SELECT file_size_bytes     FROM attachments WHERE id = ?)),
+             external_message_id = COALESCE(external_message_id, (SELECT external_message_id FROM attachments WHERE id = ?)),
+             text_content        = COALESCE(text_content,        (SELECT text_content        FROM attachments WHERE id = ?)),
+             analysis_metadata   = COALESCE(analysis_metadata,   (SELECT analysis_metadata   FROM attachments WHERE id = ?))
+           WHERE id = ?`,
+        );
+
+        // The classification TRIPLE moves AS A UNIT, by SOURCE PRECEDENCE -- never
+        // field by field, in any branch: a 'user' source paired with a 'pattern'
+        // type is a classification nobody made.
+        //   loser is 'user' and keeper is not -> loser's triple wins (this is what
+        //     protects a human correction from being replaced by a machine guess;
+        //     COALESCE(...,'') <> 'user' also covers a keeper whose source is NULL,
+        //     which is reachable because the column is nullable)
+        //   else keeper's document_type IS NULL -> take the loser's triple
+        //   else                                -> keeper wins
+        //   both 'user' -> keeper wins; it is the MIN(rowid) row, the earlier correction.
+        const triple = d.prepare(
+          `UPDATE attachments SET
+             document_type            = (SELECT document_type            FROM attachments WHERE id = ?),
+             document_type_confidence = (SELECT document_type_confidence FROM attachments WHERE id = ?),
+             document_type_source     = (SELECT document_type_source     FROM attachments WHERE id = ?)
+           WHERE id = ?
+             AND (SELECT document_type FROM attachments WHERE id = ?) IS NOT NULL
+             AND ( ((SELECT document_type_source FROM attachments WHERE id = ?) = 'user'
+                    AND COALESCE(document_type_source, '') <> 'user')
+                   OR document_type IS NULL )`,
+        );
+
+        const repoint = d.prepare(
+          "UPDATE classification_feedback SET attachment_id = ? WHERE attachment_id = ?",
+        );
+        const drop = d.prepare("DELETE FROM attachments WHERE id = ?");
+
+        for (const l of losers) {
+          coalesce.run(l.loser, l.loser, l.loser, l.loser, l.loser, l.keep);
+          triple.run(l.loser, l.loser, l.loser, l.keep, l.loser, l.loser);
+          repoint.run(l.keep, l.loser);
+          drop.run(l.loser);
+        }
+
+        // Legacy rows carry NULL and are excluded by the partial predicate, so
+        // nothing pre-existing can collide. Gmail rows also carry NULL by design
+        // (BACKLOG-3187) and stay out of this index.
+        d.exec(
+          "CREATE UNIQUE INDEX IF NOT EXISTS idx_attachments_email_provider " +
+            "ON attachments(email_id, provider_attachment_id) " +
+            "WHERE provider_attachment_id IS NOT NULL",
+        );
+
+        // ------------------------------------------------------------------
+        // BACKLOG-2839 -- SQLite has no ALTER TABLE ADD CONSTRAINT: rebuild.
+        // ------------------------------------------------------------------
+        const existingSql =
+          (
+            d
+              .prepare(
+                "SELECT sql FROM sqlite_master WHERE type='table' AND name='message_thread_names'",
+              )
+              .get() as { sql: string } | undefined
+          )?.sql ?? "";
+        let blankNamesDropped = 0;
+        if (!existingSql.includes("trim(display_name")) {
+          const TRIMSET = "' '||char(9)||char(10)||char(13)||char(11)||char(12)||char(160)";
+          d.exec(
+            `CREATE TABLE message_thread_names_new (
+               user_id TEXT NOT NULL,
+               thread_id TEXT NOT NULL,
+               display_name TEXT NOT NULL
+                 CHECK (length(trim(display_name, ${TRIMSET})) > 0),
+               updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+               PRIMARY KEY (user_id, thread_id),
+               FOREIGN KEY (user_id) REFERENCES users_local(id) ON DELETE CASCADE
+             )`,
+          );
+          const total = (
+            d.prepare("SELECT COUNT(*) AS n FROM message_thread_names").get() as { n: number }
+          ).n;
+          // Explicit column list, not SELECT *. Filter rather than throw: expected
+          // zero rows (both writers already trim) but the migration must not fail
+          // if one exists.
+          const kept = d
+            .prepare(
+              `INSERT INTO message_thread_names_new (user_id, thread_id, display_name, updated_at)
+               SELECT user_id, thread_id, display_name, updated_at
+                 FROM message_thread_names
+                WHERE length(trim(display_name, ${TRIMSET})) > 0`,
+            )
+            .run().changes;
+          d.exec("DROP TABLE message_thread_names");
+          d.exec("ALTER TABLE message_thread_names_new RENAME TO message_thread_names");
+          // DROP took the table's indexes with it. Recreate here, or the table is
+          // unindexed until the next launch re-execs schema.sql.
+          d.exec(
+            "CREATE INDEX IF NOT EXISTS idx_message_thread_names_thread ON message_thread_names(thread_id)",
+          );
+          blankNamesDropped = total - kept;
+        }
+
+        // Field evidence: whether the 2551 race has actually fired on a real
+        // machine is learned from this COUNT, never by reading anyone's rows.
+        hostLogger.info(
+          `[v71] deduped ${losers.length} duplicate attachment row(s); ` +
+            `dropped ${blankNamesDropped} blank thread name(s)`,
+        );
+      },
+    },
+  ];
 
   static validateNoDuplicateVersions(migrations: MigrationEntry[]): void {
     const seen = new Set<number>();

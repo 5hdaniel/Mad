@@ -165,6 +165,8 @@ describe("DatabaseService Migration Auto-Restore (TASK-2057)", () => {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   let service: any;
 
+  let parkedMigrations: unknown[] | undefined;
+
   beforeEach(() => {
     jest.clearAllMocks();
 
@@ -253,6 +255,30 @@ describe("DatabaseService Migration Auto-Restore (TASK-2057)", () => {
     mockDbTransaction.mockImplementation((fn: () => void) => {
       return () => fn();
     });
+
+    // BACKLOG-2551: this suite's subject is the backup / auto-restore / snapshot
+    // plumbing, exercised against a fully-mocked better-sqlite3. A real migration
+    // body cannot run there -- it asks the driver questions (PRAGMA table_info,
+    // sqlite_master) the mock does not answer -- so with a non-empty chain every
+    // `initialize()` here would land in the migration-FAILURE path and assert
+    // against a dialog it never meant to trigger. Park the real chain; the tests
+    // that mean to exercise a migration already install their own (see the
+    // `klass.MIGRATIONS = original` finally blocks below).
+    //
+    // This masks nothing about v71: its body is covered against the REAL driver in
+    // databaseService.migration-v71.test.ts, including the assertion this suite
+    // cannot make -- that a v70 database with v71 pending DOES get a backup.
+    parkedMigrations = (
+      service.constructor as unknown as { MIGRATIONS: unknown[] }
+    ).MIGRATIONS;
+    (service.constructor as unknown as { MIGRATIONS: unknown[] }).MIGRATIONS = [];
+  });
+
+  afterEach(() => {
+    if (parkedMigrations) {
+      (service.constructor as unknown as { MIGRATIONS: unknown[] }).MIGRATIONS =
+        parkedMigrations;
+    }
   });
 
   /**
@@ -362,11 +388,15 @@ describe("DatabaseService Migration Auto-Restore (TASK-2057)", () => {
     });
 
     it("SKIPS the rolling pre-migration backup when the DB is already at the latest version", async () => {
-      // Latest migration version, so no migration runs and no backup is needed
+      // At the latest version, so no migration runs and no backup is needed
       // (previously every launch copied the DB and churned the 3-file window).
-      // BACKLOG-2993: "latest" is the baseline — the chain is gone.
-      const latest = (service.constructor as { BASELINE_VERSION: number })
-        .BASELINE_VERSION;
+      // BACKLOG-2551: read "latest" from the production accessor rather than
+      // pinning BASELINE_VERSION. getLatestSchemaVersion() returns the baseline
+      // while the chain is empty and the last migration's version once it is not,
+      // so this keeps asserting the real claim instead of a frozen number.
+      const latest = (
+        service as unknown as { getLatestSchemaVersion(): number }
+      ).getLatestSchemaVersion();
       seedOnDiskVersion(latest);
 
       const result = await service.initialize();

@@ -265,7 +265,7 @@ describe("schema-baseline fence — a chain-built v69 database is refused (BACKL
     expect(dialogArg.detail).toContain(`Database: ${dbFile}`);
   });
 
-  it("fresh install (no file) lands at schema_version 70 with the four previously-chain-only tables present", async () => {
+  it("fresh install (no file) lands at the latest shipped schema_version with the four previously-chain-only tables present", async () => {
     expect(fs.existsSync(dbFile)).toBe(false);
 
     await expect(service.initialize()).resolves.toBe(true);
@@ -278,7 +278,21 @@ describe("schema-baseline fence — a chain-built v69 database is refused (BACKL
         version: number;
       }
     ).version;
-    expect(version).toBe(70);
+    // BACKLOG-2551: was pinned to 70. A fresh install seeds schema_version at
+    // BASELINE_VERSION (70) and THEN runs every pending migration, so once v71
+    // ships a fresh install lands at 71. That is not incidental -- it is the
+    // property the v71 design depends on: because a fresh install runs the
+    // migration too, idx_attachments_email_provider can live in the migration
+    // ALONE (it cannot go in schema.sql, whose unconditional exec would abort on
+    // every pre-v71 database) and still reach new installs.
+    //
+    // Assert the shipped latest, not a frozen number, so this keeps testing the
+    // claim rather than the constant.
+    const latest = (
+      service as unknown as { getLatestSchemaVersion(): number }
+    ).getLatestSchemaVersion();
+    expect(version).toBe(latest);
+    expect(latest).toBeGreaterThanOrEqual(70);
 
     // Not just the number: the four tables only the old chain used to create
     // must exist on a fresh install — the exact loss the schema regeneration
