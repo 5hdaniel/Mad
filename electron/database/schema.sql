@@ -39,6 +39,14 @@ CREATE TABLE IF NOT EXISTS attachments (
   mime_type TEXT,
   file_size_bytes INTEGER,
   storage_path TEXT,                     -- Local file path
+  -- BACKLOG-2551: the provider's own id for this attachment (Outlook Graph
+  -- attachment id). Nullable: rows predating v71 have none, and Gmail rows
+  -- deliberately leave it NULL (Google documents no stability property for
+  -- Gmail's attachmentId, so it is not used as an identity key -- see
+  -- BACKLOG-3187). idx_attachments_email_provider is created by MIGRATION v71,
+  -- NOT here: a standalone CREATE INDEX naming this column aborts this file's
+  -- unconditional exec on every database that predates the column.
+  provider_attachment_id TEXT,
 
   -- Extracted Content (for LLMs)
   text_content TEXT,                     -- OCR / extracted text from PDFs
@@ -710,7 +718,16 @@ CREATE TABLE IF NOT EXISTS message_import_state (
 CREATE TABLE IF NOT EXISTS message_thread_names (
   user_id TEXT NOT NULL,
   thread_id TEXT NOT NULL,               -- Matches messages.thread_id ("macos-chat-<chat ROWID>")
-  display_name TEXT NOT NULL,            -- Trimmed, non-empty; absence = no row
+  -- BACKLOG-2839: the non-blank rule, previously only a comment here and a JS
+  -- .trim() in two writers. This charset is a FLOOR, not parity with JS .trim():
+  -- U+2000-U+200A, U+3000 and U+FEFF pass it and are empty to .trim(). SQLite's
+  -- trim() takes a character set, not a Unicode class, so parity is unreachable
+  -- in SQL. normalizeChatDisplayName (importHelpers.ts) and getThreadDisplayName
+  -- (MessageThreadCard.tsx) remain canonical; this is a backstop against writers
+  -- that do not go through them. Applied to existing databases by MIGRATION v71
+  -- (a rebuild -- CREATE TABLE IF NOT EXISTS cannot add a CHECK).
+  display_name TEXT NOT NULL
+    CHECK (length(trim(display_name, ' '||char(9)||char(10)||char(13)||char(11)||char(12)||char(160))) > 0),
   updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
 
   PRIMARY KEY (user_id, thread_id),

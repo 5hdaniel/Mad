@@ -80,6 +80,12 @@ describe("EmailAttachmentService", () => {
     (databaseService.getEmailAttachmentByFilename as jest.Mock).mockReturnValue(
       undefined
     );
+    // BACKLOG-2551: the download path now resolves through the SHARED four-step
+    // order (provider id, then legacy adopt, then filename) rather than filename
+    // alone, so this is the seam the reconcile tests below drive.
+    (databaseService.findEmailAttachmentRow as jest.Mock).mockReturnValue(
+      undefined
+    );
     (databaseService.setEmailAttachmentStorage as jest.Mock).mockReturnValue(
       undefined
     );
@@ -142,6 +148,84 @@ describe("EmailAttachmentService", () => {
       expect(result.errors).toBe(0);
     });
 
+    it("BACKLOG-2551 CONTROL 1: two SAME-NAMED attachments in one email BOTH download", async () => {
+      // THE defect, at the layer where it actually bites. The download path used to
+      // resolve the existing row by (email_id, filename) alone, so the SECOND
+      // image001.png matched the FIRST one's row, saw storage_path already set, and
+      // returned "already downloaded" — it never fetched its bytes and never got a
+      // row. A test that stops at the DB helper passes while this stands, which is
+      // why this control drives downloadEmailAttachments.
+      // A small faithful store rather than a canned return: BOTH lookups are
+      // implemented, so reverting the production code to the filename-only lookup
+      // makes this control go RED instead of silently still passing.
+      const store = [
+        {
+          id: "row-1",
+          filename: "image001.png",
+          storage_path: "/mock/user/data/attachments/first.png",
+          provider_attachment_id: "att-1",
+        },
+      ];
+      (databaseService.findEmailAttachmentRow as jest.Mock).mockImplementation(
+        (_emailId: string, filename: string, providerId: string | null) =>
+          (providerId
+            ? store.find((r) => r.provider_attachment_id === providerId) ??
+              store.find((r) => r.filename === filename && r.provider_attachment_id === null)
+            : store.find((r) => r.filename === filename)),
+      );
+      (databaseService.getEmailAttachmentByFilename as jest.Mock).mockImplementation(
+        (_emailId: string, filename: string) => store.find((r) => r.filename === filename),
+      );
+
+      const first: EmailAttachmentMeta = { ...mockAttachment, filename: "image001.png", attachmentId: "att-1" };
+      const second: EmailAttachmentMeta = { ...mockAttachment, filename: "image001.png", attachmentId: "att-2" };
+
+      const result = await emailAttachmentService.downloadEmailAttachments(
+        mockUserId,
+        mockEmailId,
+        mockExternalEmailId,
+        "outlook",
+        [first, second]
+      );
+
+      // The first is genuinely already stored, so it is skipped. The SECOND is a
+      // different attachment that merely shares a name: it must download.
+      expect(result.skipped).toBe(1);
+      expect(result.stored).toBe(1);
+      expect(outlookFetchService.getAttachment).toHaveBeenCalledTimes(1);
+      expect(outlookFetchService.getAttachment).toHaveBeenCalledWith(
+        mockExternalEmailId,
+        "att-2"
+      );
+      // ...and it gets its OWN row, carrying its OWN provider id.
+      expect(databaseService.createAttachmentRecord).toHaveBeenCalledTimes(1);
+      expect(
+        (databaseService.createAttachmentRecord as jest.Mock).mock.calls[0][0]
+      ).toMatchObject({ filename: "image001.png", providerAttachmentId: "att-2" });
+    });
+
+    it("BACKLOG-2551: a GMAIL download passes NO provider id — the gate, at the chokepoint", async () => {
+      await emailAttachmentService.downloadEmailAttachments(
+        mockUserId,
+        mockEmailId,
+        mockExternalEmailId,
+        "gmail",
+        [mockAttachment]
+      );
+      // Gmail's attachmentId reaches this function and is deliberately not stored:
+      // Google documents partId as immutable and documents no stability property
+      // for attachmentId (BACKLOG-3187). A non-null here would put Gmail rows into
+      // idx_attachments_email_provider.
+      expect(databaseService.findEmailAttachmentRow).toHaveBeenCalledWith(
+        mockEmailId,
+        mockAttachment.filename,
+        null
+      );
+      expect(
+        (databaseService.createAttachmentRecord as jest.Mock).mock.calls[0][0]
+      ).toMatchObject({ providerAttachmentId: null });
+    });
+
     it("should skip oversized attachments", async () => {
       const largeAttachment: EmailAttachmentMeta = {
         ...mockAttachment,
@@ -181,9 +265,10 @@ describe("EmailAttachmentService", () => {
 
     it("should skip attachments already downloaded (row has storage_path)", async () => {
       // BACKLOG-1870: a row whose bytes are already stored (storage_path set) is skipped.
-      (databaseService.getEmailAttachmentByFilename as jest.Mock).mockReturnValue({
+      (databaseService.findEmailAttachmentRow as jest.Mock).mockReturnValue({
         id: "att-existing",
         storage_path: "/mock/user/data/attachments/abc.pdf",
+        provider_attachment_id: null,
       });
 
       const result = await emailAttachmentService.downloadEmailAttachments(
@@ -203,9 +288,10 @@ describe("EmailAttachmentService", () => {
 
     it("BACKLOG-1870: reconciles a sync-created metadata row (storage_path NULL) by backfilling the SAME row, not inserting a duplicate", async () => {
       // A metadata-only row exists from sync: same id, storage_path still NULL.
-      (databaseService.getEmailAttachmentByFilename as jest.Mock).mockReturnValue({
+      (databaseService.findEmailAttachmentRow as jest.Mock).mockReturnValue({
         id: "att-sync-meta",
         storage_path: null,
+        provider_attachment_id: null,
       });
 
       const result = await emailAttachmentService.downloadEmailAttachments(
@@ -241,11 +327,13 @@ describe("EmailAttachmentService", () => {
       const rawFilename = "Purchase Agreement (final).pdf";
       const sanitizedFilename = "Purchase_Agreement_final_.pdf"; // what the old code keyed on
 
-      // The sync row exists ONLY under the RAW filename (storage_path NULL).
-      (databaseService.getEmailAttachmentByFilename as jest.Mock).mockImplementation(
+      // The sync row exists ONLY under the RAW filename (storage_path NULL), and
+      // has no provider id yet — it is a legacy/sync row the download must ADOPT
+      // rather than insert beside (BACKLOG-2551 step 2).
+      (databaseService.findEmailAttachmentRow as jest.Mock).mockImplementation(
         (_emailId: string, filename: string) =>
           filename === rawFilename
-            ? { id: "att-sync-row", storage_path: null }
+            ? { id: "att-sync-row", storage_path: null, provider_attachment_id: null }
             : undefined
       );
 
@@ -265,15 +353,22 @@ describe("EmailAttachmentService", () => {
       );
 
       // The lookup used the RAW display name (matching what sync stored)...
-      expect(databaseService.getEmailAttachmentByFilename).toHaveBeenCalledWith(
+      expect(databaseService.findEmailAttachmentRow).toHaveBeenCalledWith(
         mockEmailId,
-        rawFilename
+        rawFilename,
+        "att-x"
       );
       // ...NOT the sanitized variant (the old bug).
-      expect(databaseService.getEmailAttachmentByFilename).not.toHaveBeenCalledWith(
+      expect(databaseService.findEmailAttachmentRow).not.toHaveBeenCalledWith(
         mockEmailId,
-        sanitizedFilename
+        sanitizedFilename,
+        expect.anything()
       );
+      // BACKLOG-2551: this is an OUTLOOK download, so the provider id is carried
+      // through and stamps the adopted row.
+      expect(
+        (databaseService.setEmailAttachmentStorage as jest.Mock).mock.calls[0][3]
+      ).toBe("att-x");
       // Reconciled the SAME sync row by id — exactly one row, no orphan/duplicate.
       expect(databaseService.setEmailAttachmentStorage).toHaveBeenCalledTimes(1);
       expect(

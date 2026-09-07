@@ -122,6 +122,14 @@ describe("BACKLOG-1870 sync attachment metadata persistence", () => {
       filename: "wire-instructions.pdf",
       mimeType: "application/pdf",
       fileSizeBytes: 12345,
+      // BACKLOG-2551 — THE GMAIL GATE. Gmail's attachmentId reaches this function
+      // (the normaliser now carries it) and is deliberately NOT stored: Google
+      // documents partId as immutable and documents no stability property for
+      // attachmentId, so it is not used as an identity key. A null here keeps the
+      // row out of idx_attachments_email_provider and on the pre-v71 path.
+      // If this ever becomes a string, Gmail rows have entered the unique index
+      // and BACKLOG-3187 must be resolved first.
+      providerAttachmentId: null,
     });
 
     // No provider round-trip for filenames, no byte download.
@@ -161,6 +169,10 @@ describe("BACKLOG-1870 sync attachment metadata persistence", () => {
       filename: "disclosure.docx",
       mimeType: "application/msword",
       fileSizeBytes: 6789,
+      // BACKLOG-2551 — the OUTLOOK side of the same gate: Graph's `id` IS stored,
+      // and is what makes two identically-named attachments in one email
+      // distinguishable. The normaliser used to discard this value entirely.
+      providerAttachmentId: "o-att-1",
     });
   });
 
