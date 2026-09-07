@@ -1197,6 +1197,55 @@ describe("Auth Handlers", () => {
       );
     });
 
+    /**
+     * BACKLOG-3156 stage C — THE DISCONNECT DIALOG'S CLAIM, CHECKED WHERE IT
+     * CAN BE.
+     *
+     * The confirmation added to Settings > Emails tells the user that emails
+     * and contacts already stored on this computer are KEPT. That is a claim
+     * about this handler, and no renderer test can see it, so it is asserted
+     * here: the whole disconnect path touches the database exactly twice — one
+     * read to resolve the user (`getValidUserId` -> `getUserById`) and one
+     * write, the token delete.
+     *
+     * Enumerated from the mock by execution rather than compared against a list
+     * written by hand, so a mutation that added a second write shows up as a
+     * new NAME in the failure rather than having to be predicted.
+     *
+     * The set is small because the mock is a partial one: a call to a
+     * databaseService method it does not define would throw, the handler would
+     * catch it, and `success` would come back false — so that shape is caught
+     * too, by the assertion on the line above.
+     */
+    it("touches the database exactly twice: resolve the user, delete the token", async () => {
+      // Set explicitly rather than inherited. `jest.clearAllMocks()` in this
+      // file's `beforeEach` clears CALLS but not implementations, so the
+      // sibling disconnect tests only pass because an earlier test in the file
+      // left `getUserById` resolving — each of them fails when run alone with
+      // `-t`. This one does not rely on that.
+      mockDatabaseService.getUserById.mockResolvedValue({
+        id: TEST_USER_ID,
+      } as never);
+
+      const handler = registeredHandlers.get("auth:google:disconnect-mailbox");
+      const result = await handler(mockEvent, TEST_USER_ID);
+
+      expect(result.success).toBe(true);
+
+      const called = Object.entries(
+        mockDatabaseService as unknown as Record<string, unknown>,
+      )
+        .filter(
+          ([, value]) =>
+            typeof value === "function" &&
+            ((value as jest.Mock).mock?.calls.length ?? 0) > 0,
+        )
+        .map(([name]) => name)
+        .sort();
+
+      expect(called).toEqual(["deleteOAuthToken", "getUserById"]);
+    });
+
     it("should handle invalid user ID", async () => {
       const handler = registeredHandlers.get("auth:google:disconnect-mailbox");
       const result = await handler(mockEvent, "");
