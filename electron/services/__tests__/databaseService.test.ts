@@ -227,6 +227,14 @@ describe("DatabaseService", () => {
   beforeEach(async () => {
     jest.clearAllMocks();
     jest.resetModules();
+    // BACKLOG-2962: `resetModules` hands the module under test a FRESH
+    // capability provider with nothing installed, and no jest hook fires after
+    // an in-test reset. Without this, `hostErrorReporter.captureException` in
+    // databaseService reaches the silent default and the Sentry assertions in
+    // this file see zero calls. Same reason the six SecretStore suites call
+    // `installTestSecretStore()` here.
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    require("../../../tests/helpers/installTestCapabilities").installTestCapabilities();
 
     // Reset mock defaults
     mockStatement.get.mockReturnValue(undefined);
@@ -1474,6 +1482,9 @@ describe("DatabaseService", () => {
     beforeEach(async () => {
       jest.clearAllMocks();
       jest.resetModules();
+      // BACKLOG-2962 — see the outer beforeEach for why.
+      // eslint-disable-next-line @typescript-eslint/no-var-requires
+      require("../../../tests/helpers/installTestCapabilities").installTestCapabilities();
 
       // Reset mock defaults on shared mocks (these survive resetModules)
       // CRITICAL: clearAllMocks() removes implementations from all mocks,

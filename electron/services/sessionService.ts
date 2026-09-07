@@ -355,7 +355,14 @@ export class SessionService {
       try {
         const currentSession = await this.loadSession();
         if (!currentSession) {
-          await logService.error("No session to update", "SessionService");
+          // BACKLOG-3147: INFO, not ERROR. Having no session here is a NORMAL outcome, not a
+          // failure — it is what an ordinary signed-out startup looks like, and it is also what
+          // supabaseService's fire-and-forget token persist (supabaseService.ts:436) hits when
+          // the SDK rotates tokens before the first save or after the session has been cleared.
+          // Nothing was lost: there was nothing to update. Logging it at ERROR put a red line in
+          // the log on a routine path, which trains people to ignore the error level.
+          // (debug would be invisible: logService's default minLevel is "info".)
+          await logService.info("No session to update", "SessionService");
           return false;
         }
 

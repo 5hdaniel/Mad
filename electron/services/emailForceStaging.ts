@@ -82,7 +82,6 @@ import {
 import {
   assertRebuildableProviders,
   deleteLiveForceSet as dbDeleteLiveForceSet,
-  emailForceReadView as dbEmailForceReadView,
   type EmailForceSet,
 } from "./db/emailForceSetSql";
 import {
@@ -244,6 +243,10 @@ export interface EmailForceStaging {
    * two as `string` threw the brand away before anything downstream could
    * demand it — so `emailForceReadView` could interpolate an unchecked name
    * into `FROM "${stagingTable}"` under a docstring claiming it was checked.
+   * (That interpolation is GONE as of BACKLOG-3102 PR 2: the name now goes
+   * through `db/core/identifierSql.ts`, which refuses any character the staging
+   * pattern does not admit. The brand below is still what says WHICH identifier;
+   * the builder only says which CHARACTERS.)
    *
    * That is the same widening the compiler caught during A1 at
    * `pairs: Array<[live: string, staging: string]>`, one commit later. The
@@ -350,38 +353,6 @@ export const emailForceStagingLifecycle = {
     };
   },
 };
-
-/**
- * A read that must see what the live table WOULD look like at this point in a
- * force run: everything the swap will not delete, plus everything this run has
- * staged so far.
- *
- * This is the equivalence that makes the rebuild behaviour-preserving, and
- * getting it wrong is the catastrophic path for this feature — not a subtle one.
- * `fetchStoreAndDedup` decides what to insert by asking live `emails` which
- * `external_id`s and `message_id_header`s it already holds. Under a force run
- * live still holds the ENTIRE force set (that is the point of staging), so every
- * re-fetched row would match, be classified an already-cached duplicate, and
- * never be staged. Staging would finish empty and the swap would delete the
- * user's whole corpus and put nothing back.
- *
- * Reading only staging is equally wrong in the other direction: it would lose
- * the survivors, so a row this run is not replacing would stop being deduplicated
- * against and be inserted a second time.
- *
- * Columns are listed explicitly — `SELECT *` here would drag `body_html` for
- * every row of a large mailbox through a query that wants two columns.
- */
-export function emailForceReadView(
-  staging: EmailForceStaging,
-  columns: string,
-): { sql: string; params: readonly string[] } {
-  // The surviving predicate is built inside db/ from the force SET, so it never
-  // travels as text. `forceReadView` is left alone here: BACKLOG-2990's
-  // macOSMessagesImportService calls it in three places, and its signature is
-  // that item's to change.
-  return dbEmailForceReadView(staging.forceSet, staging.emailsTable, columns);
-}
 
 /**
  * Narrow the force set to the providers that actually finished a rebuild, and

@@ -37,7 +37,7 @@ import {
   DELETE_MACOS_THREAD_NAMES_SQL,
   SELECT_MACOS_THREAD_IDS_SQL,
   UPSERT_THREAD_NAME_SQL,
-  deleteThreadNamesByIds,
+  deleteThreadNamesByIdsSync,
 } from "../db/messageThreadNameSql";
 
 /**
@@ -462,7 +462,10 @@ export function syncMacChatThreadNames(
       for (let i = 0; i < doomed.length; i += CHUNK) {
         const slice = doomed.slice(i, i + CHUNK);
         // Width derived from the array that is bound, inside db/.
-        cleared += deleteThreadNamesByIds(db, userId, slice);
+        // The *Sync twin, not the promise-returning seam export: this runs
+        // inside the `db.transaction` body above, and better-sqlite3 commits
+        // when that callback returns (BACKLOG-2960).
+        cleared += deleteThreadNamesByIdsSync(db, userId, slice);
       }
     }
 

@@ -50,11 +50,19 @@
 
 import type { Database as DatabaseType } from "better-sqlite3";
 
+// The `*Sync` twins, NOT the promise-returning seam exports of the same names,
+// and imported UNALIASED on purpose (BACKLOG-2960). Everything below runs inside
+// `swapStagingIntoLive`'s raw `db.transaction()` callback, which better-sqlite3
+// commits when it RETURNS — so a body may not await, and the twin is the only
+// callable shape. The de-aliasing is load-bearing as well as clearer:
+// `syncTwin.guard.test.ts` walks the call graph by CALLEE IDENTIFIER TEXT, so a
+// call spelled `dbDeleteLiveForceSetSync(...)` would leave the twin unreachable
+// from any transaction body and the guard would report it as a dead twin.
 import {
-  deleteLiveForceSet as dbDeleteLiveForceSet,
-  insertStagedRows,
+  deleteLiveForceSetSync,
+  insertStagedRowsSync,
   macOSForceSetFor,
-  selectYieldedMessageIds,
+  selectYieldedMessageIdsSync,
 } from "../db/macosForceSetSql";
 import { UPDATE_ATTACHMENT_MESSAGE_ID_SQL } from "../db/messageImportSql";
 import * as crypto from "crypto";
@@ -256,7 +264,7 @@ export const forceSwapSteps = {
     db: DatabaseType,
     staging: ForceStaging
   ): { messagesDeleted: number; attachmentsDeleted: number } {
-    return dbDeleteLiveForceSet(db, macOSForceSetFor(staging.userId));
+    return deleteLiveForceSetSync(db, macOSForceSetFor(staging.userId));
   },
 
   /**
@@ -336,7 +344,7 @@ export const forceSwapSteps = {
     // whole rebuild's attachments. Ask before either write, and the answer
     // cannot drift. Normally the list is EMPTY and both statements are the ones
     // this function has always run.
-    const yieldedMessageIds = selectYieldedMessageIds(
+    const yieldedMessageIds = selectYieldedMessageIdsSync(
       db,
       macOSForceSetFor(staging.userId),
       staging.messagesTable
@@ -344,14 +352,14 @@ export const forceSwapSteps = {
 
     const stagedAttachments = countStagingRows(db, staging.attachmentsTable);
 
-    const messagesInserted = insertStagedRows(
+    const messagesInserted = insertStagedRowsSync(
       db,
       "messages",
       staging.messagesTable,
       messageColumns,
       yieldedMessageIds
     );
-    const attachmentsInserted = insertStagedRows(
+    const attachmentsInserted = insertStagedRowsSync(
       db,
       "attachments",
       staging.attachmentsTable,
@@ -391,6 +399,27 @@ export const forceSwapSteps = {
  * with it. The old force transaction stayed open across minutes of awaited
  * fetching, which is exactly why anything that wrote in that window was at risk
  * and why two writers had to be paused by hand.
+ *
+ * "NO POSSIBILITY OF ONE" — WHAT ACTUALLY ENFORCES THAT, stated at measured
+ * strength because BACKLOG-2960 made the data layer promise-returning and the
+ * sentence above would otherwise read as a guarantee nothing supplies.
+ *
+ *   - Every `db/**` call this body reaches goes through a synchronous `*Sync`
+ *     twin (`deleteLiveForceSetSync`, `selectYieldedMessageIdsSync`,
+ *     `insertStagedRowsSync`), so there is nothing here to await.
+ *   - Writing `db.transaction(async () => …)` is caught by the
+ *     `no-restricted-syntax` AST rule in `eslint.config.js` — a LINT control.
+ *     `dbTransaction`'s conditional return type, which refuses a promise-
+ *     returning body, does NOT reach a raw `db.transaction(...)` like this one.
+ *   - Calling a promise-returning seam export from `forceSwapSteps.*` instead of
+ *     its twin is caught by `tsc`, because those two steps carry explicit
+ *     non-promise return annotations and the promise leaks into them.
+ *   - A call that merely FLOATS a seam export inside this body is caught by
+ *     NEITHER of those. It is reported only by `no-floating-promises`, which is
+ *     scoped to `db/**` and does not cover this file (BACKLOG-3150). What such a
+ *     float would cost here is nothing at runtime — the driver work and any
+ *     throw complete before the promise exists — but it would be a latent
+ *     `async`-away from letting this transaction commit over an error.
  *
  * THE BOUNDARY OF THAT CLAIM, because it is not unconditional.
  *

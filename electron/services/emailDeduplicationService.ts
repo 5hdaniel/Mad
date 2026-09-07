@@ -16,7 +16,7 @@ import {
   findExistingByContentHashes,
   findExistingByMessageIdHeaders,
 } from "./db/emailDeduplicationSql";
-import * as Sentry from "@sentry/electron/main";
+import { hostErrorReporter } from "../capabilities/errorReporterProvider";
 import databaseService from "./databaseService";
 import logService from "./logService";
 
@@ -331,7 +331,7 @@ export class EmailDeduplicationService {
       logService.error("Failed to check duplicates", provider.logLabel, {
         error,
       });
-      Sentry.captureException(error, {
+      hostErrorReporter.captureException(error, {
         tags: { service: provider.sentryTag, operation: "checkDuplicates" },
       });
       // Return original emails without duplicate info on error
