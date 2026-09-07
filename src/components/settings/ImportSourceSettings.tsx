@@ -213,6 +213,27 @@ export function ImportSourceSettings({ userId, onSourceChange, onConnectAndroid 
   }, [refreshAndroidStatus]);
 
   return (
+    /*
+      BACKLOG-3156 stage C — MESSAGES GETS THE `Sources` BLOCK THE OTHER TWO
+      SECTIONS HAVE.
+
+      Emails and Contacts each open with a `Sources` eyebrow above their source
+      cards; the Messages section had the card and not the eyebrow, so the one
+      shape the redesign promised did not reach it. The eyebrow lives HERE
+      rather than inside either message panel because this picker IS the
+      Messages section's source control and `Settings.tsx` renders it above
+      BOTH panels — the macOS one and the Android one — so a copy in each would
+      be the drift this item exists to undo, and would print the word twice
+      whenever the Android panel is showing.
+
+      `Settings.test.tsx` asserts the resulting order (sources -> preferences ->
+      actions) against the real composition in `Settings.tsx`, not against a
+      fixture assembled by the test.
+    */
+    <div data-testid="messages-block-sources">
+    <p className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-2">
+      Sources
+    </p>
     <div className="p-4 bg-gray-50 rounded-lg border border-gray-200">
       <h4 className="text-sm font-medium text-gray-900 mb-2">Import Source</h4>
       <p className="text-xs text-gray-600 mb-3">
@@ -406,6 +427,7 @@ export function ImportSourceSettings({ userId, onSourceChange, onConnectAndroid 
           )}
         </>
       )}
+    </div>
     </div>
   );
 }
