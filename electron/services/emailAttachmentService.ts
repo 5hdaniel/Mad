@@ -174,6 +174,21 @@ class EmailAttachmentService {
     // Load existing content hashes for deduplication
     const existingHashes = await this.loadExistingHashes();
 
+    // BACKLOG-2551 — THE download-side gate, deliberately here and nowhere else.
+    // `source` is a parameter of this function, so this single line covers all
+    // nine call sites across four files. Replicating it at those call sites (each
+    // has its own inline .map()) would mean missing one lets a Gmail attachmentId
+    // into idx_attachments_email_provider — reintroducing the very regression this
+    // avoids, with nothing red, since tsc sees a valid string either way.
+    //
+    // Gmail is NULL because Google documents `partId` as "the immutable ID of the
+    // message part" and documents NO stability property for `attachmentId`. A
+    // UNIQUE index is a durability commitment; it is not built on that. Outlook
+    // Graph ids are INFERRED stable per message — inferred, not verified.
+    // See BACKLOG-3187.
+    const providerAttachmentIdFor = (meta: EmailAttachmentMeta): string | null =>
+      source === "gmail" ? null : (meta.attachmentId ?? null);
+
     for (const attachment of attachments) {
       try {
         const downloadResult = await this.processAttachment(
@@ -183,7 +198,8 @@ class EmailAttachmentService {
           source,
           attachment,
           attachmentsDir,
-          existingHashes
+          existingHashes,
+          providerAttachmentIdFor(attachment)
         );
 
         result.details.push(downloadResult);
@@ -234,7 +250,9 @@ class EmailAttachmentService {
     source: "gmail" | "outlook",
     attachment: EmailAttachmentMeta,
     attachmentsDir: string,
-    existingHashes: Set<string>
+    existingHashes: Set<string>,
+    /** BACKLOG-2551: already gated by the caller; null for Gmail by design. */
+    providerAttachmentId: string | null
   ): Promise<{ filename: string; status: "stored" | "skipped" | "error"; reason?: string }> {
     // BACKLOG-1870: `sanitizedFilename` is ONLY for deriving the on-disk file's
     // extension (the file itself is named by content hash — see below), NOT for the
@@ -264,7 +282,15 @@ class EmailAttachmentService {
     //   - a sync persisted METADATA ONLY (storage_path NULL) → download the bytes
     //     now and backfill storage on THAT SAME row (no duplicate).
     // Keyed by the RAW display filename so it reconciles with the sync-created row.
-    const existingRow = this.getExistingAttachmentRow(emailId, displayFilename);
+    // BACKLOG-2551: resolve through the SAME four-step order the sync upsert uses.
+    // Keyed on filename alone, the second of two identically-named attachments
+    // matched the FIRST one's row, saw storage_path set, and was skipped — it never
+    // downloaded. That is the defect; this is the line that fixes it.
+    const existingRow = this.getExistingAttachmentRow(
+      emailId,
+      displayFilename,
+      providerAttachmentId
+    );
     if (existingRow && existingRow.storage_path) {
       return {
         filename: displayFilename,
@@ -334,10 +360,14 @@ class EmailAttachmentService {
     // a fresh record (the pre-BACKLOG-1870 behavior).
     let storedAttachmentId: string;
     if (existingRow) {
+      // BACKLOG-2551: passing the provider id here is what stamps an ADOPTED
+      // legacy row (matched by step 2, provider id NULL) so the next sync finds it
+      // by step 1 instead of inserting beside it.
       databaseService.setEmailAttachmentStorage(
         existingRow.id,
         storagePath,
-        data.length
+        data.length,
+        providerAttachmentId
       );
       storedAttachmentId = existingRow.id;
     } else {
@@ -348,7 +378,8 @@ class EmailAttachmentService {
         displayFilename,
         attachment.mimeType,
         data.length,
-        storagePath
+        storagePath,
+        providerAttachmentId
       );
     }
 
@@ -426,10 +457,15 @@ class EmailAttachmentService {
    */
   private getExistingAttachmentRow(
     emailId: string,
-    filename: string
-  ): { id: string; storage_path: string | null } | undefined {
+    filename: string,
+    providerAttachmentId: string | null
+  ): { id: string; storage_path: string | null; provider_attachment_id: string | null } | undefined {
     try {
-      return databaseService.getEmailAttachmentByFilename(emailId, filename);
+      return databaseService.findEmailAttachmentRow(
+        emailId,
+        filename,
+        providerAttachmentId
+      );
     } catch {
       // If the email_id column doesn't exist yet, treat as no existing row.
       return undefined;
@@ -446,7 +482,8 @@ class EmailAttachmentService {
     filename: string,
     mimeType: string,
     fileSize: number,
-    storagePath: string
+    storagePath: string,
+    providerAttachmentId: string | null
   ): Promise<string> {
     const attachmentId = crypto.randomUUID();
 
@@ -460,6 +497,7 @@ class EmailAttachmentService {
       mimeType,
       fileSizeBytes: fileSize,
       storagePath,
+      providerAttachmentId,
     });
 
     await logService.debug(

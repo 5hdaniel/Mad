@@ -137,6 +137,10 @@ describe("BACKLOG-2250 backfillAttachmentMetadata", () => {
       filename: "Purchase Agreement (final).pdf",
       mimeType: "application/pdf",
       fileSizeBytes: 5555,
+      // BACKLOG-2551: this service is a THIRD write path, reached from neither of
+      // the two chokepoints, so it carries its own copy of the same gate. Outlook
+      // Graph's `id` is stored.
+      providerAttachmentId: "a1",
     });
     expectNoBytesDownloaded();
     expect(result).toMatchObject({
@@ -172,6 +176,9 @@ describe("BACKLOG-2250 backfillAttachmentMetadata", () => {
       filename: "disclosure.docx",
       mimeType: "application/msword",
       fileSizeBytes: 6789,
+      // BACKLOG-2551: Gmail -> null, same rule as the other two write paths. A
+      // string here would mean the backfill had bypassed the gate.
+      providerAttachmentId: null,
     });
     expectNoBytesDownloaded();
     expect(result).toMatchObject({ processed: 1, indexed: 1, attachments: 1 });

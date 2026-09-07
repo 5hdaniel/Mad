@@ -2272,8 +2272,27 @@ class DatabaseService implements IDatabaseService {
     return attachmentDb.getEmailAttachmentByFilename(emailId, filename);
   }
 
-  setEmailAttachmentStorage(id: string, storagePath: string, fileSizeBytes: number) {
-    return attachmentDb.setEmailAttachmentStorage(id, storagePath, fileSizeBytes);
+  /** BACKLOG-2551: the shared insert-vs-reconcile lookup order. */
+  findEmailAttachmentRow(
+    emailId: string,
+    filename: string,
+    providerAttachmentId: string | null
+  ) {
+    return attachmentDb.findEmailAttachmentRow(emailId, filename, providerAttachmentId);
+  }
+
+  setEmailAttachmentStorage(
+    id: string,
+    storagePath: string,
+    fileSizeBytes: number,
+    providerAttachmentId?: string | null
+  ) {
+    return attachmentDb.setEmailAttachmentStorage(
+      id,
+      storagePath,
+      fileSizeBytes,
+      providerAttachmentId
+    );
   }
 
   // BACKLOG-2257: persist locally-extracted text_content onto an attachment row.

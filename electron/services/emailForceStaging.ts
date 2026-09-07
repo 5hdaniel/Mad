@@ -232,6 +232,13 @@ export interface PendingAttachmentMeta {
   readonly filename: string;
   readonly mimeType: string | null;
   readonly fileSizeBytes: number | null;
+  /**
+   * BACKLOG-2551: already gated by persistEmailAttachmentMetadata (null for Gmail
+   * by design). Without this field a force re-cache would write NULL for EVERY
+   * provider and silently drop its rows out of idx_attachments_email_provider —
+   * with nothing red, since the applier just passes the row through.
+   */
+  readonly providerAttachmentId: string | null;
 }
 
 export interface EmailForceStaging {
