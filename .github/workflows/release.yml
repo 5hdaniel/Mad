@@ -188,6 +188,59 @@ jobs:
             CSC_IDENTITY_AUTO_DISCOVERY=false npx electron-builder --config.mac.identity=null --publish never
           fi
 
+      # BACKLOG-3192. Runs with `if: always()` on purpose. This is the one
+      # observation that distinguishes "we signed from our keychain" from "we
+      # silently fell back to the packager's own", and it must not be skipped by
+      # an earlier failure -- a fall-through that also fails is still the answer.
+      #
+      # The packager's keychain path, and only that path, appends its bundled
+      # root-certs keychain to the user search list, and nothing ever removes it
+      # again. Our Import step replaces that list with ours alone, so the entry
+      # cannot pre-exist. Its presence therefore means the fallback ran.
+      #
+      # This is also the durable guard: re-adding CSC_LINK later would restore
+      # the broken path at runtime, and no static reading of this file catches
+      # that. This step does.
+      - name: Verify the signing keychain path was honoured
+        if: always()
+        run: |
+          echo "User keychain search list after packaging:"
+          security list-keychains -d user
+          if security list-keychains -d user | grep -q "electron-builder-root-certs.keychain"; then
+            echo "::error::The packager built its own keychain -- CSC_KEYCHAIN was not honoured and signing did not use our keychain"
+            exit 1
+          fi
+          echo "OK: no packager-managed keychain in the search list."
+
+      # BACKLOG-3192. Nothing in this pipeline previously distinguished a signed
+      # build from an unsigned one, so an unsigned artifact could ship green.
+      #
+      # Gate the .app and NEVER the disk image. Every release we have shipped
+      # carries an un-ticketed DMG wrapping a notarised .app, and they open; a
+      # DMG assessment here would be red on a correct build, and a standing red
+      # gets quieted. Presence of the DMG is all this asserts.
+      - name: Verify macOS signing and notarisation
+        run: |
+          set -euo pipefail
+          FOUND=0
+          for APP in dist/mac-arm64/Keepr.app dist/mac/Keepr.app; do
+            if [ ! -d "$APP" ]; then
+              echo "::error::Missing $APP"
+              ls -la dist/ || true
+              exit 1
+            fi
+            FOUND=$((FOUND+1))
+            echo "::group::$APP"
+            codesign --verify --deep --strict --verbose=2 "$APP"
+            codesign -dv --verbose=4 "$APP" 2>&1 | grep -q "Notarization Ticket=stapled" \
+              || { echo "::error::$APP has no stapled notarisation ticket"; exit 1; }
+            xcrun stapler validate "$APP"
+            spctl -a -t exec -vv "$APP"
+            echo "::endgroup::"
+          done
+          [ "$FOUND" -eq 2 ] || { echo "::error::Expected 2 .app bundles, found $FOUND"; exit 1; }
+          ls dist/*.dmg >/dev/null
+
       - name: Upload macOS Artifacts
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
@@ -197,6 +250,10 @@ jobs:
             dist/*.zip
             dist/*.blockmap
             dist/latest-mac.yml
+          # Default is `warn`. A build that produced nothing uploaded nothing
+          # and passed, and the absence only surfaced later as a glob error in
+          # the mirror step (BACKLOG-3192).
+          if-no-files-found: error
           retention-days: 30
 
   # Build and release for Windows
@@ -473,6 +530,11 @@ jobs:
             dist/*.exe
             dist/*.blockmap
             dist/latest.yml
+          # Same defect as the macOS upload: the default `warn` lets a job that
+          # produced nothing report success, and with the create-release gate now
+          # requiring BOTH platforms, an empty-but-green Windows job would let a
+          # half-release through the guard that exists to stop it (BACKLOG-3192).
+          if-no-files-found: error
           retention-days: 30
 
   # Create GitHub Release (after both platforms complete)
