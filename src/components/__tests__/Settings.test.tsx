@@ -574,6 +574,51 @@ describe("Settings", () => {
       ).toBe("preferences then actions: true");
     });
 
+    /**
+     * The Android branch, asserted separately and for a specific reason.
+     *
+     * `AndroidMessagesSettings.tsx` does NOT render `ImportSourceSettings` —
+     * checked, it contains no reference to it. It does not need to: the picker
+     * is its SIBLING one level up, rendered by `Settings.tsx` above the
+     * `activeImportSource === 'android-companion'` ternary, inside the same
+     * `space-y-4` wrapper. So both branches of that ternary get the same
+     * Sources block from the same element, and neither panel carries a copy.
+     *
+     * A reader cannot verify that from either panel's source, which is exactly
+     * why it is asserted here — with the macOS panel's absence checked too, so
+     * the test cannot pass by silently having rendered the other branch.
+     */
+    it("Android: the same Sources block sits above the Android panel", async () => {
+      jest.mocked(window.api.preferences.get).mockResolvedValue({
+        success: true,
+        preferences: {
+          export: { defaultFormat: "combined-pdf" },
+          messages: { source: "android-companion" },
+        },
+      });
+
+      await renderSettings({ userId: mockUserId, onClose: mockOnClose });
+
+      const sourcesBlock = await screen.findByTestId("messages-block-sources");
+      const preferences = await screen.findByTestId("android-block-preferences");
+      const actions = await screen.findByTestId("android-block-actions");
+
+      // This really is the Android branch, not the macOS one.
+      expect(screen.queryByTestId("macos-messages-import")).not.toBeInTheDocument();
+
+      expect(
+        `sources then android preferences: ${
+          (sourcesBlock.compareDocumentPosition(preferences) & 4) !== 0
+        }`,
+      ).toBe("sources then android preferences: true");
+      expect(
+        `android preferences then actions: ${
+          (preferences.compareDocumentPosition(actions) & 4) !== 0
+        }`,
+      ).toBe("android preferences then actions: true");
+      expect(within(sourcesBlock).getByText("Sources")).toBeInTheDocument();
+    });
+
     it("labels the block Sources, and the label sits above the Import Source card", async () => {
       await renderSettings({ userId: mockUserId, onClose: mockOnClose });
 
