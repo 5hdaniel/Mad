@@ -38,6 +38,7 @@ import {
   TransactionFrozenError,
   FROZEN_IDENTITY_FIELDS,
 } from "../transactionFreezePolicy";
+import { TransactionStatusSchema } from "../../schemas/transaction";
 import { assignmentList, columnList } from "./core/columnSql";
 import { placeholderList } from "./core/sqlFragments";
 import { joinFragments } from "./core/sqlFragments";
@@ -99,7 +100,9 @@ export const UNFREEZE_OVERRIDE_KEY = "__unfreezeOverride";
 // creation path passes exactly the values the schema already defaults to, so
 // discarding them was invisible. Turning on a write whose caller passes a
 // WRONG value lands that wrong value for the first time. `closing_date_verified`
-// is the worked example; read its `why`.
+// is the worked example — the caller that made it one has since been corrected
+// (BACKLOG-2756), so read its `why` for how the decision was reached rather
+// than as a live hazard.
 // ===========================================================================
 
 /** What happens to a caller-supplied value for one column on one path. */
@@ -218,7 +221,7 @@ export const TRANSACTION_COLUMN_POLICY: Record<TransactionColumn, ColumnPolicy> 
   closing_date_verified: {
     insert: "db-default",
     update: "writable",
-    why: "THE WORKED EXAMPLE. The audited-create path passes `property_coordinates ? true : false` (transactionService.ts:1173) — a fact about the ADDRESS, not about the closing date. Every path stores the schema DEFAULT 0 today because the INSERT dropped it; opening the INSERT would land a semantically wrong 1 for the first time. The update path already accepted it (the IPC validator forwards a 0/1 the user actually set), so that half is unchanged.",
+    why: "THE WORKED EXAMPLE, and the reason this table exists. `createAuditedTransaction` used to pass `property_coordinates ? true : false` — a fact about the ADDRESS, not about the closing date. Because the INSERT dropped the column, every row stored the schema DEFAULT 0 and the wrong value was never observable; opening the INSERT would have landed a semantically wrong 1 for the first time. BACKLOG-2756 corrected that caller, so every creating path now states `false`. The entry stays `db-default` on that basis: opening it would write exactly what the schema already defaults to, and a column gains a writer when something means to write it. The update path is where the real signal arrives — `ExportModal`'s `handleExport` sets it once the user has been shown the closing date and confirmed it, and the IPC validator forwards that 0/1.",
   },
   representation_start_confidence: {
     insert: "writable",
@@ -263,7 +266,7 @@ export const TRANSACTION_COLUMN_POLICY: Record<TransactionColumn, ColumnPolicy> 
   sale_price: {
     insert: "db-default",
     update: "writable",
-    why: "Entered by the user after the deal exists. Already accepted on the update path and forwarded by the IPC validator. NOTE the one creating caller that names it — `_createTransactionFromSummary` (transactionService.ts:530) — is a PRIVATE method with zero callers repo-wide, so opening this would change no live behaviour and would give a dead path its first effect. If that method is ever revived, revisit this entry rather than assuming the drop is still harmless.",
+    why: "Entered by the user after the deal exists. Already accepted on the update path and forwarded by the IPC validator. No creating caller names this column: the one that did — `_createTransactionFromSummary`, a private method with no callers — was deleted by BACKLOG-2756, which is why this entry no longer carries the caveat that opening the column would give a dead path its first effect. If a creating caller ever supplies a sale price, revisit this entry rather than assuming the drop is still harmless.",
   },
   earnest_money_amount: {
     insert: "db-default",
@@ -469,9 +472,24 @@ const INSERTABLE_COLUMNS: readonly TransactionColumn[] = TABLE_FIELDS.transactio
  * Prepare one caller value for binding.
  *
  * `better-sqlite3` binds only numbers, strings, bigints, buffers and null — a
- * boolean throws. The creating paths pass `closing_date_verified: false` and
- * `property_coordinates ? true : false`, so this is not hypothetical; it is the
- * first thing that breaks when a hard-coded INSERT becomes a derived one.
+ * boolean throws, so the coercion below is what lets a hard-coded INSERT become
+ * a derived one without every caller being rewritten to pass 0/1.
+ *
+ * The boolean case is reachable BY TYPE on the UPDATE path, though no caller
+ * exercises it today. `updateTransaction` takes `Partial<Transaction>`, and
+ * `Transaction` declares `closing_date_verified` as a `boolean` — the only
+ * boolean-typed column on either payload type — so a main-process caller can
+ * hand this function a boolean and the compiler will accept it. In practice
+ * none does: the one real writer, `ExportModal`'s `handleExport`, sends `1`,
+ * and the IPC validator coerces with `Number()` before the value arrives. The
+ * freeze-override sentinel is the only boolean literal in any update payload,
+ * and it is deleted from the record before the column loop runs.
+ *
+ * On the INSERT path no `writable` column is boolean-typed at all.
+ *
+ * So the coercion is defensive on both paths — deliberately, since which
+ * columns are insertable is derived from the policy table above and changes
+ * when an entry changes.
  */
 function bindValue(
   column: TransactionColumn,
@@ -495,14 +513,26 @@ function bindValue(
 
 /**
  * Valid transaction status values.
- * These are the only values allowed in the database.
+ *
+ * DERIVED, not restated (BACKLOG-2755). This used to be a hand-written array,
+ * and it was one of four copies of the same domain on the transaction path —
+ * the others being two lists in `utils/validation.ts` and a literal in the
+ * bulk-status IPC handler, which had drifted from the column's CHECK in both
+ * directions. `TransactionStatusSchema` is pinned to that CHECK, as exact
+ * sets in both directions, by `schemas/__tests__/transactionSchemaParity.test.ts`,
+ * which reads the domain out of a real migrated database.
+ *
+ * The `readonly TransactionStatus[]` annotation is kept deliberately: it is a
+ * one-direction compile check that the schema's members are all members of the
+ * union in `types/models.ts`. Nothing checks the reverse, which is why that
+ * union is named as a remaining copy in BACKLOG-3180.
+ *
+ * The order is the schema's declaration order and matches the CHECK, so the
+ * order-sensitive assertion in `__tests__/transactionDbService.test.ts` still
+ * describes the same list.
  */
-export const VALID_TRANSACTION_STATUSES: readonly TransactionStatus[] = [
-  "pending",
-  "active",
-  "closed",
-  "rejected",
-] as const;
+export const VALID_TRANSACTION_STATUSES: readonly TransactionStatus[] =
+  TransactionStatusSchema.options;
 
 /**
  * Validate and return a transaction status value.

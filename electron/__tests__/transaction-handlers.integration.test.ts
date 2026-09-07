@@ -727,12 +727,21 @@ describe("Transaction Handlers Integration Tests", () => {
   });
 
   describe("Audited Transaction Creation", () => {
+    // BACKLOG-2755 — THIS FIXTURE USED TO CARRY A TYPE THE DATABASE REJECTS.
+    //
+    // It read `transaction_type: "lease"`, and it was green only because
+    // `transactionService` is mocked here: `transactions.transaction_type` has
+    // a CHECK of ('purchase', 'sale', 'other'), so against a real database that
+    // INSERT fails. The validator accepted `lease` and the column did not, and
+    // this test documented the disagreement as if it were the intended
+    // behaviour. Corrected to a legal type, with the refusal asserted below so
+    // the case that used to pass wrongly now has a test of its own.
     it("should create audited transaction with full details", async () => {
       const auditedTransaction = {
         id: TEST_TXN_ID,
         user_id: TEST_USER_ID,
         property_address: "100 Corporate Dr, Suite 500",
-        transaction_type: "lease",
+        transaction_type: "purchase",
         status: "active",
         started_at: "2025-01-01",
         closed_at: "2025-06-30",
@@ -748,7 +757,7 @@ describe("Transaction Handlers Integration Tests", () => {
       const handler = registeredHandlers.get("transactions:create-audited");
       const result = await handler(mockEvent, TEST_USER_ID, {
         property_address: "100 Corporate Dr, Suite 500",
-        transaction_type: "lease",
+        transaction_type: "purchase",
         status: "active",
         started_at: "2025-01-01",
         closed_at: "2025-06-30",
@@ -757,8 +766,25 @@ describe("Transaction Handlers Integration Tests", () => {
       });
 
       expect(result.success).toBe(true);
-      expect(result.transaction.transaction_type).toBe("lease");
+      expect(result.transaction.transaction_type).toBe("purchase");
       expect(result.transaction.property_address).toContain("Corporate");
+    });
+
+    it("refuses a transaction type the column rejects, with a message naming the legal ones", async () => {
+      const handler = registeredHandlers.get("transactions:create-audited");
+      const result = await handler(mockEvent, TEST_USER_ID, {
+        property_address: "100 Corporate Dr, Suite 500",
+        transaction_type: "lease",
+        status: "active",
+      });
+
+      expect(result.success).toBe(false);
+      expect(result.error).toContain(
+        "Transaction type must be one of: purchase, sale, other",
+      );
+      expect(
+        mockTransactionService.createAuditedTransaction,
+      ).not.toHaveBeenCalled();
     });
   });
 
