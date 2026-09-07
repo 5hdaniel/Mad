@@ -1,6 +1,6 @@
 -- BACKLOG-3096 / MUTANT 03 -- "no row lock"
 --
--- Derived from supabase/migrations/20260905_backlog_3096_setup_first_user_wins.sql
+-- Derived from supabase/migrations/20260905120000_backlog_3096_setup_first_user_wins.sql
 -- by deleting exactly one line: `FOR UPDATE` from the organizations SELECT.
 -- The role resolution, including the claimed-rows filter, is unchanged.
 --

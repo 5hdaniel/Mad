@@ -259,7 +259,7 @@ export function makeSupabaseStub(opts: StubOptions = {}) {
  *
  * `is_built` is the one DERIVED field, and it is derived from the migration in
  * this PR rather than observed: the column does not exist in prod yet. After
- * 20260905_backlog_3098_feature_definitions_is_built.sql runs, the two keys
+ * 20260905120100_backlog_3098_feature_definitions_is_built.sql runs, the two keys
  * named in its UPDATE read false and the other 21 take the column default of
  * true. That is exactly what is written below.
  */

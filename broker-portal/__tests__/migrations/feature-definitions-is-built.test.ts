@@ -29,7 +29,7 @@ import { join } from 'path';
 
 const MIGRATION = join(
   __dirname,
-  '../../../supabase/migrations/20260905_backlog_3098_feature_definitions_is_built.sql'
+  '../../../supabase/migrations/20260905120100_backlog_3098_feature_definitions_is_built.sql'
 );
 
 const sql = readFileSync(MIGRATION, 'utf8');
@@ -52,7 +52,7 @@ function updatedKeys(): string[] {
   return [...inList[1].matchAll(/'([a-z0-9_]+)'/g)].map(([, k]) => k).sort();
 }
 
-describe('20260905_backlog_3098_feature_definitions_is_built.sql', () => {
+describe('20260905120100_backlog_3098_feature_definitions_is_built.sql', () => {
   it('adds the column the portal reads', () => {
     // lib/feature-availability.ts selects `key, is_built` from this table.
     expect(statements).toMatch(
