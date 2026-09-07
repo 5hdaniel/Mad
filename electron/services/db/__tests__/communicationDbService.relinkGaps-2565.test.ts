@@ -258,8 +258,8 @@ describe("linkCommunicationToTransaction — characterization (BACKLOG-2565)", (
     expect((await getCommunicationById(comm.id))?.transaction_id).toBe(TX_NEW);
 
     // ...and a fresh recount agrees it moved.
-    expect(countTextThreadsForTransaction(TX_OLD)).toBe(0);
-    expect(countTextThreadsForTransaction(TX_NEW)).toBe(1);
+    expect(await countTextThreadsForTransaction(TX_OLD)).toBe(0);
+    expect(await countTextThreadsForTransaction(TX_NEW)).toBe(1);
 
     // But the CACHED column on both rows still describes the world before the
     // move. This is the latent gap BACKLOG-2565 filed; BACKLOG-2766 owns the fix.
@@ -354,7 +354,7 @@ describe("backfillAllTransactionThreadCounts (BACKLOG-2960)", () => {
     expect(storedThreadCount(TX_OLD)).toBe(99);
     expect(storedThreadCount(TX_NEW)).toBe(99);
 
-    const result = backfillAllTransactionThreadCounts();
+    const result = await backfillAllTransactionThreadCounts();
 
     expect(result).toEqual({ updated: 2, errors: 0 });
     expect(storedThreadCount(TX_OLD)).toBe(1);

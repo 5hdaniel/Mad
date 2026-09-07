@@ -214,7 +214,7 @@ describe("BACKLOG-2814 — removed-messages loader, group name isolation", () =>
  */
 describe("BACKLOG-2960 — confirm-email-links reports the seam's count", () => {
   it("returns the count the seam reported", async () => {
-    (confirmEmailLinksByEmailIds as jest.Mock).mockReturnValue(3);
+    (confirmEmailLinksByEmailIds as jest.Mock).mockResolvedValue(3);
 
     const fn = handlers.get("transactions:confirm-email-links");
     if (!fn) throw new Error("handler not registered");
