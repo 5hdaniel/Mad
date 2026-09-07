@@ -626,19 +626,25 @@ export function EmailSettings({
         Emails
       </h3>
       <div className="space-y-4">
-        {/* BACKLOG-3156 stage A: block 1 of 3 — Sources. The two connection
-            cards are the sources, and they keep their own error styling; stage
-            C replaced each card's status pill + full-width button with the one
-            control in ProviderConnectionControl. */}
-        <div data-testid="emails-block-sources" className="space-y-4">
-        <p className="text-xs font-medium text-gray-500 uppercase tracking-wide">
+        {/* BACKLOG-3156 stage E: block 1 of 3 — Sources. The eyebrow is the
+            FIRST CHILD of the block's one card, and the two connections are
+            ROWS inside it. They were cards themselves, which put a card inside
+            a card the moment the eyebrow moved in; `rounded-lg` means card and
+            `rounded` means row throughout these four screens, so the rows drop
+            to `rounded` and take the white-on-gray fill the radio options in
+            `ImportSourceSettings` already use. Each row keeps its own error
+            styling; stage C replaced each one's status pill + full-width button
+            with the single control in ProviderConnectionControl. */}
+        <div data-testid="emails-block-sources" className="p-4 bg-gray-50 rounded-lg border border-gray-200">
+        <p className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-2">
           Sources
         </p>
+        <div className="space-y-2">
         {/* Gmail Connection */}
-        <div className={`p-4 rounded-lg border ${
+        <div className={`p-3 rounded border ${
           connections.google?.error && !connections.google?.connected && connections.google.error.type !== "NOT_CONNECTED"
             ? "bg-yellow-50 border-yellow-200"
-            : "bg-gray-50 border-gray-200"
+            : "bg-white border-gray-200"
         }`}>
           <div className="flex items-center justify-between mb-2">
             <div className="flex items-center gap-2">
@@ -685,10 +691,10 @@ export function EmailSettings({
         </div>
 
         {/* Outlook Connection */}
-        <div className={`p-4 rounded-lg border ${
+        <div className={`p-3 rounded border ${
           connections.microsoft?.error && !connections.microsoft?.connected && connections.microsoft.error.type !== "NOT_CONNECTED"
             ? "bg-yellow-50 border-yellow-200"
-            : "bg-gray-50 border-gray-200"
+            : "bg-white border-gray-200"
         }`}>
           <div className="flex items-center justify-between mb-2">
             <div className="flex items-center gap-2">
@@ -732,20 +738,26 @@ export function EmailSettings({
             </div>
           )}
         </div>
+        </div>
 
         </div>
 
-        {/* BACKLOG-3156 stage A: block 2 of 3 — Import Preferences.
-            TASK-2072: Email History (cache duration) */}
-        <div data-testid="emails-block-preferences">
-        <p className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-2">
-          Import Preferences
-        </p>
-        <div className="p-4 bg-gray-50 rounded-lg border border-gray-200">
-          <h4 className="text-sm font-medium text-gray-900">
-            Email History
-          </h4>
-          <p className="text-xs text-gray-600 mt-1 mb-3">
+        {/* BACKLOG-3156 stage E: block 2 of 3 — Import Preferences.
+            TASK-2072: Email History (cache duration).
+
+            The card and the block are ONE element: the eyebrow is the card's
+            first child and the description is the line beneath it, in the slot
+            `<h4>Email History</h4>` used to occupy. The heading is gone because
+            it said, one line lower and in different words, what the eyebrow
+            above it already said. */}
+        <div
+          data-testid="emails-block-preferences"
+          className="p-4 bg-gray-50 rounded-lg border border-gray-200"
+        >
+          <p className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-2">
+            Import Preferences
+          </p>
+          <p className="text-xs text-gray-600 mb-3">
             How much email to keep cached locally for fast search and auto-linking.
           </p>
           {/* BACKLOG-3156 stage A: the label sits OUTSIDE the control, as plain
@@ -766,7 +778,6 @@ export function EmailSettings({
               <option value={12}>Last 12 months</option>
             </select>
           </div>
-        </div>
         </div>
 
         {/* BACKLOG-3156 stage A: THE "STORED ON THIS COMPUTER" BLOCK IS

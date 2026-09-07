@@ -558,57 +558,54 @@ export function ContactsImportSettings({
   }
 
   return (
-    /* BACKLOG-3156 stage A: the panel is a card PLUS a bare action row beneath
-       it, so the root is a plain stack. The card below holds every block; the
-       actions sit on the page with no card and no heading. */
-    <div className="space-y-3">
-    <div className="p-4 bg-gray-50 rounded-lg border border-gray-200">
-      {/* Header */}
-      <div className="flex items-center gap-2 mb-1">
-        <svg
-          className="w-5 h-5 text-blue-600"
-          fill="none"
-          stroke="currentColor"
-          viewBox="0 0 24 24"
-        >
-          <path
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            strokeWidth={2}
-            d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"
-          />
-        </svg>
-        <h4 className="text-sm font-medium text-gray-900">Contacts</h4>
-      </div>
-      <p className="text-xs text-gray-600 mb-3">
-        Manage contact sources and import contacts for transaction assignment.
-      </p>
+    /* BACKLOG-3156 stage E: THE OUTER PANEL CARD IS GONE, and so is the panel's
+       icon + `<h4>Contacts</h4>` header.
+       ────────────────────────────────────────────────────────────────────
+       The heading repeated the section's own `<h3>Contacts</h3>` one line
+       above it, and the card it opened wrapped every block — putting each
+       block's eyebrow inside a card that then held a second heading. Now each
+       block is its own card, eyebrow first, and the root is a plain stack.
 
-      {/*
-        BACKLOG-2986: a failed preference write is visible, and visible HERE —
-        directly above the switches, so the message sits next to the control the
-        user just clicked. It first rendered at the top of the Contacts section,
-        which put it off-screen for anyone toggling one of the lower switches.
-        An error nobody sees is not much better than the silent failure it
-        replaced.
-      */}
-      {saveError && (
-        <div
-          role="alert"
-          className="mb-3 p-2 rounded text-xs bg-red-50 text-red-700 border border-red-200"
-        >
-          {saveError}
-        </div>
-      )}
-
-      {/* BACKLOG-3156 stage A: block 1 of 3 — Sources. Contacts has no import
-          preferences to set, so it has no block 2; the ORDER is the consistent
-          thing across the three sections, not the count. */}
-      <div data-testid="contacts-block-sources">
-      <div className="mb-3">
+       The panel's description was the line under that heading; it describes
+       what the source switches do, so it moved into the Sources card, in the
+       slot the deleted heading used to occupy. Verbatim — no copy was
+       rewritten. */
+    <div className="space-y-4">
+      {/* BACKLOG-3156 stage E: block 1 — Sources. Contacts has no import
+          preferences to set, so it has no Import Preferences block; the ORDER
+          is the consistent thing across the sections, not the count. */}
+      <div
+        data-testid="contacts-block-sources"
+        className="p-4 bg-gray-50 rounded-lg border border-gray-200"
+      >
         <p className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-2">
           Sources
         </p>
+        <p className="text-xs text-gray-600 mb-3">
+          Manage contact sources and import contacts for transaction assignment.
+        </p>
+
+        {/*
+          BACKLOG-2986: a failed preference write is visible, and visible HERE —
+          directly above the switches, so the message sits next to the control
+          the user just clicked. It first rendered at the top of the Contacts
+          section, which put it off-screen for anyone toggling one of the lower
+          switches. An error nobody sees is not much better than the silent
+          failure it replaced.
+
+          BACKLOG-3156 stage E moved it INSIDE the Sources card, still directly
+          above the switches — the position the item is about — rather than
+          leaving it stranded above the card they now live in.
+        */}
+        {saveError && (
+          <div
+            role="alert"
+            className="mb-3 p-2 rounded text-xs bg-red-50 text-red-700 border border-red-200"
+          >
+            {saveError}
+          </div>
+        )}
+
         <div className="space-y-2">
           {/* Outlook Contacts toggle */}
           <div className="flex items-center justify-between py-1">
@@ -775,8 +772,14 @@ export function ContactsImportSettings({
         </div>
       </div>
 
-      {/* Auto-discover from conversations (inferred) toggle switches */}
-      <div className="mb-4">
+      {/* BACKLOG-3156 stage E: `Auto-discover from conversations` is its OWN
+          block now. It was a second eyebrow inside the Sources block, which the
+          shared shape does not allow: one eyebrow per card, and it is that
+          card's first child. */}
+      <div
+        data-testid="contacts-block-autodiscover"
+        className="p-4 bg-gray-50 rounded-lg border border-gray-200"
+      >
         <p className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-2">
           Auto-discover from conversations
         </p>
@@ -862,13 +865,9 @@ export function ContactsImportSettings({
         </div>
       </div>
 
-      </div>
-
-      {/* BACKLOG-3156 stage A: the bare "Import" eyebrow is gone — the block it
-          headed is now labelled by what it shows ("Stored on this computer",
-          below) and the actions carry no heading at all. The rule the divider
-          drew stays, as the top border of the block that follows. */}
-      <div className="border-t border-gray-200 pt-3" />
+      {/* BACKLOG-3156 stage E: the divider that used to sit here is gone. It
+          separated two stretches of one card; the blocks are separate cards
+          now, so the gap between them draws the same rule. */}
 
       {/* Sync status (macOS) */}
       {hasMacOS && macosContactsEnabled && syncStatus && (
@@ -900,10 +899,13 @@ export function ContactsImportSettings({
         </div>
       )}
 
-      {/* BACKLOG-3156 stage A: block 3 of 3 — Stored on this computer. The grid
-          itself is unchanged; it gains the heading the other two sections now
-          use for the same three-cell shape. */}
-      <div data-testid="contacts-block-stored" className="mb-3">
+      {/* BACKLOG-3156 stage E: block 3 — Stored on this computer. The grid
+          itself is unchanged; the block is now its own card with the eyebrow as
+          that card's first child, like every other block on these screens. */}
+      <div
+        data-testid="contacts-block-stored"
+        className="p-4 bg-gray-50 rounded-lg border border-gray-200"
+      >
       <p className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-2">
         Stored on this computer
       </p>
@@ -1107,8 +1109,6 @@ export function ContactsImportSettings({
           )}
         </div>
       )}
-
-      </div>
 
       {/* BACKLOG-3156 stage A: block 4 — the actions, BARE on the page. No
           surrounding card and no heading; primary then destructive. Neither

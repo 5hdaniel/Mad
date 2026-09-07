@@ -1370,17 +1370,27 @@ export function MacOSMessagesImportSettings({
   }
 
   return (
-    /* BACKLOG-3156 stage A: the panel is a card PLUS a bare action row beneath
-       it. The testid and `aria-disabled` stay on the root so every existing
-       query and the BACKLOG-2335 disabled semantics reach the whole panel, not
-       just the card. */
+    /* BACKLOG-3156 stage E: THE OUTER PANEL CARD IS GONE.
+       ────────────────────────────────────────────────────────────────────
+       It wrapped the whole panel, so the `Import Preferences` eyebrow and the
+       filters card both rendered inside it — a card inside a card, and an
+       eyebrow that on Emails sits on its own card's top line. Now each block is
+       its own card and nothing wraps them.
+
+       The testid and `aria-disabled` stay on the root, which is why the root
+       survives as a plain stack: every existing query and the BACKLOG-2335
+       disabled semantics must reach the whole panel, not one block of it. */
     <div
-      className="space-y-3"
+      className="space-y-4"
       aria-disabled={!enabled}
       data-testid="macos-messages-import"
     >
-    <div className="p-4 bg-gray-50 rounded-lg border border-gray-200">
-      <div className="flex items-center justify-between mb-2">
+      {/* Panel identity. This is NOT a block eyebrow — it says which of the two
+          mutually exclusive Messages panels is on screen (this one or the
+          Android companion), so it sits on the page above the blocks, the way
+          a section heading does. */}
+      <div>
+      <div className="flex items-center justify-between mb-1">
         <div className="flex items-center gap-2">
           <svg
             className={`w-5 h-5 ${enabled ? "text-green-600" : "text-gray-400"}`}
@@ -1420,36 +1430,43 @@ export function MacOSMessagesImportSettings({
       {/* BACKLOG-2335: Mute the controls region while inactive (the note above
           stays full-strength so the reason is always legible). */}
       <div className={enabled ? "" : "opacity-60"}>
-      <p className="text-xs text-gray-600 mb-3">
+      <p className="text-xs text-gray-600">
         Import messages from the macOS Messages app to enable linking with your
         transactions.
       </p>
 
       {/* Import status display */}
       {importStatus && (
-        <div className="mb-3 text-xs text-gray-500">
+        <div className="mt-1 text-xs text-gray-500">
           Last imported: {formatLastImport(importStatus.lastImportAt)}
           {importStatus.messageCount !== undefined && (
             <> | {importStatus.messageCount.toLocaleString()} messages</>
           )}
         </div>
       )}
+      </div>
+      </div>{/* /panel identity group */}
 
-      {/* BACKLOG-3156 stage A: block 2 of the shared shape — Import Preferences.
+      {/* BACKLOG-3156 stage E: block 2 of the shared shape — Import Preferences.
           Block 1 (Sources) is the import-source picker `Settings.tsx` renders
-          directly above this panel. The label/border split the other two
-          sections adopt was already this panel's shape: both labels below are
-          plain text OUTSIDE the control, and the border wraps only the value. */}
-      <div data-testid="messages-block-preferences">
+          directly above this panel.
+
+          The block and its card are ONE element, with the eyebrow as the card's
+          first child. `<h5>Import Filters</h5>` is gone from inside it: with the
+          outer card removed the eyebrow landed directly above that heading, so
+          the card opened by naming, in near-identical words, what the line above
+          it had just named — the same doubling as `Sources` / `Import Source`.
+          The scroll anchor `settings-import-filters` (SyncStatusIndicator links
+          to it) moves onto this card, which is the thing it always meant. */}
+      <div className={enabled ? "" : "opacity-60"}>
+      <div
+        id="settings-import-filters"
+        data-testid="messages-block-preferences"
+        className="p-4 bg-gray-50 rounded-lg border border-gray-200"
+      >
       <p className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-2">
         Import Preferences
       </p>
-      {/* TASK-1952: Import Filters */}
-      <div id="settings-import-filters" className="mb-3 p-3 bg-white rounded border border-gray-200">
-        <h5 className="text-xs font-medium text-gray-700 mb-2">
-          Import Filters
-        </h5>
-
         {/* Date Range Filter */}
         <div className="flex items-center justify-between mb-2">
           <span className="text-xs text-gray-600">Import messages from</span>
@@ -1616,7 +1633,14 @@ export function MacOSMessagesImportSettings({
           Import message text only (no attachment files)
         </label>
       </div>
-      </div>{/* /BACKLOG-3156 Import Preferences block */}
+      </div>{/* /BACKLOG-3156 stage E — Import Preferences block (its own card) */}
+
+      {/* BACKLOG-3156 stage E: the run's own feedback — a space refusal, the
+          result of the last run, and the plan dialog. None of it is a settings
+          block, so with the panel card gone it sits on the page between the
+          preferences card and the actions, still muted with everything else
+          when this is not the active source (BACKLOG-2335). */}
+      <div className={enabled ? "" : "opacity-60"}>
 
       {/* BACKLOG-2743: The attachment copy does not fit.
           ────────────────────────────────────────────────────────────────
@@ -1855,8 +1879,7 @@ export function MacOSMessagesImportSettings({
           />
         )}
 
-      </div>{/* /BACKLOG-2335 muted controls region */}
-      </div>{/* /BACKLOG-3156 card — the actions sit below it, on the page */}
+      </div>{/* /BACKLOG-2335 muted run-feedback region */}
 
       {/* BACKLOG-3156 stage A: the actions, BARE — no card, no heading, primary
           then destructive. Still muted with the rest of the controls when this
