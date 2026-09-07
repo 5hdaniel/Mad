@@ -460,9 +460,16 @@ export function EmailSettings({
   return (
     <div id="settings-email" className="mb-8">
       <h3 className="text-lg font-semibold text-gray-900 mb-4">
-        Email Connections
+        Emails
       </h3>
       <div className="space-y-4">
+        {/* BACKLOG-3156 stage A: block 1 of 3 — Sources. The two connection
+            cards are the sources; they keep their own error styling (the merged
+            connection control is stage C). */}
+        <div data-testid="emails-block-sources" className="space-y-4">
+        <p className="text-xs font-medium text-gray-500 uppercase tracking-wide">
+          Sources
+        </p>
         {/* Gmail Connection */}
         <div className={`p-4 rounded-lg border ${
           connections.google?.error && !connections.google?.connected && connections.google.error.type !== "NOT_CONNECTED"
@@ -662,17 +669,26 @@ export function EmailSettings({
           )}
         </div>
 
-        {/* TASK-2072: Email History (cache duration) */}
+        </div>
+
+        {/* BACKLOG-3156 stage A: block 2 of 3 — Import Preferences.
+            TASK-2072: Email History (cache duration) */}
+        <div data-testid="emails-block-preferences">
+        <p className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-2">
+          Import Preferences
+        </p>
         <div className="p-4 bg-gray-50 rounded-lg border border-gray-200">
+          <h4 className="text-sm font-medium text-gray-900">
+            Email History
+          </h4>
+          <p className="text-xs text-gray-600 mt-1 mb-3">
+            How much email to keep cached locally for fast search and auto-linking.
+          </p>
+          {/* BACKLOG-3156 stage A: the label sits OUTSIDE the control, as plain
+              text, so the border wraps only the value — the shape both Messages
+              filters already use. */}
           <div className="flex items-center justify-between">
-            <div className="flex-1">
-              <h4 className="text-sm font-medium text-gray-900">
-                Email History
-              </h4>
-              <p className="text-xs text-gray-600 mt-1">
-                How much email to keep cached locally for fast search and auto-linking.
-              </p>
-            </div>
+            <span className="text-xs text-gray-600">Import emails from</span>
             <select
               value={emailCacheDurationMonths}
               onChange={(e) =>
@@ -680,35 +696,96 @@ export function EmailSettings({
               }
               className="ml-4 text-sm border border-gray-300 rounded px-3 py-2.5 bg-white text-gray-900 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 min-h-[44px]"
             >
-              <option value={1}>1 month</option>
-              <option value={3}>3 months</option>
-              <option value={6}>6 months</option>
-              <option value={12}>1 year</option>
+              <option value={1}>Last 1 month</option>
+              <option value={3}>Last 3 months</option>
+              <option value={6}>Last 6 months</option>
+              <option value={12}>Last 12 months</option>
             </select>
           </div>
         </div>
+        </div>
 
-        {/* BACKLOG-1362: Re-cache Emails */}
+        {/* BACKLOG-3156 stage A: THE "STORED ON THIS COMPUTER" BLOCK IS
+            DELIBERATELY ABSENT HERE, and its absence is the decision, not an
+            omission.
+            ────────────────────────────────────────────────────────────────
+            The approved design gives Emails the same three-cell grid Contacts
+            has. It was built, and every cell rendered an em-dash, because no
+            renderer-reachable API returns a cached-email count: there is no
+            count or stats channel for mail in `electron/preload/`, and the only
+            email-count function in the tree (`countEmailsByUser`,
+            `electron/services/db/emailDbService.ts`) is not exposed to the
+            renderer and returns ONE TOTAL with no per-provider split — so it
+            could not fill the Gmail and Outlook cells even if it were.
+            A grid of three em-dashes reads as broken software, which is worse
+            than no grid. FOUNDER DECISION 2026-09-06: ship without it.
+            The block returns WITH ITS DATA under BACKLOG-3158, which owns the
+            per-provider count. `settingsBlockOrder-3156.test.tsx` asserts the
+            block is absent, so it cannot come back unannounced. */}
+        {/* BACKLOG-3156 stage A: block 3 of 3 — the actions, BARE on the page.
+            No surrounding card and no heading, primary then destructive. The two
+            descriptions stay in a card above them; the `?` popup that will carry
+            this prose is stage B, so nothing is deleted here.
+
+            Neither `disabled` expression changed: both buttons still read
+            `isRecaching || !isOnline || !hasAnyConnection`, and both titles still
+            distinguish offline from not-connected. */}
         <div className="p-4 bg-gray-50 rounded-lg border border-gray-200">
-          <div className="flex items-center justify-between">
-            <div className="flex-1">
-              <h4 className="text-sm font-medium text-gray-900">
-                Re-cache Emails
-              </h4>
-              {/* BACKLOG-3056: this used to promise "Only downloads emails newer
-                  than what is already cached." That became false when the run
-                  started filling in the older mail a widened Email History
-                  setting opens up — and it was the sentence that made the
-                  founder's "0 new emails" look like correct behaviour. The two
-                  claims it must carry now: older mail arrives too, and nothing
-                  is unlinked (which is what separates this from Force re-cache
-                  below). */}
-              <p className="text-xs text-gray-600 mt-1">
-                Fetches new mail from your connected provider — and older mail too,
-                if you have increased Email History. Your emails stay linked to
-                their transactions.
-              </p>
-            </div>
+          {/* BACKLOG-3156 stage A: this card carried an `<h4>Import Emails</h4>`
+              directly above an `Import Emails` button — the same words twice in
+              one column. The heading is gone rather than reworded, for two
+              reasons read off the RENDERED order, not the source:
+
+              (1) The card describes TWO actions. `Force re-cache.` is the next
+                  paragraph inside the same card, so a heading naming the
+                  primary put the destructive paragraph under a title that was
+                  not about it. That was wrong independently of the duplication.
+              (2) The card's own convention is an inline lead-in, not a heading:
+                  the force paragraph labels itself with a bold `Force
+                  re-cache.` span. Dropping the heading makes the two paragraphs
+                  parallel, and the first is already verb-initial ("Fetches new
+                  mail…") — the same shape as the Contacts popup's "Adds new
+                  contacts, updates existing ones…".
+
+              NOT retitled: a name for "what these two buttons do" is exactly the
+              job the `?` popup takes in stage B, and inventing one now would be
+              a third pattern that stage B deletes. */}
+          <div data-testid="recache-description">
+            {/* BACKLOG-3056: this used to promise "Only downloads emails newer
+                than what is already cached." That became false when the run
+                started filling in the older mail a widened Email History
+                setting opens up — and it was the sentence that made the
+                founder's "0 new emails" look like correct behaviour. The two
+                claims it must carry now: older mail arrives too, and nothing
+                is unlinked (which is what separates this from Force re-cache
+                below). */}
+            <p className="text-xs text-gray-600 mt-1">
+              Fetches new mail from your connected provider — and older mail too,
+              if you have increased Email History. Your emails stay linked to
+              their transactions.
+            </p>
+          </div>
+
+          {/* BACKLOG-2856: Force Re-cache. Recessive next to the ordinary
+              import above — the incremental run is the one a user should reach
+              for, and this one destroys links. Same visual weight relationship
+              the messages Force Re-import uses. */}
+          <div
+            data-testid="force-recache-description"
+            className="mt-3 pt-3 border-t border-gray-200"
+          >
+            <p className="text-xs text-gray-600">
+              <span className="font-medium text-gray-900">Force re-cache.</span>{" "}
+              Re-downloads every email in your cache window and replaces what is
+              stored — use this after a fix to email importing. It{" "}
+              <strong>unlinks your emails from their transactions</strong>.
+            </p>
+          </div>
+        </div>
+
+        {/* BACKLOG-3156 stage A: the actions, bare — no card, no heading. */}
+        <div data-testid="emails-block-actions">
+          <div className="flex gap-2 items-center">
             <button
               onClick={() => void handleRecacheEmails(false)}
               disabled={isRecaching || !isOnline || !hasAnyConnection}
@@ -721,23 +798,10 @@ export function EmailSettings({
                     : undefined
               }
               data-testid="recache-emails"
-              className="ml-4 px-4 py-1.5 bg-blue-500 hover:bg-blue-600 text-white text-sm font-medium rounded transition-all disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap"
+              className="flex-1 px-3 py-2 bg-blue-500 hover:bg-blue-600 text-white text-sm font-medium rounded transition-all disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              {isRecaching ? "Caching..." : "Re-cache"}
+              {isRecaching ? "Caching..." : "Import Emails"}
             </button>
-          </div>
-
-          {/* BACKLOG-2856: Force Re-cache. Recessive next to the ordinary
-              Re-cache above — the incremental run is the one a user should reach
-              for, and this one destroys links. Same visual weight relationship
-              the messages Force Re-import uses. */}
-          <div className="mt-3 pt-3 border-t border-gray-200 flex items-center justify-between">
-            <p className="text-xs text-gray-600 flex-1">
-              <span className="font-medium text-gray-900">Force re-cache.</span>{" "}
-              Re-downloads every email in your cache window and replaces what is
-              stored — use this after a fix to email importing. It{" "}
-              <strong>unlinks your emails from their transactions</strong>.
-            </p>
             <button
               onClick={() => setShowForceWarning(true)}
               disabled={isRecaching || !isOnline || !hasAnyConnection}
@@ -749,13 +813,13 @@ export function EmailSettings({
                     : undefined
               }
               data-testid="force-recache-emails"
-              className="ml-4 px-4 py-1.5 bg-white border border-red-300 text-red-700 hover:bg-red-50 text-sm font-medium rounded transition-all disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap"
+              className="px-3 py-2 bg-white border border-red-300 text-red-700 hover:bg-red-50 text-sm font-medium rounded transition-all disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap"
             >
               Force Re-cache
             </button>
           </div>
           {/* BACKLOG-2856: the progress indicator, shared by the ordinary
-              Re-cache above and the Force Re-cache above it. The founder's
+              import above and the Force Re-cache beside it. The founder's
               report was that the force run shows nothing after its confirmation
               dialog — for an operation that can take minutes, is destructive,
               and is indistinguishable from a hung app while it runs.

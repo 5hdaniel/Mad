@@ -478,6 +478,10 @@ export function ContactsImportSettings({
   }
 
   return (
+    /* BACKLOG-3156 stage A: the panel is a card PLUS a bare action row beneath
+       it, so the root is a plain stack. The card below holds every block; the
+       actions sit on the page with no card and no heading. */
+    <div className="space-y-3">
     <div className="p-4 bg-gray-50 rounded-lg border border-gray-200">
       {/* Header */}
       <div className="flex items-center gap-2 mb-1">
@@ -517,10 +521,13 @@ export function ContactsImportSettings({
         </div>
       )}
 
-      {/* Import From (direct) toggle switches */}
+      {/* BACKLOG-3156 stage A: block 1 of 3 — Sources. Contacts has no import
+          preferences to set, so it has no block 2; the ORDER is the consistent
+          thing across the three sections, not the count. */}
+      <div data-testid="contacts-block-sources">
       <div className="mb-3">
         <p className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-2">
-          Import From
+          Sources
         </p>
         <div className="space-y-2">
           {/* Outlook Contacts toggle */}
@@ -775,12 +782,13 @@ export function ContactsImportSettings({
         </div>
       </div>
 
-      {/* Divider before import controls */}
-      <div className="border-t border-gray-200 pt-3 mb-3">
-        <p className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-2">
-          Import
-        </p>
       </div>
+
+      {/* BACKLOG-3156 stage A: the bare "Import" eyebrow is gone — the block it
+          headed is now labelled by what it shows ("Stored on this computer",
+          below) and the actions carry no heading at all. The rule the divider
+          drew stays, as the top border of the block that follows. */}
+      <div className="border-t border-gray-200 pt-3" />
 
       {/* Sync status (macOS) */}
       {hasMacOS && macosContactsEnabled && syncStatus && (
@@ -812,8 +820,15 @@ export function ContactsImportSettings({
         </div>
       )}
 
+      {/* BACKLOG-3156 stage A: block 3 of 3 — Stored on this computer. The grid
+          itself is unchanged; it gains the heading the other two sections now
+          use for the same three-cell shape. */}
+      <div data-testid="contacts-block-stored" className="mb-3">
+      <p className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-2">
+        Stored on this computer
+      </p>
       {/* Source stats grid (read-only indicators) */}
-      <div className="grid grid-cols-3 gap-2 text-center mb-3">
+      <div className="grid grid-cols-3 gap-2 text-center">
         {isMacOS && (
           <div className={`p-2 rounded border ${
             macosContactsEnabled
@@ -883,6 +898,8 @@ export function ContactsImportSettings({
             <div className={`text-xs ${androidContactsEnabled ? "text-teal-600" : "text-gray-400"}`}>Android</div>
           </div>
         )}
+      </div>
+
       </div>
 
       {/*
@@ -1027,8 +1044,12 @@ export function ContactsImportSettings({
         </div>
       )}
 
-      {/* Action buttons */}
-      <div className="flex gap-2 items-center">
+      </div>
+
+      {/* BACKLOG-3156 stage A: block 4 — the actions, BARE on the page. No
+          surrounding card and no heading; primary then destructive. Neither
+          `disabled` expression changed. */}
+      <div data-testid="contacts-block-actions" className="flex gap-2 items-center">
         <button
           onClick={handleImportAll}
           disabled={anySyncing || isOtherSyncRunning || noSourcesSelected}

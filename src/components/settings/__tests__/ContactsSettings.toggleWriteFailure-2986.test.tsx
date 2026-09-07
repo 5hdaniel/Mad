@@ -274,12 +274,17 @@ describe("BACKLOG-2986 — the banner is where the click was", () => {
     // (a) The alert precedes the switch it is about.
     expect(alert.compareDocumentPosition(screen.getByLabelText(ANDROID_SWITCH)) & 4).toBeTruthy();
     // (b) And it sits INSIDE the import panel — after that panel's own heading,
-    //     immediately above the "Import From" group. The old position was
+    //     immediately above the source toggle group. The old position was
     //     between the section's <h3> and this panel, which satisfied (a) while
     //     being a scroll away from every switch.
+    //
+    //     BACKLOG-3156 stage A renamed that group's heading from "Import From"
+    //     to "Sources" — the same three-block shape Emails and Messages now use.
+    //     Only the string this reaches for changed; the position it asserts is
+    //     the one this test was written to pin.
     const panelHeading = screen.getByRole("heading", { level: 4, name: "Contacts" });
     expect(panelHeading.compareDocumentPosition(alert) & 4).toBeTruthy();
-    expect(alert.compareDocumentPosition(screen.getByText("Import From")) & 4).toBeTruthy();
+    expect(alert.compareDocumentPosition(screen.getByText("Sources")) & 4).toBeTruthy();
   });
 });
 

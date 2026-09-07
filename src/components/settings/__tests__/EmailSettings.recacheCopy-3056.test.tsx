@@ -84,12 +84,13 @@ const renderPanel = () =>
  * an assertion about the ordinary one, which is the confusion under test.
  */
 async function recacheBlockText(): Promise<string> {
-  const button = await screen.findByTestId("recache-emails");
-  // The description shares a row with the button; its container is the row's
-  // parent block, which also holds the Force re-cache paragraph — so climb to
-  // the row and read only that.
-  const row = button.parentElement as HTMLElement;
-  return (row.textContent ?? "").replace(/\s+/g, " ");
+  // BACKLOG-3156 stage A moved the buttons OUT of the description card and onto
+  // the page, so climbing from the button now lands on a row with no prose in
+  // it. The description block carries its own testid; reading it names the same
+  // text the old traversal reached, and cannot silently start reading the Force
+  // paragraph if the markup shifts again — which is the confusion under test.
+  const block = await screen.findByTestId("recache-description");
+  return (block.textContent ?? "").replace(/\s+/g, " ");
 }
 
 describe("BACKLOG-3056 — Re-cache copy", () => {
@@ -123,7 +124,7 @@ describe("BACKLOG-3056 — Re-cache copy", () => {
   it("still warns that Force re-cache unlinks — the contrast must survive", async () => {
     renderPanel();
     await waitFor(() => expect(screen.getByTestId("force-recache-emails")).toBeInTheDocument());
-    const forceRow = screen.getByTestId("force-recache-emails").parentElement as HTMLElement;
+    const forceRow = screen.getByTestId("force-recache-description");
 
     expect((forceRow.textContent ?? "").replace(/\s+/g, " ")).toMatch(
       /unlinks your emails from their transactions/i,
