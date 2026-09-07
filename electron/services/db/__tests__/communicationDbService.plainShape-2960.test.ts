@@ -91,9 +91,14 @@ const wrappers: Array<[string, () => unknown]> = [
 ];
 
 describe("the wrapper shape: PLAIN, not async — all seven exports (BACKLOG-2960)", () => {
-  it("covers every promise-returning export of the seam, so adding one without a pin is a red", () => {
-    // The list above is what the suite holds. This assertion is what stops the
-    // list from silently falling behind the module.
+  it("the pinned set is exactly these seven names — editing the list is a red", () => {
+    // WHAT THIS DOES AND DOES NOT DO. It compares the list above to a literal,
+    // so deleting, renaming or reordering a pin reds here. It does NOT read the
+    // module: it cannot see an eighth export, and an export added later is
+    // unpinned until someone adds a case. SR demonstrated exactly that — a new
+    // seam export born `async` left tsc, eslint, the twin guard and this suite
+    // all green. Real enumeration from the module's exports would close it and
+    // is deliberately not attempted here.
     expect(wrappers.map(([name]) => name).sort()).toEqual(
       [
         "backfillAllTransactionThreadCounts",
