@@ -99,7 +99,9 @@ export const UNFREEZE_OVERRIDE_KEY = "__unfreezeOverride";
 // creation path passes exactly the values the schema already defaults to, so
 // discarding them was invisible. Turning on a write whose caller passes a
 // WRONG value lands that wrong value for the first time. `closing_date_verified`
-// is the worked example; read its `why`.
+// is the worked example — the caller that made it one has since been corrected
+// (BACKLOG-2756), so read its `why` for how the decision was reached rather
+// than as a live hazard.
 // ===========================================================================
 
 /** What happens to a caller-supplied value for one column on one path. */
@@ -218,7 +220,7 @@ export const TRANSACTION_COLUMN_POLICY: Record<TransactionColumn, ColumnPolicy> 
   closing_date_verified: {
     insert: "db-default",
     update: "writable",
-    why: "THE WORKED EXAMPLE. The audited-create path passes `property_coordinates ? true : false` (transactionService.ts:1173) — a fact about the ADDRESS, not about the closing date. Every path stores the schema DEFAULT 0 today because the INSERT dropped it; opening the INSERT would land a semantically wrong 1 for the first time. The update path already accepted it (the IPC validator forwards a 0/1 the user actually set), so that half is unchanged.",
+    why: "THE WORKED EXAMPLE, and the reason this table exists. `createAuditedTransaction` used to pass `property_coordinates ? true : false` — a fact about the ADDRESS, not about the closing date. Because the INSERT dropped the column, every row stored the schema DEFAULT 0 and the wrong value was never observable; opening the INSERT would have landed a semantically wrong 1 for the first time. BACKLOG-2756 corrected that caller, so every creating path now states `false`. The entry stays `db-default` on that basis: opening it would write exactly what the schema already defaults to, and a column gains a writer when something means to write it. The update path is where the real signal arrives — `ExportModal`'s `handleExport` sets it once the user has been shown the closing date and confirmed it, and the IPC validator forwards that 0/1.",
   },
   representation_start_confidence: {
     insert: "writable",
@@ -263,7 +265,7 @@ export const TRANSACTION_COLUMN_POLICY: Record<TransactionColumn, ColumnPolicy> 
   sale_price: {
     insert: "db-default",
     update: "writable",
-    why: "Entered by the user after the deal exists. Already accepted on the update path and forwarded by the IPC validator. NOTE the one creating caller that names it — `_createTransactionFromSummary` (transactionService.ts:530) — is a PRIVATE method with zero callers repo-wide, so opening this would change no live behaviour and would give a dead path its first effect. If that method is ever revived, revisit this entry rather than assuming the drop is still harmless.",
+    why: "Entered by the user after the deal exists. Already accepted on the update path and forwarded by the IPC validator. No creating caller names this column: the one that did — `_createTransactionFromSummary`, a private method with no callers — was deleted by BACKLOG-2756, which is why this entry no longer carries the caveat that opening the column would give a dead path its first effect. If a creating caller ever supplies a sale price, revisit this entry rather than assuming the drop is still harmless.",
   },
   earnest_money_amount: {
     insert: "db-default",
@@ -469,9 +471,15 @@ const INSERTABLE_COLUMNS: readonly TransactionColumn[] = TABLE_FIELDS.transactio
  * Prepare one caller value for binding.
  *
  * `better-sqlite3` binds only numbers, strings, bigints, buffers and null — a
- * boolean throws. The creating paths pass `closing_date_verified: false` and
- * `property_coordinates ? true : false`, so this is not hypothetical; it is the
- * first thing that breaks when a hard-coded INSERT becomes a derived one.
+ * boolean throws, so the coercion below is what lets a hard-coded INSERT become
+ * a derived one without every caller being rewritten to pass 0/1.
+ *
+ * This is not hypothetical on the UPDATE path: `NewTransaction` declares
+ * `closing_date_verified` as a `boolean` and that column is `writable` on
+ * update, so a boolean reaches this function from a real caller. On the INSERT
+ * path no `writable` column is boolean-typed today, and the coercion is
+ * defensive — deliberately, since which columns are insertable is derived from
+ * the policy table above and changes when an entry changes.
  */
 function bindValue(
   column: TransactionColumn,
