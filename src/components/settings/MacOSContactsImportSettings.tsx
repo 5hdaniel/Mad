@@ -23,6 +23,34 @@ import { usePlatform } from "../../contexts/PlatformContext";
 import { useSyncOrchestrator } from "../../hooks/useSyncOrchestrator";
 import { useNetwork } from "../../contexts/NetworkContext";
 import { ResponsiveModal } from "../common/ResponsiveModal";
+
+/**
+ * BACKLOG-3156 stage C — ONE TREATMENT FOR EVERY "Stored on this computer" CELL.
+ *
+ * The grid had a different hue per source: macOS violet, iPhone blue, Outlook
+ * indigo, Google green, Android teal. Five colours carrying no information —
+ * each cell already says which source it is, in words, directly under the
+ * number — and the effect was a row that reads as unfinished rather than as a
+ * set of counts.
+ *
+ * The one distinction that DOES carry state is kept: a source whose import is
+ * switched off is dimmed. That is the only reason a cell may look different
+ * from its neighbours.
+ *
+ * These live as constants rather than as five hand-written class strings so
+ * that "every cell wears the same treatment" is a property of the code and not
+ * of five edits staying in step. `contactsStoredNeutral-3156` asserts it from
+ * the rendered DOM as well, because a constant only helps for as long as the
+ * next cell added uses it.
+ */
+const STORED_CELL = {
+  on: "p-2 rounded border bg-white border-gray-200",
+  off: "p-2 rounded border bg-gray-50 border-gray-200 opacity-50",
+  countOn: "text-lg font-semibold text-gray-900",
+  countOff: "text-lg font-semibold text-gray-400",
+  labelOn: "text-xs text-gray-500",
+  labelOff: "text-xs text-gray-400",
+} as const;
 import { ImportInfoPopover } from "./ImportInfoPopover";
 import logger from '../../utils/logger';
 import { safeErrorMessage } from '../../utils/formatUtils';
@@ -242,13 +270,47 @@ export function ContactsImportSettings({
     error?: string;
   } | null>(null);
 
-  // Load sync status and source stats on mount
+  // Load sync status and source stats on mount.
+  //
+  // BACKLOG-3156 stage C: the connection flags are in the dependency list
+  // because connecting an account inside Settings changes what this grid should
+  // show — the Outlook and Google cells only render once their account is
+  // connected, and they rendered against whatever `sourceStats` held from
+  // mount. See the sibling effect below for the other half of that problem.
   useEffect(() => {
     if (!userId) return;
     loadSourceStats();
     if (!isMacOS) return;
     loadSyncStatus();
-  }, [isMacOS, userId]);
+  }, [isMacOS, userId, isGoogleConnected, isMicrosoftConnected]);
+
+  /**
+   * BACKLOG-3156 stage C — THE COUNTS NOW HEAR THE IMPORT THAT FOLLOWS A CONNECT.
+   *
+   * Connecting a Google or Microsoft account triggers a contact import in the
+   * main process (`postConnectContactImport.ts`, reached from
+   * `googleAuthHandlers.ts` and `microsoftAuthHandlers.ts`), which finishes by
+   * sending `contacts:external-sync-complete`. That import does NOT go through
+   * the sync orchestrator, so the `contactsItem?.status === 'complete'` effect
+   * above never fires for it, and until this subscription existed NOTHING in
+   * the renderer listened to that channel at all — the send had no consumer
+   * anywhere in `src/`. The grid therefore kept showing its mount-time numbers
+   * until Settings was closed and reopened.
+   *
+   * The `typeof` guard is for test fixtures that stub `window.api.contacts`
+   * with only the methods they call; it is not a claim that the bridge is
+   * optional in the app. `contactsStoredNeutral-3156` renders WITH the bridge
+   * present and asserts the refetch happens, so removing this subscription
+   * fails there rather than passing quietly through the guard.
+   */
+  useEffect(() => {
+    if (!userId) return;
+    const subscribe = window.api?.contacts?.onExternalSyncComplete;
+    if (typeof subscribe !== "function") return;
+    return subscribe(() => {
+      void loadSourceStats();
+    });
+  }, [userId]);
 
   // Update lastResult when contacts sync completes or errors
   useEffect(() => {
@@ -275,14 +337,32 @@ export function ContactsImportSettings({
     }
   };
 
+  /**
+   * BACKLOG-3156 stage C: a failed read is now logged.
+   *
+   * It used to be swallowed under a comment saying the stats would "show as
+   * loading". There is no loading state in this grid: when `sourceStats` stays
+   * `null`, every cell renders an em-dash, which is the same thing it renders
+   * for a source the database has never heard of. So a failed read was
+   * indistinguishable from an empty one, on screen AND in the log.
+   *
+   * The em-dash is deliberately NOT replaced with `0` here. `0` would be a
+   * claim that the rows were counted and there were none, which is the one
+   * thing this branch knows to be untrue.
+   */
   const loadSourceStats = async () => {
     try {
       const result = await window.api.contacts.getSourceStats(userId);
       if (result.success && result.stats) {
         setSourceStats(result.stats);
+        return;
       }
-    } catch {
-      // Non-critical — stats will show as loading
+      logger.warn(
+        "[Contacts] Source stats unavailable; the counts grid will show em-dashes",
+        { error: result.error },
+      );
+    } catch (error) {
+      logger.warn("[Contacts] Source stats read threw", error);
     }
   };
 
@@ -830,45 +910,33 @@ export function ContactsImportSettings({
       {/* Source stats grid (read-only indicators) */}
       <div className="grid grid-cols-3 gap-2 text-center">
         {isMacOS && (
-          <div className={`p-2 rounded border ${
-            macosContactsEnabled
-              ? "bg-violet-50 border-violet-200"
-              : "bg-gray-50 border-gray-200 opacity-50"
-          }`}>
-            <div className={`text-lg font-semibold ${macosContactsEnabled ? "text-violet-700" : "text-gray-400"}`}>
+          <div className={macosContactsEnabled ? STORED_CELL.on : STORED_CELL.off}>
+            <div className={macosContactsEnabled ? STORED_CELL.countOn : STORED_CELL.countOff}>
               {sourceStats?.macos?.toLocaleString() ?? "—"}
             </div>
-            <div className={`text-xs ${macosContactsEnabled ? "text-violet-600" : "text-gray-400"}`}>macOS</div>
+            <div className={macosContactsEnabled ? STORED_CELL.labelOn : STORED_CELL.labelOff}>macOS</div>
           </div>
         )}
         {sourceStats && sourceStats.iphone > 0 && (
-          <div className="p-2 bg-blue-50 rounded border border-blue-200">
-            <div className="text-lg font-semibold text-blue-700">{sourceStats.iphone.toLocaleString()}</div>
-            <div className="text-xs text-blue-600">iPhone</div>
+          <div className={STORED_CELL.on}>
+            <div className={STORED_CELL.countOn}>{sourceStats.iphone.toLocaleString()}</div>
+            <div className={STORED_CELL.labelOn}>iPhone</div>
           </div>
         )}
         {isMicrosoftConnected && (
-          <div className={`p-2 rounded border ${
-            outlookContactsEnabled
-              ? "bg-indigo-50 border-indigo-200"
-              : "bg-gray-50 border-gray-200 opacity-50"
-          }`}>
-            <div className={`text-lg font-semibold ${outlookContactsEnabled ? "text-indigo-700" : "text-gray-400"}`}>
+          <div className={outlookContactsEnabled ? STORED_CELL.on : STORED_CELL.off}>
+            <div className={outlookContactsEnabled ? STORED_CELL.countOn : STORED_CELL.countOff}>
               {sourceStats?.outlook?.toLocaleString() ?? "—"}
             </div>
-            <div className={`text-xs ${outlookContactsEnabled ? "text-indigo-600" : "text-gray-400"}`}>Outlook</div>
+            <div className={outlookContactsEnabled ? STORED_CELL.labelOn : STORED_CELL.labelOff}>Outlook</div>
           </div>
         )}
         {isGoogleConnected && (
-          <div className={`p-2 rounded border ${
-            googleContactsEnabled
-              ? "bg-green-50 border-green-200"
-              : "bg-gray-50 border-gray-200 opacity-50"
-          }`}>
-            <div className={`text-lg font-semibold ${googleContactsEnabled ? "text-green-700" : "text-gray-400"}`}>
+          <div className={googleContactsEnabled ? STORED_CELL.on : STORED_CELL.off}>
+            <div className={googleContactsEnabled ? STORED_CELL.countOn : STORED_CELL.countOff}>
               {sourceStats?.google_contacts?.toLocaleString() ?? "—"}
             </div>
-            <div className={`text-xs ${googleContactsEnabled ? "text-green-600" : "text-gray-400"}`}>Google</div>
+            <div className={googleContactsEnabled ? STORED_CELL.labelOn : STORED_CELL.labelOff}>Google</div>
           </div>
         )}
         {/*
@@ -887,15 +955,11 @@ export function ContactsImportSettings({
           asking.
         */}
         {showAndroidContacts && (
-          <div className={`p-2 rounded border ${
-            androidContactsEnabled
-              ? "bg-teal-50 border-teal-200"
-              : "bg-gray-50 border-gray-200 opacity-50"
-          }`}>
-            <div className={`text-lg font-semibold ${androidContactsEnabled ? "text-teal-700" : "text-gray-400"}`}>
+          <div className={androidContactsEnabled ? STORED_CELL.on : STORED_CELL.off}>
+            <div className={androidContactsEnabled ? STORED_CELL.countOn : STORED_CELL.countOff}>
               {sourceStats?.android_sync?.toLocaleString() ?? "—"}
             </div>
-            <div className={`text-xs ${androidContactsEnabled ? "text-teal-600" : "text-gray-400"}`}>Android</div>
+            <div className={androidContactsEnabled ? STORED_CELL.labelOn : STORED_CELL.labelOff}>Android</div>
           </div>
         )}
       </div>
