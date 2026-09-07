@@ -23,6 +23,7 @@ import { usePlatform } from "../../contexts/PlatformContext";
 import { useSyncOrchestrator } from "../../hooks/useSyncOrchestrator";
 import { useNetwork } from "../../contexts/NetworkContext";
 import { ResponsiveModal } from "../common/ResponsiveModal";
+import { ImportInfoPopover } from "./ImportInfoPopover";
 import logger from '../../utils/logger';
 import { safeErrorMessage } from '../../utils/formatUtils';
 
@@ -408,7 +409,6 @@ export function ContactsImportSettings({
 
   // All hooks must be declared before any early return to satisfy Rules of Hooks.
   const [forceReimporting, setForceReimporting] = useState(false);
-  const [showInfoTooltip, setShowInfoTooltip] = useState(false);
   // BACKLOG-2388 (#95): gate the destructive-sounding Force Re-import behind an
   // explicit confirm dialog before it wipes the local cache and re-imports.
   const [showReimportConfirm, setShowReimportConfirm] = useState(false);
@@ -1065,31 +1065,25 @@ export function ContactsImportSettings({
         >
           {forceReimporting ? "Clearing..." : "Force Re-import"}
         </button>
-        {/* Info icon */}
-        <div className="relative">
-          <button
-            type="button"
-            onMouseDown={(e) => {
-              e.preventDefault(); // Prevent blur from firing on self-click
-              setShowInfoTooltip(!showInfoTooltip);
-            }}
-            onBlur={() => setShowInfoTooltip(false)}
-            className="text-gray-400 hover:text-gray-600 transition-colors"
-            aria-label="Import info"
-          >
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-            </svg>
-          </button>
-          {showInfoTooltip && (
-            <div className="absolute bottom-full right-0 mb-2 w-64 p-3 bg-white rounded-lg shadow-lg border border-gray-200 text-xs text-gray-600 z-10">
-              <p className="font-medium text-gray-900 mb-1">Import Contacts</p>
-              <p className="mb-2">Adds new contacts, updates existing ones, and removes contacts deleted from the source.</p>
-              <p className="font-medium text-gray-900 mb-1">Force Re-import</p>
-              <p>Clears the copy stored on this computer for the sources you have switched on, and downloads them again. Contacts synced from your phone are left alone — only the phone can send those. Use if contacts look out of sync.</p>
-            </div>
-          )}
-        </div>
+        {/* BACKLOG-3156 stage B: the `?`, now the shared `ImportInfoPopover`.
+            The copy below is TODAY'S, unchanged — it was already accurate, and
+            BACKLOG-3029 is the reason it reads the way it does: it states the
+            RULE ("the sources you have switched on") instead of naming them,
+            because a list derived from this component's connectedness flags
+            disagrees with what the orchestrator actually empties. */}
+        <ImportInfoPopover
+          testId="contacts-import-info"
+          entries={[
+            {
+              heading: "Import Contacts",
+              body: "Adds new contacts, updates existing ones, and removes contacts deleted from the source.",
+            },
+            {
+              heading: "Force Re-import",
+              body: "Clears the copy stored on this computer for the sources you have switched on, and downloads them again. Contacts synced from your phone are left alone — only the phone can send those. Use if contacts look out of sync.",
+            },
+          ]}
+        />
       </div>
 
       {/*
