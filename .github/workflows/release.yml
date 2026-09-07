@@ -69,8 +69,24 @@ jobs:
           # Allow codesign to access the certificate
           security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$KEYCHAIN_PASSWORD" $KEYCHAIN_PATH
 
+          # BACKLOG-3192: prove the import produced a *usable* identity before
+          # anything tries to sign with it. `-v` lists valid identities only, so
+          # this single call is at once the expiry check, the revocation check,
+          # and the check that the issuing intermediate resolves on this runner.
+          # Without it, any of those failures surfaces later as an unrelated
+          # error inside the packager.
+          security find-identity -v -p codesigning "$KEYCHAIN_PATH"
+          if ! security find-identity -v -p codesigning "$KEYCHAIN_PATH" | grep -q "Developer ID Application"; then
+            echo "::error::No valid Developer ID Application identity in the signing keychain"
+            exit 1
+          fi
+
           echo "Certificate imported successfully"
           echo "signing_enabled=true" >> $GITHUB_OUTPUT
+          # Consumed as CSC_KEYCHAIN by the packaging step. Emitted from here so
+          # the two steps cannot drift on the path, and so it is empty whenever
+          # signing is disabled above (an empty value resolves to no keychain).
+          echo "keychain_path=$KEYCHAIN_PATH" >> $GITHUB_OUTPUT
 
       # Create .env.production with secrets for runtime use
       # The app loads credentials from this file at runtime (electron/main.ts)
@@ -102,9 +118,17 @@ jobs:
 
       - name: Package and Sign macOS App
         env:
-          # Code signing
-          CSC_LINK: ${{ secrets.MACOS_CERTIFICATE }}
-          CSC_KEY_PASSWORD: ${{ secrets.MACOS_CERTIFICATE_PASSWORD }}
+          # Code signing. Hand the packager the keychain the Import step already
+          # prepared, rather than letting it build one of its own. Its own path
+          # passes the certificate password to `security set-key-partition-list
+          # -k`, which takes the *keychain* password -- wrong on every release we
+          # have shipped, silently tolerated until the runner image moved, then
+          # fatal (BACKLOG-3192).
+          #
+          # This variable is honoured ONLY when no CSC link is set, so CSC_LINK
+          # and CSC_KEY_PASSWORD must be ABSENT here rather than empty: an empty
+          # CSC_LINK still counts as set and would restore the broken path.
+          CSC_KEYCHAIN: ${{ steps.import-cert.outputs.keychain_path }}
           # Notarization
           APPLE_ID: ${{ secrets.APPLE_ID }}
           APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
@@ -146,13 +170,22 @@ jobs:
           fi
           echo ".env.production verified: $(wc -l < .env.production) lines"
 
-          # Package with electron-builder (publish handled by Mirror step)
-          if [ -n "$CSC_LINK" ]; then
+          # Package with electron-builder (publish handled by Mirror step).
+          #
+          # Gate on the Import step's own result, NOT on $CSC_LINK. That variable
+          # is deliberately no longer set, and testing it here would silently
+          # select the unsigned branch and ship an unsigned build with every
+          # check green -- which is why this line and the env block above must
+          # never be changed independently of each other (BACKLOG-3192).
+          #
+          # The unsigned branch is retained ON PURPOSE: it is what the signing
+          # gate below is measured against. Do not turn it into a hard error.
+          if [ "${{ steps.import-cert.outputs.signing_enabled }}" = "true" ]; then
             echo "Packaging signed macOS app..."
             npx electron-builder --publish never
           else
             echo "Packaging unsigned macOS app..."
-            CSC_IDENTITY_AUTO_DISCOVERY=false npx electron-builder --config.mac.identity=null
+            CSC_IDENTITY_AUTO_DISCOVERY=false npx electron-builder --config.mac.identity=null --publish never
           fi
 
       - name: Upload macOS Artifacts
