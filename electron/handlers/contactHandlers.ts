@@ -123,6 +123,7 @@ import { contactInfoSourceFor } from "../utils/contactValueProvenance";
 import {
   hasNothingToImport,
   NOTHING_TO_IMPORT_REASON,
+  type ImportableRecordParts,
 } from "../utils/importableRecord";
 import { applyLinkedSourceValues } from "../services/contactSourceValues";
 // BACKLOG-2617: `recordContactOrigin` was imported here for the duplicate-by-name
@@ -1966,7 +1967,21 @@ export function registerContactHandlers(mainWindow: BrowserWindow): void {
             logService.warn(`[DIAG-1270] Import path: ${sanitizedContact.name || validatedData.name} → newCreate, allEmails=[${(sanitizedContact.allEmails || []).join(', ')}]`, 'Contacts');
             newContactsToCreate.push({
               user_id: validatedUserId,
-              display_name: validatedData.name || "Unknown",
+              /**
+               * BACKLOG-2707 — `?? ""`, NOT `|| "Unknown"`.
+               *
+               * The literal was unreachable before this item (the validator
+               * refused every nameless record on the way here) and would have
+               * become reachable the moment it stopped. Storing it writes the
+               * state BACKLOG-2461 exists to remove, and a row `contacts:import`
+               * would itself refuse on input: `hasNothingToImport` reads
+               * "Unknown" as no name at all.
+               *
+               * `??` rather than `||` so a future non-empty falsy value is not
+               * swallowed. The writer no longer substitutes either — see
+               * `contactDbService.createContactsBatch`.
+               */
+              display_name: validatedData.name ?? "",
               email: validatedData.email ?? undefined,
               phone: validatedData.phone ?? undefined,
               company: validatedData.company ?? undefined,
@@ -2391,6 +2406,48 @@ export function registerContactHandlers(mainWindow: BrowserWindow): void {
             error: "No valid user found in database",
           };
         }
+        /**
+         * BACKLOG-2707 — THE DOOR STILL REFUSES A RECORD WITH NOTHING ON IT.
+         *
+         * `validateContactData` no longer requires a name (see its comment), so
+         * without this line `contacts:create` would accept `{}` and mint a row
+         * with no name, no company, no phone and no email — the exact state
+         * BACKLOG-2684 put this predicate on `contacts:import` to prevent.
+         *
+         * THIS CHANNEL IS LIVE, not dormant. `contactBridge.ts` bridges it and
+         * `ContactFormModal.tsx` calls it, mounted in four places. What kept
+         * the relaxation off the founder's screen is a RENDERER guard
+         * (`ContactFormModal.tsx`, which refuses an empty name box before the
+         * call), and a renderer guard cannot protect a caller that does not go
+         * through the renderer — which is the whole reason BACKLOG-2684 exists.
+         *
+         * BEFORE `validateContactData`, mirroring the import loop: "nothing to
+         * make a contact out of" is the true reason, and describing the missing
+         * `name` field would be a narrower and less accurate one.
+         *
+         * ITS OWN MESSAGE. `NOTHING_TO_IMPORT_REASON` says "nothing to import",
+         * which is not what a contact form is doing, and that string is held
+         * identical to the renderer's by a parity test — so it is reused where
+         * it is true and not borrowed where it is not.
+         *
+         * SHAPE FIRST. `hasNothingToImport` reads fields off its argument, so
+         * running it on a `null` — or on a string — raises a TypeError and
+         * reports "cannot read properties of null", which is a WORSE error than
+         * the "Contact data must be an object" it would be replacing. Non-object
+         * payloads fall through to `validateContactData`, which already says
+         * exactly that, and says it first.
+         */
+        if (
+          contactData &&
+          typeof contactData === "object" &&
+          hasNothingToImport(contactData as ImportableRecordParts)
+        ) {
+          throw new ValidationError(
+            "A contact needs at least a name, company, phone, or email",
+            "contactData",
+          );
+        }
+
         const validatedData = validateContactData(contactData, false);
 
         /**
@@ -2446,7 +2503,10 @@ export function registerContactHandlers(mainWindow: BrowserWindow): void {
         const contact = await databaseService.createContact(
           {
             user_id: validatedUserId,
-            display_name: validatedData.name || "Unknown",
+            // BACKLOG-2707 — `?? ""`, not `|| "Unknown"`. Same reason as the
+            // import loop above; one substitution site left behind is how this
+            // recurs.
+            display_name: validatedData.name ?? "",
             email: validatedData.email ?? undefined,
             phone: validatedData.phone ?? undefined,
             company: validatedData.company ?? undefined,
