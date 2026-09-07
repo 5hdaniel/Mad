@@ -35,20 +35,65 @@
  * `no card inside a card` is enforceable because of it.
  *
  * ===========================================================================
- * MUTATIONS RUN AGAINST THIS FILE (each reverted after)
+ * MUTATIONS RUN AGAINST THIS FILE (each planted, run, reverted with `sed`,
+ * re-run green). 26 in total. This list is the durable record; the rest of the
+ * detail lives in `pm_comments` on BACKLOG-3156.
  * ===========================================================================
- *   1. Re-wrapped `MacOSMessagesImportSettings` in an outer panel card
- *      -> "no card sits inside another card" red on Messages (macOS).
- *   2. Moved the `Sources` eyebrow back outside its card in
- *      `ImportSourceSettings`
- *      -> "the label is the card's first child" red on Messages (sources).
- *   3. Put `<h4>Email History</h4>` back between the label and the description
- *      -> "the card carries no heading of its own" red on Emails, and the
- *         description's position red too.
- *   4. Moved the email description out of its card, above it
- *      -> "the description is the line directly under the label" red on Emails.
- *   5. Changed one screen's card classes to the old `p-3 bg-white rounded`
- *      -> "uses one card style across every screen" red.
+ * SHAPE
+ *   1. Card classes back on the `MacOSMessagesImportSettings` root
+ *      -> "Messages (macOS) > has no panel card wrapping its blocks".
+ *   2. `Sources` eyebrow swapped below the description, out of first position
+ *      -> "Messages (the source picker) > has one card whose first line…".
+ *   3. `<h4>Email History</h4>` back between the label and the description
+ *      -> "Emails > has one card per block…"; also placed AFTER the description
+ *         so check 3 passes and check 4 must be the one that fires.
+ *   4. Email description deleted from its card -> same test.
+ *   5. Contacts `Auto-discover` block stripped of its card -> "Contacts > has
+ *      one card per block…".
+ *   6. `<h4>Contacts</h4>` restored -> "Contacts > says Contacts once…".
+ *  14. Android description deleted -> "Messages (Android) > has no panel card…".
+ *  15. macOS description deleted -> "Messages (macOS) > has no panel card…".
+ *
+ * THE HEADING ALLOWLIST (check 4) — every one of these PASSED under the old
+ * chrome-class exemption, which is why the exemption is now enumerated. SR
+ * found the first two; the rest are the same trick on the other three screens.
+ *   A. `<h5>Import Filters</h5>` back inside a `rounded border` sub-box on the
+ *      macOS panel -> "Messages (macOS) > has no panel card wrapping…".
+ *   B. The same on the Android panel -> "Messages (Android) > …".
+ *   C. `<h4>Email History</h4>` inside a row on Emails -> "Emails > …".
+ *   D. `<h4>Import Source</h4>` inside a row -> "Messages (the source picker)…".
+ *   E. `<h4>Contacts</h4>` inside a row -> "Contacts > …".
+ *   F. `<h4>Gmail</h4>` — a DECLARED name — moved out of its row onto the card
+ *      -> reds too, so the allowlist is not identity-only.
+ *
+ * PANEL IDENTITY HEADERS (check 8)
+ *  11. `<h4>macOS Messages</h4>` restored -> "the four screens agree > lets no
+ *      screen carry a heading outside its cards", naming screen and heading.
+ *  12. `<h4>Android Companion</h4>` restored -> same test.
+ *   G. The same header restored as an `<h3>` -> same test. (It passed while the
+ *      check exempted the TAG rather than the section title's TEXT.)
+ *   H. A second `<h3>Emails</h3>` outside the cards -> same test.
+ *
+ * CROSS-SCREEN AGREEMENT
+ *   5b. One screen given `p-3 bg-white rounded-lg` -> "uses one card style
+ *       across every screen", and ONLY that test.
+ *
+ * THE macOS DISABLED CUES (the deleted `<h4>` greyed while inactive)
+ *  16. `aria-disabled` off the root      -> "still says it is inactive three ways…".
+ *  17. actions `opacity-60` removed      -> same test.
+ *  18. disabled note rendered while active -> "is not muted when it is the
+ *      active source", which is what keeps 16/17 from passing on a panel that
+ *      is permanently greyed.
+ *
+ * ELSEWHERE (other suites, same change)
+ *   9. Messages source description deleted -> `Settings.test` "makes the Sources
+ *      block one card whose first line is its own label".
+ *  10. Contacts `Sources` label renamed   -> `ContactsImportSettings` "should
+ *      render toggle switches and import button on macOS".
+ *  13. `<AndroidMessagesSettings/>` replaced with `<div/>` -> `Settings.test`
+ *      "does NOT render the inline guided wizard for an Android user".
+ *   8. BACKLOG-2986 alert moved back above the Sources card -> that suite's
+ *      "renders above the toggle group, not above the whole section".
  */
 
 import React from "react";
@@ -118,8 +163,24 @@ function isCard(el: Element): boolean {
 /**
  * A ROW is the chrome one step down: `rounded` (not `-lg`) plus the bare
  * `border`. Rows live inside cards — the radio options, the Gmail/Outlook
- * connections, the stored-count cells — and a row MAY carry a heading naming
- * itself. That is the one place a heading is legitimate inside a card.
+ * connections, the stored-count cells.
+ *
+ * BEING A ROW IS NOT A LICENCE TO CARRY A HEADING. It was, in the first version
+ * of this file, and SR proved the hole by restoring the exact element this
+ * change deleted —
+ *
+ *     <div className="mb-3 p-3 bg-white rounded border border-gray-200">
+ *       <h5 …>Import Filters</h5>
+ *     </div>
+ *
+ * — inside the `Import Preferences` card. All 23 tests passed. A chrome class is
+ * something anyone can type; a guard that exempts whatever wears it cannot see
+ * the regression it exists to catch, and two of the five headings this change
+ * removed had precisely that shape.
+ *
+ * So the exemption is now an ENUMERATED ALLOWLIST per block (`allowedHeadings`),
+ * and being inside a row is an ADDITIONAL requirement on the few headings the
+ * allowlist names — not an alternative to being named.
  */
 function isRow(el: Element): boolean {
   const cls = typeof el.className === "string" ? el.className : "";
@@ -152,6 +213,15 @@ interface BlockSpec {
   label: string;
   /** The line under the label, or null where the block has none. */
   description: string | null;
+  /**
+   * The exact text of every heading this card is allowed to contain. Enumerated
+   * from the live tree, not inferred from chrome: across all five components
+   * there are exactly two such headings — `Gmail` (EmailSettings :658) and
+   * `Outlook` (:707) — and they name WHICH connection each row is, which the
+   * `Sources` label above cannot say. Every other block declares none, so every
+   * other in-card heading reds wherever it is nested.
+   */
+  allowedHeadings?: string[];
 }
 
 /**
@@ -168,45 +238,56 @@ function auditBlock(screenName: string, block: BlockSpec): string {
   );
 
   // 2. The label is the card's FIRST CHILD, inside it.
+  //    (Computed value in `expect`, constant in `toBe`, so jest prints the
+  //    inverted pair the right way round: Expected = the shape, Received = what
+  //    the DOM actually did.)
   const label = within(card).getByText(block.label);
-  expect(`${where}: label is the card's first child`).toBe(
+  expect(
     card.firstElementChild === label
       ? `${where}: label is the card's first child`
       : `${where}: label is NOT the card's first child (first child is ${
           card.firstElementChild?.tagName ?? "nothing"
         }: "${card.firstElementChild?.textContent?.slice(0, 40) ?? ""}")`,
-  );
+  ).toBe(`${where}: label is the card's first child`);
 
   // 3. The description, where the block has one, is the very next line — the
   //    slot the deleted <h4> headings used to occupy.
   if (block.description !== null) {
     const description = within(card).getByText(block.description);
-    expect(`${where}: description follows the label`).toBe(
+    expect(
       label.nextElementSibling === description
         ? `${where}: description follows the label`
         : `${where}: description does NOT follow the label (next is "${
             label.nextElementSibling?.textContent?.slice(0, 40) ?? "nothing"
           }")`,
-    );
+    ).toBe(`${where}: description follows the label`);
   }
 
-  // 4. The card carries no heading OF ITS OWN. The label above IS the card's
-  //    heading; an <h4>/<h5> beneath it is the doubling this stage removed
-  //    (`Import Source`, `Email History`, `Contacts`, `Import Filters`).
-  //    A heading inside a ROW is allowed and asserted separately: `Gmail` and
-  //    `Outlook` name which connection each row is, not what the card is.
-  const cardHeadings = Array.from(card.querySelectorAll("h1,h2,h3,h4,h5,h6"))
-    .filter((h) => {
+  // 4. The card carries no heading beyond the ones this block declares. The
+  //    label above IS the card's heading; an <h4>/<h5> beneath it is the
+  //    doubling this stage removed (`Import Source`, `Email History`,
+  //    `Contacts`, `Import Filters` x2).
+  //
+  //    A declared heading must ALSO sit inside a row, because the two that are
+  //    declared are row identities. Both conditions, so neither alone lets a
+  //    heading through: an undeclared heading reds however deeply it is nested,
+  //    and a declared name reds if it escapes its row to sit on the card.
+  const allowed = block.allowedHeadings ?? [];
+  const offenders = Array.from(card.querySelectorAll("h1,h2,h3,h4,h5,h6"))
+    .map((h) => {
+      const text = (h.textContent ?? "").trim();
       let node: Element | null = h.parentElement;
+      let inRow = false;
       while (node !== null && node !== card) {
-        if (isRow(node)) return false;
+        if (isRow(node)) inRow = true;
         node = node.parentElement;
       }
-      return true;
+      if (allowed.includes(text) && inRow) return null;
+      return allowed.includes(text) ? `${text} (declared, but not inside a row)` : text;
     })
-    .map((h) => (h.textContent ?? "").trim());
-  expect(`${where}: headings owned by the card = ${JSON.stringify(cardHeadings)}`).toBe(
-    `${where}: headings owned by the card = []`,
+    .filter((t): t is string => t !== null);
+  expect(`${where}: headings the card may not carry = ${JSON.stringify(offenders)}`).toBe(
+    `${where}: headings the card may not carry = []`,
   );
 
   return typeof card.className === "string" ? card.className : "";
@@ -218,6 +299,14 @@ function auditScreen(
   container: HTMLElement,
   blocks: BlockSpec[],
   actionsTestId: string | null,
+  /**
+   * The screen's own section title, where the component under test renders one.
+   * `null` for the three panels whose `<h3>` is rendered by `Settings.tsx`.
+   * Named rather than typed-exempted for the reason SR found in check 4: a rule
+   * that exempts a TAG lets anything wearing that tag through, so a panel header
+   * reintroduced as an `<h3>` would have passed.
+   */
+  sectionTitle: string | null,
 ): string[] {
   const classNames = blocks.map((b) => auditBlock(screenName, b));
 
@@ -252,15 +341,25 @@ function auditScreen(
   }
 
   // 8. NO PANEL IDENTITY HEADER. Outside the cards, the only heading a screen
-  //    may carry is its own section title — an `<h3>`. An `<h4>`/`<h5>` out
-  //    there is a panel header, which Messages had (`macOS Messages`,
+  //    may carry is its own section title, BY TEXT and as an `<h3>`. Anything
+  //    else out there is a panel header, which Messages had (`macOS Messages`,
   //    `Android Companion`) and Emails and Contacts did not. Recorded as well
   //    as asserted, so the cross-screen test below reds on it by name.
+  let sectionTitleSeen = false;
   const panelHeadings = Array.from(
-    container.querySelectorAll("h1,h2,h4,h5,h6"),
+    container.querySelectorAll("h1,h2,h3,h4,h5,h6"),
   )
     .filter((h) => cardAncestor(h) === null)
-    .map((h) => (h.textContent ?? "").trim());
+    .map((h) => (h.textContent ?? "").trim())
+    .filter((text) => {
+      // Exactly one section title is forgiven, so a SECOND <h3> with the same
+      // words is still reported.
+      if (!sectionTitleSeen && sectionTitle !== null && text === sectionTitle) {
+        sectionTitleSeen = true;
+        return false;
+      }
+      return true;
+    });
   headersOutsideCards.set(screenName, panelHeadings);
   expect(`${screenName}: headings outside its cards = ${JSON.stringify(panelHeadings)}`).toBe(
     `${screenName}: headings outside its cards = []`,
@@ -329,7 +428,14 @@ describe("BACKLOG-3156 stage E — Emails", () => {
         "Emails",
         container,
         [
-          { testId: "emails-block-sources", label: "Sources", description: null },
+          {
+            testId: "emails-block-sources",
+            label: "Sources",
+            description: null,
+            // The only two in-card headings on any of these screens. They name
+            // WHICH connection each row is — something `Sources` cannot say.
+            allowedHeadings: ["Gmail", "Outlook"],
+          },
           {
             testId: "emails-block-preferences",
             label: "Import Preferences",
@@ -338,6 +444,7 @@ describe("BACKLOG-3156 stage E — Emails", () => {
           },
         ],
         "emails-block-actions",
+        "Emails",
       ),
     );
   });
@@ -389,6 +496,7 @@ describe("BACKLOG-3156 stage E — Messages (the source picker)", () => {
           },
         ],
         null,
+        null,
       ),
     );
   });
@@ -438,6 +546,7 @@ describe("BACKLOG-3156 stage E — Messages (macOS)", () => {
           },
         ],
         "messages-block-actions",
+        null,
       ),
     );
   });
@@ -541,6 +650,7 @@ describe("BACKLOG-3156 stage E — Messages (Android)", () => {
           },
         ],
         "android-block-actions",
+        null,
       ),
     );
   });
@@ -619,6 +729,7 @@ describe("BACKLOG-3156 stage E — Contacts", () => {
           },
         ],
         "contacts-block-actions",
+        "Contacts",
       ),
     );
   });
