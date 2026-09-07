@@ -1,6 +1,8 @@
 import { promises as fs } from "fs";
 import path from "path";
-import { app, safeStorage } from "electron";
+import { app } from "electron";
+import type { SecretStore } from "../capabilities/secretStore";
+import { hostSecretStore } from "../capabilities/secretStoreProvider";
 import * as Sentry from "@sentry/electron/main";
 import type { User, OAuthProvider, Subscription } from "../types/models";
 import logService from "./logService";
@@ -52,8 +54,10 @@ interface EncryptedSessionFile {
  * - If decryption fails (e.g., keychain conflict), deletes session and forces re-login
  * - Plaintext sessions from before encryption are auto-migrated on first read
  */
-class SessionService {
+export class SessionService {
   private sessionFilePath: string | null = null;
+  private readonly secrets: SecretStore;
+
 
   // BACKLOG-2332: serialize all session.json mutations. Without this, updateSession's
   // read-modify-write (load -> merge -> save) can interleave with a concurrent write and
@@ -62,6 +66,14 @@ class SessionService {
   // resurrect a used refresh token and get the family reuse-revoked on the next restart. The
   // queue guarantees the latest rotated tokens always win and writes never interleave.
   private writeLock: Promise<void> = Promise.resolve();
+
+  /**
+   * @param secrets - The host shell's secret store (BACKLOG-2962). Injected so
+   *   the session-encryption paths can be exercised without Electron.
+   */
+  constructor(secrets: SecretStore) {
+    this.secrets = secrets;
+  }
 
   /**
    * Run `op` exclusively after any in-flight session.json mutation completes. Errors are isolated
@@ -91,7 +103,7 @@ class SessionService {
    */
   private isEncryptionAvailable(): boolean {
     try {
-      return safeStorage.isEncryptionAvailable();
+      return this.secrets.isEncryptionAvailable();
     } catch {
       return false;
     }
@@ -112,7 +124,7 @@ class SessionService {
     }
 
     try {
-      const encryptedBuffer = safeStorage.encryptString(jsonString);
+      const encryptedBuffer = this.secrets.encryptString(jsonString);
       const wrapper: EncryptedSessionFile = {
         encrypted: encryptedBuffer.toString("base64"),
       };
@@ -173,7 +185,7 @@ class SessionService {
           (parsed as EncryptedSessionFile).encrypted,
           "base64",
         );
-        const decrypted = safeStorage.decryptString(buffer);
+        const decrypted = this.secrets.decryptString(buffer);
         const session: SessionData = JSON.parse(decrypted);
         return { session, needsMigration: false };
       } catch (error) {
@@ -343,7 +355,14 @@ class SessionService {
       try {
         const currentSession = await this.loadSession();
         if (!currentSession) {
-          await logService.error("No session to update", "SessionService");
+          // BACKLOG-3147: INFO, not ERROR. Having no session here is a NORMAL outcome, not a
+          // failure — it is what an ordinary signed-out startup looks like, and it is also what
+          // supabaseService's fire-and-forget token persist (supabaseService.ts:436) hits when
+          // the SDK rotates tokens before the first save or after the session has been cleared.
+          // Nothing was lost: there was nothing to update. Logging it at ERROR put a red line in
+          // the log on a routine path, which trains people to ignore the error level.
+          // (debug would be invisible: logService's default minLevel is "info".)
+          await logService.info("No session to update", "SessionService");
           return false;
         }
 
@@ -374,4 +393,4 @@ class SessionService {
   }
 }
 
-export default new SessionService();
+export default new SessionService(hostSecretStore);

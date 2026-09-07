@@ -11,6 +11,18 @@
 // ============================================
 
 import * as Sentry from "@sentry/electron/main";
+import {
+  UPDATE_EMAIL_IDENTITY_SQL,
+  clearSyncCursor,
+  prepareEmailInsert,
+  prepareParticipantInsert,
+  selectEarliestByParticipants,
+  selectExistingByMessageIdHeader,
+  selectExistingExternalIds,
+  selectLegacyCandidatesBySubject,
+  type EmailReadSource,
+  type EmailWriteTarget,
+} from "./db/emailSyncSql";
 import logService from "./logService";
 import { autoLinkCommunicationsForContact } from "./autoLinkService";
 import type { AutoLinkResult } from "./autoLinkService";
@@ -29,7 +41,19 @@ import {
   terminalProgress,
   type EmailPrecacheProgressCallback,
 } from "./emailPrecacheProgress";
+// BACKLOG-2960: the wall-clock instrument. Pure formatter — the clock, the log
+// transport and the build lookup stay here; only the line SHAPE lives there, so
+// it cannot drift between the before and the after measurement.
+import {
+  formatEmailPrecacheTimingLine,
+  type EmailPrecacheMode,
+} from "./emailPrecacheTiming";
 import { dbGet, dbAll, dbRun, getRawDatabase } from "./db/core/dbConnection";
+// BACKLOG-2960 — imported from `dbTiming`, not `dbConnection`, on purpose: the
+// pre-cache suites `jest.mock` `dbConnection` with a hand-written partial, so a
+// new export there would arrive `undefined` and render `dbMs=NaN`. The pure
+// module is unmocked, and reports 0 when nothing instrumented ran.
+import { readDbTimeMs } from "./db/core/dbTiming";
 import gmailFetchService from "./gmailFetchService";
 import outlookFetchService from "./outlookFetchService";
 import databaseService from "./databaseService";
@@ -55,7 +79,6 @@ import { planEmailWrites, computeLegacyContentKey, type ExistingByMessageId } fr
 // the rebuild never touches the live table until one final transaction.
 import {
   buildEmailForceSet,
-  emailForceReadView,
   emailForceStagingLifecycle,
   restrictForceSetToRebuiltProviders,
   sweepStaleEmailStaging,
@@ -466,7 +489,10 @@ async function fetchStoreAndDedup(params: {
    * BACKLOG-2856: present only during a force re-cache. When set, this batch is
    * written into the run's STAGING tables and the live `emails` table is neither
    * written nor read on its own — every dedup read becomes "survivors of the
-   * pending swap ∪ what this run has staged so far" (`emailForceReadView`).
+   * pending swap ∪ what this run has staged so far"
+   * (`db/emailForceSetSql.ts`'s `emailForceReadView`, reached through
+   * `emailSyncSql.ts`'s `readSource` — the thin re-export that used to sit in
+   * `emailForceStaging.ts` was dead and was deleted by BACKLOG-3102 PR 2).
    *
    * Absent, every line below behaves exactly as it did before, which is the
    * property that keeps ordinary delta syncs out of this feature's blast radius.
@@ -488,14 +514,23 @@ async function fetchStoreAndDedup(params: {
   // live still holds the entire force set (that is the point of staging), so
   // every re-fetched row would match, be classified an already-cached duplicate,
   // and never be staged — staging would finish empty and the swap would delete
-  // the user's corpus and put nothing back. `emailForceReadView` substitutes
+  // the user's corpus and put nothing back. `db/emailForceSetSql.ts`'s
+  // `emailForceReadView` substitutes
   // "rows the swap will keep ∪ rows staged so far" for the table name.
-  const emailsSource = (columns: string): { sql: string; params: readonly string[] } =>
-    force
-      ? emailForceReadView(force, columns)
-      : { sql: "emails", params: [] };
-  const writeEmailsTable = force ? `"${force.emailsTable}"` : "emails";
-  const writeParticipantsTable = force ? `"${force.participantsTable}"` : "email_participants";
+  // BACKLOG-2989 chunk 4: what crosses into db/ is a DISCRIMINATED TARGET
+  // carrying the branded staging names, never a pre-quoted identifier. The
+  // previous `force ? `"${force.emailsTable}"` : "emails"` destroyed the
+  // StagingTableName brand with a template literal and no annotation to notice.
+  const writeTarget: EmailWriteTarget = force
+    ? {
+        mode: "force",
+        emailsTable: force.emailsTable,
+        participantsTable: force.participantsTable,
+      }
+    : { mode: "live" };
+  const readSource: EmailReadSource = force
+    ? { mode: "force", set: force.forceSet, emailsTable: force.emailsTable }
+    : { mode: "live" };
 
   // BACKLOG-1549: Look up the user's connected email address to compute direction
   const oauthProvider = provider === "outlook" ? "microsoft" : "google";
@@ -530,11 +565,10 @@ async function fetchStoreAndDedup(params: {
     const CHUNK_SIZE = 500;
     for (let i = 0; i < newEmails.length; i += CHUNK_SIZE) {
       const chunk = newEmails.slice(i, i + CHUNK_SIZE);
-      const placeholders = chunk.map(() => "?").join(",");
-      const src = emailsSource("external_id, user_id");
-      const rows = dbAll<{ external_id: string }>(
-        `SELECT external_id FROM ${src.sql} WHERE user_id = ? AND external_id IN (${placeholders})`,
-        [...src.params, userId, ...chunk.map((e) => e.id)],
+      const rows = selectExistingExternalIds(
+        readSource,
+        userId,
+        chunk.map((e) => e.id),
       );
       for (const row of rows) {
         existingExternalIds.add(row.external_id);
@@ -553,12 +587,7 @@ async function fetchStoreAndDedup(params: {
     const CHUNK_SIZE = 500;
     for (let i = 0; i < headersToCheck.length; i += CHUNK_SIZE) {
       const chunk = headersToCheck.slice(i, i + CHUNK_SIZE);
-      const placeholders = chunk.map(() => "?").join(",");
-      const src = emailsSource("id, external_id, message_id_header, user_id");
-      const rows = dbAll<{ id: string; external_id: string | null; message_id_header: string }>(
-        `SELECT id, external_id, message_id_header FROM ${src.sql} WHERE user_id = ? AND message_id_header IN (${placeholders})`,
-        [...src.params, userId, ...chunk],
-      );
+      const rows = selectExistingByMessageIdHeader(readSource, userId, chunk);
       for (const row of rows) {
         existingByMessageId.set(row.message_id_header, { id: row.id, externalId: row.external_id });
       }
@@ -586,27 +615,7 @@ async function fetchStoreAndDedup(params: {
       const LEGACY_CHUNK = 500;
       for (let i = 0; i < subjectsToCheck.length; i += LEGACY_CHUNK) {
         const chunk = subjectsToCheck.slice(i, i + LEGACY_CHUNK);
-        const placeholders = chunk.map(() => "?").join(",");
-        const legacySrc = emailsSource(
-          "id, external_id, subject, sender, sent_at, user_id, message_id_header",
-        );
-        const legacyRows = dbAll<{
-          id: string;
-          external_id: string | null;
-          subject: string;
-          sender: string;
-          sent_at: string;
-        }>(
-          `SELECT id, external_id, subject, sender, sent_at
-           FROM ${legacySrc.sql}
-           WHERE user_id = ?
-             AND message_id_header IS NULL
-             AND sent_at IS NOT NULL
-             AND sender IS NOT NULL
-             AND subject IS NOT NULL
-             AND LOWER(TRIM(subject)) IN (${placeholders})`,
-          [...legacySrc.params, userId, ...chunk],
-        );
+        const legacyRows = selectLegacyCandidatesBySubject(readSource, userId, chunk);
         // Build key → row map and frequency count for ambiguity detection.
         const keyCount = new Map<string, number>();
         const keyToRow = new Map<string, { id: string; external_id: string | null }>();
@@ -661,34 +670,10 @@ async function fetchStoreAndDedup(params: {
     try {
       const db = getRawDatabase();
       const crypto = await import("crypto");
-      const insertStmt = db.prepare(`
-        INSERT INTO ${writeEmailsTable} (
-          id, user_id, external_id, source, account_id, direction,
-          subject, body_plain, body_html,
-          sender, recipients, cc, bcc,
-          thread_id, in_reply_to, references_header,
-          sent_at, received_at,
-          has_attachments, attachment_count,
-          message_id_header, content_hash, labels,
-          bulk_mail_headers,
-          ingest_source, validated_at,
-          -- BACKLOG-2857: stamped at write time so a later derivation fix can
-          -- tell this row apart from one produced by superseded logic.
-          -- APPENDED after every other bound parameter on purpose:
-          -- emailSyncService.retainedHeaders.test.ts transcribes positional
-          -- indices into this list, so inserting mid-list would silently
-          -- re-point its assertions at the wrong columns.
-          derived_version,
-          created_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
-      `);
+      const insertStmt = prepareEmailInsert(db, writeTarget);
 
       // BACKLOG-1722: Junction participant INSERT, prepared once and reused.
-      const insertParticipantStmt = db.prepare(`
-        INSERT INTO ${writeParticipantsTable}
-          (email_id, role, position, participant_hash, email_address, display_name)
-        VALUES (?, ?, ?, ?, ?, ?)
-      `);
+      const insertParticipantStmt = prepareParticipantInsert(db, writeTarget);
 
       // BACKLOG-1769: resurrection remap — point an already-stored row at the new
       // provider id when the same Message-ID was re-delivered under a fresh id.
@@ -697,7 +682,7 @@ async function fetchStoreAndDedup(params: {
       // requiring the forward guard again. COALESCE is a no-op for rows that
       // already have a message_id_header (standard BACKLOG-1769 resurrections).
       const updateExternalIdStmt = db.prepare(
-        `UPDATE emails SET external_id = ?, message_id_header = COALESCE(message_id_header, ?) WHERE id = ?`,
+        UPDATE_EMAIL_IDENTITY_SQL,
       );
 
       // Map of external_id -> generated internal id for attachment processing
@@ -967,6 +952,37 @@ export async function storeParsedEmailsForAccount(params: {
     seenIds: params.seenIds ?? new Set<string>(),
     getAttachmentsFn: params.getAttachmentsFn,
   });
+}
+
+/**
+ * BACKLOG-2960: which build produced a timing number.
+ *
+ * READ FROM SENTRY'S RELEASE, NOT FROM `app.getVersion()`, ON PURPOSE.
+ * `main.ts:226` initialises Sentry with `release: app.getVersion()`, so the
+ * release IS the app version in any real run — and reading it back costs this
+ * module nothing, because Sentry is already imported here. Importing `electron`
+ * to call `app.getVersion()` directly would move `emailSyncService` into the
+ * set of Electron-coupled modules BACKLOG-2961 is currently measuring and
+ * cutting, which is a bad trade for one string.
+ *
+ * Falls back to `npm_package_version` (set by `npm run dev`, absent in a
+ * packaged app) and finally to "unknown". It never throws and never guesses:
+ * an unreadable build is reported as unknown rather than as a plausible number,
+ * because a duration attributed to the wrong build is worse than one attributed
+ * to none. The `try` also covers the test suites that mock `@sentry/electron`
+ * down to `addBreadcrumb`/`captureException`, where `getClient` does not exist.
+ */
+function resolvePrecacheBuild(): string {
+  try {
+    const release = Sentry.getClient()?.getOptions?.().release;
+    if (typeof release === "string" && release.length > 0) {
+      return release;
+    }
+  } catch {
+    // Sentry not initialised, or mocked away. Fall through.
+  }
+  const packageVersion = process.env.npm_package_version;
+  return packageVersion && packageVersion.length > 0 ? packageVersion : "unknown";
 }
 
 /**
@@ -1656,18 +1672,7 @@ class EmailSyncService {
     // LOWER(sender) IN (...) OR LOWER(recipients) LIKE ... scan, which
     // could miss BCC-only and Outlook display-name-only matches and was
     // unindexed for the LIKE clause.
-    const placeholders = contactEmails.map(() => "?").join(", ");
-    const sql = `
-      SELECT MIN(e.sent_at) as earliest, COUNT(DISTINCT e.id) as total
-      FROM email_participants ep
-      JOIN emails e ON e.id = ep.email_id
-      WHERE e.user_id = ?
-        AND ep.email_address IN (${placeholders})
-    `;
-    const lowerEmails = contactEmails.map((e) => e.toLowerCase().trim());
-    const params = [userId, ...lowerEmails];
-
-    const row = dbGet<{ earliest: string | null; total: number }>(sql, params);
+    const row = selectEarliestByParticipants(userId, contactEmails);
 
     if (!row || row.total === 0 || !row.earliest) {
       return false;
@@ -1961,6 +1966,34 @@ class EmailSyncService {
       onProgress?.(progress);
     };
 
+    // BACKLOG-2960 — TIMING BOOKKEEPING, declared out here for the same reason
+    // the progress counters are: the line is emitted from the `finally`, which
+    // is the only place every exit path passes through.
+    //
+    // The clock starts HERE rather than inside the fetch loop, and that is the
+    // whole point of the instrument. `precacheEmails` on a full re-cache spends
+    // time in the repair pass, in the staging setup, in two providers' fetches
+    // and in the swap; a timer around any one of those would report a number
+    // that a 3% regression could hide in. Entry to `finally` is the span the
+    // founder actually waits through.
+    //
+    // The counters below are the run's own — hoisted out of the `try` rather
+    // than copied into a record after each `+=`, because a throw between a
+    // mutation and its copy would hand the `finally` stale numbers.
+    const runStartedAt = Date.now();
+    // Taken here, beside the wall clock, so both figures cover the same span.
+    const dbMsAtRunStart = readDbTimeMs();
+    let totalFetched = 0;
+    let totalStored = 0;
+    // Non-force runs start at "cache" and become "re-cache" the moment the
+    // bounds read shows this mailbox already held mail. A non-force run
+    // cancelled before that read (the pre-repair checkpoint) reports the
+    // default, which is the honest reading: no cached mail was ever observed.
+    let precacheMode: EmailPrecacheMode = isForce ? "force" : "cache";
+    // Assigned once the connected tokens are known; stays empty on the
+    // no-provider-connected exit, where "none" is exactly right.
+    let timedProviders: readonly EmailForceProvider[] = [];
+
     let forceStaging: EmailForceStaging | null = null;
     let forceSwap: {
       emailsDeleted: number;
@@ -2092,6 +2125,14 @@ class EmailSyncService {
     // a force run has no high-water mark to clamp to and no gap to backfill,
     // because it re-fetches the entire configured window by construction.
     const cachedBounds = isForce ? null : getCachedEmailSentAtBounds(userId);
+    // BACKLOG-2960: the timing line's `mode`, decided by the SAME expression the
+    // "date range computed" line below reports as `isIncremental`, so the two
+    // lines in one log can never disagree about what kind of run this was.
+    // A force run keeps `force` — `cachedBounds` is null on that path by
+    // construction, so this branch cannot overwrite it.
+    if (cachedBounds?.newest) {
+      precacheMode = "re-cache";
+    }
     let fetchSinceDate = cacheSinceDate;
     if (cachedBounds?.newest) {
       const latestCached = new Date(cachedBounds.newest);
@@ -2159,8 +2200,9 @@ class EmailSyncService {
     });
 
     const seenEmailIds = new Set<string>();
-    let totalFetched = 0;
-    let totalStored = 0;
+    // BACKLOG-2960: `totalFetched` / `totalStored` are declared above the `try`
+    // so the timing line in the `finally` reads the counts this run actually
+    // reached, including on a throw. Same values, same mutations, wider scope.
     // BACKLOG-2127: records the FIRST auth-class provider failure so the
     // caller (SyncOrchestrator) can raise a reconnect prompt. Transient
     // (network) failures are intentionally NOT recorded here.
@@ -2186,6 +2228,19 @@ class EmailSyncService {
       ...(microsoftToken ? (["outlook"] as const) : []),
       ...(googleToken ? (["gmail"] as const) : []),
     ];
+    // BACKLOG-2960: the timing line reports the providers this run WORKED, which
+    // is the connected set — not `rebuiltProviders`, which is narrowed to the
+    // ones that finished. A duration is spent on every provider the run tried,
+    // including one that failed halfway, so the connected set is what makes two
+    // measurements comparable.
+    //
+    // COPIED, not aliased. `connectedProviders` is not mutated anywhere today
+    // (checked: its five references are all reads), but `rebuiltProviders` two
+    // lines below IS mutated in place and holds the narrowed set — so an edit
+    // that ever narrowed this array instead would silently change what the
+    // timing line means, with no test to catch it. The copy costs nothing and
+    // makes the snapshot the intent rather than a coincidence.
+    timedProviders = [...connectedProviders];
     // A provider joins this only when its ENTIRE fetch succeeded — the inbox
     // round AND the all-folders/all-labels round. A partial fetch must not
     // delete that provider's live rows; see `restrictForceSetToRebuiltProviders`.
@@ -2741,6 +2796,56 @@ class EmailSyncService {
       this.precacheInProgress = false;
       this.precacheAbortController = null;
 
+      // BACKLOG-2960 — THE ONE TIMING LINE, on every exit path, emitted FIRST.
+      //
+      // First, so the staging drop below is outside the measured span. That drop
+      // runs on EVERY exit path, success included: it is gated on whether a
+      // force run created staging, not on how the run ended, and
+      // `swapEmailStagingIntoLive` does not drop the tables itself — it copies
+      // out of them and returns, so on a successful force run they still hold
+      // the whole corpus when the drop reaches them. Excluding it keeps ~44 ms
+      // at 33,637 emails (measured on the real driver — SR review, pm_comments
+      // `f18e9103` §2) out of the number, identically on both sides of the
+      // before/after comparison. The founder does wait through it.
+      //
+      // Wrapped, because an instrument must never be the reason a re-cache
+      // fails. An unguarded throw here would skip `forceStaging.drop()` and leak
+      // two staging tables per run — an observability line causing a data-layer
+      // leak is exactly the trade this must not make.
+      //
+      // The "already in progress" guard returns BEFORE the `try` and therefore
+      // emits nothing. That is deliberate: a rejected second invocation is not a
+      // run, and giving it an `elapsedMs` near zero would pollute the very
+      // measurement this line exists to produce.
+      try {
+        const elapsedMs = Date.now() - runStartedAt;
+        // Rounded once, here. The accumulator is fractional because a single
+        // prepared statement is well under a millisecond; rounding per call
+        // would floor most of them to zero.
+        const dbMs = Math.round(readDbTimeMs() - dbMsAtRunStart);
+        const timing = {
+          mode: precacheMode,
+          outcome: progressOutcome,
+          providers: timedProviders,
+          checked: totalFetched,
+          written: totalStored,
+          // Present only when the swap actually ran; see the field's doc.
+          ...(forceSwap ? { inserted: forceSwap.emailsInserted } : {}),
+          elapsedMs,
+          build: resolvePrecacheBuild(),
+          dbMs,
+        };
+        logService.info(
+          formatEmailPrecacheTimingLine(timing),
+          "EmailSyncService",
+          { ...timing, userId },
+        );
+      } catch (timingError) {
+        logService.warn("Could not emit email pre-cache timing", "EmailSyncService", {
+          error: timingError instanceof Error ? timingError.message : String(timingError),
+        });
+      }
+
       // BACKLOG-2856 — THE ONE TERMINAL PROGRESS EVENT, on every exit path.
       //
       // Success, a structured error return, a thrown failure, a cancel: all of
@@ -2783,10 +2888,7 @@ class EmailSyncService {
    * swallowed rather than allowed to fail the run.
    */
   private clearShadowDeltaCursors(userId: string): void {
-    dbRun(
-      `UPDATE email_sync_state SET cursor = NULL, updated_at = CURRENT_TIMESTAMP WHERE user_id = ?`,
-      [userId],
-    );
+    clearSyncCursor(userId);
   }
 
   /**

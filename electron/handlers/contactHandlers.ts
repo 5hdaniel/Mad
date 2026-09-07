@@ -100,6 +100,11 @@ import {
 } from "../services/contactCompare";
 import { queryContacts, isPoolReady } from "../workers/contactWorkerPool";
 import { dbAll, dbRun } from "../services/db/core/dbConnection";
+import { IMPORTED_CONTACT_IDS_SQL } from "../services/db/contactBackfillPlanSql";
+import {
+  SET_CONTACT_DEFAULT_ROLE_SQL,
+  TRANSACTION_IDS_FOR_CONTACT_SQL,
+} from "../services/db/contactHandlersSql";
 import type { Contact, Transaction, ContactSource, Communication } from "../types/models";
 
 // Import validation utilities
@@ -897,7 +902,7 @@ async function backfillImportedContactsFromExternal(userId: string): Promise<{ u
     // lands. Contacts with no crosswalk row yet fall through to the SAME
     // email/phone matching used everywhere else — NEVER back to name.
     const importedContacts = dbAll<{ id: string }>(
-      `SELECT id FROM contacts WHERE user_id = ? AND is_imported = 1`,
+      IMPORTED_CONTACT_IDS_SQL,
       [userId],
     );
 
@@ -1502,7 +1507,7 @@ export function registerContactHandlers(mainWindow: BrowserWindow): void {
               "Contacts",
             );
 
-            setImmediate(async () => {
+            const refreshContactNamesInBackground = async () => {
               try {
                 const { phoneToContactInfo, contacts } = await getContactNames();
 
@@ -1537,6 +1542,9 @@ export function registerContactHandlers(mainWindow: BrowserWindow): void {
               } catch (err) {
                 logService.warn(`[Main] Background external contacts sync failed: ${err}`, "Contacts");
               }
+            };
+            setImmediate(() => {
+              void refreshContactNamesInBackground();
             });
           }
         }
@@ -2768,7 +2776,7 @@ export function registerContactHandlers(mainWindow: BrowserWindow): void {
               "../services/reviewStateService"
             );
             const affected = dbAll<{ transaction_id: string }>(
-              "SELECT DISTINCT transaction_id FROM transaction_contacts WHERE contact_id = ?",
+              TRANSACTION_IDS_FOR_CONTACT_SQL,
               [validatedContactId],
             );
             for (const row of affected) {
@@ -3767,7 +3775,7 @@ export function registerContactHandlers(mainWindow: BrowserWindow): void {
         }
 
         dbRun(
-          `UPDATE contacts SET default_role = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?`,
+          SET_CONTACT_DEFAULT_ROLE_SQL,
           [validatedRole, validatedContactId]
         );
 

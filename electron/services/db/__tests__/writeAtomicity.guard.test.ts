@@ -65,12 +65,65 @@ const DB_DIR = path.join(REPO_ROOT, "electron", "services", "db");
  * Functions allowed to issue multiple writes unwrapped. EVERY entry needs a
  * reason. An entry whose reason is "it's fine" is a bug report.
  */
+/**
+ * An exemption is keyed `file::function`, never a bare name — BACKLOG-2990 chunk 5.
+ *
+ * A bare name is matched REPO-WIDE, so exempting one function silently exempts
+ * every same-named function in `db/`. That is not hypothetical here: chunk 5
+ * exempted `deleteLiveForceSet` in `macosForceSetSql.ts`, and
+ * `emailForceSetSql.ts` has a namesake. The email one is inert today at a single
+ * write — below this guard's threshold of two — but it would have been covered
+ * silently the moment it grew.
+ *
+ * Third name-collision in this epic: BACKLOG-3061's method shadowed by an
+ * identically-named live one, this guard's own known-list, and a reviewer pass
+ * that matched `REPO_ROOT` and missed a guard using `ROOT`. A stated collision
+ * is not hypothetical.
+ */
+const exemptKey = (f: { file: string; name: string }): string => `${f.file}::${f.name}`;
+
 const EXEMPT: Record<string, string> = {
-  // Schema/migration paths run at startup against a database no user is
-  // touching, and are already wrapped one level up by the migration runner.
-  runMigrations: "migration runner wraps the whole migration in its own transaction",
-  applyMigration: "invoked by runMigrations, inside its transaction",
-  relabelTypedContactValues:
+  // REMOVED by BACKLOG-2990 chunk 5: `runMigrations` and `applyMigration` were
+  // exempted here, and both are METHODS on `electron/services/databaseService.ts`
+  // — outside `DB_DIR`, which is `electron/services/db`. This guard has never
+  // enumerated them, so those two exemptions were inert for their whole life.
+  //
+  // A bare-name key hid that: nothing distinguishes "exempted and needed" from
+  // "exempted and never seen". Re-keying to `file::function` made me write the
+  // path down, and there was no path to write. Deleting them shrinks the
+  // exemption surface, which is the safe direction.
+  // BACKLOG-2990 chunk 5. Three DELETEs, and they ARE atomic — this guard cannot
+  // see it, because the transaction is one module away in `services/` and
+  // `namesCalledInsideATransaction` scans only `db/` for `dbTransaction(`.
+  //
+  // Its ONE caller is `forceStaging.forceSwapSteps.deleteLiveForceSet`, itself
+  // called only from inside the `db.transaction()` callback in
+  // `swapStagingIntoLive` (forceStaging.ts:453). Verified by enumerating every
+  // reference to the symbol, not by reading the nearest one.
+  //
+  // WRAPPING IT WOULD BE REDUNDANT, not merely stylistically wrong. better-sqlite3
+  // implements a nested `db.transaction()` as a SAVEPOINT, so the failure semantics
+  // of THIS path are unchanged — measured on the real driver, an uncaught throw
+  // inside the inner transaction rolls back to the savepoint, rethrows, and aborts
+  // the outer swap, leaving the user's corpus untouched exactly as it does today.
+  // What nesting WOULD change is what a FUTURE caller could do: it makes a
+  // partial-swap-survives-an-error state reachable by catching, on the one path
+  // whose job is not to lose the user's messages. Transaction shape belongs to
+  // item 6, not to a text move.
+  //
+  // These three writes lived in `services/` before this chunk and were invisible
+  // to a guard that enumerates `db/`. The move did not create the exposure; it
+  // made it visible.
+  //
+  // BACKLOG-2960 RE-KEYED, not re-argued: the three DELETEs now live in the
+  // SYNCHRONOUS TWIN `deleteLiveForceSetSync`, because the seam export
+  // `deleteLiveForceSet` became a promise-returning wrapper and a
+  // `db.transaction()` body cannot await. The exemption follows the writes. The
+  // reasoning above is unchanged — same three DELETEs, same single call path,
+  // same reason nesting would be wrong — and this map still holds two entries.
+  "electron/services/db/macosForceSetSql.ts::deleteLiveForceSetSync":
+    "atomic via swapStagingIntoLive's db.transaction() body in macOSMessagesImportService/forceStaging.ts, its only call path (body -> forceSwapSteps.deleteLiveForceSet -> this twin); nesting would convert a swap-aborting failure into a savepoint rollback",
+  "electron/services/db/contactValueProvenanceBackfill.ts::relabelTypedContactValues":
     "called only from a migration — inside migration v60's migrate() at databaseService.ts:3276 — and EVERY migration is run by `const runInTransaction = currentDb.transaction(...)` at databaseService.ts:3513, verified by reading the caller, not inferred (BACKLOG-2569 re-checked these; they had drifted from :3231/:3468)",
 };
 
@@ -476,7 +529,7 @@ describe("a multi-statement write may not ship without a transaction (BACKLOG-25
       .filter((f) => !wrapsItself(f.body))
       .filter((f) => !writesAreBranchExclusive(f.body))
       .filter((f) => !insideATransaction.has(f.name))
-      .filter((f) => !(f.name in EXEMPT));
+      .filter((f) => !(exemptKey(f) in EXEMPT));
   }
 
   it("NO NEW multi-write function ships without a transaction", () => {

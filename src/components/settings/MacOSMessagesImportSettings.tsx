@@ -14,6 +14,7 @@
 
 import React, { useState, useEffect, useCallback, useRef } from "react";
 import { ResponsiveModal } from "../common/ResponsiveModal";
+import { ImportInfoPopover } from "./ImportInfoPopover";
 // BACKLOG-2749: the ONE pre-import dialog. It replaces the inline amber cap
 // prompt and the inline red space-refusal block — surfaces that each worked out
 // the same decision from whatever numbers were nearest to hand, and
@@ -26,6 +27,13 @@ import {
   type CapFittingRange,
 } from "./ImportPlanDialog";
 import type { MessageImportPlanFacts } from "@electron/types/ipc/window-api-messages";
+// BACKLOG-2832: this local shape also omitted "querying", so the panel could
+// never name the phase it was actually in during the query pass.
+// BACKLOG-3128: ONE exhaustive phase vocabulary, shared with the dashboard pill.
+import {
+  importPhaseDisplayFor,
+  type ImportPhaseDisplay,
+} from "../../utils/importPhaseDisplay";
 import { usePlatform } from "../../contexts/PlatformContext";
 import { useSyncOrchestrator } from "../../hooks/useSyncOrchestrator";
 import { settingsService } from '../../services';
@@ -93,12 +101,23 @@ export function stripStaleCapClause(
   return stripped.length > 0 ? stripped : undefined;
 }
 
-/** Import progress state for inline display */
+/**
+ * Import progress state for inline display.
+ *
+ * BACKLOG-3128: `percent` is gone. The macOS Messages import has no honest
+ * single number — see the orchestrator listener — so this panel renders the
+ * phase, and real counts when the phase has them.
+ *
+ * `display` is `undefined` for a phase this panel has no copy for; the render
+ * then shows the raw phase text and an indeterminate bar rather than borrowing
+ * another phase's label. `current`/`total` are optional for the same reason:
+ * absent means "this phase reports no count", not "zero".
+ */
 interface ImportProgressState {
-  phase: "deleting" | "attachments" | "importing";
-  current: number;
-  total: number;
-  percent: number;
+  phase: string;
+  display: ImportPhaseDisplay | undefined;
+  current?: number;
+  total?: number;
 }
 
 interface MacOSMessagesImportSettingsProps {
@@ -163,13 +182,39 @@ export function MacOSMessagesImportSettings({
   const cancelAvailable =
     messagesItem?.status === 'running' || messagesItem?.status === 'pending';
 
-  // Derive progress from orchestrator queue item
-  const importProgress = isImporting && messagesItem?.phase ? {
-    phase: messagesItem.phase as ImportProgressState['phase'],
-    current: 0,
-    total: 0,
-    percent: messagesItem.progress,
-  } : null;
+  // Derive progress from orchestrator queue item.
+  //
+  // BACKLOG-3128: this used to hard-code `current: 0, total: 0` AND render them,
+  // so every import displayed a literal "0 / 0 messages" — a value presented as
+  // known that never was (BACKLOG-2886). The producer has always sent real
+  // per-phase counts; they had nowhere to ride until the queue item gained
+  // `current`/`total`.
+  //
+  // The blind `as` cast is gone too: an unrecognised phase now resolves to
+  // `display: undefined` and renders honestly, instead of being asserted into a
+  // union it may not belong to.
+  const importProgress: ImportProgressState | null =
+    isImporting && messagesItem?.phase
+      ? {
+          phase: messagesItem.phase,
+          display: importPhaseDisplayFor(messagesItem.phase),
+          current: messagesItem.current,
+          total: messagesItem.total,
+        }
+      : null;
+
+  // BACKLOG-3128: counts are shown only when the phase actually reports them.
+  // The test is `total > 0`, not `total != null` — a zero total cannot produce a
+  // fraction, and "0 of 0" is exactly the fabricated value this item removes.
+  const hasCounts =
+    importProgress?.current !== undefined &&
+    importProgress?.total !== undefined &&
+    importProgress.total > 0;
+  const countFraction =
+    hasCounts && importProgress
+      ? Math.min(100, Math.max(0, (importProgress.current! / importProgress.total!) * 100))
+      : 0;
+
   const [lastResult, setLastResult] = useState<{
     success: boolean;
     messagesImported: number;
@@ -1325,35 +1370,39 @@ export function MacOSMessagesImportSettings({
   }
 
   return (
+    /* BACKLOG-3156 stage E: THE OUTER PANEL CARD IS GONE.
+       ────────────────────────────────────────────────────────────────────
+       It wrapped the whole panel, so the `Import Preferences` eyebrow and the
+       filters card both rendered inside it — a card inside a card, and an
+       eyebrow that on Emails sits on its own card's top line. Now each block is
+       its own card and nothing wraps them.
+
+       The testid and `aria-disabled` stay on the root, which is why the root
+       survives as a plain stack: every existing query and the BACKLOG-2335
+       disabled semantics must reach the whole panel, not one block of it. */
     <div
-      className="p-4 bg-gray-50 rounded-lg border border-gray-200"
+      className="space-y-4"
       aria-disabled={!enabled}
       data-testid="macos-messages-import"
     >
-      <div className="flex items-center justify-between mb-2">
-        <div className="flex items-center gap-2">
-          <svg
-            className={`w-5 h-5 ${enabled ? "text-green-600" : "text-gray-400"}`}
-            fill="none"
-            stroke="currentColor"
-            viewBox="0 0 24 24"
-          >
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              strokeWidth={2}
-              d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"
-            />
-          </svg>
-          <h4
-            className={`text-sm font-medium ${
-              enabled ? "text-gray-900" : "text-gray-400"
-            }`}
-          >
-            macOS Messages
-          </h4>
-        </div>
-      </div>
+      {/* BACKLOG-3156 stage E: THE PANEL IDENTITY HEADER IS GONE — the icon and
+          `<h4>macOS Messages</h4>` that used to open this panel.
+          ────────────────────────────────────────────────────────────────────
+          Emails and Contacts have no such header, so carrying one here was the
+          divergence the shared shape forbids; and on macOS it printed
+          `macOS Messages` a few lines below the radio option of that exact name
+          in the Sources card above, which is the same doubling as
+          `Import Preferences` over `Import Filters`.
+
+          Nothing was load-bearing in it. Its only state was the `enabled`
+          colouring, and that fact reaches the reader twice over and louder: the
+          `macos-import-disabled-note` says WHY the panel is inactive in a
+          sentence, and every control below is muted to `opacity-60`.
+
+          `settingsBlockShape-3156` asserts that no screen carries a heading
+          outside its cards other than its own section `<h3>`, so neither panel
+          can grow one back. */}
+      <div>
 
       {/* BACKLOG-2335: Explain why the panel is inactive when another message
           source is active, so the disabled controls don't read as a bug. */}
@@ -1370,27 +1419,48 @@ export function MacOSMessagesImportSettings({
       {/* BACKLOG-2335: Mute the controls region while inactive (the note above
           stays full-strength so the reason is always legible). */}
       <div className={enabled ? "" : "opacity-60"}>
-      <p className="text-xs text-gray-600 mb-3">
-        Import messages from the macOS Messages app to enable linking with your
-        transactions.
-      </p>
-
       {/* Import status display */}
       {importStatus && (
-        <div className="mb-3 text-xs text-gray-500">
+        <div className="mt-1 text-xs text-gray-500">
           Last imported: {formatLastImport(importStatus.lastImportAt)}
           {importStatus.messageCount !== undefined && (
             <> | {importStatus.messageCount.toLocaleString()} messages</>
           )}
         </div>
       )}
+      </div>
+      </div>{/* /panel identity group */}
 
-      {/* TASK-1952: Import Filters */}
-      <div id="settings-import-filters" className="mb-3 p-3 bg-white rounded border border-gray-200">
-        <h5 className="text-xs font-medium text-gray-700 mb-2">
-          Import Filters
-        </h5>
+      {/* BACKLOG-3156 stage E: block 2 of the shared shape — Import Preferences.
+          Block 1 (Sources) is the import-source picker `Settings.tsx` renders
+          directly above this panel.
 
+          The block and its card are ONE element, with the eyebrow as the card's
+          first child. `<h5>Import Filters</h5>` is gone from inside it: with the
+          outer card removed the eyebrow landed directly above that heading, so
+          the card opened by naming, in near-identical words, what the line above
+          it had just named — the same doubling as `Sources` / `Import Source`.
+          The scroll anchor `settings-import-filters` (SyncStatusIndicator links
+          to it) moves onto this card, which is the thing it always meant. */}
+      <div className={enabled ? "" : "opacity-60"}>
+      <div
+        id="settings-import-filters"
+        data-testid="messages-block-preferences"
+        className="p-4 bg-gray-50 rounded-lg border border-gray-200"
+      >
+      <p className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-2">
+        Import Preferences
+      </p>
+      {/* BACKLOG-3156 stage E: the panel's description, moved into the block's
+          description slot when the identity header above it was deleted. The
+          sentence is unchanged — it states what this panel imports, which is
+          the scope of every preference below it. Every other block on these
+          four screens that has a description puts it exactly here, between the
+          label and the controls. */}
+      <p className="text-xs text-gray-600 mb-3">
+        Import messages from the macOS Messages app to enable linking with your
+        transactions.
+      </p>
         {/* Date Range Filter */}
         <div className="flex items-center justify-between mb-2">
           <span className="text-xs text-gray-600">Import messages from</span>
@@ -1557,6 +1627,14 @@ export function MacOSMessagesImportSettings({
           Import message text only (no attachment files)
         </label>
       </div>
+      </div>{/* /BACKLOG-3156 stage E — Import Preferences block (its own card) */}
+
+      {/* BACKLOG-3156 stage E: the run's own feedback — a space refusal, the
+          result of the last run, and the plan dialog. None of it is a settings
+          block, so with the panel card gone it sits on the page between the
+          preferences card and the actions, still muted with everything else
+          when this is not the active source (BACKLOG-2335). */}
+      <div className={enabled ? "" : "opacity-60"}>
 
       {/* BACKLOG-2743: The attachment copy does not fit.
           ────────────────────────────────────────────────────────────────
@@ -1795,7 +1873,14 @@ export function MacOSMessagesImportSettings({
           />
         )}
 
-      <div className="flex gap-2">
+      </div>{/* /BACKLOG-2335 muted run-feedback region */}
+
+      {/* BACKLOG-3156 stage A: the actions, BARE — no card, no heading, primary
+          then destructive. Still muted with the rest of the controls when this
+          is not the active source (BACKLOG-2335), and neither `disabled`
+          expression changed: both remain `controlsDisabled || spaceBlocked`. */}
+      <div className={enabled ? "" : "opacity-60"}>
+      <div data-testid="messages-block-actions" className="flex gap-2 items-center">
         <button
           // BACKLOG-2749: ONE gate. It decides which surface the click reaches
           // — the space refusal, the cap choice, or the run itself — so the two
@@ -1821,6 +1906,50 @@ export function MacOSMessagesImportSettings({
         >
           Force Re-import
         </button>
+        {/* BACKLOG-3156 stage B: the `?`, the same shared popover Contacts has
+            had since BACKLOG-2388. Purely additive here — this panel never
+            carried per-button prose, so nothing is removed to make room. Its
+            one description (`Import messages from the macOS Messages app to
+            enable linking with your transactions`, above the preferences) is
+            the SECTION's purpose, not a claim about either button, and stays.
+
+            BACKLOG-3029's rule applies to the primary's wording: it says "your
+            selected source", the RULE, rather than naming macOS / iPhone /
+            Android — a list here would be read off this panel while the source
+            that actually runs is decided in `Settings.tsx`, which is how a
+            derived list goes false. `settingsPopupCopy-3156` pins that.
+
+            The force claim names WHAT IS DELETED, scoped (SR `972e37ea`). The
+            first draft of this sentence said "the messages stored on this
+            computer", which is false and was the BACKLOG-3029 shape on a string
+            written the same day: the wipe is SCOPED. `forceSetMessages`
+            (`electron/services/db/macosForceSetSql.ts`) predicates the delete on
+            `json_extract(metadata, '$.source') = 'macos_messages'`, and that is
+            the only bulk `DELETE FROM messages` on the force path — so iPhone
+            and Android rows, and their transaction links, survive it.
+            BACKLOG-2796 scoped it for exactly that reason.
+
+            So this states the RULE — what Keepr imported from your selected
+            source — rather than the unscoped total or a list of sources.
+            `settingsPopupCopy-3156` pins both halves: the scoping phrase must
+            be present, and the unscoped phrasings must be absent.
+
+            The unlink half is the confirmation dialog's own claim in shorter
+            form: the clear + re-import cascade-deletes the
+            conversation↔transaction junction (BACKLOG-2331). */}
+        <ImportInfoPopover
+          testId="messages-import-info"
+          entries={[
+            {
+              heading: "Import Messages",
+              body: "Brings in messages from your selected source, within the time range and limit set above. Existing messages and their transaction links are left alone.",
+            },
+            {
+              heading: "Force Re-import",
+              body: "Deletes the messages Keepr imported from your selected source and imports them again from scratch. This unlinks attached conversations from their transactions. Use if messages look wrong or incomplete.",
+            },
+          ]}
+        />
       </div>
 
       {/*
@@ -1909,37 +2038,39 @@ export function MacOSMessagesImportSettings({
         <div className="mt-3">
           {importProgress ? (
             <>
+              {/* BACKLOG-3128: ONE exhaustive map, not three ternary chains whose
+                  `else` arm labelled every unnamed phase "Importing messages...".
+                  No percentage is rendered — this import has no honest one. */}
               <div className="flex justify-between text-xs text-gray-600 mb-1">
-                <span>
-                  {importProgress.phase === "deleting"
-                    ? "Clearing existing messages..."
-                    : importProgress.phase === "attachments"
-                      ? "Processing attachments..."
-                      : "Importing messages..."}
-                </span>
-                <span>{importProgress.percent}%</span>
+                <span>{importProgress.display?.label ?? importProgress.phase}</span>
               </div>
-              <div className="w-full bg-gray-200 rounded-full h-2">
-                <div
-                  className={`h-2 rounded-full transition-all duration-300 ${
-                    importProgress.phase === "deleting"
-                      ? "bg-orange-500"
-                      : importProgress.phase === "attachments"
-                        ? "bg-green-500"
-                        : "bg-blue-500"
-                  }`}
-                  style={{ width: `${importProgress.percent}%` }}
-                />
+              <div className="w-full bg-gray-200 rounded-full h-2 overflow-hidden">
+                {hasCounts ? (
+                  <div
+                    className={`h-2 rounded-full transition-all duration-300 ${
+                      importProgress.display?.colour ?? "bg-blue-500"
+                    }`}
+                    style={{ width: `${countFraction}%` }}
+                    data-testid="import-progress-bar"
+                  />
+                ) : (
+                  /* No count for this phase — an indeterminate stripe, because a
+                     bar at any width would be a claim about how far along we are. */
+                  <div
+                    className={`h-2 rounded-full w-1/3 animate-pulse ${
+                      importProgress.display?.colour ?? "bg-blue-500"
+                    }`}
+                    data-testid="import-progress-indeterminate"
+                  />
+                )}
               </div>
-              <p className="text-xs text-gray-500 mt-1">
-                {importProgress.current.toLocaleString()} /{" "}
-                {importProgress.total.toLocaleString()}
-                {importProgress.phase === "deleting"
-                  ? " cleared"
-                  : importProgress.phase === "attachments"
-                    ? " attachments"
-                    : " messages"}
-              </p>
+              {hasCounts && (
+                <p className="text-xs text-gray-500 mt-1">
+                  {importProgress.current!.toLocaleString()} of{" "}
+                  {importProgress.total!.toLocaleString()}{" "}
+                  {importProgress.display?.unit ?? ""}
+                </p>
+              )}
             </>
           ) : (
             <div className="flex items-center gap-2 text-sm text-gray-500">
