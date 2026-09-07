@@ -10,6 +10,60 @@ import {
   TransactionTypeSchema,
   TransactionStatusSchema,
 } from "../schemas/transaction";
+import type { TransactionColumn } from "./sqlFieldWhitelist";
+
+/**
+ * The `transactions` columns this validator accepts over IPC.
+ *
+ * ===========================================================================
+ * BACKLOG-2560 — THE NAMES ARE DERIVED NOW, NOT RESTATED
+ * ===========================================================================
+ * `Extract` is what makes this a derivation rather than a fourth list of
+ * column names. `TransactionColumn` comes from `TABLE_FIELDS.transactions`
+ * (`utils/sqlFieldWhitelist.ts`), which is enumerated from `PRAGMA table_info`
+ * and pinned to a real migrated database by
+ * `utils/__tests__/sqlFieldWhitelist.schemaParity.test.ts` — in both
+ * directions, so it can carry neither a phantom nor an omission.
+ *
+ * WHAT THIS BUYS, STATED PRECISELY, because the weaker claim is the true one:
+ *
+ *  - A name that is NOT a column cannot be USED here. `Extract<TransactionColumn,
+ *    "amount">` is `never`, so any read or write of `data.amount` below is a
+ *    compile error. That is how `amount` and `notes` — validated here for two
+ *    years while belonging to no table — are kept from coming back.
+ *    (A phantom name added to the list and then never referenced anywhere is
+ *    silently dropped rather than flagged. It has no behavioural effect: the
+ *    writer can never see a key nothing assigns.)
+ *  - A column that is REMOVED or renamed in the schema breaks the build here,
+ *    because the name disappears from the union and the assignment below stops
+ *    type-checking.
+ *  - A NEW column is NOT forced into this list, deliberately. This validator
+ *    accepts 18 of 59 columns and should: most of the rest are internal
+ *    bookkeeping the renderer must never set. Which columns the IPC surface
+ *    ought to accept is a policy question with a security dimension, tracked
+ *    as BACKLOG-3180, and it is not settled by a type.
+ */
+type TransactionField = Extract<
+  TransactionColumn,
+  | "property_address"
+  | "property_street"
+  | "property_city"
+  | "property_state"
+  | "property_zip"
+  | "property_coordinates"
+  | "transaction_type"
+  | "status"
+  | "sale_price"
+  | "listing_price"
+  | "closing_date_verified"
+  | "started_at"
+  | "closed_at"
+  | "closing_deadline"
+  | "detection_status"
+  | "reviewed_at"
+  | "rejection_reason"
+  | "suggested_contacts"
+>;
 
 /**
  * The transaction value domains, DERIVED — not restated.
@@ -534,6 +588,26 @@ export interface ValidatedTransactionData {
   contact_assignments?: ContactAssignmentData[];
 }
 
+/**
+ * Every key this validator forwards is a real column.
+ *
+ * `ValidatedTransactionData` stays a declared interface rather than a mapped
+ * type because its value types are heterogeneous — `string | null` here, plain
+ * `number` there — and a `Record` would flatten that. So the key set is checked
+ * separately: add a name that is not a `transactions` column and this
+ * assignment stops compiling.
+ */
+type ValidatedKeysAreRealColumns = [
+  Exclude<
+    keyof ValidatedTransactionData,
+    TransactionColumn | "contact_assignments"
+  >,
+] extends [never]
+  ? true
+  : never;
+const _validatedKeysAreRealColumns: ValidatedKeysAreRealColumns = true;
+void _validatedKeysAreRealColumns;
+
 // Contact assignment data for transaction creation
 export interface ContactAssignmentData {
   contact_id: string;
@@ -544,33 +618,21 @@ export interface ContactAssignmentData {
 }
 
 /**
- * Raw transaction data interface
+ * What a caller may send. Every key is a real column, by construction.
+ *
+ * This used to be a hand-written list, and it declared two keys that are
+ * columns of NO table — `amount` and `notes` — which this validator then
+ * checked and threw on while forwarding neither. Keying it off
+ * `TransactionField` is what stops that recurring: those two names are now
+ * unreadable here rather than merely unforwarded.
+ *
+ * `contact_assignments` is deliberately not a column. It is a sibling payload
+ * consumed by `createAuditedTransaction` and written to `transaction_contacts`,
+ * never to `transactions`.
  */
-export interface RawTransactionData {
-  property_address?: unknown;
-  property_street?: unknown;
-  property_city?: unknown;
-  property_state?: unknown;
-  property_zip?: unknown;
-  property_coordinates?: unknown;
-  transaction_type?: unknown;
-  amount?: unknown;
-  status?: unknown;
-  notes?: unknown;
-  sale_price?: unknown;
-  listing_price?: unknown;
-  closing_date_verified?: unknown;
-  started_at?: unknown;
-  closed_at?: unknown;
-  closing_deadline?: unknown;
-  // AI detection fields
-  detection_status?: unknown;
-  reviewed_at?: unknown;
-  rejection_reason?: unknown;
-  suggested_contacts?: unknown;
-  // Contact assignments
+export type RawTransactionData = Partial<Record<TransactionField, unknown>> & {
   contact_assignments?: unknown;
-}
+};
 
 /**
  * Validate transaction data for creation/update
@@ -659,21 +721,11 @@ export function validateTransactionData(
     validated.transaction_type = type;
   }
 
-  // Amount (if provided)
-  //
-  // BACKLOG-2558 F6: CHECKED BUT NOT FORWARDED. `transactions` has no `amount`
-  // column — on any path — so forwarding it only handed the writer a key it had
-  // to discard. The check stays: deleting it would turn today's ValidationError
-  // on `amount: -5` into silence, which is the wrong direction for this epic.
-  if (data.amount !== undefined && data.amount !== null) {
-    const amount = Number(data.amount);
-    if (isNaN(amount) || amount < 0) {
-      throw new ValidationError(
-        "Amount must be a non-negative number",
-        "amount",
-      );
-    }
-  }
+  // `amount` was validated here and forwarded nowhere — it is a column of no
+  // table. BACKLOG-2558 kept the check on the argument that deleting it would
+  // turn a ValidationError into silence. That argument held only while the key
+  // was merely unforwarded; `TransactionField` now makes it unreadable, so the
+  // guarantee is stronger than the check it replaces. See the type's comment.
 
   // Status — domain derived, see TransactionStatusValue above.
   if (data.status !== undefined) {
@@ -688,18 +740,10 @@ export function validateTransactionData(
     validated.status = status;
   }
 
-  // Notes (optional)
-  //
-  // BACKLOG-2558 F6: CHECKED BUT NOT FORWARDED, for the same reason as `amount`
-  // — `transactions` has no `notes` column. (Contact assignments carry their own
-  // `notes`, on `transaction_contacts`; that is a different field and is handled
-  // under `contact_assignments` below.)
-  if (data.notes !== undefined && data.notes !== null) {
-    validateString(data.notes, "notes", {
-      required: false,
-      maxLength: 10000,
-    });
-  }
+  // `notes` was the same shape as `amount` above, and is gone for the same
+  // reason. (Contact assignments carry their own `notes`, on
+  // `transaction_contacts`; that is a different field, handled under
+  // `contact_assignments` below.)
 
   // Sale price (optional)
   if (data.sale_price !== undefined && data.sale_price !== null) {
