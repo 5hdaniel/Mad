@@ -1,6 +1,6 @@
 -- BACKLOG-3096 / MUTANT 04 -- "never admin"
 --
--- Derived from supabase/migrations/20260905_backlog_3096_setup_first_user_wins.sql
+-- Derived from supabase/migrations/20260905120000_backlog_3096_setup_first_user_wins.sql
 -- by replacing the CASE expression with an unconditional
 -- `v_role := v_default_role;`. The lock is unchanged.
 --

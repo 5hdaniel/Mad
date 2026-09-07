@@ -7,6 +7,6 @@
 --
 -- The path is relative to THIS file, so run psql from anywhere.
 
-\ir ../../../migrations/20260905_backlog_3096_setup_first_user_wins.sql
+\ir ../../../migrations/20260905120000_backlog_3096_setup_first_user_wins.sql
 
 SELECT 'shipped definition restored' AS status;

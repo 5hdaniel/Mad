@@ -1,6 +1,6 @@
 -- BACKLOG-3096 / MUTANT 02 -- "no claimed-rows filter"
 --
--- Derived from supabase/migrations/20260905_backlog_3096_setup_first_user_wins.sql
+-- Derived from supabase/migrations/20260905120000_backlog_3096_setup_first_user_wins.sql
 -- by deleting exactly one line: `AND user_id IS NOT NULL` from the membership
 -- count. Everything else, including the FOR UPDATE lock, is unchanged.
 --
