@@ -276,7 +276,17 @@ describe("contacts:import accepts a record with no name but an identifier (BACKL
     expect(rows()[0].display_name).toBe("");
   });
 
-  it("a company-only record imports and keeps its company", async () => {
+  /**
+   * REVERSED by founder ruling `a41a805b` / PM decision `5fac2d84`
+   * (2026-09-07). This asserted that a company-only record imports. It does
+   * not, any more — a company is not somebody you can import. It IS still
+   * saveable through `contacts:create`, which is asserted in the create
+   * describe below, and that asymmetry is the decision, not an accident.
+   *
+   * Rewritten rather than deleted: the trail from BACKLOG-2672's "COMPANY
+   * COUNTS" to here is the only thing that stops the next reader reopening it.
+   */
+  it("a company-only record is refused, with a reason true of its own row", async () => {
     const outcome = await importRecords([
       {
         id: "ext-5",
@@ -290,8 +300,12 @@ describe("contacts:import accepts a record with no name but an identifier (BACKL
       },
     ]);
 
-    expect(outcome.refused).toBe(false);
-    expect(rows()[0]).toMatchObject({ display_name: "", company: "Vantrees Realty" });
+    expect(outcome.refused).toBe(true);
+    // The row this record renders is labelled "Vantrees Realty" — the company —
+    // so a refusal claiming it has nothing on it would be false to the reader.
+    expect(outcome.error).toMatch(/company on its own/i);
+    expect(outcome.error).not.toMatch(/nothing to import/i);
+    expect(rows()).toHaveLength(0);
   });
 
   it("a named record is untouched — the regression baseline", async () => {
@@ -321,11 +335,12 @@ describe("contacts:import accepts a record with no name but an identifier (BACKL
   it("no import writes the literal 'Unknown' any more", async () => {
     await importRecords([
       { id: "a", name: null, phone: "+14155550142", allPhones: ["+14155550142"], isFromDatabase: false },
-      { id: "b", name: "", company: "Vantrees Realty", isFromDatabase: false },
       { id: "c", name: "   ", email: "x@example.com", allEmails: ["x@example.com"], isFromDatabase: false },
     ]);
 
-    expect(rows().map((r) => r.display_name)).toEqual(["", "", ""]);
+    // Two records now, not three: the company-only one moved to the refusal
+    // describe above when founder ruling `a41a805b` made it un-importable.
+    expect(rows().map((r) => r.display_name)).toEqual(["", ""]);
   });
 });
 
@@ -426,6 +441,39 @@ describe("contacts:create still refuses a record with nothing on it (BACKLOG-270
 
     expect(outcome.refused).toBe(false);
     expect(rows()[0].display_name).toBe("");
+  });
+
+  /**
+   * =========================================================================
+   * PM DECISION `5fac2d84` — CREATE IS LOOSER THAN IMPORT, ON PURPOSE
+   * =========================================================================
+   * Import is inference; creation is intent. A company-only record arriving
+   * from a sync is Keepr guessing a scrap is worth keeping. A person typing a
+   * company name and pressing Save has said exactly what they want — and
+   * blocking them does not stop the data, it makes them type "Vantrees Realty"
+   * into the NAME field, which pollutes every name-based match.
+   *
+   * THIS BEHAVIOUR HAD NO TEST ANYWHERE before BACKLOG-2707. SR found it by
+   * driving the handler, not by reading a suite. Without this, a future
+   * tightening of `hasNothingToSave` deletes the founder's decision silently.
+   */
+  it("accepts a COMPANY-ONLY contact — which import refuses (PM 5fac2d84)", async () => {
+    const outcome = await createContact({ name: null, company: "Vantrees Realty" });
+
+    expect(outcome.refused).toBe(false);
+    expect(rows()[0]).toMatchObject({ display_name: "", company: "Vantrees Realty" });
+  });
+
+  /**
+   * The other half of the same asymmetry, and the one the Add Contact form used
+   * to refuse: a name with no phone and no email. The handler has always taken
+   * it; only the renderer said otherwise.
+   */
+  it("accepts a NAME-ONLY contact, with no phone and no email", async () => {
+    const outcome = await createContact({ name: "Gus Example" });
+
+    expect(outcome.refused).toBe(false);
+    expect(rows()[0].display_name).toBe("Gus Example");
   });
 
   it("accepts an ordinary named contact — the form's normal path", async () => {

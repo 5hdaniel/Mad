@@ -121,8 +121,8 @@ import {
 // "in case" is how a deleted rule grows a second call site.
 import { contactInfoSourceFor } from "../utils/contactValueProvenance";
 import {
-  hasNothingToImport,
-  NOTHING_TO_IMPORT_REASON,
+  hasNothingToSave,
+  importRefusalReason,
   type ImportableRecordParts,
 } from "../utils/importableRecord";
 import { applyLinkedSourceValues } from "../services/contactSourceValues";
@@ -1946,9 +1946,13 @@ export function registerContactHandlers(mainWindow: BrowserWindow): void {
            * silently-dropped import is worse than a rejected one: the caller
            * would have no way to tell which of its records landed.
            */
-          if (hasNothingToImport(sanitizedContact)) {
+          const importRefusal = importRefusalReason(sanitizedContact);
+          if (importRefusal) {
+            // BACKLOG-2707: the reason is chosen per record rather than fixed,
+            // so a company-only record is refused with a sentence that is TRUE
+            // beside the label its own row renders — which is the company name.
             throw new ValidationError(
-              `Record ${index + 1} has ${NOTHING_TO_IMPORT_REASON.toLowerCase()}`,
+              `Record ${index + 1}: ${importRefusal}`,
               "contactsToImport",
             );
           }
@@ -2423,10 +2427,15 @@ export function registerContactHandlers(mainWindow: BrowserWindow): void {
          * call), and a renderer guard cannot protect a caller that does not go
          * through the renderer — which is the whole reason BACKLOG-2684 exists.
          *
-         * ITS OWN MESSAGE. `NOTHING_TO_IMPORT_REASON` says "nothing to import",
-         * which is not what a contact form is doing, and that string is held
-         * identical to the renderer's by a parity test — so it is reused where
-         * it is true and not borrowed where it is not.
+         * ITS OWN MESSAGE, AND ITS OWN PREDICATE. This gate asks
+         * `hasNothingToSave`, the LOOSER rule — not `hasNothingToImport`.
+         * PM decision `5fac2d84` (2026-09-07, on the founder's delegated
+         * authority): a company-only contact may be CREATED by hand even though
+         * it may not be IMPORTED. Import is inference, creation is intent, and
+         * blocking hand-creation does not stop the data — it makes the user type
+         * the company into the NAME field, which is strictly worse for every
+         * name-based match. The message below therefore still names `company`
+         * and is still true; do not "tidy" it to match the import string.
          *
          * -------------------------------------------------------------------
          * TYPES FIRST, THEN EMPTINESS — AND THE ORDER IS THE WHOLE FIX
@@ -2472,7 +2481,7 @@ export function registerContactHandlers(mainWindow: BrowserWindow): void {
             : [];
 
         if (
-          hasNothingToImport({
+          hasNothingToSave({
             name: validatedData.name,
             company: validatedData.company,
             phone: validatedData.phone,

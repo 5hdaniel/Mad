@@ -393,10 +393,22 @@ describe("a nameless-but-identified record is refused by nothing (BACKLOG-2707)"
     expect(rowsCreated()).toBe(1);
   });
 
-  it("a company-only record imports", async () => {
+  /**
+   * REVERSED by founder ruling `a41a805b` (2026-09-07). It read "a company-only
+   * record imports". A company alone is not somebody to import — but it is
+   * still something a user may CREATE by hand, which is PM decision `5fac2d84`
+   * and is pinned in `contact-handlers.namelessImport-2707.test.ts`.
+   *
+   * It still is not `hasNothingToImport`'s *empty-record* branch that refuses
+   * it, which is what this describe exists to distinguish: the reason names the
+   * company rather than claiming the row is blank.
+   */
+  it("a company-only record is refused — and told why, accurately", async () => {
     const outcome = await importRecords([{ name: "", company: "Vantrees Realty" }]);
 
-    expect(outcome.refused).toBe(false);
-    expect(rowsCreated()).toBe(1);
+    expect(outcome.refused).toBe(true);
+    expect(outcome.error).toMatch(/company on its own/i);
+    expect(outcome.error).not.toMatch(/nothing to import/i);
+    expect(rowsCreated()).toBe(0);
   });
 });

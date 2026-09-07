@@ -903,24 +903,54 @@ function Contacts({ userId, onClose, onOpenTransaction }: ContactsProps) {
   const handlePreviewImport = async () => {
     if (!previewContact) return;
 
-    const hasName = !!(previewContact.display_name || previewContact.name);
-    const hasEmail = !!(previewContact.email || previewContact.allEmails?.[0]);
-    const hasPhone = !!(previewContact.phone || previewContact.allPhones?.[0]);
-
-    if (!hasName || (!hasEmail && !hasPhone)) {
-      // Missing required data - open edit form.
-      //
-      // BACKLOG-2566: the pane stays MOUNTED under the z-[70] modal. Clearing it
-      // here used to leave the user on the empty list once the form closed, on
-      // either button — the same defect as `handlePreviewEdit` below, at a
-      // second call site. This branch routes to the form's CREATE leg
-      // (ContactFormModal.tsx:220 — `contact && !isExternalContact` is false for
-      // an address-book record), so the saved contact carries a NEW database id;
-      // the id handling for that lives in the modal's onSuccess handler.
-      setSelectedContact(previewContact);
-      setShowAddEdit(true);
-      return;
-    }
+    /**
+     * =====================================================================
+     * BACKLOG-2707 — THIS HANDLER NO LONGER RE-DECIDES WHAT THE BUTTON ASKED
+     * =====================================================================
+     * A block stood here that opened the contact FORM instead of importing,
+     * whenever the record had no name, or had neither an email nor a phone:
+     *
+     *     const hasName = !!(display_name || name);   // …and hasEmail, hasPhone
+     *     if (!hasName || (!hasEmail && !hasPhone)) {
+     *       setSelectedContact(previewContact); setShowAddEdit(true); return;
+     *     }
+     *
+     * It was a SECOND rule about the same question `hasNothingToImport`
+     * already answers — the rule the founder ruled on in BACKLOG-2672 and
+     * which `ContactPreview` consults to decide whether this very button is
+     * enabled. The two disagreed. So the button rendered enabled, the press
+     * landed, and the form opened and refused with "Name is required".
+     *
+     * FOUND BY THE FOUNDER, NOT BY A TEST (`a104375f`, 2026-09-07). He synced
+     * four Google contacts and could import none of the three nameless ones.
+     * Every control on the fix — seven mutations and a twelve-payload probe —
+     * drove the IPC handler. This block is upstream of the IPC handler, so no
+     * suite on the tree could fail on it.
+     *
+     * ---------------------------------------------------------------------
+     * IT WAS NOT AN OVERLOOKED FOSSIL. THREE ITEMS SAW IT AND KEPT IT.
+     * ---------------------------------------------------------------------
+     * Its four commits date from 2026-01-29/31, seven months before
+     * `hasNothingToImport` existed — but that is only where it started:
+     *
+     *   - BACKLOG-2459 pinned the second clause, in
+     *     `Contacts.importStaysOnContact.test.tsx`.
+     *   - BACKLOG-2566 wrote its explanatory comment INSIDE the block.
+     *   - BACKLOG-2672 — the very item whose rule 4 says a nameless-but-phoned
+     *     record must stay importable — pinned the FIRST clause, in a test
+     *     named "a record with NO NAME but WITH a phone is still importable"
+     *     whose body asserted it was NOT imported.
+     *
+     * So this was re-ratified three times, and any future reader who finds
+     * that history is looking at decisions the founder has since overruled:
+     * his 12a failure `a104375f` and his ruling `a41a805b`. Both of those
+     * tests are rewritten rather than deleted, each citing that ruling, so the
+     * trail stays legible instead of vanishing.
+     *
+     * WHAT DECIDES NOW: `hasNothingToImport`, once, before the button renders
+     * (`ContactPreview` → `aria-disabled` + a stated reason). By the time this
+     * handler runs, the answer is already yes. It does not ask again.
+     */
 
     // Read BEFORE the await. `previewContact` in this closure is frozen at the
     // moment of the click; `previewContactIdRef` is not, which is the whole

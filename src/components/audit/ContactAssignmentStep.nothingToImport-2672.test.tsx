@@ -28,7 +28,7 @@
  */
 
 import React from "react";
-import { render, screen, fireEvent } from "@testing-library/react";
+import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import "@testing-library/jest-dom";
 import ContactAssignmentStep from "./ContactAssignmentStep";
 import type { Contact } from "../../../electron/types/models";
@@ -257,5 +257,138 @@ describe("BACKLOG-2672 — the transaction picker", () => {
 
     fireEvent.click(rowFor("c-marisol"));
     expect(onSelectedContactIdsChange).toHaveBeenCalledWith(["c-marisol"]);
+  });
+});
+
+/**
+ * =============================================================================
+ * BACKLOG-2707 — the transaction flow's import legs, DRIVEN rather than read
+ * =============================================================================
+ * The Step 6 plan for the renderer half claimed this surface had no diverting
+ * name check, on the strength of reading `handlePreviewImportAction`. SR ruled
+ * that insufficient — and it was the same read-not-driven reasoning that let
+ * the founder's Step 12a failure through in the first place. `window.api.contacts.import`
+ * was asserted NOWHERE on this surface for a nameless record; the nearest test
+ * (`a record with NO NAME but WITH a phone keeps a working + Add`) asserts
+ * SELECTION, which is a different thing entirely.
+ *
+ * Both legs are exercised here:
+ *   - row-body leg  — `ContactAssignmentStep.tsx` `onImportContact={handleImportContact}`
+ *   - card leg      — `ContactPreview` `onImport={handlePreviewImportAction}` (step 3)
+ *
+ * Reachability is not assumed either: this component is rendered by
+ * `AuditTransactionModal` (Start New Audit → step 2) and by `EditContactsModal`
+ * (editing contacts on an existing transaction). Both are live user surfaces.
+ *
+ * The records are ADDRESS-BOOK rows, because those are what actually carry
+ * `name: null`. A message-derived row cannot — `getMessageDerivedContacts`
+ * selects `json_extract(participants,'$.from')` into BOTH `display_name` and
+ * `name`, so its "nameless" records carry the phone string as their name.
+ */
+const namelessExternal = contact({
+  id: "ext_reachable",
+  display_name: null,
+  name: null,
+  phone: "+16175550147",
+  email: null,
+  company: null,
+  source: "google_contacts",
+  is_message_derived: 0,
+  isFromDatabase: false,
+  externalRecordId: "GC-RECORD-1",
+  externalSourceType: "google_contacts",
+});
+
+const companyOnlyExternal = contact({
+  id: "ext_company",
+  display_name: null,
+  name: null,
+  phone: null,
+  email: null,
+  company: "Vantrees Realty Test",
+  source: "google_contacts",
+  is_message_derived: 0,
+  isFromDatabase: false,
+  externalRecordId: "GC-RECORD-3",
+  externalSourceType: "google_contacts",
+});
+
+describe("the transaction flow imports a nameless record too (BACKLOG-2707)", () => {
+  beforeEach(() => {
+    jest.mocked(window.api.contacts.import).mockResolvedValue({
+      success: true,
+      contacts: [contact({ id: "saved-1", display_name: "", name: "" })],
+    });
+  });
+
+  it("row-body leg — pressing the row imports it", async () => {
+    render(
+      <ContactAssignmentStep
+        {...propsWith([], { externalContacts: [namelessExternal] })}
+      />,
+    );
+
+    fireEvent.click(rowFor("ext_reachable"));
+
+    await waitFor(() => expect(window.api.contacts.import).toHaveBeenCalled());
+    const [, records] = jest.mocked(window.api.contacts.import).mock.calls[0];
+    expect((records[0] as unknown as { id: string }).id).toBe("ext_reachable");
+  });
+
+  /**
+   * CARD LEG — REACHABILITY MEASURED, AND THE MEASUREMENT IS THE RESULT.
+   *
+   * `handlePreviewImportAction` is wired to `ContactPreview`'s `onImport`. I set
+   * out to drive it and could not: the preview does not open from this list.
+   * `ContactSearchList` here is given no `onContactClick` — its own comment at
+   * `ContactSearchList.tsx` says the component infers selection mode from that
+   * absence — so a row press selects (and, for an external record, imports).
+   * The only other opener is a `ContactRoleRow` at step 3, which lists contacts
+   * the user has ALREADY selected, i.e. already imported.
+   *
+   * So on this surface the row-body leg above is the whole import path, and
+   * `handlePreviewImportAction` has no reachable caller today. That is recorded
+   * rather than asserted-around: SR required this leg driven, and "it cannot be
+   * driven because nothing reaches it" is the honest answer, not a green test
+   * written against a path no user can take.
+   *
+   * This test pins the reachability claim itself, so the day it stops being
+   * true, someone is told.
+   */
+  it("card leg — no preview opens from the list, so it has no reachable caller", async () => {
+    render(
+      <ContactAssignmentStep
+        {...propsWith([], { externalContacts: [companyOnlyExternal] })}
+      />,
+    );
+
+    // A company-only row is blocked, so this press cannot import — which makes
+    // it the one press that could reveal a preview if the list opened one.
+    fireEvent.click(rowFor("ext_company"));
+
+    await waitFor(() =>
+      expect(screen.queryByTestId("contact-preview-name")).not.toBeInTheDocument(),
+    );
+    expect(screen.queryByTestId("contact-preview-import")).not.toBeInTheDocument();
+  });
+
+  /**
+   * The founder's ruling `a41a805b` reaches this surface too: a company-only
+   * record is refused before the press, on the row, with the accurate reason.
+   */
+  it("a company-only record is blocked on the row, with a reason true of it", () => {
+    render(
+      <ContactAssignmentStep
+        {...propsWith([], { externalContacts: [companyOnlyExternal] })}
+      />,
+    );
+
+    const row = rowFor("ext_company");
+    expect(row.querySelector('[data-testid="contact-row-add-blocked"]')).not.toBeNull();
+    expect(row.textContent).toContain("company on its own");
+    expect(row.textContent).not.toContain("nothing to import");
+
+    fireEvent.click(row);
+    expect(window.api.contacts.import).not.toHaveBeenCalled();
   });
 });
