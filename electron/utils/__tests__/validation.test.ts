@@ -21,6 +21,10 @@ import {
   SESSION_TOKEN_MIN_LENGTH,
   SESSION_TOKEN_MAX_LENGTH,
 } from "../validation";
+import {
+  TransactionTypeSchema,
+  TransactionStatusSchema,
+} from "../../schemas/transaction";
 
 describe("Contact Validation", () => {
   describe("validateContactId", () => {
@@ -803,6 +807,114 @@ describe("Security Validation - TASK-601", () => {
         expect(isSessionTokenCorruptionError(undefined)).toBe(false);
         expect(isSessionTokenCorruptionError("string error")).toBe(false);
       });
+    });
+  });
+});
+
+// ===========================================================================
+// BACKLOG-2755 — VALUE DOMAINS
+// ===========================================================================
+// Before this item the two enums below were hand-written arrays inside
+// `validateTransactionData`, and they had drifted from the `transactions`
+// CHECK constraints in BOTH directions: the validator accepted `lease`,
+// `refinance` and `cancelled` (which the CHECK rejects) and rejected
+// `rejected` (which the CHECK accepts).
+//
+// Nothing caught it. The whole of this file was green at the time — 91 tests —
+// because every existing case sampled a value that happened to be legal on
+// both sides. So these tests PROBE the function over a value list that spans
+// the disagreement, and assert the ACCEPTED SET, not membership samples.
+//
+// TWO assertions per field, and they are not redundant:
+//
+//  - against a HAND-WRITTEN literal. This is the tripwire. A change to the
+//    column's CHECK must consciously update this line; it cannot ride in.
+//  - against `Schema.options`. This one is green under any domain change by
+//    construction — it compares the code with the same source the code derives
+//    from. Its only job is to fail if someone re-introduces a hand-written
+//    array here that DIFFERS from the schema. An identical one is invisible to
+//    it, which is exactly why the literal above is also required.
+describe("validateTransactionData — value domains (BACKLOG-2755)", () => {
+  /** A value no CHECK list contains, to prove the domain is closed at all. */
+  const DOMAIN_SENTINEL = "zzz_not_a_real_domain_value";
+
+  /**
+   * Drive the real function and report which values it ACCEPTS, by asking the
+   * returned object rather than by reading the validator's source.
+   */
+  function acceptedSet(field: "transaction_type" | "status", candidates: string[]): string[] {
+    const accepted: string[] = [];
+    for (const value of candidates) {
+      try {
+        const validated = validateTransactionData({ [field]: value }, true);
+        if (validated[field] === value) accepted.push(value);
+      } catch {
+        // rejected — deliberately not accepted
+      }
+    }
+    return accepted.sort();
+  }
+
+  const TYPE_CANDIDATES = [
+    // the CHECK's own list
+    "purchase", "sale", "other",
+    // the three the validator used to accept and the database rejects
+    "lease", "refinance",
+    DOMAIN_SENTINEL,
+  ];
+
+  const STATUS_CANDIDATES = [
+    // the CHECK's own list
+    "pending", "active", "closed", "rejected",
+    // the one the validator used to accept and the database rejects
+    "cancelled",
+    DOMAIN_SENTINEL,
+  ];
+
+  describe("transaction_type", () => {
+    it("accepts exactly the CHECK's list — pinned by hand, so a domain change cannot ride in", () => {
+      expect(acceptedSet("transaction_type", TYPE_CANDIDATES)).toEqual([
+        "other",
+        "purchase",
+        "sale",
+      ]);
+    });
+
+    it("accepts exactly what the schema declares, so no hand-written list can return here", () => {
+      expect(acceptedSet("transaction_type", TYPE_CANDIDATES)).toEqual(
+        [...TransactionTypeSchema.options].sort(),
+      );
+    });
+
+    it("names the legal values in the error, so the message cannot drift from the check", () => {
+      expect(() =>
+        validateTransactionData({ transaction_type: "lease" }, true),
+      ).toThrow("Transaction type must be one of: purchase, sale, other");
+    });
+  });
+
+  describe("status", () => {
+    it("accepts exactly the CHECK's list — pinned by hand, so a domain change cannot ride in", () => {
+      expect(acceptedSet("status", STATUS_CANDIDATES)).toEqual([
+        "active",
+        "closed",
+        "pending",
+        "rejected",
+      ]);
+    });
+
+    it("accepts exactly what the schema declares, so no hand-written list can return here", () => {
+      expect(acceptedSet("status", STATUS_CANDIDATES)).toEqual(
+        [...TransactionStatusSchema.options].sort(),
+      );
+    });
+
+    it("accepts 'rejected', the review-queue status it used to block outright", () => {
+      // The half of the drift that was USER-VISIBLE: the database and the
+      // writer both accept this status, and this validator refused it.
+      expect(validateTransactionData({ status: "rejected" }, true).status).toBe(
+        "rejected",
+      );
     });
   });
 });
