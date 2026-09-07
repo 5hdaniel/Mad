@@ -142,28 +142,34 @@ describe("DIFFERENTIAL — binding the page bounds selects exactly what interpol
     ["limit 3 offset 99", 3, 99],
   ];
 
-  it.each(pages)("selectChatMessages agrees with the pre-move form: %s", (_label, limit, offset) => {
+  it.each(pages)("selectChatMessages agrees with the pre-move form: %s", async (_label, limit, offset) => {
     const before = preMoveChatMessages(true, CHAT, limit, offset);
-    const after = selectChatMessages<{ ROWID: number }>(db as never, true, CHAT, {
-      limit,
-      offset,
-    }).map((r) => r.ROWID);
+    const after = (
+      await selectChatMessages<{ ROWID: number }>(db as never, true, CHAT, {
+        limit,
+        offset,
+      })
+    ).map((r) => r.ROWID);
 
     // Exact ID set, in order. Two offsetting errors produce the same count.
     expect(after).toEqual(before);
   });
 
-  it("limit 0 returns ONE row, not zero — the clamp is load-bearing", () => {
+  it("limit 0 returns ONE row, not zero — the clamp is load-bearing", async () => {
     // `Math.max(1, ...)`. Binding the RAW limit would return zero rows here,
     // which is why the clamped value is what binds.
-    expect(selectChatMessages<{ ROWID: number }>(db as never, true, CHAT, { limit: 0 })).toHaveLength(1);
+    expect(
+      await selectChatMessages<{ ROWID: number }>(db as never, true, CHAT, { limit: 0 }),
+    ).toHaveLength(1);
   });
 
-  it("an offset without a limit is ignored, exactly as before", () => {
+  it("an offset without a limit is ignored, exactly as before", async () => {
     const before = preMoveChatMessages(true, CHAT, undefined, 5);
-    const after = selectChatMessages<{ ROWID: number }>(db as never, true, CHAT, {
-      offset: 5,
-    }).map((r) => r.ROWID);
+    const after = (
+      await selectChatMessages<{ ROWID: number }>(db as never, true, CHAT, {
+        offset: 5,
+      })
+    ).map((r) => r.ROWID);
     expect(after).toEqual(before);
     expect(after).toHaveLength(8);
   });
@@ -177,15 +183,15 @@ describe("DIFFERENTIAL — searchMessagesByText, whose clamp differs on purpose"
 
   const limits: Array<number | undefined> = [undefined, 0, 1, 3, 99, 2.7, -4];
 
-  it.each(limits)("agrees with the pre-move form at limit=%s", (limit) => {
+  it.each(limits)("agrees with the pre-move form at limit=%s", async (limit) => {
     const before = preMoveSearch(false, "%body%", limit);
-    const after = searchMessagesByText<{ ROWID: number }>(db as never, false, "%body%", limit).map(
-      (r) => r.ROWID,
-    );
+    const after = (
+      await searchMessagesByText<{ ROWID: number }>(db as never, false, "%body%", limit)
+    ).map((r) => r.ROWID);
     expect(after).toEqual(before);
   });
 
-  it("limit 0 returns EVERYTHING here, unlike selectChatMessages", () => {
+  it("limit 0 returns EVERYTHING here, unlike selectChatMessages", async () => {
     /**
      * The two call sites clamped differently and the difference is observable:
      * `searchMessages` gates on `limit > 0`, so zero means "no limit"; while
@@ -195,20 +201,20 @@ describe("DIFFERENTIAL — searchMessagesByText, whose clamp differs on purpose"
      * rule matching neither caller — the kind of tidy-up a mechanical move is
      * the wrong place for.
      */
-    expect(searchMessagesByText(db as never, false, "%body%", 0)).toHaveLength(6);
-    expect(selectChatMessages(db as never, false, CHAT, { limit: 0 })).toHaveLength(1);
+    expect(await searchMessagesByText(db as never, false, "%body%", 0)).toHaveLength(6);
+    expect(await selectChatMessages(db as never, false, CHAT, { limit: 0 })).toHaveLength(1);
   });
 
-  it("orders newest first, the opposite of the chat read", () => {
-    const ids = searchMessagesByText<{ ROWID: number }>(db as never, false, "%body%").map(
-      (r) => r.ROWID,
-    );
+  it("orders newest first, the opposite of the chat read", async () => {
+    const ids = (
+      await searchMessagesByText<{ ROWID: number }>(db as never, false, "%body%")
+    ).map((r) => r.ROWID);
     expect(ids).toEqual([6, 5, 4, 3, 2, 1]);
   });
 });
 
 describe("the audio_transcript projection", () => {
-  it("selects the column when the backup has it", () => {
+  it("selects the column when the backup has it", async () => {
     openSmsDb(true);
     seedMessages(1);
     db.prepare("UPDATE message SET audio_transcript = 'hi' WHERE ROWID = 1").run();
@@ -216,11 +222,11 @@ describe("the audio_transcript projection", () => {
     const present = db.prepare(AUDIO_TRANSCRIPT_COLUMN_PROBE_SQL).all() as unknown[];
     expect(present).toHaveLength(1);
 
-    const row = selectChatMessages<Record<string, unknown>>(db as never, true, CHAT)[0];
+    const row = (await selectChatMessages<Record<string, unknown>>(db as never, true, CHAT))[0];
     expect(row.audio_transcript).toBe("hi");
   });
 
-  it("omits it on an older backup instead of failing the whole query", () => {
+  it("omits it on an older backup instead of failing the whole query", async () => {
     openSmsDb(false);
     seedMessages(2);
 
@@ -228,9 +234,51 @@ describe("the audio_transcript projection", () => {
 
     // Selecting it unconditionally would throw "no such column" and return no
     // messages at all — the degrade-vs-fail distinction this probe exists for.
-    const rows = selectChatMessages<Record<string, unknown>>(db as never, false, CHAT);
+    const rows = await selectChatMessages<Record<string, unknown>>(db as never, false, CHAT);
     expect(rows).toHaveLength(2);
     expect(rows[0]).not.toHaveProperty("audio_transcript");
+  });
+});
+
+describe("the wrapper shape: PLAIN, not async (BACKLOG-2960)", () => {
+  /** A driver handle whose `prepare` throws, where a real one would fail. */
+  const throwingDb = {
+    prepare() {
+      throw new Error("prepare failed");
+    },
+  } as never;
+
+  /**
+   * Call `fn` and report, as plain values, whether it threw before returning.
+   *
+   * A returned promise is settled and its rejection swallowed, so a wrapper that
+   * defers its failure produces an assertion diff here rather than an unhandled
+   * rejection that takes the worker down with it.
+   */
+  const calledSynchronously = (
+    fn: () => unknown,
+  ): { threw: boolean; message: string | null } => {
+    try {
+      const value = fn();
+      void Promise.resolve(value).catch(() => undefined);
+      return { threw: false, message: null };
+    } catch (e) {
+      return { threw: true, message: e instanceof Error ? e.message : String(e) };
+    }
+  };
+
+  it("selectChatMessages: a driver failure unwinds BEFORE the promise is constructed", () => {
+    expect(calledSynchronously(() => selectChatMessages(throwingDb, false, CHAT))).toEqual({
+      threw: true,
+      message: "prepare failed",
+    });
+  });
+
+  it("searchMessagesByText: a driver failure unwinds BEFORE the promise is constructed", () => {
+    expect(calledSynchronously(() => searchMessagesByText(throwingDb, false, "%body%"))).toEqual({
+      threw: true,
+      message: "prepare failed",
+    });
   });
 });
 

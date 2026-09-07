@@ -478,3 +478,8 @@ afterAll(() => {
 // exists for that; see its own file for why it is not done automatically.
 // ---------------------------------------------------------------------------
 require('./helpers/installTestSecretStore').installTestSecretStore();
+// The same, for the seams BACKLOG-2962 added after secret storage. Kept in a
+// separate helper because that one installs the mocked `safeStorage` OBJECT
+// (identity matters to its callers' assertions) while these forward at call
+// time; see the two files for the difference and why it is not cosmetic.
+require('./helpers/installTestCapabilities').installTestCapabilities();

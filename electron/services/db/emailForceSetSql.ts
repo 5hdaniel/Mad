@@ -35,6 +35,9 @@
 
 import type { Database as DatabaseType } from "better-sqlite3";
 
+import { stagingTableSql } from "./core/identifierSql";
+import { placeholderList } from "./core/sqlFragments";
+import { sql, type SafeSql } from "./core/sqlText";
 import type { StagingTableName } from "./stagingDdlSql";
 
 export type EmailForceProvider = "gmail" | "outlook";
@@ -76,8 +79,8 @@ export function assertRebuildableProviders(
 }
 
 interface ForceSetPredicate {
-  readonly sql: string;
-  readonly survivingSql: string;
+  readonly sql: SafeSql;
+  readonly survivingSql: SafeSql;
   readonly params: readonly string[];
 }
 
@@ -90,14 +93,24 @@ interface ForceSetPredicate {
 function predicateFor(set: EmailForceSet): ForceSetPredicate {
   assertRebuildableProviders(set.providers);
 
-  const sourceList = set.providers.map((p) => `'${p}'`).join(", ");
-  const sql =
-    `user_id = ? AND external_id IS NOT NULL ` +
-    `AND source IN (${sourceList}) ` +
-    `AND sent_at >= ?`;
+  // BACKLOG-3102 PR 2. This used to be
+  //   `set.providers.map((p) => `'${p}'`).join(", ")`
+  // spliced into the text as quoted literals, which is why the three consumers
+  // in `emailSyncSql.ts` needed `unsafeSql` — the tag refuses a `string`, and it
+  // is right to. The providers are now BOUND, so the only thing crossing into
+  // the text is the placeholder list, which is SQL.
+  //
+  // `placeholderList`'s default separator is `", "`, so `IN (?, ?)` occupies the
+  // same bytes `IN ('gmail', 'outlook')` did apart from the tokens themselves.
+  //
+  // `emails.source` is `TEXT CHECK (source IN ('gmail','outlook'))` — TEXT
+  // affinity — and a bound JS string binds as TEXT, so the comparison is the one
+  // the quoted literal made. That is asserted by EXECUTION against the real
+  // driver in `emailForceSetSql.test.ts`, not by this comment.
+  const predicateSql = sql`user_id = ? AND external_id IS NOT NULL AND source IN (${placeholderList(set.providers.length)}) AND sent_at >= ?`;
 
   return {
-    sql,
+    sql: predicateSql,
     // NULL-safe by hand. `source` is nullable past its CHECK constraint and
     // `sent_at` is nullable outright, so the force predicate CAN evaluate to
     // NULL. For such a row a plain `NOT (…)` is NULL — the row would survive
@@ -106,8 +119,14 @@ function predicateFor(set: EmailForceSet): ForceSetPredicate {
     // exactly how a surviving row stops being deduplicated against and gets
     // staged a second time. COALESCE spells out what "survived" means: the
     // force set was not TRUE.
-    survivingSql: `COALESCE(${sql}, 0) = 0`,
-    params: [set.userId, set.cacheSinceIso],
+    survivingSql: sql`COALESCE(${predicateSql}, 0) = 0`,
+    // POSITIONAL, and the order is the order the placeholders appear in:
+    // `user_id = ?`, then `source IN (?, ?)`, then `sent_at >= ?`. Binding the
+    // providers inserts them BETWEEN the two parameters that were already here,
+    // so every caller that spreads `params` ahead of its own keeps working —
+    // and a caller that hard-coded two would break loudly rather than silently
+    // bind the wrong column.
+    params: [set.userId, ...set.providers, set.cacheSinceIso],
   };
 }
 
@@ -137,13 +156,19 @@ function predicateFor(set: EmailForceSet): ForceSetPredicate {
 export function emailForceReadView(
   set: EmailForceSet,
   stagingTable: StagingTableName,
-  columns: string,
-): { sql: string; params: readonly string[] } {
+  columns: SafeSql,
+): { sql: SafeSql; params: readonly string[] } {
   const predicate = predicateFor(set);
   return {
-    sql:
-      `(SELECT ${columns} FROM emails WHERE ${predicate.survivingSql}` +
-      ` UNION ALL SELECT ${columns} FROM "${stagingTable}")`,
+    // `columns` is `SafeSql`, not `string` — every call site passes a literal
+    // column list, so the tag holds with no loss of expressiveness, and a column
+    // name arriving from anywhere else is now a compile error.
+    //
+    // `stagingTableSql` emits `"<name>"` — the same characters the old
+    // `` `"${stagingTable}"` `` emitted. It is what takes the last escape out of
+    // this file's consumers: the brand alone could not, because a template
+    // literal destroys it (`emailSyncSql.ts:22-28` records that happening).
+    sql: sql`(SELECT ${columns} FROM emails WHERE ${predicate.survivingSql} UNION ALL SELECT ${columns} FROM ${stagingTableSql(stagingTable)})`,
     params: predicate.params,
   };
 }
@@ -158,6 +183,20 @@ export function emailForceReadView(
  * The FK cascades this fires are the POINT, not an obstacle: deleting the force
  * set with an ordinary DELETE is what makes link loss happen exactly as it does
  * for a messages force re-import, which is the parity the founder asked for.
+ *
+ * ## BACKLOG-3102 PR 2 changed this statement, and it deletes the user's mail
+ *
+ * It shares `predicateFor` with the read view, so binding the provider list
+ * changed the DELETE too: `source IN ('gmail', 'outlook')` became
+ * `source IN (?, ?)` and the bound parameters went from two to two-plus-N.
+ * Unavoidable, and correct — duplicating the predicate to spare this path would
+ * mean the read and the DELETE could drift, which is the one divergence that
+ * loses mail.
+ *
+ * Because it is the user's mail, the equivalence is proven by EXECUTION on the
+ * real driver over every provider combination the producer can emit, comparing
+ * the ID SETS removed rather than the counts. Text comparison would not be
+ * evidence here.
  */
 export function deleteLiveForceSet(db: DatabaseType, set: EmailForceSet): number {
   const predicate = predicateFor(set);

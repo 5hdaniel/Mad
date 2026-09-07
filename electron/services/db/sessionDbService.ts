@@ -124,5 +124,5 @@ export async function deleteAllUserSessions(userId: string): Promise<void> {
 export async function clearAllSessions(): Promise<void> {
   const statement = sql`DELETE FROM sessions`;
   dbRun(statement, []);
-  logService.info("[SessionDbService] Cleared all sessions for session-only OAuth", "SessionDbService");
+  void logService.info("[SessionDbService] Cleared all sessions for session-only OAuth", "SessionDbService");
 }

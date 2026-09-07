@@ -8,7 +8,7 @@
  * @see TASK-1031
  */
 
-import * as Sentry from "@sentry/electron/main";
+import { hostErrorReporter } from "../capabilities/errorReporterProvider";
 import { dbAll, dbGet, dbRun } from "./db/core/dbConnection";
 import {
   AUTOLINK_CONTACT_EMAILS_SQL,
@@ -189,7 +189,7 @@ async function getContactInfo(contactId: string): Promise<ContactInfo | null> {
     .filter((p): p is string => p !== null);
 
   // BACKLOG-1340: Sentry breadcrumb for contact email resolution diagnostics
-  Sentry.addBreadcrumb({
+  hostErrorReporter.addBreadcrumb({
     category: "auto_link.contact_resolution",
     message: `Resolved contact info: ${emails.length} emails, ${phoneNumbers.length} phones`,
     level: "info",
@@ -626,7 +626,7 @@ export async function autoLinkCommunicationsForContact(
         `Contact not found for auto-link: ${contactId}`,
         "AutoLinkService"
       );
-      Sentry.addBreadcrumb({
+      hostErrorReporter.addBreadcrumb({
         category: "auto_link.abort",
         message: "Contact not found",
         level: "warning",
@@ -642,7 +642,7 @@ export async function autoLinkCommunicationsForContact(
         "AutoLinkService"
       );
       // BACKLOG-1340: Log when contact has no email addresses — common root cause
-      Sentry.addBreadcrumb({
+      hostErrorReporter.addBreadcrumb({
         category: "auto_link.abort",
         message: "Contact has no email addresses or phone numbers in contact_emails/contact_phones tables",
         level: "warning",
@@ -659,7 +659,7 @@ export async function autoLinkCommunicationsForContact(
         `Transaction not found for auto-link: ${transactionId}`,
         "AutoLinkService"
       );
-      Sentry.addBreadcrumb({
+      hostErrorReporter.addBreadcrumb({
         category: "auto_link.abort",
         message: "Transaction not found",
         level: "warning",
@@ -670,7 +670,7 @@ export async function autoLinkCommunicationsForContact(
 
     // BACKLOG-1340: Log when transaction has no contacts assigned
     if (!transactionInfo.propertyAddress) {
-      Sentry.addBreadcrumb({
+      hostErrorReporter.addBreadcrumb({
         category: "auto_link.context",
         message: "Transaction has no property address — address filter will be skipped entirely",
         level: "info",
@@ -702,7 +702,7 @@ export async function autoLinkCommunicationsForContact(
 
     // BACKLOG-1340: Log date range validity
     if (!dateRange.start || !dateRange.end || isNaN(dateRange.start.getTime()) || isNaN(dateRange.end.getTime())) {
-      Sentry.addBreadcrumb({
+      hostErrorReporter.addBreadcrumb({
         category: "auto_link.abort",
         message: "Date range is null or invalid",
         level: "warning",
@@ -716,7 +716,7 @@ export async function autoLinkCommunicationsForContact(
     }
 
     // BACKLOG-1340: Comprehensive sync trigger breadcrumb
-    Sentry.addBreadcrumb({
+    hostErrorReporter.addBreadcrumb({
       category: "auto_link.start",
       message: `Auto-link starting for contact`,
       level: "info",
@@ -792,7 +792,7 @@ export async function autoLinkCommunicationsForContact(
     const needsReviewCount = emailCandidates.filter(
       (c) => c.addressMatched === false && !c.matchesOtherCandidate
     ).length;
-    Sentry.addBreadcrumb({
+    hostErrorReporter.addBreadcrumb({
       category: "auto_link.email_match",
       message: `Email matching complete: ${emailCandidates.length} candidate emails (${needsReviewCount} needs-review)`,
       level: emailCandidates.length === 0 && contactInfo.emails.length > 0 ? "warning" : "info",
@@ -840,10 +840,10 @@ export async function autoLinkCommunicationsForContact(
 
     // 5b. BACKLOG-1560: Filter out emails and threads that the user previously unlinked.
     // This prevents deleted conversations from reappearing after re-sync.
-    const ignoredEmailIds = getIgnoredEmailIdsForTransaction(transactionId);
-    const ignoredThreadIds = getIgnoredThreadIdsForTransaction(transactionId);
+    const ignoredEmailIds = await getIgnoredEmailIdsForTransaction(transactionId);
+    const ignoredThreadIds = await getIgnoredThreadIdsForTransaction(transactionId);
     // BACKLOG-1560: Per-message suppression for messages without a valid thread_id
-    const ignoredCommIds = getIgnoredCommunicationIdsForTransaction(transactionId);
+    const ignoredCommIds = await getIgnoredCommunicationIdsForTransaction(transactionId);
 
     await logService.debug("[BACKLOG-1560] Auto-link suppression sets", "AutoLinkService", {
       transactionId,
@@ -1028,7 +1028,7 @@ export async function autoLinkCommunicationsForContact(
     const duration = Date.now() - startTime;
 
     // BACKLOG-1340: Comprehensive result breadcrumb
-    Sentry.addBreadcrumb({
+    hostErrorReporter.addBreadcrumb({
       category: "auto_link.complete",
       message: `Auto-link complete: ${result.emailsLinked} emails, ${result.messagesLinked} threads linked`,
       level: "info",
@@ -1060,7 +1060,7 @@ export async function autoLinkCommunicationsForContact(
       (result.blockedPendingReview ?? 0) === 0 &&
       (contactInfo.emails.length > 0 || contactInfo.phoneNumbers.length > 0)
     ) {
-      Sentry.captureMessage(
+      hostErrorReporter.captureMessage(
         `Auto-link completed with 0 results for contact with ${contactInfo.emails.length} emails and ${contactInfo.phoneNumbers.length} phones`,
         {
           level: "warning",
@@ -1283,7 +1283,7 @@ export async function autoLinkNewMessagesForUser(
       duration_ms: result.durationMs,
     });
 
-    Sentry.addBreadcrumb({
+    hostErrorReporter.addBreadcrumb({
       category: "auto_link.post_sync",
       message: `Post-sync auto-link: ${result.totalEmailsLinked} emails, ${result.totalMessagesLinked} threads linked`,
       level: "info",
@@ -1586,8 +1586,8 @@ export async function expandAttachedThreadsForUser(
       // 6. Suppression sets for THIS transaction — identical to the ones
       //    autoLinkCommunicationsForContact honors. A conversation/message the
       //    user removed stays removed.
-      const ignoredThreadIds = getIgnoredThreadIdsForTransaction(transactionId);
-      const ignoredCommIds = getIgnoredCommunicationIdsForTransaction(transactionId);
+      const ignoredThreadIds = await getIgnoredThreadIdsForTransaction(transactionId);
+      const ignoredCommIds = await getIgnoredCommunicationIdsForTransaction(transactionId);
 
       // messageId -> thread_id, deduped across sibling discovery.
       const candidates = new Map<string, string | null>();
@@ -1708,7 +1708,7 @@ export async function expandAttachedThreadsForUser(
       //    attach ultimately relies on). Recomputed from the junction, so it is
       //    idempotent across re-runs.
       if (linkedForTxn > 0) {
-        updateTransactionThreadCount(transactionId);
+        await updateTransactionThreadCount(transactionId);
       }
     }
 
@@ -1741,7 +1741,7 @@ export async function expandAttachedThreadsForUser(
       duration_ms: result.durationMs,
     });
 
-    Sentry.addBreadcrumb({
+    hostErrorReporter.addBreadcrumb({
       category: "auto_link.attached_expansion",
       message: `Attached-thread expansion: ${result.messagesLinked} linked, ${result.skippedSuppressed} suppressed`,
       level: "info",

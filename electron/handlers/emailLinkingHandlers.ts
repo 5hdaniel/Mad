@@ -456,7 +456,7 @@ export function registerEmailLinkingHandlers(): void {
         throw new ValidationError("Email IDs must be a non-empty array", "emailIds");
       }
 
-      const confirmedCount = confirmEmailLinksByEmailIds(emailIds, validatedTransactionId);
+      const confirmedCount = await confirmEmailLinksByEmailIds(emailIds, validatedTransactionId);
 
       logService.info("Email links confirmed (Needs review → Linked)", "Transactions", {
         transactionId: validatedTransactionId,

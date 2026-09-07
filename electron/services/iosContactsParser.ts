@@ -101,10 +101,12 @@ export interface IdentityCaptureStats {
 /**
  * Parser for iOS AddressBook.sqlitedb from iTunes-style backups.
  *
- * Usage:
+ * Usage (inside an async function): `open()` returns a promise since
+ * BACKLOG-2960, and a call that skips the `await` leaves the caches empty —
+ * `getAllContacts()` then returns `[]` with no error thrown.
  * ```typescript
  * const parser = new iOSContactsParser();
- * parser.open('/path/to/backup');
+ * await parser.open('/path/to/backup');
  * const contacts = parser.getAllContacts();
  * const result = parser.lookupByHandle('+15555550112');
  * parser.close();
@@ -148,10 +150,18 @@ export class iOSContactsParser {
   /**
    * Opens the AddressBook database from a backup directory.
    *
+   * BACKLOG-2960: `async` because `db/appleAddressBookSql.prepareAbPersonStatements`
+   * is now promise-returning at the export. The driver work underneath is still
+   * synchronous — `new Database(...)`, the column probe, `.prepare()` and
+   * `buildLookupIndexes()` all run to completion — so the only observable change
+   * is that a caller must await. The rejection path is unchanged: the `await` is
+   * inside the existing try, so a failure still logs and rethrows, and callers
+   * that awaited see it as a rejection instead of a synchronous throw.
+   *
    * @param backupPath - Path to the iOS backup directory
    * @throws Error if the database file is not found or cannot be opened
    */
-  open(backupPath: string): void {
+  async open(backupPath: string): Promise<void> {
     const dbPath = iOSContactsParser.getBackupFilePath(
       backupPath,
       iOSContactsParser.ADDRESSBOOK_DB_HASH,
@@ -162,7 +172,7 @@ export class iOSContactsParser {
       this.db = new Database(dbPath, { readonly: true });
       log.info("[iOSContactsParser] Opened AddressBook database");
 
-      this.prepareStatements();
+      await this.prepareStatements();
       this.buildLookupIndexes();
     } catch (error) {
       log.error("[iOSContactsParser] Failed to open AddressBook database", {
@@ -254,7 +264,7 @@ export class iOSContactsParser {
     /**
    * Prepares SQL statements for reuse.
    */
-  private prepareStatements(): void {
+  private async prepareStatements(): Promise<void> {
     if (!this.db) return;
 
     // BACKLOG-2407: BOTH ABPerson statements are built from the same list —
@@ -265,7 +275,7 @@ export class iOSContactsParser {
 
     // Prepared as a PAIR in db/, so preparing one without the other is not
     // expressible — which is what BACKLOG-2407's finding actually requires.
-    const abPerson = prepareAbPersonStatements(this.db, this.probeIdentityColumns());
+    const abPerson = await prepareAbPersonStatements(this.db, this.probeIdentityColumns());
     this.stmtAllContacts = abPerson.all;
     this.stmtContactById = abPerson.byId;
 

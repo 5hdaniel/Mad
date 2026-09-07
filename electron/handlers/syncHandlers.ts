@@ -415,7 +415,7 @@ function setupEventForwarding(): void {
   });
 
   // Forward completion events and persist data
-  orchestrator.on("complete", async (result: SyncResult) => {
+  const onSyncComplete = async (result: SyncResult) => {
     log.info("[SyncHandlers] Sync complete", {
       conversations: result.conversations.length,
       messages: result.messages.length,
@@ -632,6 +632,9 @@ function setupEventForwarding(): void {
       // BACKLOG-2898: still close the timeline.
       syncTimeline.endSync(result.success ? "complete" : "error");
     }
+  };
+  orchestrator.on("complete", (result: SyncResult) => {
+    void onSyncComplete(result);
   });
 }
 

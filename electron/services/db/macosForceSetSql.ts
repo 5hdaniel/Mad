@@ -34,6 +34,47 @@
  * Parameters are POSITIONAL. `params` travels WITH the sql in one object so the
  * two cannot drift, and because better-sqlite3 refuses to mix `?` with `@name`
  * in one statement — which is why the old code had to spell some queries twice.
+ *
+ * ## THE EXPORT SEAM — BACKLOG-2960
+ *
+ * The three exports that EXECUTE — `deleteLiveForceSet`, `selectYieldedMessageIds`,
+ * `insertStagedRows` — return promises. Each is a plain wrapper (NEVER `async`)
+ * over a synchronous `*Sync` twin, and THE TWIN IS THE PRIMITIVE. The swap at
+ * `macOSMessagesImportService/forceStaging.ts` is `swapStagingIntoLive`'s raw
+ * `db.transaction()` callback, which better-sqlite3 commits when it RETURNS
+ * (anchored by name, not by line — the line moves). So everything called
+ * from inside it — `forceSwapSteps.deleteLiveForceSet` and `.insertFromStaging`,
+ * and through them these three — takes the twin and stays synchronous.
+ *
+ * WHAT EACH SHAPE ACTUALLY DOES, at the strength it was measured on the real
+ * driver (PR #2544 SR review) rather than at the strength it is usually assumed:
+ *
+ *   - A PLAIN wrapper called from inside a transaction body WITHOUT `await`
+ *     loses NOTHING. The synchronous work — including any throw — completes
+ *     before the promise is constructed, so the writes stay inside the
+ *     transaction and the driver still rolls back on the error.
+ *   - An `async` wrapper is the mutation to fear. The throw then arrives after
+ *     the frame that could roll back: the transaction sees no error and COMMITS
+ *     over it, and the failure surfaces later as a rejection. That is the whole
+ *     reason these are plain functions.
+ *
+ * WHAT THE TYPE SYSTEM CAN AND CANNOT SEE — measured, not assumed:
+ *
+ *   - an `await` inside the synchronous body is `TS1308: 'await' expressions are
+ *     only allowed within async functions…`, and a step that RETURNS or ASSIGNS
+ *     one of these promises is an error against that step's OWN non-promise
+ *     return annotation — `TS2739`/`TS2740` where the target is an object type,
+ *     `TS2322` where it is a primitive. All four measured on this file's callers
+ *     in PR #2545; do not quote `dbTransaction`'s `TS2345` here, because that
+ *     diagnostic comes from a type this raw body never reaches;
+ *   - a body that merely FLOATS the call is invisible to `tsc`. It is caught only
+ *     by `@typescript-eslint/no-floating-promises`, which is scoped to `db/**` —
+ *     so a floated call from a caller OUTSIDE `db/**` is caught by nothing in CI
+ *     today (BACKLOG-3150);
+ *   - `db.transaction(async () => …)` is caught by the `no-restricted-syntax` AST
+ *     rule in `eslint.config.js`, which is a LINT control, not a type control.
+ *     `dbTransaction`'s conditional return type does not reach a raw
+ *     `db.transaction(...)` body at all.
  */
 
 import type { Database as DatabaseType } from "better-sqlite3";
@@ -199,8 +240,21 @@ export function macosForceReadView(
  *
  * Executes, and takes no SQL — only the set. It had to move here once the
  * predicate stopped travelling as text.
+ *
+ * THE SYNCHRONOUS PRIMITIVE. Its one call path is the swap's transaction body
+ * (`swapStagingIntoLive`'s `db.transaction()` body -> `forceSwapSteps.deleteLiveForceSet`), which is why
+ * the three DELETEs are unwrapped here and exempted in `writeAtomicity.guard`:
+ * nesting a transaction around them would be redundant, not merely stylistically
+ * wrong. better-sqlite3 implements a nested `db.transaction()` as a SAVEPOINT, so
+ * the failure semantics of THIS path are unchanged — measured on the real driver,
+ * an uncaught throw inside the inner transaction rolls back to the savepoint,
+ * rethrows, and aborts the outer swap, leaving the user's corpus untouched exactly
+ * as it does today. What nesting WOULD change is what a FUTURE caller could do: it
+ * makes a partial-swap-survives-an-error state reachable by catching, on the one
+ * path whose job is not to lose the user's messages. Transaction shape belongs to
+ * item 6, not to a text move.
  */
-export function deleteLiveForceSet(
+export function deleteLiveForceSetSync(
   db: DatabaseType,
   set: MacOSForceSet,
 ): { messagesDeleted: number; attachmentsDeleted: number } {
@@ -221,6 +275,20 @@ export function deleteLiveForceSet(
 }
 
 /**
+ * The seam wrapper over {@link deleteLiveForceSetSync}. See "THE EXPORT SEAM" in
+ * the file header for what this shape does and does not protect.
+ *
+ * Plain, not `async`, on purpose: the delete runs — and any error throws —
+ * before this promise exists.
+ */
+export function deleteLiveForceSet(
+  db: DatabaseType,
+  set: MacOSForceSet,
+): Promise<{ messagesDeleted: number; attachmentsDeleted: number }> {
+  return Promise.resolve(deleteLiveForceSetSync(db, set));
+}
+
+/**
  * Staged rows whose `external_id` a SURVIVING live row already holds.
  *
  * Asked BEFORE either insert, deliberately. `idx_messages_user_external_id` is
@@ -232,8 +300,11 @@ export function deleteLiveForceSet(
  *
  * Scoped to the user on purpose: another user holding the same GUID is not a
  * conflict and must not make this run yield to it.
+ *
+ * THE SYNCHRONOUS PRIMITIVE — the swap's transaction body reads this before
+ * either insert, and a body cannot await.
  */
-export function selectYieldedMessageIds(
+export function selectYieldedMessageIdsSync(
   db: DatabaseType,
   set: MacOSForceSet,
   stagingMessagesTable: StagingTableName,
@@ -251,6 +322,18 @@ export function selectYieldedMessageIds(
 }
 
 /**
+ * The seam wrapper over {@link selectYieldedMessageIdsSync}. See "THE EXPORT
+ * SEAM" in the file header. Plain, not `async`.
+ */
+export function selectYieldedMessageIds(
+  db: DatabaseType,
+  set: MacOSForceSet,
+  stagingMessagesTable: StagingTableName,
+): Promise<string[]> {
+  return Promise.resolve(selectYieldedMessageIdsSync(db, set, stagingMessagesTable));
+}
+
+/**
  * Insert the staged rows into a live table, skipping any the survivors already own.
  *
  * The `NOT IN` width comes from the same array that is bound. Chunk 3a's
@@ -260,8 +343,11 @@ export function selectYieldedMessageIds(
  * `message_id IS NULL OR …` on the attachment side is not optional: an email
  * attachment carries no `message_id`, and `NULL NOT IN (…)` is NULL, so without
  * the guard every email attachment would be filtered out of the rebuild.
+ *
+ * THE SYNCHRONOUS PRIMITIVE — both of the swap's inserts run through it, inside
+ * the transaction body.
  */
-export function insertStagedRows(
+export function insertStagedRowsSync(
   db: DatabaseType,
   liveTable: "messages" | "attachments",
   stagingTable: StagingTableName,
@@ -281,4 +367,21 @@ export function insertStagedRows(
         skip,
     )
     .run(...yieldedMessageIds).changes;
+}
+
+/**
+ * The seam wrapper over {@link insertStagedRowsSync}. See "THE EXPORT SEAM" in
+ * the file header. Plain, not `async` — making it `async` is what would let the
+ * swap commit over a constraint failure.
+ */
+export function insertStagedRows(
+  db: DatabaseType,
+  liveTable: "messages" | "attachments",
+  stagingTable: StagingTableName,
+  columns: string,
+  yieldedMessageIds: readonly string[],
+): Promise<number> {
+  return Promise.resolve(
+    insertStagedRowsSync(db, liveTable, stagingTable, columns, yieldedMessageIds),
+  );
 }

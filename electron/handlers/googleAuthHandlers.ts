@@ -250,7 +250,7 @@ export async function handleGoogleLogin(
     );
 
     // Process login in background after code is received
-    setTimeout(async () => {
+    const processLoginInBackground = async () => {
       try {
         // Wrap the code promise with a timeout (matches Microsoft pattern)
         const timeoutMs = 120000; // 2 minutes
@@ -396,6 +396,9 @@ export async function handleGoogleLogin(
           });
         }
       }
+    };
+    setTimeout(() => {
+      void processLoginInBackground();
     }, 0);
 
     return {
@@ -697,7 +700,7 @@ export async function handleGoogleConnectMailbox(
     // No BrowserWindow navigation interception needed.
 
     // Process in background
-    setTimeout(async () => {
+    const processLoginInBackground = async () => {
       try {
         const code = await codePromise;
         await logService.info(
@@ -837,6 +840,9 @@ export async function handleGoogleConnectMailbox(
           });
         }
       }
+    };
+    setTimeout(() => {
+      void processLoginInBackground();
     }, 0);
 
     return {

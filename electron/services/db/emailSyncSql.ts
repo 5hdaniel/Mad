@@ -38,7 +38,7 @@
 import type { Database as DatabaseType, Statement } from "better-sqlite3";
 
 import { dbAll, dbGet, dbRun } from "./core/dbConnection";
-import { sql, unsafeSql } from "./core/sqlText";
+import { sql, type SafeSql } from "./core/sqlText";
 import { emailForceReadView, type EmailForceSet } from "./emailForceSetSql";
 import type { StagingTableName } from "./stagingDdlSql";
 import { placeholderList } from "./core/sqlFragments";
@@ -79,11 +79,11 @@ const participantsWriteTable = (t: EmailWriteTarget): string =>
  */
 function readSource(
   source: EmailReadSource,
-  columns: string,
-): { sql: string; params: readonly string[] } {
+  columns: SafeSql,
+): { sql: SafeSql; params: readonly string[] } {
   return source.mode === "force"
     ? emailForceReadView(source.set, source.emailsTable, columns)
-    : { sql: "emails", params: [] };
+    : { sql: sql`emails`, params: [] };
 }
 
 /**
@@ -164,14 +164,10 @@ export function selectExistingExternalIds(
   externalIds: readonly string[],
 ): Array<{ external_id: string }> {
   if (externalIds.length === 0) return [];
-  const src = readSource(source, "external_id, user_id");
+  const src = readSource(source, sql`external_id, user_id`);
   const placeholders = placeholderList(externalIds.length, sql`,`);
   return dbAll<{ external_id: string }>(
-    // BACKLOG-3102 — NOT CONVERTED. `src.sql` comes from `emailForceReadView`,
-    // whose predicate splices provider VALUES into SQL text as quoted literals
-    // (`source IN ('gmail', 'outlook')`, `emailForceSetSql.ts:92`). The tag
-    // refuses it, correctly. Filed rather than escaped past.
-    unsafeSql(`SELECT external_id FROM ${src.sql} WHERE user_id = ? AND external_id IN (${placeholders})`),
+    sql`SELECT external_id FROM ${src.sql} WHERE user_id = ? AND external_id IN (${placeholders})`,
     [...src.params, userId, ...externalIds],
   );
 }
@@ -187,12 +183,10 @@ export function selectExistingByMessageIdHeader(
   headers: readonly string[],
 ): Array<{ id: string; external_id: string | null; message_id_header: string }> {
   if (headers.length === 0) return [];
-  const src = readSource(source, "id, external_id, message_id_header, user_id");
-  const placeholders = headers.map(() => "?").join(",");
+  const src = readSource(source, sql`id, external_id, message_id_header, user_id`);
+  const placeholders = placeholderList(headers.length, sql`,`);
   return dbAll(
-    // BACKLOG-3102 — NOT CONVERTED, same reason as above: `src.sql` splices
-    // provider VALUES into SQL text.
-    unsafeSql(`SELECT id, external_id, message_id_header FROM ${src.sql} WHERE user_id = ? AND message_id_header IN (${placeholders})`),
+    sql`SELECT id, external_id, message_id_header FROM ${src.sql} WHERE user_id = ? AND message_id_header IN (${placeholders})`,
     [...src.params, userId, ...headers],
   );
 }
@@ -224,20 +218,18 @@ export function selectLegacyCandidatesBySubject(
   if (normalisedSubjects.length === 0) return [];
   const src = readSource(
     source,
-    "id, external_id, subject, sender, sent_at, user_id, message_id_header",
+    sql`id, external_id, subject, sender, sent_at, user_id, message_id_header`,
   );
-  const placeholders = normalisedSubjects.map(() => "?").join(",");
+  const placeholders = placeholderList(normalisedSubjects.length, sql`,`);
   return dbAll(
-    // BACKLOG-3102 — NOT CONVERTED, same reason as above: `src.sql` splices
-    // provider VALUES into SQL text.
-    unsafeSql(`SELECT id, external_id, subject, sender, sent_at
+    sql`SELECT id, external_id, subject, sender, sent_at
            FROM ${src.sql}
            WHERE user_id = ?
              AND message_id_header IS NULL
              AND sent_at IS NOT NULL
              AND sender IS NOT NULL
              AND subject IS NOT NULL
-             AND LOWER(TRIM(subject)) IN (${placeholders})`),
+             AND LOWER(TRIM(subject)) IN (${placeholders})`,
     [...src.params, userId, ...normalisedSubjects],
   );
 }

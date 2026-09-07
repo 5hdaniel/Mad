@@ -269,7 +269,7 @@ export function findClaimedSourceRecordIds(
       for (const row of rows) claimed.add(row.source_record_id);
     }
   } catch (error) {
-    logService.warn(
+    void logService.warn(
       `[Contacts] could not read existing source claims: ${error}`,
       "Contacts",
     );
@@ -309,7 +309,7 @@ export function recordContactOrigin(
     if (!userId || !contactId) return false;
     return insertOriginRow(userId, contactId, contactSource);
   } catch (error) {
-    logService.warn(
+    void logService.warn(
       `[Contacts] could not record where a new contact came from: ${error}`,
       "Contacts",
     );

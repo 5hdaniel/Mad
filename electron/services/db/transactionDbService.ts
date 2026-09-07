@@ -582,15 +582,16 @@ export async function createTransaction(
  * The synchronous core of `createTransaction` (BACKLOG-2538).
  *
  * WHY IT HAD TO BE SPLIT OUT — the same reason `updateContactSync` was
- * (BACKLOG-2496). Creating a deal and attaching its parties now run in ONE
- * transaction, and `dbTransaction` takes a SYNCHRONOUS callback. Calling the
- * `async` wrapper inside it would have been a silent atomicity hole: the body
- * is synchronous, but an `async` function turns a throw into a REJECTED
- * PROMISE rather than a synchronous throw, so `dbTransaction` would see the
- * callback return normally and COMMIT — with the failure surfacing later as an
- * unhandled rejection, after the write it was supposed to prevent had landed.
+ * (BACKLOG-2496). Creating a deal and attaching its parties run in ONE
+ * transaction, and `dbTransaction` takes a SYNCHRONOUS callback, so the
+ * composition needs a callee that is synchronous all the way down. What is at
+ * stake if a callee in that position is not synchronous is asserted, by name,
+ * in `db/__tests__/transactionDbService.atomicDealCreate-2538.test.ts`.
  *
- * The async wrapper stays because other callers await it.
+ * This function must stay synchronous. The promise-returning
+ * `createTransaction` above stays because other callers await it; it is NOT
+ * yet the plain shape BACKLOG-2960 rules for a seam export, and this file's
+ * seven seam functions are a later round.
  */
 export function createTransactionSync(
   transactionData: NewTransaction,
@@ -788,9 +789,11 @@ export async function getTransactionById(
  * people, and marked nothing. It read as complete. Ranked third by damage in
  * the write-path audit (BACKLOG-2496).
  *
- * Both callees are the SYNC cores, deliberately. `dbTransaction` takes a
- * synchronous callback; calling the `async` facades here would let the
- * transaction commit over a rejected promise — see `createTransactionSync`.
+ * Both callees are the SYNC cores, deliberately: `dbTransaction` takes a
+ * synchronous callback, so this composition needs callees that are synchronous
+ * all the way down. What is at stake if the assign callee is replaced by a
+ * promise-returning facade is asserted, by name, in
+ * `db/__tests__/transactionDbService.atomicDealCreate-2538.test.ts`.
  *
  * Communication auto-linking is NOT in here. It is a long network-and-scan
  * operation, and holding the single SQLite write lock across it would block
@@ -1033,7 +1036,7 @@ export async function updateTransaction(
         // it must be HUMAN (no raw snake_case column names). The precise frozen
         // field list stays in the log and on the typed error's `attemptedFields`
         // for developers/support; it is never dumped at the user.
-        logService.info(
+        void logService.info(
           "Blocked edit to frozen identity anchor(s) after export",
           "TransactionDbService",
           { transactionId, attemptedFrozen: changedFrozen },
@@ -1083,7 +1086,7 @@ export async function updateTransaction(
     // nothing, so a caller whose entire payload had been discarded — which is
     // exactly what happened to Reject — was told only that "no valid fields"
     // existed, with no way to see which fields it had sent.
-    logService.warn("Transaction update dropped every field", "TransactionDbService", {
+    void logService.warn("Transaction update dropped every field", "TransactionDbService", {
       transactionId,
       dropped,
     });
@@ -1100,7 +1103,7 @@ export async function updateTransaction(
     // Not silent: a partially-dropped payload says so, with the decision that
     // dropped it, so the next BACKLOG-2558 is visible in a log rather than
     // inferred from a stuck row.
-    logService.debug("Transaction update skipped non-writable keys", "TransactionDbService", {
+    void logService.debug("Transaction update skipped non-writable keys", "TransactionDbService", {
       transactionId,
       dropped,
     });
@@ -1111,14 +1114,14 @@ export async function updateTransaction(
   const statement = sql`UPDATE transactions SET ${assignmentList(columns)} WHERE id = ?`;
   const result = dbRun(statement, values);
 
-  logService.debug("Transaction update result", "TransactionDbService", {
+  void logService.debug("Transaction update result", "TransactionDbService", {
     transactionId,
     columns,
     rowsChanged: result.changes,
   });
 
   if (result.changes === 0) {
-    logService.warn("Transaction update changed 0 rows", "TransactionDbService", {
+    void logService.warn("Transaction update changed 0 rows", "TransactionDbService", {
       transactionId,
       columns,
     });

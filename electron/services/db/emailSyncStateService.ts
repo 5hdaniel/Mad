@@ -184,7 +184,7 @@ export function recordSyncFailure(
      WHERE user_id = ? AND account_id = ?`,
     [message.slice(0, 500), userId, accountId],
   );
-  logService.warn("[BACKLOG-1802] email_sync_state failure recorded", "EmailSyncState", {
+  void logService.warn("[BACKLOG-1802] email_sync_state failure recorded", "EmailSyncState", {
     accountId,
     provider,
     error: message.slice(0, 200),

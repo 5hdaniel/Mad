@@ -230,10 +230,39 @@ describe("schema-baseline fence — a chain-built v69 database is refused (BACKL
     // Explained, then exited: the dialog names the problem and the cleanup
     // scripts, and the app quits.
     expect(showMessageBoxMock).toHaveBeenCalledTimes(1);
-    const dialogArg = showMessageBoxMock.mock.calls[0][0] as { message: string; detail: string };
+    const dialogArg = showMessageBoxMock.mock.calls[0][0] as {
+      type: string;
+      title: string;
+      message: string;
+      detail: string;
+      buttons: string[];
+    };
     expect(dialogArg.message).toContain("older version");
     expect(dialogArg.detail).toContain("cleanup");
     expect(quitMock).toHaveBeenCalledTimes(1);
+
+    // BACKLOG-2962, seams PR B: this box now reaches the platform through the
+    // Dialog capability, so what the founder READS must be pinned rather than
+    // sampled. Until now `message` contains "older version" and `detail`
+    // contains "cleanup" were the only assertions on it — its TITLE, its
+    // `buttons: ["Quit"]` and the cleanup script NAMES were pinned by nothing,
+    // and a seam that dropped or renamed any of them would have stayed green.
+    // Transcribed from `databaseService.ts:487-506`, not invented.
+    expect(dialogArg.type).toBe("error");
+    expect(dialogArg.title).toBe("Database from an older version");
+    expect(dialogArg.message).toBe(
+      "This database was created by an older version of Keepr and cannot be opened.",
+    );
+    // One button, and it says Quit: the app is about to quit and no retry is
+    // offered, because there is nothing to retry.
+    expect(dialogArg.buttons).toEqual(["Quit"]);
+    // The two script names are the whole remediation. They also remove the
+    // encryption key, which deleting the folder by hand would leave behind.
+    expect(dialogArg.detail).toContain("\u2022 macOS:   scripts/cleanup-macos.sh");
+    expect(dialogArg.detail).toContain("\u2022 Windows: scripts/cleanup-windows.ps1");
+    expect(dialogArg.detail).toContain("Cloud data is unaffected");
+    expect(dialogArg.detail.startsWith("Keepr reset its local database format")).toBe(true);
+    expect(dialogArg.detail).toContain(`Database: ${dbFile}`);
   });
 
   it("fresh install (no file) lands at schema_version 70 with the four previously-chain-only tables present", async () => {

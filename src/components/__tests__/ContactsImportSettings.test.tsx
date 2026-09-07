@@ -183,7 +183,13 @@ describe("ContactsImportSettings", () => {
         "darwin"
       );
 
-      expect(screen.getByText("Contacts")).toBeInTheDocument();
+      // BACKLOG-3156 stage E: the panel's `<h4>Contacts</h4>` is gone — it
+      // repeated the section's own <h3> one line above it. The claim here was
+      // "the panel rendered its body", and the `Sources` label proves that
+      // better than the heading did: it is the first line of the first block,
+      // so it is absent both when the panel does not render and when it renders
+      // the no-sources placeholder instead.
+      expect(screen.getByText("Sources")).toBeInTheDocument();
       expect(screen.getByText("Import Contacts")).toBeInTheDocument();
       expect(screen.getByText("Force Re-import")).toBeInTheDocument();
       expect(screen.getByLabelText("macOS Contacts import")).toBeInTheDocument();

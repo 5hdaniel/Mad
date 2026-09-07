@@ -23,6 +23,35 @@ import { usePlatform } from "../../contexts/PlatformContext";
 import { useSyncOrchestrator } from "../../hooks/useSyncOrchestrator";
 import { useNetwork } from "../../contexts/NetworkContext";
 import { ResponsiveModal } from "../common/ResponsiveModal";
+
+/**
+ * BACKLOG-3156 stage C — ONE TREATMENT FOR EVERY "Stored on this computer" CELL.
+ *
+ * The grid had a different hue per source: macOS violet, iPhone blue, Outlook
+ * indigo, Google green, Android teal. Five colours carrying no information —
+ * each cell already says which source it is, in words, directly under the
+ * number — and the effect was a row that reads as unfinished rather than as a
+ * set of counts.
+ *
+ * The one distinction that DOES carry state is kept: a source whose import is
+ * switched off is dimmed. That is the only reason a cell may look different
+ * from its neighbours.
+ *
+ * These live as constants rather than as five hand-written class strings so
+ * that "every cell wears the same treatment" is a property of the code and not
+ * of five edits staying in step. `contactsStoredNeutral-3156` asserts it from
+ * the rendered DOM as well, because a constant only helps for as long as the
+ * next cell added uses it.
+ */
+const STORED_CELL = {
+  on: "p-2 rounded border bg-white border-gray-200",
+  off: "p-2 rounded border bg-gray-50 border-gray-200 opacity-50",
+  countOn: "text-lg font-semibold text-gray-900",
+  countOff: "text-lg font-semibold text-gray-400",
+  labelOn: "text-xs text-gray-500",
+  labelOff: "text-xs text-gray-400",
+} as const;
+import { ImportInfoPopover } from "./ImportInfoPopover";
 import logger from '../../utils/logger';
 import { safeErrorMessage } from '../../utils/formatUtils';
 
@@ -241,13 +270,47 @@ export function ContactsImportSettings({
     error?: string;
   } | null>(null);
 
-  // Load sync status and source stats on mount
+  // Load sync status and source stats on mount.
+  //
+  // BACKLOG-3156 stage C: the connection flags are in the dependency list
+  // because connecting an account inside Settings changes what this grid should
+  // show — the Outlook and Google cells only render once their account is
+  // connected, and they rendered against whatever `sourceStats` held from
+  // mount. See the sibling effect below for the other half of that problem.
   useEffect(() => {
     if (!userId) return;
     loadSourceStats();
     if (!isMacOS) return;
     loadSyncStatus();
-  }, [isMacOS, userId]);
+  }, [isMacOS, userId, isGoogleConnected, isMicrosoftConnected]);
+
+  /**
+   * BACKLOG-3156 stage C — THE COUNTS NOW HEAR THE IMPORT THAT FOLLOWS A CONNECT.
+   *
+   * Connecting a Google or Microsoft account triggers a contact import in the
+   * main process (`postConnectContactImport.ts`, reached from
+   * `googleAuthHandlers.ts` and `microsoftAuthHandlers.ts`), which finishes by
+   * sending `contacts:external-sync-complete`. That import does NOT go through
+   * the sync orchestrator, so the `contactsItem?.status === 'complete'` effect
+   * above never fires for it, and until this subscription existed NOTHING in
+   * the renderer listened to that channel at all — the send had no consumer
+   * anywhere in `src/`. The grid therefore kept showing its mount-time numbers
+   * until Settings was closed and reopened.
+   *
+   * The `typeof` guard is for test fixtures that stub `window.api.contacts`
+   * with only the methods they call; it is not a claim that the bridge is
+   * optional in the app. `contactsStoredNeutral-3156` renders WITH the bridge
+   * present and asserts the refetch happens, so removing this subscription
+   * fails there rather than passing quietly through the guard.
+   */
+  useEffect(() => {
+    if (!userId) return;
+    const subscribe = window.api?.contacts?.onExternalSyncComplete;
+    if (typeof subscribe !== "function") return;
+    return subscribe(() => {
+      void loadSourceStats();
+    });
+  }, [userId]);
 
   // Update lastResult when contacts sync completes or errors
   useEffect(() => {
@@ -274,14 +337,32 @@ export function ContactsImportSettings({
     }
   };
 
+  /**
+   * BACKLOG-3156 stage C: a failed read is now logged.
+   *
+   * It used to be swallowed under a comment saying the stats would "show as
+   * loading". There is no loading state in this grid: when `sourceStats` stays
+   * `null`, every cell renders an em-dash, which is the same thing it renders
+   * for a source the database has never heard of. So a failed read was
+   * indistinguishable from an empty one, on screen AND in the log.
+   *
+   * The em-dash is deliberately NOT replaced with `0` here. `0` would be a
+   * claim that the rows were counted and there were none, which is the one
+   * thing this branch knows to be untrue.
+   */
   const loadSourceStats = async () => {
     try {
       const result = await window.api.contacts.getSourceStats(userId);
       if (result.success && result.stats) {
         setSourceStats(result.stats);
+        return;
       }
-    } catch {
-      // Non-critical — stats will show as loading
+      logger.warn(
+        "[Contacts] Source stats unavailable; the counts grid will show em-dashes",
+        { error: result.error },
+      );
+    } catch (error) {
+      logger.warn("[Contacts] Source stats read threw", error);
     }
   };
 
@@ -408,7 +489,6 @@ export function ContactsImportSettings({
 
   // All hooks must be declared before any early return to satisfy Rules of Hooks.
   const [forceReimporting, setForceReimporting] = useState(false);
-  const [showInfoTooltip, setShowInfoTooltip] = useState(false);
   // BACKLOG-2388 (#95): gate the destructive-sounding Force Re-import behind an
   // explicit confirm dialog before it wipes the local cache and re-imports.
   const [showReimportConfirm, setShowReimportConfirm] = useState(false);
@@ -478,50 +558,54 @@ export function ContactsImportSettings({
   }
 
   return (
-    <div className="p-4 bg-gray-50 rounded-lg border border-gray-200">
-      {/* Header */}
-      <div className="flex items-center gap-2 mb-1">
-        <svg
-          className="w-5 h-5 text-blue-600"
-          fill="none"
-          stroke="currentColor"
-          viewBox="0 0 24 24"
-        >
-          <path
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            strokeWidth={2}
-            d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"
-          />
-        </svg>
-        <h4 className="text-sm font-medium text-gray-900">Contacts</h4>
-      </div>
-      <p className="text-xs text-gray-600 mb-3">
-        Manage contact sources and import contacts for transaction assignment.
-      </p>
+    /* BACKLOG-3156 stage E: THE OUTER PANEL CARD IS GONE, and so is the panel's
+       icon + `<h4>Contacts</h4>` header.
+       ────────────────────────────────────────────────────────────────────
+       The heading repeated the section's own `<h3>Contacts</h3>` one line
+       above it, and the card it opened wrapped every block — putting each
+       block's eyebrow inside a card that then held a second heading. Now each
+       block is its own card, eyebrow first, and the root is a plain stack.
 
-      {/*
-        BACKLOG-2986: a failed preference write is visible, and visible HERE —
-        directly above the switches, so the message sits next to the control the
-        user just clicked. It first rendered at the top of the Contacts section,
-        which put it off-screen for anyone toggling one of the lower switches.
-        An error nobody sees is not much better than the silent failure it
-        replaced.
-      */}
-      {saveError && (
-        <div
-          role="alert"
-          className="mb-3 p-2 rounded text-xs bg-red-50 text-red-700 border border-red-200"
-        >
-          {saveError}
-        </div>
-      )}
-
-      {/* Import From (direct) toggle switches */}
-      <div className="mb-3">
+       The panel's description was the line under that heading; it describes
+       what the source switches do, so it moved into the Sources card, in the
+       slot the deleted heading used to occupy. Verbatim — no copy was
+       rewritten. */
+    <div className="space-y-4">
+      {/* BACKLOG-3156 stage E: block 1 — Sources. Contacts has no import
+          preferences to set, so it has no Import Preferences block; the ORDER
+          is the consistent thing across the sections, not the count. */}
+      <div
+        data-testid="contacts-block-sources"
+        className="p-4 bg-gray-50 rounded-lg border border-gray-200"
+      >
         <p className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-2">
-          Import From
+          Sources
         </p>
+        <p className="text-xs text-gray-600 mb-3">
+          Manage contact sources and import contacts for transaction assignment.
+        </p>
+
+        {/*
+          BACKLOG-2986: a failed preference write is visible, and visible HERE —
+          directly above the switches, so the message sits next to the control
+          the user just clicked. It first rendered at the top of the Contacts
+          section, which put it off-screen for anyone toggling one of the lower
+          switches. An error nobody sees is not much better than the silent
+          failure it replaced.
+
+          BACKLOG-3156 stage E moved it INSIDE the Sources card, still directly
+          above the switches — the position the item is about — rather than
+          leaving it stranded above the card they now live in.
+        */}
+        {saveError && (
+          <div
+            role="alert"
+            className="mb-3 p-2 rounded text-xs bg-red-50 text-red-700 border border-red-200"
+          >
+            {saveError}
+          </div>
+        )}
+
         <div className="space-y-2">
           {/* Outlook Contacts toggle */}
           <div className="flex items-center justify-between py-1">
@@ -688,8 +772,14 @@ export function ContactsImportSettings({
         </div>
       </div>
 
-      {/* Auto-discover from conversations (inferred) toggle switches */}
-      <div className="mb-4">
+      {/* BACKLOG-3156 stage E: `Auto-discover from conversations` is its OWN
+          block now. It was a second eyebrow inside the Sources block, which the
+          shared shape does not allow: one eyebrow per card, and it is that
+          card's first child. */}
+      <div
+        data-testid="contacts-block-autodiscover"
+        className="p-4 bg-gray-50 rounded-lg border border-gray-200"
+      >
         <p className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-2">
           Auto-discover from conversations
         </p>
@@ -775,12 +865,9 @@ export function ContactsImportSettings({
         </div>
       </div>
 
-      {/* Divider before import controls */}
-      <div className="border-t border-gray-200 pt-3 mb-3">
-        <p className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-2">
-          Import
-        </p>
-      </div>
+      {/* BACKLOG-3156 stage E: the divider that used to sit here is gone. It
+          separated two stretches of one card; the blocks are separate cards
+          now, so the gap between them draws the same rule. */}
 
       {/* Sync status (macOS) */}
       {hasMacOS && macosContactsEnabled && syncStatus && (
@@ -812,48 +899,46 @@ export function ContactsImportSettings({
         </div>
       )}
 
+      {/* BACKLOG-3156 stage E: block 3 — Stored on this computer. The grid
+          itself is unchanged; the block is now its own card with the eyebrow as
+          that card's first child, like every other block on these screens. */}
+      <div
+        data-testid="contacts-block-stored"
+        className="p-4 bg-gray-50 rounded-lg border border-gray-200"
+      >
+      <p className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-2">
+        Stored on this computer
+      </p>
       {/* Source stats grid (read-only indicators) */}
-      <div className="grid grid-cols-3 gap-2 text-center mb-3">
+      <div className="grid grid-cols-3 gap-2 text-center">
         {isMacOS && (
-          <div className={`p-2 rounded border ${
-            macosContactsEnabled
-              ? "bg-violet-50 border-violet-200"
-              : "bg-gray-50 border-gray-200 opacity-50"
-          }`}>
-            <div className={`text-lg font-semibold ${macosContactsEnabled ? "text-violet-700" : "text-gray-400"}`}>
+          <div className={macosContactsEnabled ? STORED_CELL.on : STORED_CELL.off}>
+            <div className={macosContactsEnabled ? STORED_CELL.countOn : STORED_CELL.countOff}>
               {sourceStats?.macos?.toLocaleString() ?? "—"}
             </div>
-            <div className={`text-xs ${macosContactsEnabled ? "text-violet-600" : "text-gray-400"}`}>macOS</div>
+            <div className={macosContactsEnabled ? STORED_CELL.labelOn : STORED_CELL.labelOff}>macOS</div>
           </div>
         )}
         {sourceStats && sourceStats.iphone > 0 && (
-          <div className="p-2 bg-blue-50 rounded border border-blue-200">
-            <div className="text-lg font-semibold text-blue-700">{sourceStats.iphone.toLocaleString()}</div>
-            <div className="text-xs text-blue-600">iPhone</div>
+          <div className={STORED_CELL.on}>
+            <div className={STORED_CELL.countOn}>{sourceStats.iphone.toLocaleString()}</div>
+            <div className={STORED_CELL.labelOn}>iPhone</div>
           </div>
         )}
         {isMicrosoftConnected && (
-          <div className={`p-2 rounded border ${
-            outlookContactsEnabled
-              ? "bg-indigo-50 border-indigo-200"
-              : "bg-gray-50 border-gray-200 opacity-50"
-          }`}>
-            <div className={`text-lg font-semibold ${outlookContactsEnabled ? "text-indigo-700" : "text-gray-400"}`}>
+          <div className={outlookContactsEnabled ? STORED_CELL.on : STORED_CELL.off}>
+            <div className={outlookContactsEnabled ? STORED_CELL.countOn : STORED_CELL.countOff}>
               {sourceStats?.outlook?.toLocaleString() ?? "—"}
             </div>
-            <div className={`text-xs ${outlookContactsEnabled ? "text-indigo-600" : "text-gray-400"}`}>Outlook</div>
+            <div className={outlookContactsEnabled ? STORED_CELL.labelOn : STORED_CELL.labelOff}>Outlook</div>
           </div>
         )}
         {isGoogleConnected && (
-          <div className={`p-2 rounded border ${
-            googleContactsEnabled
-              ? "bg-green-50 border-green-200"
-              : "bg-gray-50 border-gray-200 opacity-50"
-          }`}>
-            <div className={`text-lg font-semibold ${googleContactsEnabled ? "text-green-700" : "text-gray-400"}`}>
+          <div className={googleContactsEnabled ? STORED_CELL.on : STORED_CELL.off}>
+            <div className={googleContactsEnabled ? STORED_CELL.countOn : STORED_CELL.countOff}>
               {sourceStats?.google_contacts?.toLocaleString() ?? "—"}
             </div>
-            <div className={`text-xs ${googleContactsEnabled ? "text-green-600" : "text-gray-400"}`}>Google</div>
+            <div className={googleContactsEnabled ? STORED_CELL.labelOn : STORED_CELL.labelOff}>Google</div>
           </div>
         )}
         {/*
@@ -872,17 +957,15 @@ export function ContactsImportSettings({
           asking.
         */}
         {showAndroidContacts && (
-          <div className={`p-2 rounded border ${
-            androidContactsEnabled
-              ? "bg-teal-50 border-teal-200"
-              : "bg-gray-50 border-gray-200 opacity-50"
-          }`}>
-            <div className={`text-lg font-semibold ${androidContactsEnabled ? "text-teal-700" : "text-gray-400"}`}>
+          <div className={androidContactsEnabled ? STORED_CELL.on : STORED_CELL.off}>
+            <div className={androidContactsEnabled ? STORED_CELL.countOn : STORED_CELL.countOff}>
               {sourceStats?.android_sync?.toLocaleString() ?? "—"}
             </div>
-            <div className={`text-xs ${androidContactsEnabled ? "text-teal-600" : "text-gray-400"}`}>Android</div>
+            <div className={androidContactsEnabled ? STORED_CELL.labelOn : STORED_CELL.labelOff}>Android</div>
           </div>
         )}
+      </div>
+
       </div>
 
       {/*
@@ -1027,8 +1110,10 @@ export function ContactsImportSettings({
         </div>
       )}
 
-      {/* Action buttons */}
-      <div className="flex gap-2 items-center">
+      {/* BACKLOG-3156 stage A: block 4 — the actions, BARE on the page. No
+          surrounding card and no heading; primary then destructive. Neither
+          `disabled` expression changed. */}
+      <div data-testid="contacts-block-actions" className="flex gap-2 items-center">
         <button
           onClick={handleImportAll}
           disabled={anySyncing || isOtherSyncRunning || noSourcesSelected}
@@ -1044,31 +1129,25 @@ export function ContactsImportSettings({
         >
           {forceReimporting ? "Clearing..." : "Force Re-import"}
         </button>
-        {/* Info icon */}
-        <div className="relative">
-          <button
-            type="button"
-            onMouseDown={(e) => {
-              e.preventDefault(); // Prevent blur from firing on self-click
-              setShowInfoTooltip(!showInfoTooltip);
-            }}
-            onBlur={() => setShowInfoTooltip(false)}
-            className="text-gray-400 hover:text-gray-600 transition-colors"
-            aria-label="Import info"
-          >
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-            </svg>
-          </button>
-          {showInfoTooltip && (
-            <div className="absolute bottom-full right-0 mb-2 w-64 p-3 bg-white rounded-lg shadow-lg border border-gray-200 text-xs text-gray-600 z-10">
-              <p className="font-medium text-gray-900 mb-1">Import Contacts</p>
-              <p className="mb-2">Adds new contacts, updates existing ones, and removes contacts deleted from the source.</p>
-              <p className="font-medium text-gray-900 mb-1">Force Re-import</p>
-              <p>Clears the copy stored on this computer for the sources you have switched on, and downloads them again. Contacts synced from your phone are left alone — only the phone can send those. Use if contacts look out of sync.</p>
-            </div>
-          )}
-        </div>
+        {/* BACKLOG-3156 stage B: the `?`, now the shared `ImportInfoPopover`.
+            The copy below is TODAY'S, unchanged — it was already accurate, and
+            BACKLOG-3029 is the reason it reads the way it does: it states the
+            RULE ("the sources you have switched on") instead of naming them,
+            because a list derived from this component's connectedness flags
+            disagrees with what the orchestrator actually empties. */}
+        <ImportInfoPopover
+          testId="contacts-import-info"
+          entries={[
+            {
+              heading: "Import Contacts",
+              body: "Adds new contacts, updates existing ones, and removes contacts deleted from the source.",
+            },
+            {
+              heading: "Force Re-import",
+              body: "Clears the copy stored on this computer for the sources you have switched on, and downloads them again. Contacts synced from your phone are left alone — only the phone can send those. Use if contacts look out of sync.",
+            },
+          ]}
+        />
       </div>
 
       {/*

@@ -134,12 +134,28 @@ const SELF = "electron/services/db/core/__tests__/sqlText.escapeSet.test.ts";
  * `--allow-growth`, and no baseline was regenerated — this map is compared against a
  * measurement, so a row can only leave when its escape actually leaves.
  *
- * **Four did not convert, and they are still here rather than gone.** In each, the
- * tag refuses a splice because a VALUE is pasted into SQL text: a row limit
+ * **Four did not convert, and they were still here rather than gone.** In each, the
+ * tag refused a splice because a VALUE was pasted into SQL text: a row limit
  * (`LIMIT ${Number(limit)}`) and, three times, a provider list hand-quoted into a
  * predicate by `emailForceReadView`. Fixing either CHANGES the statement, so neither
- * belongs inside a byte-identical conversion. They are re-owned to **BACKLOG-3102**,
+ * belonged inside a byte-identical conversion. They were re-owned to **BACKLOG-3102**,
  * which is what the owner column is for.
+ *
+ * ## 2026-09-05 — BACKLOG-3102 removed the last four. 135 -> 4 -> 0.
+ *
+ * PR 1 bound the row limit (`LIMIT ?`). PR 2 bound the provider list and branded
+ * the staging identifier through `core/identifierSql.ts`, a bodied builder over the
+ * character alphabet `STAGING_NAME_PATTERN` admits. **`EXPECTED_ESCAPES` is now
+ * empty, and that is the point: the ratchet is LOCKED AT ZERO.** A single new
+ * `unsafeSql` anywhere in the tree fails the exact-map assertion below, by name.
+ *
+ * **What zero does NOT mean.** It does not mean no unbranded SQL exists inside
+ * `db/`. `emailSyncSql.ts`'s `emailsWriteTable`/`participantsWriteTable` still
+ * splice staging names into `db.prepare` on the RAW handle, which the brand does
+ * not guard (`sqlText.ts`'s stated `getRawDatabase`/`ensureDb` Phase-B hole), and
+ * `macosForceSetSql.ts`'s sibling read view still receives a predicate as text.
+ * What reaches zero is unbranded SQL reaching the four CONDUITS. A false
+ * completeness claim would be worse than a stated limit.
  *
  * ## A count correction, found by re-deriving rather than by reading
  *
@@ -284,13 +300,14 @@ const SELF = "electron/services/db/core/__tests__/sqlText.escapeSet.test.ts";
  * **BACKLOG-3103** bound it. The tag refused them, correctly, and that refusal is what
  * made the defect visible instead of tolerable. They moved here unchanged.
  *
- * The residual 3 are BACKLOG-3102's, in-layer, and they are the same shape one level
- * further in: a provider list spliced as a VALUE into statements that live in `db/`
- * already.
+ * The residual 3 were BACKLOG-3102's, in-layer, and they were the same shape one
+ * level further in: a provider list spliced as a VALUE into statements that live in
+ * `db/` already. **They are gone as of PR 2, and the map is EMPTY.**
  *
- * The row limit that used to sit beside them is GONE — BACKLOG-3102 PR 1 bound it
+ * The row limit that used to sit beside them went first — BACKLOG-3102 PR 1 bound it
  * (`LIMIT ?`), so `communicationDbService.ts` left this map by having its escape
- * removed, which is the only way a row may leave.
+ * removed, which is the only way a row may leave. `emailSyncSql.ts` left it the same
+ * way: its three escapes were converted, not deleted from this table.
  *
  * OWNERS, and what each one means:
  *
@@ -299,15 +316,19 @@ const SELF = "electron/services/db/core/__tests__/sqlText.escapeSet.test.ts";
  *     untouched by BACKLOG-3085 — including the ones a newly-branded constant made
  *     redundant, because this map pins them and they are not that item's work.
  *
- *   BACKLOG-3102 — the statement is inside the layer and CANNOT use the tag, because
- *     it splices a value into SQL text. 3 in 1 file, down from 4 in 2: PR 1 bound the
- *     row limit, PR 2 owns the provider list and takes this map to empty.
+ *   BACKLOG-3102 — the statement was inside the layer and could not use the tag,
+ *     because it spliced a value into SQL text. 4 in 2 files, then 3 in 1, now NONE:
+ *     PR 1 bound the row limit, PR 2 bound the provider list and branded the staging
+ *     identifier. **This owner has no rows left, and neither does anyone else.**
  *
  * Phase B items re-own these rows as they are filed; the owner column is what makes
  * "who is going to remove this" a fact in CI rather than a memory.
  */
 const EXPECTED_ESCAPES: Record<string, { count: number; owner: string }> = {
-  "electron/services/db/emailSyncSql.ts": { count: 3, owner: "BACKLOG-3102" },
+  // EMPTY, AND LOCKED. Not "empty for now" — the map is compared against a
+  // measurement, so adding an `unsafeSql` anywhere fails the exact-map assertion
+  // below and prints the file that added it. Emptiness is the strongest state
+  // this ratchet has: there is no row to hide a new escape behind.
 };
 
 /**
@@ -469,7 +490,7 @@ describe("BACKLOG-3064 — the escape set is exactly what the PR says it is", ()
     expect(measure(countEscapes)).toEqual({ ...expectedCounts, ...EXPECTED_CONTROL_CALLS });
   });
 
-  it("totals 3 ESCAPES in 1 file — BACKLOG-3044 is DONE; only BACKLOG-3102 PR 2 remains", () => {
+  it("totals ZERO escapes in ZERO files — the ratchet is LOCKED at 0", () => {
     const measured = measure(countEscapes);
     const escapes = Object.fromEntries(
       Object.entries(measured).filter(([f]) => !(f in EXPECTED_CONTROL_CALLS)),
@@ -477,8 +498,8 @@ describe("BACKLOG-3064 — the escape set is exactly what the PR says it is", ()
 
     expect(escapes).toEqual(expectedCounts);
     expect(Object.values(escapes).reduce((a, b) => a + b, 0)).toBe(EXPECTED_TOTAL);
-    expect(EXPECTED_TOTAL).toBe(3);
-    expect(Object.keys(escapes)).toHaveLength(1);
+    expect(EXPECTED_TOTAL).toBe(0);
+    expect(Object.keys(escapes)).toHaveLength(0);
   });
 
   /** Every escape carries an owner. No default, no fall-through, no blanks. */
@@ -486,14 +507,17 @@ describe("BACKLOG-3064 — the escape set is exactly what the PR says it is", ()
     for (const [file, entry] of Object.entries(EXPECTED_ESCAPES)) {
       expect([file, entry.owner]).toEqual([file, expect.stringMatching(/^BACKLOG-\d+$/)]);
     }
-    // The owner split is ASSERTED rather than read off the table, so a row that
-    // changes hands has to say so here. Only BACKLOG-3102 remains — BACKLOG-3044's
-    // rows left when its statements moved into the layer.
+    // HONEST NOTE: with the map empty, the loop above and the split below are
+    // VACUOUS — they iterate nothing and pass unconditionally. They are kept
+    // rather than deleted because the moment anyone re-adds a row they become
+    // load-bearing again, and re-deriving this rule later is how owner columns
+    // quietly go missing. The assertion that still MEASURES something is the
+    // exact-map test above, which compares against a census of the tree.
     const byOwner: Record<string, number> = {};
     for (const entry of Object.values(EXPECTED_ESCAPES)) {
       byOwner[entry.owner] = (byOwner[entry.owner] ?? 0) + entry.count;
     }
-    expect(byOwner).toEqual({ "BACKLOG-3102": 3 });
+    expect(byOwner).toEqual({});
   });
 
   /**
