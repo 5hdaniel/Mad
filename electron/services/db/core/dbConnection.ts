@@ -19,6 +19,7 @@ import { DatabaseError, QueryResult } from "../../../types";
 import type { SafeSql } from "./sqlText";
 import { databaseEncryptionService } from "../../databaseEncryptionService";
 import logService from "../../logService";
+import { instrumentDatabaseTiming } from "./dbTiming";
 
 /**
  * Database connection state - shared across all services
@@ -137,7 +138,12 @@ export function openDatabase(): DatabaseType {
  * Set the database instance (used during initialization)
  */
 export function setDb(database: DatabaseType): void {
-  db = database;
+  // BACKLOG-2960 — the single point where the live handle is published, and so
+  // the single point where database-time accounting is installed. Every caller
+  // downstream of here shares this object: the conduits below, and every
+  // `getRawDatabase()` holder that drives `prepare`/`exec`/`transaction`
+  // directly. See `dbTiming.ts` for why the measurement is not in the conduits.
+  db = instrumentDatabaseTiming(database);
 }
 
 /**

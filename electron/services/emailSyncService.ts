@@ -49,6 +49,11 @@ import {
   type EmailPrecacheMode,
 } from "./emailPrecacheTiming";
 import { dbGet, dbAll, dbRun, getRawDatabase } from "./db/core/dbConnection";
+// BACKLOG-2960 — imported from `dbTiming`, not `dbConnection`, on purpose: the
+// pre-cache suites `jest.mock` `dbConnection` with a hand-written partial, so a
+// new export there would arrive `undefined` and render `dbMs=NaN`. The pure
+// module is unmocked, and reports 0 when nothing instrumented ran.
+import { readDbTimeMs } from "./db/core/dbTiming";
 import gmailFetchService from "./gmailFetchService";
 import outlookFetchService from "./outlookFetchService";
 import databaseService from "./databaseService";
@@ -1976,6 +1981,8 @@ class EmailSyncService {
     // than copied into a record after each `+=`, because a throw between a
     // mutation and its copy would hand the `finally` stale numbers.
     const runStartedAt = Date.now();
+    // Taken here, beside the wall clock, so both figures cover the same span.
+    const dbMsAtRunStart = readDbTimeMs();
     let totalFetched = 0;
     let totalStored = 0;
     // Non-force runs start at "cache" and become "re-cache" the moment the
@@ -2812,6 +2819,10 @@ class EmailSyncService {
       // measurement this line exists to produce.
       try {
         const elapsedMs = Date.now() - runStartedAt;
+        // Rounded once, here. The accumulator is fractional because a single
+        // prepared statement is well under a millisecond; rounding per call
+        // would floor most of them to zero.
+        const dbMs = Math.round(readDbTimeMs() - dbMsAtRunStart);
         const timing = {
           mode: precacheMode,
           outcome: progressOutcome,
@@ -2822,6 +2833,7 @@ class EmailSyncService {
           ...(forceSwap ? { inserted: forceSwap.emailsInserted } : {}),
           elapsedMs,
           build: resolvePrecacheBuild(),
+          dbMs,
         };
         logService.info(
           formatEmailPrecacheTimingLine(timing),
