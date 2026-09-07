@@ -1503,7 +1503,7 @@ export class DeviceSyncOrchestrator extends EventEmitter {
         message: "Reading contacts...",
       });
 
-      this.contactsParser.open(backupPath);
+      await this.contactsParser.open(backupPath);
       const contacts = this.contactsParser.getAllContacts();
 
       this.emitProgress({
@@ -2305,7 +2305,7 @@ export class DeviceSyncOrchestrator extends EventEmitter {
         message: "Reading contacts...",
       });
 
-      this.contactsParser.open(extractionPath);
+      await this.contactsParser.open(extractionPath);
       const contacts = this.contactsParser.getAllContacts();
 
       this.emitProgress({

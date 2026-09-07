@@ -5,6 +5,9 @@
  * --------------
  *   E1  The shell's entry module (`electron/main.ts`) contains a TOP-LEVEL
  *       import whose specifier RESOLVES to the composition root.
+ *   E2  For each required ENTRY import, the entry module contains a top-level
+ *       import that RESOLVES to it — and, where that import's contract says so,
+ *       it is the entry's FIRST statement.
  *   C1  For each required call, the composition root contains a call
  *       expression whose callee resolves, THROUGH AN IMPORT BINDING, to the
  *       named export of the named module.
@@ -26,8 +29,8 @@
  * Every one of those is a planted control in
  * `electron/capabilities/__tests__/compositionRootGuard.test.ts`.
  *
- * WHY E1 ASSERTS NO ORDERING
- * --------------------------
+ * WHY E1 ASSERTS NO ORDERING AND E2 SOMETIMES DOES
+ * ------------------------------------------------
  * A top-level import executes during the entry module's evaluation, which
  * completes before Electron's `ready` event fires — so the composition root
  * runs before `createWindow()` whatever its statement index. Statement ORDER is
@@ -39,6 +42,14 @@
  * `ImportDeclaration` inside a function or a block, so the restriction excludes
  * nothing the parser would have accepted elsewhere. What E1 genuinely excludes
  * is every CALL form — see the "does not cover" list below.
+ *
+ * E2 is the same presence check plus an OPTIONAL position rule, and it exists
+ * because one bootstrap import does have an ordering contract: BACKLOG-2709's
+ * `installAppDataPaths` must repoint userData before anything reads it, and
+ * `electron/main.ts:1-5` says so in prose. `mustBeFirstStatement` is what makes
+ * that prose enforceable. It is read from the registry per entry, never
+ * assumed: an entry with `mustBeFirstStatement: false` is checked for presence
+ * only, on exactly E1's reasoning.
  *
  * WHAT IT FALSELY REJECTS — correct code this guard reds on
  * ---------------------------------------------------------
@@ -54,7 +65,19 @@
  *   - the INSTALL moved into a sibling module (e.g. `./installStores`) —
  *     rejects `secretStore`.
  *
- * The common cause is CROSS-MODULE INDIRECTION: C1 resolves a callee one hop,
+ * E2 adds two of its own, both from the position rule and both narrow:
+ *
+ *   - a TYPE-ONLY import placed above a `mustBeFirstStatement` entry is
+ *     rejected, although TypeScript erases it and it can execute nothing.
+ *     "First" is `statements[0]`, literally. Loosening it would mean teaching
+ *     this file which statement kinds survive emit — a second, drifting copy of
+ *     the compiler's rule — to protect a case nobody has hit above a comment
+ *     block that reads "This import MUST stay first";
+ *   - a re-export chain — `import "./bootstrap"` where that barrel imports
+ *     `installAppDataPaths` — is rejected, on the same one-hop resolution limit
+ *     C1 has.
+ *
+ * The common cause of the three C1 rejections is CROSS-MODULE INDIRECTION: C1 resolves a callee one hop,
  * to the module the composition root imports it from, and does not follow a
  * re-export or descend into another file. No barrel exists today
  * (`electron/capabilities/index.ts` is absent), so nothing is broken now — but
@@ -84,15 +107,22 @@
  *     `import("./bootstrap/…")` is reported as MISSING, not accepted. That is
  *     conservative in the safe direction (it over-reports), but it is a false
  *     positive waiting for anyone who rewrites `main.ts` in that style.
- *   - Install ORDER, between capabilities or between bootstrap modules.
+ *   - Install ORDER between CAPABILITIES, and every ordering between bootstrap
+ *     modules except the one E2 asserts: that a `mustBeFirstStatement` entry is
+ *     the entry module's first statement. Nothing here says the composition
+ *     root runs after the app-data override — only that the override is first,
+ *     which implies it.
  *   - Whether the installed implementation WORKS. That is
  *     `electron/capabilities/electron/__tests__/electronSecretStore.test.ts`.
  *   - Whether the capability is reachable at all in a packaged build. Nothing
  *     here runs a bundler.
- *   - `electron/bootstrap/installAppDataPaths`. SR named it as the same hazard
- *     class with no guard of any kind, and it is still unguarded: it is a
- *     path override, not a capability with an interface, so it is out of this
- *     registry's scope rather than covered by it.
+ *   - A RUNTIME check on any E2 entry. E2 is static only. Whether
+ *     `installAppDataPaths` actually ran is not asserted anywhere at launch —
+ *     deliberately, with the two measurements behind that choice recorded on
+ *     `REQUIRED_ENTRY_IMPORTS` in `electron/capabilities/nativeCapabilities.ts`.
+ *     (Before that list existed, this line said `installAppDataPaths` was
+ *     unguarded and out of scope. E2 is now the guard; the entry is kept in
+ *     amended form so the change is legible rather than silently deleted.)
  *   - Any shell other than Electron. `entryFile` is a parameter, but only
  *     `electron/main.ts` is asserted today.
  *
@@ -114,10 +144,30 @@ export interface RequiredCall {
 
 /** One thing the guard found wrong. */
 export interface Finding {
-  readonly rule: "E1" | "C1";
-  /** The capability/call name for C1; the entry file for E1. */
+  readonly rule: "E1" | "E2" | "C1";
+  /**
+   * The capability/call name for C1, the entry import's name for E2; the entry
+   * file for E1.
+   */
   readonly subject: string;
   readonly detail: string;
+}
+
+/**
+ * A side-effect import the shell ENTRY must make, beyond the composition root.
+ *
+ * Structurally identical to the registry's `RequiredEntryImport`; restated here
+ * so this helper depends on no production module, exactly as `RequiredCall` is.
+ */
+export interface RequiredEntryImport {
+  /** Name used in failure messages — a description, not an identifier. */
+  readonly name: string;
+  /** Repo-relative, extensionless, POSIX path of the module to import. */
+  readonly module: string;
+  /** True when presence is not enough and it must be `statements[0]`. */
+  readonly mustBeFirstStatement: boolean;
+  /** Why the entry needs it. Quoted into the failure message. */
+  readonly why: string;
 }
 
 export interface CompositionRootInput {
@@ -128,6 +178,13 @@ export interface CompositionRootInput {
   readonly compositionRoot: string;
   readonly compositionRootSource: string;
   readonly requiredCalls: readonly RequiredCall[];
+  /**
+   * Side-effect imports the ENTRY must make, checked by E2.
+   *
+   * Optional and defaulting to none, so a caller that only wants E1 and C1 gets
+   * byte-identical findings to the ones it got before E2 existed.
+   */
+  readonly requiredEntryImports?: readonly RequiredEntryImport[];
 }
 
 const SOURCE_EXT = /\.(ts|tsx|mts|cts|js|jsx|mjs|cjs)$/;
@@ -171,6 +228,32 @@ function requireTarget(expr: ts.Expression | undefined): string | null {
     ts.isStringLiteralLike(e.arguments[0])
   ) {
     return e.arguments[0].text;
+  }
+  return null;
+}
+
+/**
+ * The module a TOP-LEVEL statement imports, resolved — or `null` if it is not
+ * an import statement at all.
+ *
+ * Recognises the same two forms E1 does, `import "..."` and
+ * `import x = require("...")`, and deliberately duplicates that recognition
+ * rather than sharing a helper with E1. E1 is the rule PR #2515 shipped and SR
+ * measured; refactoring it to serve a second caller would put its behaviour
+ * change beyond the reach of the twenty cases that currently pin it, and no
+ * existing case exercises its `import x = require(...)` branch. Ten duplicated
+ * lines are cheaper than an unmeasured change to a merged guard.
+ */
+function entryImportedModule(stmt: ts.Statement, entryFile: string): string | null {
+  if (ts.isImportDeclaration(stmt) && ts.isStringLiteral(stmt.moduleSpecifier)) {
+    return resolveSpecifier(entryFile, stmt.moduleSpecifier.text);
+  }
+  if (
+    ts.isImportEqualsDeclaration(stmt) &&
+    ts.isExternalModuleReference(stmt.moduleReference) &&
+    ts.isStringLiteral(stmt.moduleReference.expression)
+  ) {
+    return resolveSpecifier(entryFile, stmt.moduleReference.expression.text);
   }
   return null;
 }
@@ -304,8 +387,10 @@ function parse(filePath: string, source: string): ts.SourceFile {
 /**
  * Run E1 and C1. Returns every finding; an empty array means the guard passes.
  *
- * Deterministic order: E1 first, then C1 in `requiredCalls` order, so a failure
- * message reads the same on every machine.
+ * Deterministic order: E1 first, then E2 in `requiredEntryImports` order, then
+ * C1 in `requiredCalls` order, so a failure message reads the same on every
+ * machine. Each E2 entry contributes at most one finding: a missing import is
+ * not also reported as mis-positioned.
  */
 export function checkCompositionRoot(input: CompositionRootInput): Finding[] {
   const findings: Finding[] = [];
@@ -339,6 +424,41 @@ export function checkCompositionRoot(input: CompositionRootInput): Finding[] {
         "so the core reaches an uninstalled provider and the app launches without a window. " +
         "This is the exact mutation that went red nowhere before this guard existed.",
     });
+  }
+
+  // ---- E2: the entry imports each required bootstrap module, in position ----
+  for (const required of input.requiredEntryImports ?? []) {
+    const index = entry.statements.findIndex(
+      (stmt) => entryImportedModule(stmt, input.entryFile) === required.module,
+    );
+
+    if (index === -1) {
+      findings.push({
+        rule: "E2",
+        subject: required.name,
+        detail:
+          `${input.entryFile} has no top-level import that resolves to ` +
+          `${required.module}. The entry needs it because ${required.why}. ` +
+          "Deleting this import is invisible to tsc and to every other suite in " +
+          "the repository — that is the defect this rule exists for.",
+      });
+      continue;
+    }
+
+    if (required.mustBeFirstStatement && index !== 0) {
+      const preceding = entry.statements[0];
+      const precedingText = preceding.getText(entry).split("\n")[0].trim();
+      findings.push({
+        rule: "E2",
+        subject: required.name,
+        detail:
+          `${input.entryFile} imports ${required.module}, but as statement ` +
+          `${index + 1} rather than the first. It must be first because ` +
+          `${required.why}. Statement 1 is currently \`${precedingText}\`. ` +
+          "Position IS execution position here: tsconfig.electron.json emits " +
+          "CommonJS, which preserves statement order.",
+      });
+    }
   }
 
   // ---- C1: the composition root actually calls each required installer ----

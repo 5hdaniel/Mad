@@ -34,6 +34,15 @@
  *   C20  PORTABLE module destructuring await import()         -> RED   (R2)
  *   C21  PORTABLE module, bare dynamic import, no binding     -> RED   (R2)
  *   C22  await import of a LOCAL module named similarly       -> GREEN
+ *   C23  PORTABLE module importing electron-log               -> RED   (R3)
+ *   C24  PORTABLE module importing @sentry/electron/main      -> RED   (R3)
+ *   C25  PORTABLE module, side-effect `import "electron-log"` -> RED   (R3)
+ *   C26  PORTABLE module require("electron-log")              -> RED   (R3)
+ *   C27  PORTABLE module await import("@sentry/electron/main")-> RED   (R3)
+ *   C28  PORTABLE module, type-only from electron-log         -> GREEN (erased)
+ *   C29  PORTABLE module importing a LOCAL "./electron-logging"-> GREEN
+ *   C30  a NON-portable module importing electron-log         -> GREEN (ratchet, not ban)
+ *   C31  PORTABLE module importing `electron` fires R2 ONLY   -> RED, one rule
  *   CENSUS  the gate reports 2 of 2 portable modules checked -> the counter that
  *           caught a real defect in the gate during implementation, pinned so it
  *           cannot silently undercount again
@@ -47,6 +56,27 @@ const path = require("path");
 const REPO_ROOT = path.join(__dirname, "..", "..");
 const GATE = path.join(REPO_ROOT, "scripts", "ci", "check-native-capabilities.mjs");
 
+/**
+ * The gate's own PORTABLE list, parsed out of its source.
+ *
+ * Read rather than retyped: a hand-copied list here would silently stop matching
+ * the gate the first time a seam is added, and the fixture would then be
+ * asserting about modules the gate no longer checks.
+ */
+function portableModules() {
+  const src = fs.readFileSync(GATE, "utf8");
+  const block = /const PORTABLE = new Set\(\[([\s\S]*?)\]\);/.exec(src);
+  if (!block) throw new Error("could not find the gate's PORTABLE list");
+  // Only repo-relative TypeScript paths. The block carries explanatory comments
+  // that themselves contain quoted strings — `app.getPath("userData")` is one —
+  // and a bare /"([^"]+)"/ sweep counted `userData` as a tenth module. Found by
+  // the CENSUS case going red, which is the case being computed here: it caught
+  // its own input.
+  const mods = [...block[1].matchAll(/"(electron\/[^"]+\.ts)"/g)].map((m) => m[1]);
+  if (mods.length === 0) throw new Error("the gate's PORTABLE list parsed as empty");
+  return mods;
+}
+
 const results = [];
 const record = (id, name, ok, detail) => results.push({ id, name, ok, detail });
 
@@ -59,9 +89,13 @@ function makeFixture() {
     fs.writeFileSync(abs, body);
   };
 
-  // The two declared-portable modules must exist, and must be clean.
-  write("electron/services/keychainGate.ts", "export const gate = 1;\n");
-  write("electron/services/tokenEncryptionService.ts", "export const svc = 1;\n");
+  // EVERY declared-portable module must exist and be clean, or C16 fires. The
+  // list is read from the gate itself rather than retyped here, so adding a
+  // capability seam cannot leave this fixture stale — which is exactly the class
+  // of drift C16 exists to catch, one level up.
+  for (const rel of portableModules()) {
+    write(rel, `export const portable_${rel.replace(/[^a-z0-9]/gi, "_")} = 1;\n`);
+  }
   // The allowed home for safeStorage.
   write(
     "electron/capabilities/electron/electronSecretStore.ts",
@@ -123,10 +157,11 @@ function control(id, name, rel, body, expectRed, { track = true, rule = null } =
   try {
     const r = runGate(dir);
     record("C1", "clean fixture tree -> GREEN", r.code === 0, `exit=${r.code}`);
+    const expectedPortable = portableModules().length;
     record(
       "CENSUS",
-      "gate reports 2 of 2 portable modules checked",
-      r.json && r.json.portableChecked === 2,
+      `gate reports ${expectedPortable} of ${expectedPortable} portable modules checked`,
+      r.json && r.json.portableChecked === expectedPortable,
       `portableChecked=${r.json ? r.json.portableChecked : "?"} (a file whose only ` +
         'mention of the platform is the capitalised word "Electron" must still be checked)',
     );
@@ -218,6 +253,57 @@ control("C20", 'PORTABLE module using await import("electron") -> RED',
 control("C21", 'PORTABLE module with a bare dynamic import, no binding -> RED',
   "electron/services/keychainGate.ts",
   'export async function gate() {\n  return (await import("electron")).app.getPath("userData");\n}\n',
+  true, { rule: "R2" });
+
+// --- R3: the rest of BACKLOG-2961's coupling class -------------------------
+// Four of the ten coupled modules reached the platform ONLY through
+// `electron-log` and six ONLY through `@sentry/electron/main`. R2 cannot see
+// either, so before R3 a module could satisfy this gate completely and still be
+// unloadable by a non-Electron shell.
+
+control("C23", 'PORTABLE module importing electron-log -> RED (R3)',
+  "electron/services/keychainGate.ts",
+  'import log from "electron-log";\nexport const gate = () => log.info("x");\n',
+  true, { rule: "R3" });
+
+control("C24", 'PORTABLE module importing @sentry/electron/main -> RED (R3)',
+  "electron/services/keychainGate.ts",
+  'import * as Sentry from "@sentry/electron/main";\nexport const gate = () => Sentry.captureMessage("x");\n',
+  true, { rule: "R3" });
+
+control("C25", 'PORTABLE module with a SIDE-EFFECT import of electron-log -> RED (R3)',
+  "electron/services/keychainGate.ts",
+  'import "electron-log";\nexport const gate = 1;\n',
+  true, { rule: "R3" });
+
+control("C26", 'PORTABLE module require()ing electron-log -> RED (R3)',
+  "electron/services/keychainGate.ts",
+  'export const gate = () => require("electron-log").info("x");\n',
+  true, { rule: "R3" });
+
+control("C27", 'PORTABLE module await import()ing @sentry/electron -> RED (R3)',
+  "electron/services/keychainGate.ts",
+  'export async function gate() {\n  const S = await import("@sentry/electron/main");\n  return S.captureMessage("x");\n}\n',
+  true, { rule: "R3" });
+
+control("C28", 'PORTABLE module importing only a TYPE from electron-log -> GREEN',
+  "electron/services/keychainGate.ts",
+  'import type { LogFunctions } from "electron-log";\nexport type L = LogFunctions;\nexport const gate = 1;\n',
+  false);
+
+control("C29", 'PORTABLE module importing a LOCAL module named electron-log-ish -> GREEN',
+  "electron/services/keychainGate.ts",
+  'import log from "./electron-logging";\nexport const gate = () => log.info("x");\n',
+  false);
+
+control("C30", 'a NON-portable module importing electron-log -> GREEN (R3 is a ratchet, not a ban)',
+  V,
+  'import log from "electron-log";\nexport const f = () => log.info("x");\n',
+  false);
+
+control("C31", 'R3 and R2 do not both fire on `electron` -> only R2',
+  "electron/services/keychainGate.ts",
+  'import { app } from "electron";\nexport const gate = () => app.getPath("userData");\n',
   true, { rule: "R2" });
 
 control("C22", 'await import of a DIFFERENT module named similarly -> GREEN', V,

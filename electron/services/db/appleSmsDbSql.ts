@@ -21,6 +21,21 @@
  * assembled per-database from `AUDIO_TRANSCRIPT_COLUMN_PROBE_SQL`. The text
  * genuinely is not knowable until the database is open, so those three cannot
  * be constants a caller passes to `.prepare()`.
+ *
+ * ## Promise-returning at the export, and NOT `async` — BACKLOG-2960
+ *
+ * The `electron/services/db/**` export surface is becoming driver-agnostic: an
+ * export returns a promise so a driver that is not `better-sqlite3` can satisfy
+ * the same signature. The driver underneath is not changing and stays
+ * synchronous — `db.prepare(...).all(...)` is evaluated first and the promise is
+ * built from its result.
+ *
+ * `async` is deliberately not used, and that is a rule for this whole layer
+ * rather than a preference in this file. The reasoning and the runs behind it
+ * are SR ruling `79c3aa69` §2a and its corrections `5687984d`. Read those before
+ * converting either function here to `async`; the shape both functions must keep
+ * is pinned by `the wrapper shape: PLAIN, not async (BACKLOG-2960)` in
+ * `__tests__/appleSmsDbSql.test.ts`.
  */
 
 import type { Database as DatabaseType, Statement } from "better-sqlite3";
@@ -185,7 +200,7 @@ export function selectChatMessages<T>(
   hasAudioTranscript: boolean,
   chatId: number,
   page: MessagePage = {},
-): T[] {
+): Promise<T[]> {
   const limit = page.limit === undefined ? undefined : Math.max(1, Math.floor(page.limit));
   const offset =
     limit === undefined || page.offset === undefined
@@ -198,9 +213,10 @@ export function selectChatMessages<T>(
   if (limit !== undefined) params.push(limit);
   if (offset !== undefined) params.push(offset);
 
-  return db
-    .prepare(
-      `
+  return Promise.resolve(
+    db
+      .prepare(
+        `
         SELECT
           ${messageSelectColumns(hasAudioTranscript)}
         FROM message
@@ -208,8 +224,9 @@ export function selectChatMessages<T>(
         WHERE chat_message_join.chat_id = ?
         ORDER BY message.date ASC
       ` + clause,
-    )
-    .all(...params) as T[];
+      )
+      .all(...params) as T[],
+  );
 }
 
 /**
@@ -230,22 +247,24 @@ export function searchMessagesByText<T>(
   hasAudioTranscript: boolean,
   pattern: string,
   limit?: number,
-): T[] {
+): Promise<T[]> {
   const applied = limit !== undefined && limit > 0 ? Math.floor(limit) : undefined;
   const params: (string | number)[] = [pattern];
   if (applied !== undefined) params.push(applied);
 
-  return db
-    .prepare(
-      `
+  return Promise.resolve(
+    db
+      .prepare(
+        `
         SELECT
           ${messageSelectColumns(hasAudioTranscript)}
         FROM message
         WHERE message.text LIKE ?
         ORDER BY message.date DESC
       ` + (applied === undefined ? "" : " LIMIT ?"),
-    )
-    .all(...params) as T[];
+      )
+      .all(...params) as T[],
+  );
 }
 
 /** Exported for the pin: the projection is what the row mapper reads. */

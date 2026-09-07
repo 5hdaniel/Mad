@@ -36,6 +36,7 @@ import {
   mirrorStagingIndexes,
   selectStagedIdsBySource,
 } from "../emailStagingSql";
+import { sql } from "../core/sqlText";
 import { STAGING_PREFIX, checkedStagingTable } from "../stagingDdlSql";
 import { deleteLiveForceSet, type EmailForceSet } from "../emailForceSetSql";
 
@@ -184,7 +185,7 @@ describe("PAIR 2 — survivors vs staged: every live row is in exactly one set",
     // Half A: what the survivor predicate SEES.
     const { emailForceReadView } = require("../emailForceSetSql") as typeof import("../emailForceSetSql");
     db.exec(`CREATE TABLE "${STAGED_E}" (id TEXT PRIMARY KEY, user_id TEXT, external_id TEXT, source TEXT, sent_at TEXT, subject TEXT)`);
-    const view = emailForceReadView(SET, STAGED_E, "id");
+    const view = emailForceReadView(SET, STAGED_E, sql`id`);
     const seen = (
       db.prepare(`SELECT id FROM ${view.sql} ORDER BY id`).all(...view.params) as Array<{ id: string }>
     ).map((r) => r.id);

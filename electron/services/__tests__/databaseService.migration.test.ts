@@ -181,6 +181,13 @@ describe("DatabaseService Migration Robustness (TASK-2048)", () => {
   beforeEach(async () => {
     jest.clearAllMocks();
     jest.resetModules();
+    // BACKLOG-2962: `resetModules` hands the module under test a FRESH capability
+    // provider with nothing installed, and no jest hook fires after an in-test
+    // reset. AppPaths' default THROWS (a path accessor has no honest no-op), so
+    // without this `databaseService.initialize()` dies on `hostAppPaths.userData()`.
+    // Same reason the six SecretStore suites call `installTestSecretStore()` here.
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    require("../../../tests/helpers/installTestCapabilities").installTestCapabilities();
 
     // Reset mock defaults
     mockStatement.get.mockReturnValue(undefined);

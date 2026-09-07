@@ -444,8 +444,8 @@ export async function autoLinkTextsToTransaction(
 
     // BACKLOG-1560: Filter out messages whose threads were previously unlinked by user
     // Also handles per-message suppression for messages with no/empty thread_id
-    const ignoredThreadIds = getIgnoredThreadIdsForTransaction(transactionId);
-    const ignoredCommIds = getIgnoredCommunicationIdsForTransaction(transactionId);
+    const ignoredThreadIds = await getIgnoredThreadIdsForTransaction(transactionId);
+    const ignoredCommIds = await getIgnoredCommunicationIdsForTransaction(transactionId);
     let filteredMatches = matches;
     if (ignoredThreadIds.size > 0 || ignoredCommIds.size > 0) {
       // Look up thread_id for each matched message to check suppression
@@ -737,7 +737,7 @@ export async function autoLinkEmailsToTransaction(
     // The primary auto-link path (autoLinkService) uses email_id from the emails table.
     // This path uses message_id from the messages table, so we cross-reference via
     // the emails table to find ignored email_ids.
-    const ignoredEmailIds = getIgnoredEmailIdsForTransaction(transactionId);
+    const ignoredEmailIds = await getIgnoredEmailIdsForTransaction(transactionId);
     let filteredEmailMatches = matches;
     if (ignoredEmailIds.size > 0) {
       filteredEmailMatches = matches.filter((match) => {

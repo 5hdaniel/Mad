@@ -18,12 +18,14 @@
 
 import Database from "better-sqlite3-multiple-ciphers";
 import type { Database as DatabaseType } from "better-sqlite3";
-import log from "electron-log";
+import { hostLogger } from "../capabilities/loggerProvider";
 import path from "path";
 import fs from "fs";
 import crypto from "crypto";
-import { app, dialog } from "electron";
-import * as Sentry from "@sentry/electron/main";
+import { hostAppLifecycle } from "../capabilities/appLifecycleProvider";
+import { hostAppPaths } from "../capabilities/appPathsProvider";
+import { hostDialog } from "../capabilities/dialogProvider";
+import { hostErrorReporter } from "../capabilities/errorReporterProvider";
 import logService from "./logService";
 import {
   setDb,
@@ -180,7 +182,7 @@ class DatabaseService implements IDatabaseService {
     // BACKLOG-1842 (resume-at-step fix round): test-only seam to reproduce
     // the "relaunch reaches auth/onboarding reads before the local DB is
     // ready" race on demand, without depending on real memory pressure.
-    // Double-gated (!app.isPackaged && KEEPR_TEST_DB_DELAY set) so it is DEAD
+    // Double-gated (!hostAppLifecycle.isPackaged() && KEEPR_TEST_DB_DELAY set) so it is DEAD
     // CODE in any packaged/shipped build, mirroring the KEEPR_E2E gates in
     // permissionHandlers.ts. Value is milliseconds to sleep before DB init
     // proceeds -- e.g. `KEEPR_TEST_DB_DELAY=5000 npm run dev` delays DB
@@ -188,7 +190,7 @@ class DatabaseService implements IDatabaseService {
     // get-phone-type, check-email-onboarding, check-all-connections, the
     // onboarding resume-marker flow) can be exercised against a real race
     // instead of only unit-test mocks.
-    if (!app.isPackaged && process.env.KEEPR_TEST_DB_DELAY) {
+    if (!hostAppLifecycle.isPackaged() && process.env.KEEPR_TEST_DB_DELAY) {
       const delayMs = parseInt(process.env.KEEPR_TEST_DB_DELAY, 10);
       if (Number.isFinite(delayMs) && delayMs > 0) {
         await logService.warn(
@@ -200,7 +202,7 @@ class DatabaseService implements IDatabaseService {
     }
 
     try {
-      const userDataPath = app.getPath("userData");
+      const userDataPath = hostAppPaths.userData();
       this.dbPath = path.join(userDataPath, "mad.db");
 
       await logService.info("Initializing database", "DatabaseService", { path: this.dbPath });
@@ -307,7 +309,7 @@ class DatabaseService implements IDatabaseService {
         });
 
         // Migration failed -- attempt auto-restore from pre-migration backup
-        log.error("[DatabaseService] Migration FAILED:", migrationError instanceof Error ? migrationError.message : String(migrationError));
+        hostLogger.error("[DatabaseService] Migration FAILED:", migrationError instanceof Error ? migrationError.message : String(migrationError));
         await logService.error("Migration failed, attempting auto-restore", "DatabaseService", {
           error: migrationError instanceof Error ? migrationError.message : String(migrationError),
         });
@@ -315,7 +317,7 @@ class DatabaseService implements IDatabaseService {
         const restoreResult = await this._attemptAutoRestore(migrationError);
 
         // Report to Sentry with migration failure tags
-        Sentry.captureException(migrationError, {
+        hostErrorReporter.captureException(migrationError, {
           tags: {
             service: "database-service",
             operation: "runMigrations",
@@ -326,8 +328,8 @@ class DatabaseService implements IDatabaseService {
         });
 
         // Ensure app is ready before showing dialog
-        if (!app.isReady()) {
-          await app.whenReady();
+        if (!hostAppLifecycle.isReady()) {
+          await hostAppLifecycle.whenReady();
         }
 
         if (restoreResult.restored) {
@@ -342,7 +344,7 @@ class DatabaseService implements IDatabaseService {
           // 2999 defect behind it, in the same commit. Do not "fix" 2834 by
           // deleting this boundary: the no-quit assertion in
           // databaseService.migration-restore.test.ts pins it.
-          dialog.showMessageBox({
+          hostDialog.showMessageBox({
             type: "warning",
             title: "Database Update Notice",
             message: "A database update failed, but your data has been restored.",
@@ -390,7 +392,7 @@ class DatabaseService implements IDatabaseService {
           // whereas this user's data may well be recoverable and those
           // scripts would destroy it. The path is appended because it is the
           // first thing support asks for.
-          await dialog.showMessageBox({
+          await hostDialog.showMessageBox({
             type: "error",
             title: "Database Update Failed",
             message: "A database update failed and could not be automatically fixed.",
@@ -402,7 +404,7 @@ class DatabaseService implements IDatabaseService {
 
           // Flush before any exit path so the migration_failure event
           // survives it (BACKLOG-1576 precedent).
-          await Sentry.flush(2000);
+          await hostErrorReporter.flush(2000);
 
           // THE FLAG IS NOT THE FIX — THE THROW IS. Quitting is a
           // startup-specific remedy and it defaults OFF. Forgetting the
@@ -416,7 +418,7 @@ class DatabaseService implements IDatabaseService {
           // Destructive beats annoying, so the destructive outcome is the
           // one that has to be opted into.
           if (options?.quitOnUnrecoverableFailure) {
-            app.quit();
+            hostAppLifecycle.quit();
           }
 
           throw new MigrationRecoveryFailedError(
@@ -448,7 +450,8 @@ class DatabaseService implements IDatabaseService {
         // and documents the case as informational), and LoadingOrchestrator
         // reads `retryable` only into a Sentry extra. What actually stops a
         // retry loop on an unfixable database is the sequence below: the user
-        // is TOLD (dialog, awaited), and then the app EXITS (app.quit()) —
+        // is TOLD (dialog, awaited), and then the app EXITS
+        // (hostAppLifecycle.quit()) —
         // quit makes renderer state moot. Do not "fix" a future retry bug by
         // teaching the reducer about retryable; the dialog+quit is the
         // load-bearing surface, by SR ruling on this item.
@@ -461,7 +464,7 @@ class DatabaseService implements IDatabaseService {
           foundVersion: error.foundVersion,
           path: this.dbPath,
         });
-        Sentry.captureException(error, {
+        hostErrorReporter.captureException(error, {
           tags: {
             service: "database-service",
             operation: "initialize",
@@ -470,10 +473,10 @@ class DatabaseService implements IDatabaseService {
         });
         // Flush before the quit path so the event survives the exit
         // (BACKLOG-1576 precedent on the auto-restore path).
-        await Sentry.flush(2000);
+        await hostErrorReporter.flush(2000);
 
-        if (!app.isReady()) {
-          await app.whenReady();
+        if (!hostAppLifecycle.isReady()) {
+          await hostAppLifecycle.whenReady();
         }
         // ORDER IS LOAD-BEARING: the dialog is AWAITED, then quit. Dropping
         // the await would exit mid-dialog — the user would never learn why
@@ -486,7 +489,7 @@ class DatabaseService implements IDatabaseService {
         // hand-deleted folder leaves a stale key behind and produces a
         // different, more confusing failure. No retry is offered — there is
         // nothing to retry.
-        await dialog.showMessageBox({
+        await hostDialog.showMessageBox({
           type: "error",
           title: "Database from an older version",
           message: "This database was created by an older version of Keepr and cannot be opened.",
@@ -503,7 +506,7 @@ class DatabaseService implements IDatabaseService {
             `Database: ${this.dbPath ?? "unknown"}`,
           buttons: ["Quit"],
         });
-        app.quit();
+        hostAppLifecycle.quit();
         throw error;
       }
 
@@ -519,7 +522,7 @@ class DatabaseService implements IDatabaseService {
       await logService.error("Failed to initialize database", "DatabaseService", {
         error: error instanceof Error ? error.message : String(error),
       });
-      Sentry.captureException(error, {
+      hostErrorReporter.captureException(error, {
         tags: { service: "database-service", operation: "initialize" },
       });
       throw error;
@@ -602,7 +605,7 @@ class DatabaseService implements IDatabaseService {
       } catch {
         /* ignore */
       }
-      log.warn(
+      hostLogger.warn(
         "[BaselineFence] readonly open failed — deferring to the read-write open (cannot-open is not pre-reset):",
         openError instanceof Error ? openError.message : String(openError),
       );
@@ -679,7 +682,7 @@ class DatabaseService implements IDatabaseService {
             "have upgraded it no longer exists.";
         } else {
           if (version > baseline) {
-            log.warn(
+            hostLogger.warn(
               `[BaselineFence] database schema_version ${version} is ABOVE this build's ` +
                 `baseline ${baseline} — written by a newer build; proceeding.`,
             );
@@ -688,7 +691,7 @@ class DatabaseService implements IDatabaseService {
         }
       }
     } catch (readError) {
-      log.warn(
+      hostLogger.warn(
         `[BaselineFence] could not evaluate the baseline predicate via ${via} — ` +
           "neither refusing nor accepting; the existing open/migration pipeline decides:",
         readError instanceof Error ? readError.message : String(readError),
@@ -763,10 +766,10 @@ class DatabaseService implements IDatabaseService {
         CREATE INDEX IF NOT EXISTS idx_failure_log_timestamp ON failure_log(timestamp);
         CREATE INDEX IF NOT EXISTS idx_failure_log_acknowledged ON failure_log(acknowledged);
       `);
-      log.info("[DatabaseService] failure_log table safety check passed");
+      hostLogger.info("[DatabaseService] failure_log table safety check passed");
     } catch (err) {
       // Log but do not throw -- this is a safety net, not a hard requirement
-      log.warn(
+      hostLogger.warn(
         "[DatabaseService] failure_log safety check failed:",
         err instanceof Error ? err.message : String(err)
       );
@@ -899,7 +902,7 @@ class DatabaseService implements IDatabaseService {
       await logService.error("Database encryption migration failed", "DatabaseService", {
         error: error instanceof Error ? error.message : String(error),
       });
-      Sentry.captureException(error, {
+      hostErrorReporter.captureException(error, {
         tags: { service: "database-service", operation: "_migrateToEncryptedDatabase" },
       });
 
@@ -1055,8 +1058,8 @@ class DatabaseService implements IDatabaseService {
       if (tables.length > 0) {
         const user = currentDb.prepare(LOCAL_USER_ID_AND_EMAIL_SQL).get() as { id: string; email?: string } | undefined;
         if (user?.id) {
-          Sentry.setUser({ id: user.id, email: user.email || undefined });
-          Sentry.addBreadcrumb({
+          hostErrorReporter.setUser({ id: user.id, email: user.email || undefined });
+          hostErrorReporter.addBreadcrumb({
             category: "database",
             message: "Pre-migration user context set",
             level: "info",
@@ -1119,7 +1122,7 @@ class DatabaseService implements IDatabaseService {
         await logService.info(`Pre-migration backup created: ${bkPath}`, "DatabaseService");
       } catch (backupError) {
         await logService.warn("Pre-migration backup failed", "DatabaseService", { error: backupError instanceof Error ? backupError.message : String(backupError) });
-        Sentry.captureException(backupError, {
+        hostErrorReporter.captureException(backupError, {
           tags: { service: "database-service", operation: "runMigrations.backup" },
         });
       }
@@ -1176,13 +1179,13 @@ class DatabaseService implements IDatabaseService {
       await logService.error("Failed to run migrations", "DatabaseService", {
         error: error instanceof Error ? error.message : String(error),
       });
-      Sentry.captureException(error, {
+      hostErrorReporter.captureException(error, {
         tags: { service: "database-service", operation: "runMigrations" },
       });
       // BACKLOG-1576: Flush Sentry before re-throwing so the event
       // (with user context) is guaranteed to be sent even if the
       // process exits quickly after the auto-restore flow.
-      await Sentry.flush(2000);
+      await hostErrorReporter.flush(2000);
       throw error;
     }
 
@@ -1995,7 +1998,7 @@ class DatabaseService implements IDatabaseService {
       await logService.error("Failed to re-key database", "DatabaseService", {
         error: error instanceof Error ? error.message : String(error),
       });
-      Sentry.captureException(error, {
+      hostErrorReporter.captureException(error, {
         tags: { service: "database-service", operation: "rekeyDatabase" },
       });
       throw error;
