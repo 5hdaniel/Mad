@@ -25,7 +25,7 @@ import { join } from 'path';
 
 const MIGRATION = join(
   __dirname,
-  '../../../supabase/migrations/20260905_backlog_3096_setup_first_user_wins.sql'
+  '../../../supabase/migrations/20260905120000_backlog_3096_setup_first_user_wins.sql'
 );
 
 /** The statement that starts at `needle`, up to and including its terminating `;`. */
@@ -37,7 +37,7 @@ function statementAt(sql: string, needle: string): string {
   return sql.slice(start, end + 1);
 }
 
-describe('20260905_backlog_3096_setup_first_user_wins.sql', () => {
+describe('20260905120000_backlog_3096_setup_first_user_wins.sql', () => {
   const sql = readFileSync(MIGRATION, 'utf8');
   // Comments carry the words 'admin' and FOR UPDATE all over the place. Strip
   // them so every assertion below is about executable SQL.

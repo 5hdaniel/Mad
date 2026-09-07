@@ -1,7 +1,7 @@
 # BACKLOG-3096 controls — `/setup` must not hand admin to every employee
 
 These files execute the fix in
-`supabase/migrations/20260905_backlog_3096_setup_first_user_wins.sql`.
+`supabase/migrations/20260905120000_backlog_3096_setup_first_user_wins.sql`.
 
 **They have been run.** Against a disposable Postgres replica on 2026-09-05:
 first against production's unfixed body, then against the fix, then against two
@@ -257,7 +257,7 @@ export DATABASE_URL='postgresql://…'   # direct connection, not the pooler
 
 # apply the fix
 psql "$DATABASE_URL" -v ON_ERROR_STOP=1 \
-  -f supabase/migrations/20260905_backlog_3096_setup_first_user_wins.sql
+  -f supabase/migrations/20260905120000_backlog_3096_setup_first_user_wins.sql
 
 # controls 1-4, 6 and 7
 for f in supabase/tests/backlog-3096/control-[123467]-*.sql; do
