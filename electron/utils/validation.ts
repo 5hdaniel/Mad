@@ -570,12 +570,18 @@ export interface ValidatedTransactionData {
   property_coordinates?: string | null;
   transaction_type?: TransactionTypeValue;
   status?: TransactionStatusValue;
-  sale_price?: number;
-  listing_price?: number;
-  closing_date_verified?: number;
-  started_at?: string;
-  closed_at?: string;
-  closing_deadline?: string;
+  /** `null` is meaningful: how a price is cleared (BACKLOG-2759). */
+  sale_price?: number | null;
+  /** `null` is meaningful: how a price is cleared (BACKLOG-2759). */
+  listing_price?: number | null;
+  /** `null` is meaningful: how the flag is cleared (BACKLOG-2759). */
+  closing_date_verified?: number | null;
+  /** `null` is meaningful: how the start date is cleared (BACKLOG-2759). */
+  started_at?: string | null;
+  /** `null` is meaningful: how the closing date is cleared (BACKLOG-2759). */
+  closed_at?: string | null;
+  /** `null` is meaningful: how the deadline is cleared (BACKLOG-2759). */
+  closing_deadline?: string | null;
   // AI detection fields
   detection_status?: string;
   /** `null` is meaningful: the column's "never reviewed" state (BACKLOG-2558). */
@@ -745,87 +751,155 @@ export function validateTransactionData(
   // `transaction_contacts`; that is a different field, handled under
   // `contact_assignments` below.)
 
-  // Sale price (optional)
-  if (data.sale_price !== undefined && data.sale_price !== null) {
-    const price = Number(data.sale_price);
-    if (isNaN(price) || price < 0) {
-      throw new ValidationError(
-        "Sale price must be a non-negative number",
-        "sale_price",
-      );
+  // ===========================================================================
+  // BACKLOG-2759 — CLEARING A FIELD IS AN INSTRUCTION, NOT AN ABSENCE.
+  // ===========================================================================
+  // Every guard from here to `closing_deadline` used to read
+  // `!== undefined && !== null`, the shape PR #2326 already removed from
+  // `reviewed_at` and `rejection_reason` below. It collapses "clear this
+  // column" (an explicit `null`) into "say nothing about this column"
+  // (`undefined`) and drops the key, so the writer never learns a clear was
+  // asked for and the caller is told it succeeded. `useAuditSubmission.ts`
+  // sends `closed_at` and `closing_deadline` as `|| null`, so this was live:
+  // blanking a closing date left the old date on the row.
+  //
+  // `undefined` still means "not mentioned" and is still skipped.
+  //
+  // The EMPTY STRING is the second half, and it is a separate bug per column:
+  //   - for the three dates, `""` is what a blanked form field produces. The
+  //     writer declares `emptyToNull: true` for these columns, but that rule
+  //     is applied on the INSERT path ONLY (`transactionDbService.ts`, the
+  //     `path === "insert"` condition) — measured, not read: forwarding `""`
+  //     to the update path stored a literal empty string in a DATETIME
+  //     column, which is not NULL and so still reads as "a date is set".
+  //     The clear is therefore resolved HERE, to `null`, for the same reason
+  //     it is for the prices below.
+  //   - for the two prices, `Number("") === 0`, so clearing a price did not
+  //     silently do nothing: it silently wrote `$0` on a nullable column.
+  //     Latent today (no renderer writes either price) but wrong in kind, so
+  //     `""` clears rather than zeroes.
+
+  // Sale price (optional; `null` and `""` both clear it)
+  if (data.sale_price !== undefined) {
+    if (data.sale_price === null || data.sale_price === "") {
+      validated.sale_price = null;
+    } else {
+      const price = Number(data.sale_price);
+      if (isNaN(price) || price < 0) {
+        throw new ValidationError(
+          "Sale price must be a non-negative number",
+          "sale_price",
+        );
+      }
+      validated.sale_price = price;
     }
-    validated.sale_price = price;
   }
 
-  // Listing price (optional)
-  if (data.listing_price !== undefined && data.listing_price !== null) {
-    const price = Number(data.listing_price);
-    if (isNaN(price) || price < 0) {
-      throw new ValidationError(
-        "Listing price must be a non-negative number",
-        "listing_price",
-      );
+  // Listing price (optional; `null` and `""` both clear it)
+  if (data.listing_price !== undefined) {
+    if (data.listing_price === null || data.listing_price === "") {
+      validated.listing_price = null;
+    } else {
+      const price = Number(data.listing_price);
+      if (isNaN(price) || price < 0) {
+        throw new ValidationError(
+          "Listing price must be a non-negative number",
+          "listing_price",
+        );
+      }
+      validated.listing_price = price;
     }
-    validated.listing_price = price;
   }
 
-  // Closing date verified flag (optional, must be 0 or 1)
-  if (
-    data.closing_date_verified !== undefined &&
-    data.closing_date_verified !== null
-  ) {
-    const verified = Number(data.closing_date_verified);
-    if (verified !== 0 && verified !== 1) {
-      throw new ValidationError(
-        "Closing date verified must be 0 or 1",
-        "closing_date_verified",
-      );
+  // Closing date verified flag (optional, must be 0 or 1).
+  //
+  // `""` is deliberately NOT treated as a clear here, unlike the prices above.
+  // The column is `INTEGER DEFAULT 0` and `0` is its resting "not verified"
+  // state, so `Number("") === 0` lands the right value rather than a wrong one.
+  if (data.closing_date_verified !== undefined) {
+    if (data.closing_date_verified === null) {
+      validated.closing_date_verified = null;
+    } else {
+      const verified = Number(data.closing_date_verified);
+      if (verified !== 0 && verified !== 1) {
+        throw new ValidationError(
+          "Closing date verified must be 0 or 1",
+          "closing_date_verified",
+        );
+      }
+      validated.closing_date_verified = verified;
     }
-    validated.closing_date_verified = verified;
   }
 
   // Started at date (optional, must be valid date string)
-  if (data.started_at !== undefined && data.started_at !== null) {
-    if (typeof data.started_at === "string" && data.started_at.trim()) {
-      // Validate it's a valid date format (YYYY-MM-DD or ISO date string)
+  if (data.started_at !== undefined) {
+    // BOTH strip layers are opened here. The outer `!== null` dropped an
+    // explicit clear; the inner `.trim()` truthiness dropped `""`, which is
+    // what a blanked form field sends. Leaving either in place leaves the
+    // field unclearable.
+    if (data.started_at === null) {
+      validated.started_at = null;
+    } else if (typeof data.started_at === "string") {
       const dateStr = data.started_at.trim();
-      if (!/^\d{4}-\d{2}-\d{2}/.test(dateStr)) {
-        throw new ValidationError(
-          "Started at date must be in YYYY-MM-DD format",
-          "started_at",
-        );
+      if (dateStr === "") {
+        validated.started_at = null;
+      } else {
+        if (!/^\d{4}-\d{2}-\d{2}/.test(dateStr)) {
+          throw new ValidationError(
+            "Started at date must be in YYYY-MM-DD format",
+            "started_at",
+          );
+        }
+        validated.started_at = dateStr;
       }
-      validated.started_at = dateStr;
     }
   }
 
   // Closed at date (optional, must be valid date string)
-  if (data.closed_at !== undefined && data.closed_at !== null) {
-    if (typeof data.closed_at === "string" && data.closed_at.trim()) {
-      // Validate it's a valid date format (YYYY-MM-DD or ISO date string)
+  if (data.closed_at !== undefined) {
+    // BOTH strip layers are opened here. The outer `!== null` dropped an
+    // explicit clear; the inner `.trim()` truthiness dropped `""`, which is
+    // what a blanked form field sends. Leaving either in place leaves the
+    // field unclearable.
+    if (data.closed_at === null) {
+      validated.closed_at = null;
+    } else if (typeof data.closed_at === "string") {
       const dateStr = data.closed_at.trim();
-      if (!/^\d{4}-\d{2}-\d{2}/.test(dateStr)) {
-        throw new ValidationError(
-          "Closed at date must be in YYYY-MM-DD format",
-          "closed_at",
-        );
+      if (dateStr === "") {
+        validated.closed_at = null;
+      } else {
+        if (!/^\d{4}-\d{2}-\d{2}/.test(dateStr)) {
+          throw new ValidationError(
+            "Closed at date must be in YYYY-MM-DD format",
+            "closed_at",
+          );
+        }
+        validated.closed_at = dateStr;
       }
-      validated.closed_at = dateStr;
     }
   }
 
   // Closing deadline date (optional, must be valid date string)
-  if (data.closing_deadline !== undefined && data.closing_deadline !== null) {
-    if (typeof data.closing_deadline === "string" && data.closing_deadline.trim()) {
-      // Validate it's a valid date format (YYYY-MM-DD or ISO date string)
+  if (data.closing_deadline !== undefined) {
+    // BOTH strip layers are opened here. The outer `!== null` dropped an
+    // explicit clear; the inner `.trim()` truthiness dropped `""`, which is
+    // what a blanked form field sends. Leaving either in place leaves the
+    // field unclearable.
+    if (data.closing_deadline === null) {
+      validated.closing_deadline = null;
+    } else if (typeof data.closing_deadline === "string") {
       const dateStr = data.closing_deadline.trim();
-      if (!/^\d{4}-\d{2}-\d{2}/.test(dateStr)) {
-        throw new ValidationError(
-          "Closing deadline date must be in YYYY-MM-DD format",
-          "closing_deadline",
-        );
+      if (dateStr === "") {
+        validated.closing_deadline = null;
+      } else {
+        if (!/^\d{4}-\d{2}-\d{2}/.test(dateStr)) {
+          throw new ValidationError(
+            "Closing deadline date must be in YYYY-MM-DD format",
+            "closing_deadline",
+          );
+        }
+        validated.closing_deadline = dateStr;
       }
-      validated.closing_deadline = dateStr;
     }
   }
 
