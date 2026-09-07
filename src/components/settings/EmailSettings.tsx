@@ -8,6 +8,7 @@ import { settingsService, authService } from '../../services';
 import logger from '../../utils/logger';
 import { safeErrorMessage } from '../../utils/formatUtils';
 import { ResponsiveModal } from "../common/ResponsiveModal";
+import { ImportInfoPopover } from "./ImportInfoPopover";
 import type { Connections, ConnectionResult, PreferencesResult } from './types';
 
 // Refresh interval for connection status (60 seconds)
@@ -722,67 +723,25 @@ export function EmailSettings({
             The block returns WITH ITS DATA under BACKLOG-3158, which owns the
             per-provider count. `settingsBlockOrder-3156.test.tsx` asserts the
             block is absent, so it cannot come back unannounced. */}
-        {/* BACKLOG-3156 stage A: block 3 of 3 — the actions, BARE on the page.
-            No surrounding card and no heading, primary then destructive. The two
-            descriptions stay in a card above them; the `?` popup that will carry
-            this prose is stage B, so nothing is deleted here.
+        {/* BACKLOG-3156 stage B: THE TWO DESCRIPTIONS MOVED INTO THE `?` POPUP.
+            ────────────────────────────────────────────────────────────────
+            Stage A dropped this card's `<h4>Import Emails</h4>` because the
+            card described TWO actions and the heading named one of them. Stage
+            B takes the next step the approved design asks for: the prose is
+            what the `?` says, so keeping it on the page as well would be the
+            same sentence printed twice.
+
+            The card is gone, not emptied. Both testids the copy suites read —
+            `recache-description` and `force-recache-description` — moved WITH
+            their paragraphs onto the popup, so `recacheCopy-3056` asserts the
+            same four claims about the same words, one `mouseDown` further in.
+            `settingsPopupCopy-3156` additionally asserts the prose is not on
+            the page while the popup is shut, so it cannot come back in both
+            places at once.
 
             Neither `disabled` expression changed: both buttons still read
-            `isRecaching || !isOnline || !hasAnyConnection`, and both titles still
-            distinguish offline from not-connected. */}
-        <div className="p-4 bg-gray-50 rounded-lg border border-gray-200">
-          {/* BACKLOG-3156 stage A: this card carried an `<h4>Import Emails</h4>`
-              directly above an `Import Emails` button — the same words twice in
-              one column. The heading is gone rather than reworded, for two
-              reasons read off the RENDERED order, not the source:
-
-              (1) The card describes TWO actions. `Force re-cache.` is the next
-                  paragraph inside the same card, so a heading naming the
-                  primary put the destructive paragraph under a title that was
-                  not about it. That was wrong independently of the duplication.
-              (2) The card's own convention is an inline lead-in, not a heading:
-                  the force paragraph labels itself with a bold `Force
-                  re-cache.` span. Dropping the heading makes the two paragraphs
-                  parallel, and the first is already verb-initial ("Fetches new
-                  mail…") — the same shape as the Contacts popup's "Adds new
-                  contacts, updates existing ones…".
-
-              NOT retitled: a name for "what these two buttons do" is exactly the
-              job the `?` popup takes in stage B, and inventing one now would be
-              a third pattern that stage B deletes. */}
-          <div data-testid="recache-description">
-            {/* BACKLOG-3056: this used to promise "Only downloads emails newer
-                than what is already cached." That became false when the run
-                started filling in the older mail a widened Email History
-                setting opens up — and it was the sentence that made the
-                founder's "0 new emails" look like correct behaviour. The two
-                claims it must carry now: older mail arrives too, and nothing
-                is unlinked (which is what separates this from Force re-cache
-                below). */}
-            <p className="text-xs text-gray-600 mt-1">
-              Fetches new mail from your connected provider — and older mail too,
-              if you have increased Email History. Your emails stay linked to
-              their transactions.
-            </p>
-          </div>
-
-          {/* BACKLOG-2856: Force Re-cache. Recessive next to the ordinary
-              import above — the incremental run is the one a user should reach
-              for, and this one destroys links. Same visual weight relationship
-              the messages Force Re-import uses. */}
-          <div
-            data-testid="force-recache-description"
-            className="mt-3 pt-3 border-t border-gray-200"
-          >
-            <p className="text-xs text-gray-600">
-              <span className="font-medium text-gray-900">Force re-cache.</span>{" "}
-              Re-downloads every email in your cache window and replaces what is
-              stored — use this after a fix to email importing. It{" "}
-              <strong>unlinks your emails from their transactions</strong>.
-            </p>
-          </div>
-        </div>
-
+            `isRecaching || !isOnline || !hasAnyConnection`, and both titles
+            still distinguish offline from not-connected. */}
         {/* BACKLOG-3156 stage A: the actions, bare — no card, no heading. */}
         <div data-testid="emails-block-actions">
           <div className="flex gap-2 items-center">
@@ -817,6 +776,36 @@ export function EmailSettings({
             >
               Force Re-cache
             </button>
+            {/* BACKLOG-3156 stage B: the `?`. Headings are the buttons' own
+                labels, so the destructive one reads `Force Re-cache` — the name
+                on the button TODAY. The approved design renames it to `Force
+                Re-import`; that rename is a later stage because it moves
+                test-pinned strings, and copy that named a button the user
+                cannot see would be a small falsehood of exactly the kind this
+                item exists to stop. `settingsPopupCopy-3156` ties the headings
+                to the rendered labels structurally, so the rename cannot land
+                without this following it.
+
+                Both claims in the force paragraph are true at source: the swap
+                deletes the force set with an ordinary DELETE so every cascade
+                fires — transaction links AND their pending-review siblings
+                (`electron/services/emailForceStaging.ts`, `deleteLiveForceSet`).
+                The confirmation dialog below already says the same thing. */}
+            <ImportInfoPopover
+              testId="emails-import-info"
+              entries={[
+                {
+                  heading: "Import Emails",
+                  bodyTestId: "recache-description",
+                  body: "Fetches new mail from your connected providers, and older mail too if you have increased Email History. Your emails stay linked to their transactions.",
+                },
+                {
+                  heading: "Force Re-cache",
+                  bodyTestId: "force-recache-description",
+                  body: "Re-downloads every email in your cache window and replaces what is stored. This unlinks your emails from their transactions and loses review decisions on them. Use after a fix to email importing.",
+                },
+              ]}
+            />
           </div>
           {/* BACKLOG-2856: the progress indicator, shared by the ordinary
               import above and the Force Re-cache beside it. The founder's
