@@ -26,6 +26,13 @@ import {
   type CapFittingRange,
 } from "./ImportPlanDialog";
 import type { MessageImportPlanFacts } from "@electron/types/ipc/window-api-messages";
+// BACKLOG-2832: this local shape also omitted "querying", so the panel could
+// never name the phase it was actually in during the query pass.
+// BACKLOG-3128: ONE exhaustive phase vocabulary, shared with the dashboard pill.
+import {
+  importPhaseDisplayFor,
+  type ImportPhaseDisplay,
+} from "../../utils/importPhaseDisplay";
 import { usePlatform } from "../../contexts/PlatformContext";
 import { useSyncOrchestrator } from "../../hooks/useSyncOrchestrator";
 import { settingsService } from '../../services';
@@ -93,12 +100,23 @@ export function stripStaleCapClause(
   return stripped.length > 0 ? stripped : undefined;
 }
 
-/** Import progress state for inline display */
+/**
+ * Import progress state for inline display.
+ *
+ * BACKLOG-3128: `percent` is gone. The macOS Messages import has no honest
+ * single number — see the orchestrator listener — so this panel renders the
+ * phase, and real counts when the phase has them.
+ *
+ * `display` is `undefined` for a phase this panel has no copy for; the render
+ * then shows the raw phase text and an indeterminate bar rather than borrowing
+ * another phase's label. `current`/`total` are optional for the same reason:
+ * absent means "this phase reports no count", not "zero".
+ */
 interface ImportProgressState {
-  phase: "deleting" | "attachments" | "importing";
-  current: number;
-  total: number;
-  percent: number;
+  phase: string;
+  display: ImportPhaseDisplay | undefined;
+  current?: number;
+  total?: number;
 }
 
 interface MacOSMessagesImportSettingsProps {
@@ -163,13 +181,39 @@ export function MacOSMessagesImportSettings({
   const cancelAvailable =
     messagesItem?.status === 'running' || messagesItem?.status === 'pending';
 
-  // Derive progress from orchestrator queue item
-  const importProgress = isImporting && messagesItem?.phase ? {
-    phase: messagesItem.phase as ImportProgressState['phase'],
-    current: 0,
-    total: 0,
-    percent: messagesItem.progress,
-  } : null;
+  // Derive progress from orchestrator queue item.
+  //
+  // BACKLOG-3128: this used to hard-code `current: 0, total: 0` AND render them,
+  // so every import displayed a literal "0 / 0 messages" — a value presented as
+  // known that never was (BACKLOG-2886). The producer has always sent real
+  // per-phase counts; they had nowhere to ride until the queue item gained
+  // `current`/`total`.
+  //
+  // The blind `as` cast is gone too: an unrecognised phase now resolves to
+  // `display: undefined` and renders honestly, instead of being asserted into a
+  // union it may not belong to.
+  const importProgress: ImportProgressState | null =
+    isImporting && messagesItem?.phase
+      ? {
+          phase: messagesItem.phase,
+          display: importPhaseDisplayFor(messagesItem.phase),
+          current: messagesItem.current,
+          total: messagesItem.total,
+        }
+      : null;
+
+  // BACKLOG-3128: counts are shown only when the phase actually reports them.
+  // The test is `total > 0`, not `total != null` — a zero total cannot produce a
+  // fraction, and "0 of 0" is exactly the fabricated value this item removes.
+  const hasCounts =
+    importProgress?.current !== undefined &&
+    importProgress?.total !== undefined &&
+    importProgress.total > 0;
+  const countFraction =
+    hasCounts && importProgress
+      ? Math.min(100, Math.max(0, (importProgress.current! / importProgress.total!) * 100))
+      : 0;
+
   const [lastResult, setLastResult] = useState<{
     success: boolean;
     messagesImported: number;
@@ -1909,37 +1953,39 @@ export function MacOSMessagesImportSettings({
         <div className="mt-3">
           {importProgress ? (
             <>
+              {/* BACKLOG-3128: ONE exhaustive map, not three ternary chains whose
+                  `else` arm labelled every unnamed phase "Importing messages...".
+                  No percentage is rendered — this import has no honest one. */}
               <div className="flex justify-between text-xs text-gray-600 mb-1">
-                <span>
-                  {importProgress.phase === "deleting"
-                    ? "Clearing existing messages..."
-                    : importProgress.phase === "attachments"
-                      ? "Processing attachments..."
-                      : "Importing messages..."}
-                </span>
-                <span>{importProgress.percent}%</span>
+                <span>{importProgress.display?.label ?? importProgress.phase}</span>
               </div>
-              <div className="w-full bg-gray-200 rounded-full h-2">
-                <div
-                  className={`h-2 rounded-full transition-all duration-300 ${
-                    importProgress.phase === "deleting"
-                      ? "bg-orange-500"
-                      : importProgress.phase === "attachments"
-                        ? "bg-green-500"
-                        : "bg-blue-500"
-                  }`}
-                  style={{ width: `${importProgress.percent}%` }}
-                />
+              <div className="w-full bg-gray-200 rounded-full h-2 overflow-hidden">
+                {hasCounts ? (
+                  <div
+                    className={`h-2 rounded-full transition-all duration-300 ${
+                      importProgress.display?.colour ?? "bg-blue-500"
+                    }`}
+                    style={{ width: `${countFraction}%` }}
+                    data-testid="import-progress-bar"
+                  />
+                ) : (
+                  /* No count for this phase — an indeterminate stripe, because a
+                     bar at any width would be a claim about how far along we are. */
+                  <div
+                    className={`h-2 rounded-full w-1/3 animate-pulse ${
+                      importProgress.display?.colour ?? "bg-blue-500"
+                    }`}
+                    data-testid="import-progress-indeterminate"
+                  />
+                )}
               </div>
-              <p className="text-xs text-gray-500 mt-1">
-                {importProgress.current.toLocaleString()} /{" "}
-                {importProgress.total.toLocaleString()}
-                {importProgress.phase === "deleting"
-                  ? " cleared"
-                  : importProgress.phase === "attachments"
-                    ? " attachments"
-                    : " messages"}
-              </p>
+              {hasCounts && (
+                <p className="text-xs text-gray-500 mt-1">
+                  {importProgress.current!.toLocaleString()} of{" "}
+                  {importProgress.total!.toLocaleString()}{" "}
+                  {importProgress.display?.unit ?? ""}
+                </p>
+              )}
             </>
           ) : (
             <div className="flex items-center gap-2 text-sm text-gray-500">

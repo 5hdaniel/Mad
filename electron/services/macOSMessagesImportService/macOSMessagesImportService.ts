@@ -1038,12 +1038,38 @@ class MacOSMessagesImportService {
           return this.cancelledUnchangedResult(startTime);
         }
 
-        // Send final 100% progress to update UI
+        // BACKLOG-3132: the work after the last attachment gets its OWN phase.
+        //
+        // This emit used to say `phase: "importing", percent: 100` — a second
+        // `importing` event arriving AFTER `attachments`, because no phase
+        // existed to name what happens here. Two consequences, both real: the
+        // Settings panel flipped its label back to "Importing messages..." at the
+        // end of every run, and the audit-coverage bar needed BACKLOG-2344's
+        // monotonic clamp to stop the reversal dragging it backwards.
+        //
+        // What it actually signals: the rebuild is complete and the import is
+        // about to save. On a FORCE re-import that is the stage-and-swap below
+        // (~2 s on the founder's 34,547-message run); on BOTH paths it is the
+        // chat-thread-name sync that follows. This emit is deliberately outside
+        // any staging guard, so delta runs report the phase too.
+        //
+        // `current`/`total` are 0 because there is nothing to count and the
+        // duration is not knowable in advance — the listener forwards counts only
+        // when `total > 0`, so surfaces render the indeterminate stripe.
+        //
+        // `percent: 0`, NOT the 100 this line inherited. Nothing reads it on the
+        // Settings path (the orchestrator listener stopped forwarding `percent`
+        // in BACKLOG-3128), but `useAuditCoverageCheck` subscribes to this stream
+        // directly and maps `percent` across the phase's band. At 100 the bar
+        // would jump to 92 the instant saving began — and 92 is the ceiling
+        // BACKLOG-2344 reserved for the silent thread-expansion tail that runs
+        // after this returns. 0 holds the bar at the band's floor while the work
+        // is actually in progress, which is what is true.
         onProgress?.({
-          phase: "importing",
-          current: allMessages.length,
-          total: allMessages.length,
-          percent: 100,
+          phase: "finalizing",
+          current: 0,
+          total: 0,
+          percent: 0,
         });
 
         // BACKLOG-2790: THE SWAP. The rebuild is complete, so it is finally
@@ -2188,25 +2214,46 @@ class MacOSMessagesImportService {
         }
         skipped++;
         processed++;
-      }
+      } finally {
+        // BACKLOG-3128: this tail runs in `finally` because EIGHT of the ten
+        // exit paths above are `continue` statements — unsupported type, no
+        // message id, no source path, already-stored, and so on, each doing
+        // `processed++; continue;`. Sitting after the try/catch, it was reached
+        // only by the stored path and the catch.
+        //
+        // The founder's 2026-09-05 force re-import: 69,265 attachments, 2,409
+        // stored, 66,856 SKIPPED, 16 seconds. `processed` raced past every
+        // multiple of the 3,463 report interval inside a skipped iteration, so
+        // `processed % attachReportInterval === 0` almost never ran on a tick
+        // where it was true. Zero progress events were sent for the whole phase,
+        // and the panel held a stale "34,547 of 34,547 messages" throughout.
+        // The renderer was blameless; nothing was ever emitted to it.
+        //
+        // The yield was bypassed the same way, so 66,856 skips ran without ever
+        // returning to the event loop. `finally` fixes both, because both live
+        // in this tail.
+        //
+        // The cancellation `break` is deliberately OUTSIDE this try: a run the
+        // user abandoned must not emit a final progress report on its way out.
 
-      // Update progress bar
-      attachProgressBar.update(processed);
+        // Update progress bar
+        attachProgressBar.update(processed);
 
-      // Report progress to UI at ~5% increments
-      if (processed % attachReportInterval === 0 || processed === totalAttachments) {
-        const percent = Math.round((processed / totalAttachments) * 100);
-        onProgress?.({
-          phase: "attachments",
-          current: processed,
-          total: totalAttachments,
-          percent,
-        });
-      }
+        // Report progress to UI at ~5% increments
+        if (processed % attachReportInterval === 0 || processed === totalAttachments) {
+          const percent = Math.round((processed / totalAttachments) * 100);
+          onProgress?.({
+            phase: "attachments",
+            current: processed,
+            total: totalAttachments,
+            percent,
+          });
+        }
 
-      // Yield to event loop every 100 attachments to prevent UI freeze
-      if (processed % 100 === 0) {
-        await yieldToEventLoop();
+        // Yield to event loop every 100 attachments to prevent UI freeze
+        if (processed % 100 === 0) {
+          await yieldToEventLoop();
+        }
       }
     }
 
