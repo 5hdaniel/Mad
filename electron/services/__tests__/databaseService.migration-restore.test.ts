@@ -266,8 +266,9 @@ describe("DatabaseService Migration Auto-Restore (TASK-2057)", () => {
     // `klass.MIGRATIONS = original` finally blocks below).
     //
     // This masks nothing about v71: its body is covered against the REAL driver in
-    // databaseService.migration-v71.test.ts, including the assertion this suite
-    // cannot make -- that a v70 database with v71 pending DOES get a backup.
+    // databaseService.migration-v71.test.ts. What the parking DOES change here is
+    // the backup decision, so the input to that decision is asserted directly
+    // below ("a database at the baseline is now BEHIND the latest").
     parkedMigrations = (
       service.constructor as unknown as { MIGRATIONS: unknown[] }
     ).MIGRATIONS;
@@ -384,6 +385,29 @@ describe("DatabaseService Migration Auto-Restore (TASK-2057)", () => {
         expect(rollingBackupCopies()).toBeGreaterThan(0);
       } finally {
         klass.MIGRATIONS = original;
+      }
+    });
+
+    it("BACKLOG-2551: a database at the BASELINE is now BEHIND the latest, which is what arms the backup", () => {
+      // The rolling pre-migration backup is taken when the on-disk version is below
+      // the latest migration version. While the chain was empty those were the same
+      // number and the backup never armed for a v70 database; with v71 shipping it
+      // does. Asserted on the real (unparked) chain, since the parking above would
+      // otherwise make this trivially false.
+      const klass = service.constructor as unknown as {
+        MIGRATIONS: Array<{ version: number }>;
+        BASELINE_VERSION: number;
+      };
+      const parked = klass.MIGRATIONS;
+      klass.MIGRATIONS = parkedMigrations as Array<{ version: number }>;
+      try {
+        const latest = (
+          service as unknown as { getLatestSchemaVersion(): number }
+        ).getLatestSchemaVersion();
+        expect(latest).toBeGreaterThan(klass.BASELINE_VERSION);
+        expect(klass.BASELINE_VERSION).toBeLessThan(latest); // i.e. a v70 DB is behind
+      } finally {
+        klass.MIGRATIONS = parked;
       }
     });
 

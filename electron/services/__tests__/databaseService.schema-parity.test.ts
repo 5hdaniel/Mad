@@ -238,4 +238,93 @@ describe("schema baseline parity — schema.sql vs frozen chain-v69 transcript (
 
     expect(unexpected).toEqual([]);
   });
+
+  // -------------------------------------------------------------------------
+  // BACKLOG-2551 — CONTROL 4: the COMPOSITE control, and it lives here on purpose.
+  //
+  // From v71 onward `schema.sql` alone no longer describes the shipped schema:
+  // `schema.sql + MIGRATIONS` does. The unique index is created by the migration
+  // and deliberately not by schema.sql (a standalone CREATE INDEX naming a column
+  // only a migration adds aborts schema.sql's unconditional exec on every existing
+  // database). Nothing else checks that the two delivery paths converge.
+  //
+  // It belongs in the PARITY suite rather than in the v71 suite because as a
+  // one-off it would decay the moment the next migration lands; here it keeps
+  // asserting the invariant for every migration that ever ships.
+  // -------------------------------------------------------------------------
+  describe("fresh install and upgraded database converge (BACKLOG-2551 control 4)", () => {
+    /** Every migration above the on-disk version, run the way the runner runs them. */
+    function applyMigrations(db: DatabaseType, fromVersion: number): void {
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      const svc = require("../databaseService").default;
+      const chain = (
+        svc.constructor as {
+          MIGRATIONS: Array<{ version: number; migrate: (d: DatabaseType) => void }>;
+        }
+      ).MIGRATIONS;
+      db.pragma("foreign_keys = OFF");
+      try {
+        for (const m of chain.filter((x) => x.version > fromVersion)) {
+          db.transaction(() => m.migrate(db))();
+        }
+      } finally {
+        db.pragma("foreign_keys = ON");
+      }
+    }
+
+    it("PRECONDITION: there is at least one migration to apply, so this cannot pass vacuously", () => {
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      const svc = require("../databaseService").default;
+      const chain = (svc.constructor as { MIGRATIONS: unknown[] }).MIGRATIONS;
+      expect(chain.length).toBeGreaterThan(0);
+    });
+
+    it("a FRESH install and an UPGRADED v70 database end structurally identical", () => {
+      const fresh = buildFresh();
+      applyMigrations(fresh, 70); // fresh seeds schema_version at BASELINE, then migrates
+
+      const upgraded = replayFrozen();
+      applyMigrations(upgraded, 70);
+
+      const divergences = diffFingerprints(
+        extractFingerprint(fresh),
+        extractFingerprint(upgraded),
+        "FRESH(schema.sql + migrations)",
+        "UPGRADED(v70 + migrations)",
+      );
+      expect(divergences.map((d: Divergence) => `[${d.key}] ${d.detail}`)).toEqual([]);
+    });
+
+    it("both paths carry the migration-only objects that schema.sql cannot deliver", () => {
+      for (const [label, build] of [
+        ["fresh", buildFresh],
+        ["upgraded", replayFrozen],
+      ] as const) {
+        const db = build();
+        applyMigrations(db, 70);
+
+        // The partial unique index exists ONLY because the migration made it.
+        const idx = db
+          .prepare(
+            "SELECT name FROM sqlite_master WHERE type='index' AND name='idx_attachments_email_provider'",
+          )
+          .get() as { name: string } | undefined;
+        expect(`${label}:${idx?.name}`).toBe(`${label}:idx_attachments_email_provider`);
+
+        // And the CHECK, which the fingerprint above is structurally blind to:
+        // PRAGMA table_info does not expose CHECK, so it must be read from
+        // sqlite_master or it is not checked at all.
+        const ddl = (
+          db
+            .prepare(
+              "SELECT sql FROM sqlite_master WHERE type='table' AND name='message_thread_names'",
+            )
+            .get() as { sql: string }
+        ).sql;
+        expect(`${label}:${/CHECK\s*\(\s*length\s*\(\s*trim\(display_name/.test(ddl)}`).toBe(
+          `${label}:true`,
+        );
+      }
+    });
+  });
 });

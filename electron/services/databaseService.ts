@@ -1306,9 +1306,15 @@ class DatabaseService implements IDatabaseService {
         // file downloaded twice. Two rows with different storage_path are
         // different files and both stay, even when identically named.
         //
-        // `storage_path IS NOT NULL` is load-bearing: SQLite groups NULLs
-        // together, so without it every metadata-only row of an email collapses
-        // into one group and legitimate rows are deleted.
+        // `storage_path IS NOT NULL` is DEFENCE IN DEPTH here, not load-bearing,
+        // and the distinction is measured rather than assumed: this query joins on
+        // `keeper.storage_path = loser.storage_path`, and NULL never equals NULL,
+        // so metadata-only rows are already excluded — removing the predicate
+        // changes nothing and no control can go red on it. It stays because the
+        // hazard is real for the OTHER natural spelling: `GROUP BY email_id,
+        // storage_path` DOES collapse all NULLs into one group, which would delete
+        // every metadata-only row of an email but one. Keep the predicate, and if
+        // this is ever rewritten as a GROUP BY it is already correct.
         //
         // ORDER BY loser.rowid makes "earliest wins" true for losers as well as
         // for the keeper. Without it a group with two 'user' losers has an
