@@ -115,19 +115,77 @@ describe("database time is non-zero and bounded by the span", () => {
     expect(wallMs - dbMs).toBeGreaterThanOrEqual(55);
   });
 
-  it("accumulates sub-millisecond statements instead of flooring each to zero", () => {
-    // The control for `performance.now()` over `Date.now()`. Each of these
-    // statements is far under 1 ms; a millisecond-granularity clock rounds
-    // essentially all of them to 0 and reports a near-zero total.
-    const { wallMs, dbMs } = measure(() => {
-      const select = db.prepare("SELECT 1 AS one");
-      for (let i = 0; i < 2000; i++) {
-        select.get();
-      }
-    });
+  it("charges nearly every sub-millisecond statement, where a millisecond-granularity clock charges almost none", () => {
+    // THE CONTROL FOR `performance.now()` OVER `Date.now()` (BACKLOG-3166).
+    //
+    // What separates the two clocks is RESOLUTION, not the total they arrive at.
+    // Counting statements each one charges a non-zero amount for is a comparison
+    // of two numbers taken on the same machine in the same run, so host speed
+    // cancels. The previous form asserted `dbMs >= wallMs * 0.5` — a claim about
+    // how much of a span this HOST spends inside SQLite rather than in the JS
+    // loop, jest instrumentation and the OS scheduler. It measured 37% on a
+    // shared Windows runner and reds every PR into int. On an idle M-series Mac
+    // the same loop measures 0.658-0.773 over eight trials: it passes there, but
+    // on 1.3-1.5x margin against a threshold that has nothing to do with the
+    // code under test.
+    //
+    // Comparing the two TOTALS does not work either, and the reason is worth
+    // recording so it is not reintroduced: a `Date.now()` accumulator charges a
+    // full 1 ms for every integer-millisecond boundary landing inside a
+    // statement and nothing otherwise. Boundaries arrive once per ms of wall
+    // clock and land inside a statement with probability dbMs/wallMs, so the
+    // expected `Date.now()` total EQUALS the true total — and when the true
+    // total is under 1 ms it overcounts. Measured over five trials, the
+    // `performance.now()` total was the greater one once out of five.
+    const SAMPLES = 2000;
+    const select = db.prepare("SELECT 1 AS one");
 
-    expect(dbMs).toBeGreaterThanOrEqual(wallMs * 0.5);
-    expect(dbMs).toBeGreaterThan(0.5);
+    let chargedByInstrument = 0;
+    let chargedByMillisecondClock = 0;
+
+    for (let i = 0; i < SAMPLES; i++) {
+      const dbBefore = readDbTimeMs();
+      const msBefore = Date.now();
+      select.get();
+      // Read the millisecond clock first, so its bracket is a strict SUPERSET of
+      // the span the instrument charges. The stand-in is favoured on purpose:
+      // it gets every chance to register a boundary crossing.
+      const msAfter = Date.now();
+      if (readDbTimeMs() - dbBefore > 0) chargedByInstrument++;
+      if (msAfter - msBefore > 0) chargedByMillisecondClock++;
+    }
+
+    // Bounds set AFTER a probe, not pre-registered like the rest of this file:
+    // measured 2000/2000 and 1-2/2000 over five trials, then given 10x slack on
+    // each side. Both are one-sided in the direction a SLOWER host moves them.
+    //
+    // What this rests on is CLOCK GRANULARITY, not statement speed: a statement
+    // registers iff it outlasts one `performance.now()` tick. On the runner that
+    // reported the original failure the statements ran 1.79 us (its own 3.5767 ms
+    // over 2000) against a 100 ns tick — every figure in that output lands on a
+    // 0.0001 ms grid — so roughly 18x. A slower host lengthens the statement and
+    // leaves the tick alone, which is why this direction is the safe one.
+    expect(chargedByInstrument).toBeGreaterThanOrEqual(SAMPLES * 0.9);
+
+    // Fixture validity, not a second control. It establishes that the statements
+    // really are sub-millisecond, which is the precondition for the assertion
+    // above to mean anything: on a host slow enough to push a `SELECT 1` past
+    // 1 ms, BOTH clocks would charge every statement and the case above would go
+    // green under a planted `Date.now()`. Same 1.79 us against the 100 us per
+    // statement this bound permits.
+    expect(chargedByMillisecondClock).toBeLessThanOrEqual(SAMPLES * 0.1);
+
+    // `expect(dbMs).toBeGreaterThan(0.5)` stood here and was deleted rather than
+    // lowered, because it never discriminated: across 20 planted cold runs it
+    // returned the same verdict as the ratio in every row, and both were falsely
+    // GREEN in 16 of the 20. It was also the same flake in miniature, asserting
+    // the host is slower than a threshold — the tightest of 12 unplanted trials
+    // came in at 0.5932 ms, a 1.19x margin.
+    //
+    // Nothing is lost by removing it, which is a weaker statement than the one
+    // that stood here before: the count above does NOT entail it. 1800 charges of
+    // one 100 ns tick total 0.18 ms, which is under 0.5. The count entails
+    // `dbMs > 0`, and it discriminates the two clocks, which `> 0.5` did not.
   });
 });
 
