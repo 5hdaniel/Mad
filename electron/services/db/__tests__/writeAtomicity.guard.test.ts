@@ -290,6 +290,44 @@ function writeCount(body: string): number {
   return matches ? matches.length : 0;
 }
 
+/**
+ * ONE pattern for "this text opens a `dbTransaction`", used by BOTH
+ * `wrapsItself` and `namesCalledInsideATransaction` — the same
+ * one-source-string discipline BACKLOG-2569 imposed on `WRITE_PATTERN`, and for
+ * the same reason: these two were written out separately and drifted together.
+ *
+ * ===========================================================================
+ * BACKLOG-2584 — THE GENERIC FORM WAS NEVER MATCHED
+ * ===========================================================================
+ * Both sites used to test `/\bdbTransaction\s*\(/`, which does NOT match
+ * `dbTransaction<UnlinkOutcome>(` — the type argument sits between the name and
+ * the paren. Executed both forms: plain -> true, generic -> FALSE.
+ *
+ * Inside `db/` that was inert, because the only `dbTransaction<` occurrence
+ * there is the DECLARATION at `core/dbConnection.ts:287`. It became
+ * load-bearing the moment this guard's scan root widened past `db/`: six call
+ * sites live in five production files outside it, and five of the six use the
+ * generic form (measured at `0dca6beb1`) —
+ *
+ *   electron/handlers/contactHandlers.ts:2884        dbTransaction(() => {
+ *   electron/services/contactProvenance.ts:246       dbTransaction<UnlinkOutcome>(
+ *   electron/services/contactCompare.ts:1166         dbTransaction<ConfirmSourcesOutcome>(
+ *   electron/services/contactLinkReview.ts:322,:410  dbTransaction<ReviewDecisionOutcome>(
+ *   electron/services/contactManualLink.ts:294       dbTransaction<LinkSourceOutcome>(
+ *
+ * — so the widened scan would have reported four CORRECTLY ATOMIC wrappers as
+ * unwrapped. Under this guard's rule that every `KNOWN_UNWRAPPED` entry cites a
+ * filed item, those four false positives could only have been quieted by filing
+ * four bogus items. Fixing the regex is a PRECONDITION of widening, not an
+ * improvement shipped alongside it.
+ *
+ * STATED FLOOR, not fixed: `(?:<[^>]*>)?` cannot match a NESTED generic —
+ * `dbTransaction<Map<string, number>>(` reads as unwrapped, measured. There are
+ * ZERO nested-generic call sites at `0dca6beb1`, so this is latent. Closing it
+ * needs a bracket-matching parse, which is a different task.
+ */
+const TRANSACTION_CALL = String.raw`\bdbTransaction\s*(?:<[^>]*>)?\s*\(`;
+
 function wrapsItself(body: string): boolean {
   // `dbTransaction(...)` is the shared helper. `db.transaction(...)` is
   // better-sqlite3's own API, used directly where a function already holds a
@@ -306,7 +344,7 @@ function wrapsItself(body: string): boolean {
   // `// … .transaction( …` comment still evades this. Closing that needs a real
   // comment/string-literal-aware parse, which is a different task.
   const src = stripComments(body);
-  return /\bdbTransaction\s*\(/.test(src) || /\b\w+\.transaction\s*\(/.test(src);
+  return new RegExp(TRANSACTION_CALL).test(src) || /\b\w+\.transaction\s*\(/.test(src);
 }
 
 /**
@@ -377,7 +415,7 @@ function namesCalledInsideATransaction(): Set<string> {
     const src = fs.readFileSync(file, "utf8");
     const lines = src.split("\n");
     for (let i = 0; i < lines.length; i++) {
-      if (!/\bdbTransaction\s*\(/.test(lines[i])) continue;
+      if (!new RegExp(TRANSACTION_CALL).test(lines[i])) continue;
       const block = captureBody(lines, i);
       for (const m of block.matchAll(/\b([A-Za-z0-9_]+)\s*\(/g)) inside.add(m[1]);
     }
@@ -482,6 +520,52 @@ describe("the write heuristics themselves (BACKLOG-2569)", () => {
     // set is unaffected. This test is what pins that flip.
     expect(writesAreBranchExclusive(LONE_MULTILINE_WRITE)).toBe(true);
     expect(writeCount(LONE_MULTILINE_WRITE)).toBe(1);
+  });
+
+  // ==========================================================================
+  // BACKLOG-2584 — the generic form of the wrapper, pinned
+  // ==========================================================================
+  // Transcribed from `unlinkContactSource`, electron/services/contactProvenance.ts:246
+  // @ 0dca6beb1. Five of the six `dbTransaction` call sites outside `db/` look
+  // like this, and NONE of them was recognised as wrapping before this task.
+  const GENERIC_FORM_WRAPPER = `
+  return dbTransaction<UnlinkOutcome>(() => {
+    recordVerdict({
+      userId,
+      contactId,
+      sourceType: row.source_type,
+      sourceRecordId: row.source_record_id,
+      identityVerdict: "different_people",
+      reason: "manual_unlink",
+      matchedOn: row.match_method,
+      decidedBy: "provenance_unlink",
+    });
+    deleteLinkById(linkId);
+  });
+`;
+
+  it("a `dbTransaction<T>(...)` call reads as WRAPPED (BACKLOG-2584)", () => {
+    // THE DEFECT, pinned. Delete `(?:<[^>]*>)?` from TRANSACTION_CALL and THIS
+    // TEST IS THE ONE THAT GOES RED — along with four correctly-atomic
+    // orchestration wrappers turning up as offenders in the scan below.
+    expect(wrapsItself(GENERIC_FORM_WRAPPER)).toBe(true);
+
+    // The negative half, so this cannot pass by `wrapsItself` returning true for
+    // everything — the same anti-vacuity shape as the PRECONDITION below.
+    expect(wrapsItself(`dbRun(\`INSERT INTO contacts (id) VALUES (?)\`, [id]);`)).toBe(false);
+
+    // And the plain form still works. `contactHandlers.ts:2884` is the only
+    // plain-form caller outside `db/`; if this regressed, that site would be the
+    // one to lose its clearance.
+    expect(wrapsItself(`dbTransaction(() => { dbRun(sql, v); });`)).toBe(true);
+  });
+
+  it("a NESTED generic is a STATED FLOOR, not a claim (BACKLOG-2584)", () => {
+    // Not a wish — a measurement of what this guard cannot do, written as a test
+    // so the floor cannot quietly become false. `[^>]*` stops at the first `>`.
+    // ZERO nested-generic call sites exist at `0dca6beb1`. If this ever flips to
+    // `true`, someone closed the floor and this test should be deleted with a note.
+    expect(wrapsItself(`dbTransaction<Map<string, number>>(() => { dbRun(sql, v); });`)).toBe(false);
   });
 
   it("writeCount and the branch-exclusive check see the SAME writes", () => {
