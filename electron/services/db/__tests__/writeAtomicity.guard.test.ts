@@ -306,13 +306,20 @@ const KNOWN_UNWRAPPED: Record<string, string> = {
   // not paraphrased. Line numbers here are as measured at `0dca6beb1` and drift;
   // the `file::function` keys do not.
 
-  // --- BACKLOG-2546 (critical, open): login/provisioning chain -------------
-  "electron/handlers/googleAuthHandlers.ts::handleGoogleLogin":
-    "BACKLOG-2546 @0dca6beb1 (:116, createUser + createSession): after createUser, before saveOAuthToken/createSession, a users_local row with no token and no session — the next login takes the update branch and never re-runs new-user provisioning, so the account stays a ghost",
-  "electron/handlers/googleAuthHandlers.ts::handleGoogleCompleteLogin":
-    "BACKLOG-2546 @0dca6beb1 (:423, createUser/updateUser/updateLastLogin/saveOAuthToken/createSession): after saveOAuthToken and before createSession, a token row with no session row and no session.json; after createSession but before the file write, a DB session row orphaned on restart",
-  "electron/handlers/microsoftAuthHandlers.ts::handleMicrosoftLogin":
-    "BACKLOG-2546 @0dca6beb1 (:94, same five writes as the Google path): a users_local row committed with no token and no session, and the getUserByOAuthId check at the top is separated from createUser by awaits, so a second concurrent callback writes a second session row",
+  // --- BACKLOG-2546: DISCHARGED by the login-provisioning transaction -------
+  // The three entries that were here (googleAuthHandlers::handleGoogleLogin,
+  // ::handleGoogleCompleteLogin, microsoftAuthHandlers::handleMicrosoftLogin)
+  // are deleted because their bug is fixed: all four login paths now commit the
+  // user, token and session rows in one transaction owned by
+  // `services/loginProvisioningService.ts`.
+  //
+  // READ THIS BEFORE TRUSTING THE DELETION. It is evidenced by the DIFF and by
+  // the forced-crash suite `loginProvisioningAtomicity-2546.test.ts`, NOT by
+  // this guard. This guard cannot tell "fixed" from "made invisible" here: the
+  // fix turns five db/ exports into delegates, which drops them from
+  // `dbLayerWriters()`, so the same three entries would also have to be deleted
+  // if the handlers had been left completely untouched (measured). That is
+  // BACKLOG-3238.
 
   // --- BACKLOG-2549 (critical, open): export status vs freeze stamp -------
   "electron/handlers/transactionExportHandlers.ts::ipc:transactions:export-enhanced":
@@ -1294,7 +1301,7 @@ describe("the enumerator does NOT see a non-violation (BACKLOG-2584)", () => {
   );
 
 async function handleCompletePendingLogin(_event, userId) {
-  await databaseService.updateUser(userId, { email_onboarding_completed_at: now });
+  await databaseService.completeEmailOnboarding(userId);
 }
 `;
 
@@ -1315,6 +1322,16 @@ async function handleCompletePendingLogin(_event, userId) {
       "ipc:auth:dev:reset-onboarding",
     ]);
 
+    // BACKLOG-3238 — why this fixture says `completeEmailOnboarding` and not
+    // `updateUser`. BACKLOG-2546 gave `updateUser` a sync twin, so the exported
+    // `updateUser` became a one-line delegate holding no SQL of its own and
+    // LEFT `dbLayerWriters()` — this unit then read 0 writes and the assertion
+    // below went red on correct code. `completeEmailOnboarding` writes
+    // `users_local` in its own body and is not twinned, so it is a stable stand
+    // in with the same meaning (the fixture's third handler already writes the
+    // same column raw). The load-bearing assertion here is the NAMES array
+    // above, which is unchanged.
+    //
     // One write each: a db-layer writer call in the resolved declaration, a
     // db-layer writer call in the second, raw SQL in the third. Asserted per
     // unit, not as a total — a total cannot tell "one each" from "all three in
