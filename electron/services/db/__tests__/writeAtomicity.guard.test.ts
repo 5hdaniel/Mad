@@ -273,6 +273,25 @@ const EXEMPT: Record<string, string> = {
  * Every entry cites the SHA it was measured at, because a `file::function` key
  * survives line drift but the LINE NUMBERS inside these reason strings do not.
  * Re-derive them; do not hand-copy them forward.
+ *
+ * ---------------------------------------------------------------------------
+ * THIS LIST IS A LOWER BOUND, NOT A COMPLETE SET
+ * ---------------------------------------------------------------------------
+ * A populated list invites the reading "these are the unwrapped multi-writes."
+ * It is not. Two measured floors sit under it, and while either is open the
+ * thirteen is a FLOOR:
+ *
+ *   - `captureBody` truncates on an inline object type in a parameter list, so
+ *     some multi-write functions are counted as ZERO-write and can never appear
+ *     here. 56 functions have the shape, 4 are multi-write, at `0dca6beb1`.
+ *     Tracked by BACKLOG-3225.
+ *   - Call-token counting is scoped OUT of `db/`. That is a floor with a
+ *     measured size, not a proof of absence: turning it on surfaces EIGHT more,
+ *     all real (a raw write plus a non-exported local helper that writes), of
+ *     which six had no filed item until BACKLOG-3226. Tracked there.
+ *
+ * Add a floor here when one is found; do not let the list's completeness be
+ * assumed from its length.
  */
 const KNOWN_UNWRAPPED: Record<string, string> = {
   // ==========================================================================
@@ -578,6 +597,14 @@ function unitsInFile(rel: string, lines: string[], dbWriters: Set<string>): Fn[]
   // measured size. Not adopted here — eight new dispositions inside the
   // write-densest directory in the repo is its own task, and SR ruled it comes
   // back for review rather than being absorbed.
+  //
+  // SO THIS IS A FLOOR WITH A MEASURED SIZE, NOT A PROOF OF ABSENCE. SR
+  // decomposed the eight and they are real, not artifacts of the uniform rule:
+  // the six in communicationDbService.ts are a raw write plus a call to
+  // `updateTransactionThreadCountInternal` (:1236), a non-exported local helper
+  // holding its own UPDATE. Two are filed in BACKLOG-2554; the six are filed as
+  // BACKLOG-3226, which also carries the rule change. Do not read the scoped-out
+  // decision as "nothing is there".
   const isDbWriterCall = inDbLayer
     ? null
     : (name: string) => dbWriters.has(name) || localWriters.has(name);
@@ -1197,12 +1224,41 @@ describe("the enumerator does NOT see a non-violation (BACKLOG-2584)", () => {
   // positives. Under the rule above, a false positive can only be quieted by
   // filing a bogus item or bending EXEMPT. Both are silencing.
   //
-  // Transcribed from `electron/handlers/sharedAuthHandlers.ts:488-545` @0dca6beb1:
-  // two SEPARATE dev-only registrations, ONE write each. An earlier version of
-  // this task reported this file as a violation, because a brace-matched capture
-  // ran the first registration's body on into the second and added their writes
-  // together. That is the regression this fixture exists to catch.
-  const TWO_HANDLERS_ONE_WRITE_EACH = `
+  // Transcribed from `electron/handlers/sharedAuthHandlers.ts:475-545` @0dca6beb1:
+  // THREE separate registrations, ONE write each. Two are multi-line and
+  // block-bodied; the FIRST is the one-liner identifier form the real file uses
+  // at `:475` — `ipcMain.handle("auth:complete-pending-login", handleCompletePendingLogin);`
+  //
+  // THE ONE-LINER IS WHAT MAKES THIS FIXTURE ABLE TO FAIL, and it was missing.
+  // An earlier version held only the two block-bodied registrations and claimed
+  // it would catch a regression to brace matching. IT COULD NOT: an arrow
+  // function's own braces balance, so a brace-matched capture stops cleanly at
+  // the end of the first handler and never reaches the second. SR injected that
+  // exact regression and the suite stayed 19/19 GREEN. A one-liner registration
+  // contains no brace at all, which is the only shape that makes a brace-matched
+  // capture run on — and it is the shape that produced three identical
+  // `sharedAuthHandlers` rows in this task's first measurement.
+  //
+  // The assertion is the UNIT NAMES, and the claim is stated as MEASURED rather
+  // than as predicted — the first draft of this comment predicted two different
+  // failures and both runs disagreed with it.
+  //
+  // Both regressions produce the SAME observable, verified by injecting each:
+  //   - `captureHandlerUnit` replaced by a plain brace-matched capture, and
+  //   - the identifier-resolution arm disabled (`if (false && ...)`)
+  // both make the one-liner stop resolving to its declaration. It is named
+  // `ipc:auth:complete-pending-login` instead of `handleCompletePendingLogin`,
+  // and its body becomes the FOLLOWING handler's. Each injection reddens this
+  // test on exactly that first array element.
+  //
+  // WHICH ASSERTION IS LOAD-BEARING, because it is not the obvious one: the
+  // per-unit write counts stay `[1, 1, 1]` under both regressions, since the
+  // swallowed body carries one write just as the resolved declaration does. The
+  // counts cannot tell the two apart. THE NAMES CAN. Do not "simplify" this to a
+  // length or a total.
+  const THREE_HANDLERS_ONE_WRITE_EACH = `
+  ipcMain.handle("auth:complete-pending-login", handleCompletePendingLogin);
+
   ipcMain.handle(
     "auth:dev:expire-mailbox-token",
     async (_event, userId, provider) => {
@@ -1236,27 +1292,36 @@ describe("the enumerator does NOT see a non-violation (BACKLOG-2584)", () => {
       }
     }
   );
+
+async function handleCompletePendingLogin(_event, userId) {
+  await databaseService.updateUser(userId, { email_onboarding_completed_at: now });
+}
 `;
 
-  it("two handlers with one write each are TWO units, and neither is an offender", () => {
+  it("three handlers with one write each are THREE units, and none is an offender", () => {
     const units = unitsInFile(
       "electron/handlers/fixture.ts",
-      TWO_HANDLERS_ONE_WRITE_EACH.split("\n"),
+      THREE_HANDLERS_ONE_WRITE_EACH.split("\n"),
       dbLayerWriters()
     );
 
-    // TWO units, not one. If the capture regresses to brace matching, the first
-    // registration swallows the second and this drops to 1 — at which point the
-    // write counts add up and a non-violation is reported as an offender.
+    // THREE units, named exactly. The first name is the resolved DECLARATION,
+    // not a channel. That element is the whole control: both the brace-matching
+    // regression and a disabled identifier arm turn it into
+    // `ipc:auth:complete-pending-login`, measured by injecting each.
     expect(units.map((u) => u.name)).toEqual([
+      "handleCompletePendingLogin",
       "ipc:auth:dev:expire-mailbox-token",
       "ipc:auth:dev:reset-onboarding",
     ]);
 
-    // One write each: a db-layer writer CALL in the first, raw SQL in the second.
-    // Asserted as the exact per-unit counts, not a total — a total of two cannot
-    // tell "one each" from "both in one handler", which is the whole question.
-    expect(units.map((u) => unitWrites(u).length)).toEqual([1, 1]);
+    // One write each: a db-layer writer call in the resolved declaration, a
+    // db-layer writer call in the second, raw SQL in the third. Asserted per
+    // unit, not as a total — a total cannot tell "one each" from "all three in
+    // one handler". Measured limit, stated so nobody mistakes this line for the
+    // control: these counts are UNCHANGED by both regressions above. They pin
+    // the write rule, not the enumeration.
+    expect(units.map((u) => unitWrites(u).length)).toEqual([1, 1, 1]);
 
     // And therefore nothing to report. This is the offender predicate itself,
     // minus the two repo-global clearing sets, which a fixture cannot supply.
