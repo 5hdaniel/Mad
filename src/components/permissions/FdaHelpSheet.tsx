@@ -104,11 +104,21 @@ export function FdaHelpSheet({
       // Backdrop click must dismiss, NOT open System Settings. This is why
       // FdaSafetySheet needed an `onClose` separate from `onLetsGo`.
       onClose={onClose}
+      // The restart is stated because it is TRUE HERE and was not in the first
+      // draft of this copy. Onboarding relaunches itself the moment it detects
+      // the grant (`PermissionsStep.relaunchForGrant`), so "macOS restarts
+      // Keepr for you" reads correctly there and NOWHERE ELSE. macOS decides an
+      // app's Full Disk Access when the process starts and does not revisit it,
+      // so from Settings or the dashboard the running process stays denied
+      // until it is restarted — which is exactly why BACKLOG-3208 put a
+      // "restart Keepr to finish" notice in the Messages panel, one inch below
+      // where this sheet opens. A footer promising an automatic restart would
+      // have contradicted the panel behind it.
       footer={
         <>
-          Switch Keepr on under Privacy &amp; Security &rarr; Full Disk Access.
+          Switch Keepr on under Privacy &amp; Security &rarr; Full Disk Access,
           <br />
-          macOS restarts Keepr when you do &mdash; nothing is lost.
+          then restart Keepr. Nothing is lost.
         </>
       }
     />

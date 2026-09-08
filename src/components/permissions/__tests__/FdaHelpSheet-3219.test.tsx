@@ -147,6 +147,22 @@ describe("FdaHelpSheet — the post-onboarding explainer (BACKLOG-3210 part 2)",
     expect(mockOpenFullDiskAccessSettings).not.toHaveBeenCalled();
   });
 
+  it("tells the user to restart, and does NOT promise that macOS will do it", () => {
+    // Caught by review, not by a test — no suite asserted this copy, so the
+    // first draft ("macOS restarts Keepr when you do") shipped green while
+    // contradicting the BACKLOG-3208 notice one inch below it in Settings.
+    // Onboarding relaunches ITSELF on detecting the grant; from Settings or the
+    // dashboard the process stays denied until the user restarts it. The
+    // assertion exists so the sheet cannot drift back into promising otherwise.
+    render(<FdaHelpSheet onClose={jest.fn()} />);
+
+    expect(screen.getByText(/then restart Keepr/)).toBeInTheDocument();
+    expect(screen.queryByText(/macOS restarts Keepr/)).not.toBeInTheDocument();
+    expect(
+      screen.queryByText(/restarts Keepr for you/)
+    ).not.toBeInTheDocument();
+  });
+
   it("does not offer 'Skip for now' — outside onboarding there is no step to skip", () => {
     render(<FdaHelpSheet onClose={jest.fn()} />);
     expect(screen.queryByText("Skip for now")).not.toBeInTheDocument();
