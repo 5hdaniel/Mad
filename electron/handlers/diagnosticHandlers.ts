@@ -133,6 +133,218 @@ export function decorateFdaPermissionIssues(
 }
 
 /**
+ * BACKLOG-3237 — ONE ROW PER ROOT CAUSE, NEVER ONE PER AFFECTED FEATURE.
+ *
+ * ---------------------------------------------------------------------------
+ * WHAT THE USER SAW
+ * ---------------------------------------------------------------------------
+ * A Mac without Full Disk Access produced THREE stacked banner rows for one
+ * missing permission:
+ *
+ *   1. "Full Disk Access permission is required to read iMessages."
+ *      — `checkFullDiskAccess()`, `FULL_DISK_ACCESS_DENIED`
+ *   2. "Contacts permission is required to match phone numbers to names."
+ *      — `checkContactsPermission()`, `CONTACTS_ACCESS_DENIED`
+ *   3. "Cannot Load Contacts / Could not load contacts from Contacts app"
+ *      — `checkContactsLoading()`, `CONTACTS_LOADING_FAILED`
+ *
+ * None of that is new; BACKLOG-3219 only made it VISIBLE. `AppShell` had gated
+ * the whole banner on the permission being granted, so a denied user saw zero
+ * rows. Removing the gate turned zero into three.
+ *
+ * Row 3 deserves a specific note, because it is the worst of the three and it
+ * does not look it. It is not action-less: it carries `actionHandler:
+ * "open-system-settings"` and an `action` of "Grant Full Disk Access in System
+ * Settings > Privacy & Security > Full Disk Access" — a 76-character sentence
+ * that `SystemHealthMonitor` renders as a BUTTON LABEL, so it reads as loose
+ * text. It drops the user in the raw macOS pane instead of the explainer. A
+ * worse action, not a missing one.
+ *
+ * ---------------------------------------------------------------------------
+ * WHAT THIS DOES
+ * ---------------------------------------------------------------------------
+ * `collapseFdaPermissionIssues` — the two denial codes become ONE row that
+ * names the permission and lists the consequences as secondary text.
+ *
+ * `isDownstreamOfFdaDenial` — row 3 is SUPPRESSED while a denial is known,
+ * because a denial fully explains it and the denial row says it better.
+ *
+ * `orderHealthIssues` — genuinely distinct causes are ordered so a row with a
+ * working button always outranks one without.
+ *
+ * THE DISCRIMINATING CASE, and the reason suppression is conditional rather
+ * than a deletion of the producer: with NO denial, row 3 is the only signal
+ * there is — a corrupt or unreadable address book on a Mac that has granted
+ * everything. `checkContactsLoading` cannot tell a denial from an absent
+ * address book (proved in the BACKLOG-3210 review: byte-identical output for
+ * both), which is exactly why it must not speak when something that CAN tell
+ * them apart has already spoken — and must still speak when nothing has.
+ */
+
+/** The collapsed row's heading. `SystemHealthMonitor` renders `title || userMessage`. */
+export const FDA_COLLAPSED_TITLE = "Full Disk Access Required";
+
+/**
+ * The collapsed row's subtitle — the consequences that used to be their own
+ * rows. `SystemHealthMonitor` renders `message` under the title.
+ */
+export const FDA_COLLAPSED_MESSAGE =
+  "Without it, Keepr can't read your Messages history or match phone numbers to contact names.";
+
+/**
+ * Issue `type`s from `checkContactsLoading()` that a Full Disk Access denial
+ * fully explains. Both are downstream symptoms: the first is "the read
+ * returned nothing", the second is "the check itself threw". Under a denial
+ * neither can add anything the denial row has not already said.
+ */
+const FDA_DOWNSTREAM_ISSUE_TYPES = new Set([
+  "CONTACTS_LOADING_FAILED",
+  "CONTACTS_CHECK_FAILED",
+]);
+
+function errorCodeOf(issue: unknown): string | undefined {
+  const code = (issue as { errorCode?: unknown } | null)?.errorCode;
+  return typeof code === "string" ? code : undefined;
+}
+
+/**
+ * Is macOS refusing us, as far as the permission probes can tell?
+ *
+ * Derived from the error CODES rather than from `allGranted`, deliberately.
+ * `allGranted` is false for any unmet permission — including
+ * `CONTACTS_STORE_NOT_FOUND`, which is not a denial at all — so keying
+ * suppression off it would hide the contacts row for a user who has granted
+ * everything and simply has no address book.
+ */
+export function hasFdaDenial(errors: ReadonlyArray<unknown>): boolean {
+  return errors.some((issue) => {
+    const code = errorCodeOf(issue);
+    return code !== undefined && FDA_DENIAL_ERROR_CODES.has(code);
+  });
+}
+
+/**
+ * Should this `checkContactsLoading()` issue stay silent, given a denial is
+ * already being reported? Matches on `type`, which is the field that producer
+ * sets; anything else it might grow in future is passed through rather than
+ * silently swallowed.
+ */
+export function isDownstreamOfFdaDenial(issue: unknown): boolean {
+  const type = (issue as { type?: unknown } | null)?.type;
+  return typeof type === "string" && FDA_DOWNSTREAM_ISSUE_TYPES.has(type);
+}
+
+/**
+ * Collapse every Full Disk Access denial into ONE decorated row, in the
+ * position of the first one. Everything else — `CONTACTS_STORE_NOT_FOUND`
+ * above all — is passed through BYTE-IDENTICAL, same object, same order.
+ *
+ * `CONTACTS_STORE_NOT_FOUND` must never be folded in: it means the address
+ * book is absent, not refused, and telling that user to grant a permission she
+ * may already hold is the BACKLOG-2392 bug.
+ *
+ * `userMessage` is left exactly as the producer wrote it. The renderer prefers
+ * `title`, so the collapsed heading displays; the untouched `userMessage`
+ * keeps this row identical, field for field, to what `usePermissionsFlow` and
+ * `systemHandlers` see from the same producer.
+ */
+export function collapseFdaPermissionIssues(
+  errors: ReadonlyArray<unknown>,
+): unknown[] {
+  const decorated = decorateFdaPermissionIssues(errors);
+
+  // Prefer FULL_DISK_ACCESS_DENIED as the base when both fired: it is the
+  // denial named after the permission, and its `userMessage` is the one that
+  // survives on the collapsed object.
+  const denialIndices = decorated
+    .map((issue, index) => ({ issue, index }))
+    .filter(({ issue }) => {
+      const code = errorCodeOf(issue);
+      return code !== undefined && FDA_DENIAL_ERROR_CODES.has(code);
+    });
+
+  if (denialIndices.length === 0) {
+    return decorated;
+  }
+
+  const preferred =
+    denialIndices.find(
+      ({ issue }) => errorCodeOf(issue) === "FULL_DISK_ACCESS_DENIED",
+    ) ?? denialIndices[0];
+
+  const collapsed = {
+    ...(preferred.issue as Record<string, unknown>),
+    title: FDA_COLLAPSED_TITLE,
+    message: FDA_COLLAPSED_MESSAGE,
+  };
+
+  // The collapsed row takes the slot of the FIRST denial, so it keeps the
+  // position the denial already had relative to any unrelated issue.
+  const firstDenialIndex = denialIndices[0].index;
+  const out: unknown[] = [];
+  decorated.forEach((issue, index) => {
+    if (index === firstDenialIndex) {
+      out.push(collapsed);
+      return;
+    }
+    const code = errorCodeOf(issue);
+    if (code !== undefined && FDA_DENIAL_ERROR_CODES.has(code)) {
+      return; // the other denials are now part of the collapsed row
+    }
+    out.push(issue);
+  });
+  return out;
+}
+
+/**
+ * Sort tier for one issue. LOWER SORTS FIRST.
+ *
+ *   0  blocking and user-fixable  — a real button that does something
+ *   1  blocking, not user-fixable — nothing the user can press
+ *   2  degraded                   — severity "warning"
+ *   3  informational              — severity "info"
+ *
+ * TWO THINGS THIS DELIBERATELY DOES NOT DO.
+ *
+ * It does not read `action`. `CONTACTS_STORE_NOT_FOUND` carries action TEXT
+ * with no handler behind it — `SystemHealthMonitor.handleAction` falls through
+ * to `default:` and logs "Unknown action handler". Keying on the text would
+ * rank a dead button as actionable, which is the defect this file already had
+ * to fix once.
+ *
+ * It does not write a severity back onto the row. A permission result carries
+ * no `severity` at all, and the renderer turns that absence into amber on
+ * purpose. The tier computed here is SORT-LOCAL: an absent severity is treated
+ * as blocking for ORDERING, and the row keeps its colour.
+ */
+export function healthIssueTier(issue: unknown): number {
+  const record = issue as { severity?: unknown; actionHandler?: unknown } | null;
+  const severity = record?.severity;
+  if (severity === "info") return 3;
+  if (severity === "warning") return 2;
+  const handler = record?.actionHandler;
+  return typeof handler === "string" && handler.length > 0 ? 0 : 1;
+}
+
+/**
+ * Order the assembled issues by tier, so a row the user can act on is never
+ * outranked by one she cannot.
+ *
+ * WITHIN A TIER, INSERTION ORDER IS KEPT, and that is a decision rather than
+ * an omission. The obvious tiebreak — most recently detected first — is not
+ * available: every health check rebuilds all issues from scratch in one
+ * `Promise.all`, and no first-seen timestamp exists in this process or in the
+ * renderer. Synthesising one here would produce a value identical for every
+ * row in a run, which sorts by nothing while looking like it sorts by time.
+ */
+export function orderHealthIssues(issues: ReadonlyArray<unknown>): unknown[] {
+  return issues
+    .map((issue, index) => ({ issue, index }))
+    .sort((a, b) => healthIssueTier(a.issue) - healthIssueTier(b.issue) || a.index - b.index)
+    .map(({ issue }) => issue);
+}
+
+/**
  * Register all diagnostic IPC handlers
  */
 export function registerDiagnosticHandlers(): void {
@@ -184,14 +396,32 @@ export function registerDiagnosticHandlers(): void {
         // has a short label and a handler that goes somewhere — see
         // decorateFdaPermissionIssues above. Non-FDA issues pass through
         // unchanged.
+        // BACKLOG-3237: and the two denial codes are ONE row, not two — same
+        // permission, same fix, so the consequences ride along as secondary
+        // text instead of stacking.
         if (!permissions.allGranted) {
-          issues.push(...decorateFdaPermissionIssues(permissions.errors));
+          issues.push(...collapseFdaPermissionIssues(permissions.errors));
         }
 
-        // Add contacts loading issue
+        // Add contacts loading issue.
+        //
+        // BACKLOG-3237: SUPPRESSED while a Full Disk Access denial is already
+        // being reported. This probe cannot distinguish "macOS refused us"
+        // from "there is no address book here" — it emits byte-identical
+        // output for both — so under a denial it is a downstream symptom, with
+        // worse wording and a button that opens the raw Privacy pane.
+        //
+        // With NO denial it is the ONLY signal a user gets that her contacts
+        // are unreadable, so it still appears. `fdaDenied` reads the error
+        // CODES rather than `allGranted`, which is also false for
+        // CONTACTS_STORE_NOT_FOUND — an absent address book must not silence
+        // this row.
+        const fdaDenied = hasFdaDenial(permissions.errors);
         const contactsResult = contactsLoading as { canLoadContacts: boolean; error?: unknown };
         if (!contactsResult.canLoadContacts && contactsResult.error) {
-          issues.push(contactsResult.error);
+          if (!(fdaDenied && isDownstreamOfFdaDenial(contactsResult.error))) {
+            issues.push(contactsResult.error);
+          }
         }
 
         // BACKLOG-2127: Raise a reconnect issue for ANY provider whose stored
@@ -240,19 +470,24 @@ export function registerDiagnosticHandlers(): void {
               : null
           : null;
 
+        // BACKLOG-3237: the renderer maps this array in order and never
+        // sorts, so ordering is decided here — a row with a working button
+        // ahead of one without. Ordering only; no row is rewritten.
+        const orderedIssues = orderHealthIssues(issues);
+
         return {
           success: true,
-          healthy: issues.length === 0,
+          healthy: orderedIssues.length === 0,
           permissions,
           connection,
           contactsLoading,
-          issues,
+          issues: orderedIssues,
           summary: {
-            totalIssues: issues.length,
-            criticalIssues: issues.filter(
+            totalIssues: orderedIssues.length,
+            criticalIssues: orderedIssues.filter(
               (i) => (i as { severity?: string }).severity === "error",
             ).length,
-            warnings: issues.filter(
+            warnings: orderedIssues.filter(
               (i) => (i as { severity?: string }).severity === "warning",
             ).length,
           },

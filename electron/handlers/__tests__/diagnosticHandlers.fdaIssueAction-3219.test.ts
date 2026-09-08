@@ -149,7 +149,7 @@ describe("BACKLOG-3219 — system:health-check decorates a Full Disk Access deni
     expect(issue.errorCode).toBe("FULL_DISK_ACCESS_DENIED");
   });
 
-  it("decorates the contacts denial too — the same permission, the second row", async () => {
+  it("collapses the contacts denial into that row — the same permission, ONE row", async () => {
     mockCheckAllPermissions.mockResolvedValue(
       deniedPermissions([
         { ...FDA_DENIED_PERMISSION_RESULT, error: ERRNO_MESSAGE },
@@ -159,14 +159,24 @@ describe("BACKLOG-3219 — system:health-check decorates a Full Disk Access deni
 
     const result = await getHealthCheckHandler()({}, null, null);
 
-    // Both rows appear on a denied Mac; leaving one with a dead button beside
-    // a live one would be its own defect.
-    expect(result.issues).toHaveLength(2);
+    // BACKLOG-3237 CHANGED THIS ASSERTION, AND THE CHANGE IS THE POINT.
+    //
+    // It used to read `toHaveLength(2)` — "both rows appear on a denied Mac;
+    // leaving one with a dead button beside a live one would be its own
+    // defect". Decorating both was right; emitting both was not. Two rows for
+    // one missing permission is what the founder saw on 2026-09-07, and the
+    // fix is one row per ROOT CAUSE rather than one per affected feature. The
+    // consequences now ride along as secondary text on the single row; see
+    // diagnosticHandlers.oneRowPerCause-3237.test.ts.
+    //
+    // Rewritten rather than deleted: a deleted test hides the behaviour
+    // change, this one records it.
+    expect(result.issues).toHaveLength(1);
     expect(
       (result.issues as Array<Record<string, unknown>>).map(
         (i) => i.actionHandler
       )
-    ).toEqual([FDA_EXPLAINER_ACTION_HANDLER, FDA_EXPLAINER_ACTION_HANDLER]);
+    ).toEqual([FDA_EXPLAINER_ACTION_HANDLER]);
   });
 
   it("leaves CONTACTS_STORE_NOT_FOUND alone — an absent address book is not a permission to grant", async () => {
