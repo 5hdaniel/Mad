@@ -34,6 +34,7 @@ import {
   importPhaseDisplayFor,
   type ImportPhaseDisplay,
 } from "../../utils/importPhaseDisplay";
+import { FdaHelpSheet } from "../permissions/FdaHelpSheet";
 import { usePlatform } from "../../contexts/PlatformContext";
 import { useSyncOrchestrator } from "../../hooks/useSyncOrchestrator";
 import { settingsService, systemService } from '../../services';
@@ -392,6 +393,17 @@ export function MacOSMessagesImportSettings({
   const [isRestartingForFda, setIsRestartingForFda] = useState(false);
 
   /**
+   * BACKLOG-3210 (part 2): the Full Disk Access explainer is open.
+   *
+   * The notice's button used to open the macOS Privacy pane directly — a list
+   * of apps with no statement of what Keepr wants, why, or what happens to the
+   * data. The founder's instruction was to show the explanation the app
+   * already has first, and keep the pane one click further in. Same component
+   * the dashboard health banner opens, so both dead-ends land in one place.
+   */
+  const [showFdaExplainer, setShowFdaExplainer] = useState(false);
+
+  /**
    * BACKLOG-3208: the relaunch was asked for and did not happen.
    *
    * `relaunchApp` resolves `{ relaunched: false }` when the main-process
@@ -712,28 +724,19 @@ export function MacOSMessagesImportSettings({
   }, [isMacOS, refreshFdaStatus]);
 
   /**
-   * BACKLOG-3208: open the macOS Full Disk Access pane with Keepr already in
-   * it, then re-check.
+   * BACKLOG-3208 / BACKLOG-3210 (part 2): `handleOpenFdaSettings` used to live
+   * here and is DELETED, not orphaned.
    *
-   * The trigger-then-open sequence lives in `systemService` because it is
-   * borrowed verbatim from `PermissionsStep.handleOpenSystemSettings` and both
-   * callers must keep using the same one — the pre-list trigger is the step
-   * that puts Keepr's row in the pane, and BACKLOG-2192 established it has to
-   * fire on every open, not once.
+   * Its whole body — `systemService.openFullDiskAccessSettings()` (the
+   * trigger-then-open sequence borrowed from `PermissionsStep`, where
+   * BACKLOG-2192 established the pre-list trigger has to fire on every open),
+   * an error log, then a status re-check — now lives in `FdaHelpSheet`, which
+   * this panel renders and hands `refreshFdaStatus` as its `onOpenedSettings`.
+   * The behaviour is identical and the pane is still opened from exactly one
+   * place; only the surface the user meets first has changed. Leaving the old
+   * copy behind would have been a second, silently divergent path to the same
+   * pane.
    */
-  const handleOpenFdaSettings = useCallback(async () => {
-    const result = await systemService.openFullDiskAccessSettings();
-    if (!result.success) {
-      logger.error(
-        "[MacOSMessagesImportSettings] Failed to open Full Disk Access settings:",
-        result.error
-      );
-    }
-    // The user may flip the toggle and come straight back; the focus listener
-    // covers that, and this immediate re-check covers the case where the pane
-    // never took focus away at all.
-    await refreshFdaStatus();
-  }, [refreshFdaStatus]);
 
   /**
    * BACKLOG-3208: restart Keepr so a grant made while it was running takes
@@ -1738,18 +1741,33 @@ export function MacOSMessagesImportSettings({
             grant it, Keepr cannot read any messages and an import here will not
             bring anything in.
           </p>
+          {/* BACKLOG-3210 (part 2): "Show me how" opens the explainer.
+              `handleOpenFdaSettings` is not gone — it is now the explainer's
+              primary action, so the pane still opens through the same
+              trigger-then-open path and this panel still re-checks its status
+              when the user comes back. */}
           <button
             type="button"
-            onClick={handleOpenFdaSettings}
+            onClick={() => setShowFdaExplainer(true)}
             data-testid="macos-fda-open-settings"
             className="px-3 py-1.5 bg-primary text-white rounded text-xs font-medium hover:bg-primary-dark"
           >
-            Open System Settings
+            Show me how
           </button>
           <p className="mt-2">
             Switch Keepr on under Privacy &amp; Security &rarr; Full Disk Access,
             then come back here — Keepr checks again on its own.
           </p>
+          {showFdaExplainer && (
+            <FdaHelpSheet
+              onClose={() => setShowFdaExplainer(false)}
+              onOpenedSettings={refreshFdaStatus}
+              // BACKLOG-3210 (part 2): the explainer closes itself on the
+              // grant; this is what takes the notice around it down at the
+              // same moment rather than on the next window focus.
+              onPermissionGranted={refreshFdaStatus}
+            />
+          )}
         </div>
       )}
 
