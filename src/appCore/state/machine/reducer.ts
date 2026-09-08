@@ -129,9 +129,37 @@ function isOnboardingComplete(userData: UserData, platform: PlatformInfo, _isNew
     return false;
   }
 
-  // macOS must have permissions
+  // macOS must have permissions — OR have already declined them, with a data
+  // source that does not depend on them.
+  //
+  // BACKLOG-3212: before this, `!hasPermissions` alone forced every macOS user
+  // who declined Full Disk Access back into onboarding on EVERY launch. That
+  // made BACKLOG-1842's "Skip for now" unrepeatable in practice: the skip lived
+  // in a React useState Set and died with the process, and this check re-routed
+  // the user regardless. A user who cannot grant FDA at all (managed Mac) was
+  // onboarded forever.
+  //
+  // `fdaSkipped` is deliberately NOT folded into `hasPermissions`: skipping
+  // does not grant access to the local Messages database, and anything gating
+  // on that capability must keep reading `hasPermissions`.
+  //
+  // The `hasEmailConnected` conjunct is what keeps the BACKLOG-1821
+  // data-source floor intact. `hasCompletedEmailOnboarding` is also true for a
+  // user who SKIPPED email, so releasing on `fdaSkipped` alone would drop a
+  // user who skipped both email and FDA onto the dashboard with zero data
+  // sources — the floor would never fire again. A connected mailbox is
+  // strictly narrower than the floor's own accepted sources
+  // (dataSourceFloor.getSatisfyingSource: email, FDA, iPhone driver, Android),
+  // so this can never release someone the floor would have held. Users whose
+  // only source is Android or an iPhone driver still enter onboarding, but the
+  // queue now seeds `permissions` as answered, the floor passes, and the queue
+  // completes without re-asking.
   if (platform.isMacOS && !userData.hasPermissions) {
-    return false;
+    const declinedWithAnotherSource =
+      userData.fdaSkipped === true && userData.hasEmailConnected === true;
+    if (!declinedWithAnotherSource) {
+      return false;
+    }
   }
 
   // Windows + iPhone must not need driver setup
@@ -431,7 +459,12 @@ export function appStateReducer(
         completedSteps.push("email-connect");
       }
 
-      if (platform.isMacOS && data.hasPermissions) {
+      // BACKLOG-3212: an already-declined FDA prompt counts as answered here
+      // exactly as a granted one does. The "implied complete" reasoning for
+      // secure-storage is identical in both cases — secure-storage sits before
+      // permissions in the macOS flow, so reaching permissions at all (to
+      // grant OR to skip) means secure-storage already ran.
+      if (platform.isMacOS && (data.hasPermissions || data.fdaSkipped === true)) {
         completedSteps.push("permissions");
         completedSteps.push("secure-storage"); // Implied complete if they got past it
       }
@@ -456,6 +489,11 @@ export function appStateReducer(
         // Preserve hasPermissions from loaded data so selector can access it
         // Fixes bug where users with FDA granted were stuck on permissions step
         hasPermissions: data.hasPermissions,
+        // BACKLOG-3212: carry the persisted "Skip for now" choice onto
+        // onboarding state. A user can legitimately re-enter onboarding for
+        // another reason (no mailbox yet); when they do, the queue reads this
+        // to seed `permissions` as already answered instead of asking again.
+        fdaSkipped: data.fdaSkipped,
         // Preserve hasEmailConnected so returning users with email already
         // connected don't get shown the email-connect step unnecessarily.
         // Without this, OnboardingState.hasEmailConnected defaults to undefined,
@@ -704,6 +742,10 @@ export function appStateReducer(
         // Preserve email connected state if they already have it (shouldn't happen, but be safe)
         hasEmailConnected: state.userData.hasEmailConnected,
         hasPermissions: state.userData.hasPermissions,
+        // BACKLOG-3212: preserved for the same reason hasPermissions is — a
+        // ready user who opens email setup must not be re-asked for Full Disk
+        // Access they already declined.
+        fdaSkipped: state.userData.fdaSkipped,
       };
     }
 

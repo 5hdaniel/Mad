@@ -321,12 +321,6 @@ const KNOWN_UNWRAPPED: Record<string, string> = {
   // if the handlers had been left completely untouched (measured). That is
   // BACKLOG-3238.
 
-  // --- BACKLOG-2549 (critical, open): export status vs freeze stamp -------
-  "electron/handlers/transactionExportHandlers.ts::ipc:transactions:export-enhanced":
-    "BACKLOG-2549 @0dca6beb1 (:234, updateTransaction export-tracking then markFirstExport): a transaction marked exported with first_exported_at NULL — NOT frozen, so address, type and audit-start stay editable although an exported artifact already exists on disk",
-  "electron/handlers/transactionExportHandlers.ts::ipc:transactions:export-folder":
-    "BACKLOG-2549 @0dca6beb1 (:386, same pair on the folder path): exported and frozen flip separately, and markFirstExport is deliberately non-throwing, so a stamp FAILURE — not only a crash — leaves an exported deal the user can still edit",
-
   // --- BACKLOG-2550 (critical, open): message link pointer vs junction ----
   "electron/services/messageMatchingService.ts::autoLinkTextsToTransaction":
     "BACKLOG-2550 @0dca6beb1 (:386, junction INSERT loop then one bulk messages UPDATE): junction rows with messages.transaction_id still NULL, so the message is re-offered as unlinked and the re-link is blocked only by the unique index",
@@ -1430,6 +1424,16 @@ describe("a multi-statement write may not ship without a transaction (BACKLOG-25
     // pass just as well if the directory were renamed or deleted.
     expect(fs.existsSync(path.join(REPO_ROOT, "electron", "types", "__typefixtures__"))).toBe(true);
     expect(units.some((u) => u.file.includes("__typefixtures__"))).toBe(false);
+
+    // BACKLOG-2549 — PIN. `recordExportCompletion` is what the two export
+    // handlers now write through, so it is the single name that keeps them
+    // countable. If its signature is ever rewritten with an INLINE object type
+    // in the parameter list, `captureBody` closes before the body opens
+    // (BACKLOG-3225), the function reads as having no writes, it drops out of
+    // this set, and both handlers silently fall to 0 counted writes — green
+    // because the guard went blind, not because the code is atomic. Keep the
+    // named `ExportCompletionParams` interface.
+    expect(dbLayerWriters().has("recordExportCompletion")).toBe(true);
   });
 
   it("PRECONDITION: it can tell a wrapped write from an unwrapped one", () => {
