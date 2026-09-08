@@ -80,12 +80,31 @@ export const FDA_EXPLAINER_ACTION_HANDLER = "open-fda-explainer";
 
 /**
  * What the renderer actually receives for an FDA denial after
- * `diagnosticHandlers` decorates it: the producer's object, with a button
- * label short enough to be a button and a handler that goes somewhere.
+ * `diagnosticHandlers` collapses and decorates it: the producer's object, with
+ * a button label short enough to be a button, a handler that goes somewhere,
+ * and — BACKLOG-3237 — the heading and consequence text of the SINGLE row that
+ * now stands for the whole denial.
+ *
+ * `title` and `message` were added when BACKLOG-3237 collapsed the two denial
+ * rows into one. Without them this constant would describe a shape the handler
+ * can no longer emit, and `SystemHealthMonitor.test.tsx` — which renders from
+ * it — would have gone on asserting `userMessage` as the heading, a heading
+ * production stopped showing. That is the exact failure this file's header
+ * warns about, so the two strings are tied to the handler's exported constants
+ * in `diagnosticHandlers.oneRowPerCause-3237.test.ts`.
+ *
+ * `userMessage` is deliberately still here and still the producer's: the
+ * collapse adds fields, it does not rewrite the ones other consumers read.
  */
+export const FDA_COLLAPSED_TITLE_TEXT = "Full Disk Access Required";
+export const FDA_COLLAPSED_MESSAGE_TEXT =
+  "Without it, Keepr can't read your Messages history or match phone numbers to contact names.";
+
 export const FDA_DENIED_BANNER_ISSUE = {
   ...FDA_DENIED_PERMISSION_RESULT,
   error: "EPERM: operation not permitted",
+  title: FDA_COLLAPSED_TITLE_TEXT,
+  message: FDA_COLLAPSED_MESSAGE_TEXT,
   action: FDA_EXPLAINER_ACTION_LABEL,
   actionHandler: FDA_EXPLAINER_ACTION_HANDLER,
 } as const;
