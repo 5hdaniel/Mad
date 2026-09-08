@@ -1019,21 +1019,49 @@ export function MacOSMessagesImportSettings({
   // here because that state no longer disables the button — it opens the
   // refusal dialog, which says considerably more than a tooltip could.
   //
-  // BACKLOG-3208: the permission case is FIRST, because neither of the other
-  // two describes it. With Full Disk Access missing the estimate fails, so
-  // `estimateStatus` is `unavailable` and the fallback fired — the disabled
-  // Import button told the user, in a tooltip, that Keepr could not work out
-  // how much SPACE the import needs. That is the same misattribution the
-  // inline copy carried, surviving in the one place that is only read once the
-  // user has already tried to click. The other two branches are untouched:
-  // they are still exactly right for the states they describe, and the test
-  // below holds the non-permission failure to the disk-space wording so the
-  // two cases cannot collapse into one again.
-  const spaceBlockedReason = estimateBlockedByPermission
-    ? "Keepr needs Full Disk Access to read your messages"
-    : estimateStatus === "pending"
+  // BACKLOG-3208 (SR review of PR #2578): these two branches stay exactly as
+  // they are. They are right for the states they describe — a space question
+  // whose answer is not in yet, and one that could not be answered. The
+  // permission case is NOT one of them, and is layered on in
+  // `importBlockedReason` below rather than smuggled in here.
+  const spaceBlockedReason =
+    estimateStatus === "pending"
       ? "Still checking how much space this import needs"
       : "Keepr could not work out how much space this import needs";
+
+  /**
+   * BACKLOG-3208 (SR review of PR #2578): why the import is refused, when the
+   * reason is not about space at all.
+   *
+   * `spaceBlocked` above keys on the SIZE of the attachment copy, so it is
+   * false whenever `skipAttachments` is on — and Import and Force Re-import
+   * stayed clickable with Full Disk Access denied, running an import that
+   * could not read one message. The tooltip had the mirror-image gap: its two
+   * branches both talk about space, so a permission refusal was explained, in
+   * the one place a user reads only after trying to click, as Keepr not
+   * working out how much space the import needs.
+   *
+   * Both come from ONE term, and that term is derived from the permission
+   * state this component already keeps — no second source of truth:
+   *   - `fdaStatus === "denied"` is the panel's own authoritative answer, and
+   *     it holds from the moment the check returns, before any estimate has
+   *     resolved.
+   *   - `estimateBlockedByPermission` additionally covers main refusing for
+   *     permission in the window before the panel's own check has caught up.
+   */
+  const permissionBlocked =
+    fdaStatus === "denied" || estimateBlockedByPermission;
+
+  /** Every reason Import and Force Re-import are refused, space and otherwise. */
+  const importBlocked = spaceBlocked || permissionBlocked;
+
+  /**
+   * The permission case FIRST: when Keepr cannot read Messages at all, what the
+   * import would have cost in disk space is not the thing to say.
+   */
+  const importBlockedReason = permissionBlocked
+    ? "Keepr needs Full Disk Access to read your messages"
+    : spaceBlockedReason;
 
   // BACKLOG-2743: Plain size formatting — real numbers, no adjectives.
   const formatGb = (bytes: number): string => {
@@ -2234,7 +2262,9 @@ export function MacOSMessagesImportSettings({
       {/* BACKLOG-3156 stage A: the actions, BARE — no card, no heading, primary
           then destructive. Still muted with the rest of the controls when this
           is not the active source (BACKLOG-2335), and neither `disabled`
-          expression changed: both remain `controlsDisabled || spaceBlocked`. */}
+          expression changed: both remain `controlsDisabled || <blocked>`.
+          BACKLOG-3208 (SR review) widened that term from `spaceBlocked` to
+          `importBlocked`, which is `spaceBlocked` plus the permission case. */}
       <div className={enabled ? "" : "opacity-60"}>
       <div data-testid="messages-block-actions" className="flex gap-2 items-center">
         <button
@@ -2248,15 +2278,18 @@ export function MacOSMessagesImportSettings({
           // opens the refusal dialog, which offers a window that does fit. The
           // import is still refused — no path from that dialog starts a run
           // that does not fit.
-          disabled={controlsDisabled || spaceBlocked}
-          title={spaceBlocked ? spaceBlockedReason : undefined}
+          // BACKLOG-3208 (SR review): `importBlocked`, not `spaceBlocked` —
+          // a missing Full Disk Access refuses the import too, and did not
+          // reach this gate while "import text only" was on.
+          disabled={controlsDisabled || importBlocked}
+          title={importBlocked ? importBlockedReason : undefined}
           className="flex-1 px-3 py-2 bg-blue-500 hover:bg-blue-600 text-white text-sm font-medium rounded transition-all disabled:opacity-50 disabled:cursor-not-allowed"
         >
           {isImporting ? "Importing..." : "Import Messages"}
         </button>
         <button
           onClick={() => setShowForceWarning(true)}
-          disabled={controlsDisabled || spaceBlocked}
+          disabled={controlsDisabled || importBlocked}
           className="px-3 py-2 bg-gray-200 hover:bg-gray-300 text-gray-700 text-sm font-medium rounded transition-all disabled:opacity-50 disabled:cursor-not-allowed"
           title="Delete all existing messages and re-import from scratch"
         >

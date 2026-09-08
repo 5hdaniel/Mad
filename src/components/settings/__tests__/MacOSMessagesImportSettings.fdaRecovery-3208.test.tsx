@@ -364,59 +364,101 @@ describe("BACKLOG-3208 — the Messages panel offers Full Disk Access after onbo
   });
 
   /**
-   * SR review of PR #2578 — the misattribution survived in the Import button's
-   * tooltip, which is the one place a user reads only AFTER trying to click.
+   * SR review of PR #2578 — the two findings, and why they are one test block.
    *
-   * `spaceBlockedReason` had two branches, "still checking" and "could not work
-   * out how much space", and neither described a missing permission. With Full
-   * Disk Access denied the estimate fails, so the fallback fired and the
-   * disabled button explained itself as a disk-space problem.
+   * FINDING 1: the disabled Import button's tooltip had two branches, "still
+   * checking" and "could not work out how much space", and neither described a
+   * missing permission — so the disk-space misattribution survived in the one
+   * place a user reads only AFTER trying to click.
    *
-   * These two tests are a PAIR and neither is optional. The first fixes the
-   * wording for the permission case; the second holds every OTHER estimate
-   * failure to the original disk-space wording. Without the second, "make the
-   * tooltip mention Full Disk Access" could be satisfied by making it say that
-   * always — which is the same two-states-collapsed-into-one defect this whole
-   * item is about, pointing the other way.
+   * FINDING 2: `spaceBlocked` keys on the SIZE of the attachment copy, so it is
+   * false whenever "import text only" is on. Import and Force Re-import
+   * therefore stayed clickable with Full Disk Access denied, offering to run an
+   * import that could not read one message.
+   *
+   * The three cases below are a DISCRIMINATING SET, not a happy path plus
+   * decoration. The middle one is the one that matters: it holds a genuine
+   * space-unknown refusal to the original wording and the original disabled
+   * state, so "make it mention Full Disk Access" cannot be satisfied by making
+   * it say that always — which would be this item's own defect class, pointing
+   * the other way.
    */
-  it("names Full Disk Access in the Import tooltip when that is why the import is refused", async () => {
-    systemApi().checkPermissions.mockResolvedValue(FDA_DENIED);
-    (window.api.messages.getImportCount as jest.Mock).mockResolvedValue(
-      ESTIMATE_REFUSED_NO_FDA
-    );
+  describe("SR review of PR #2578 — the import gate and its reason", () => {
+    it("refuses the import and names Full Disk Access, even with attachments skipped", async () => {
+      // "Import text only" makes the SPACE question moot — which is exactly
+      // how the buttons stayed live with no permission to read anything.
+      //
+      // The key is `messageImport.filters.skipAttachments` (the panel reads
+      // `messageImport.filters`, not `messageImport`). Written the shallow way
+      // first, this test PASSED anyway — the button was disabled by the space
+      // term, proving nothing about the permission one. Hence the explicit
+      // assertion below that the toggle really is on: the premise of the test
+      // is checked, not assumed.
+      mockGetPreferences.mockResolvedValue({
+        success: true,
+        data: { messageImport: { filters: { skipAttachments: true } } },
+      });
+      systemApi().checkPermissions.mockResolvedValue(FDA_DENIED);
+      (window.api.messages.getImportCount as jest.Mock).mockResolvedValue(
+        ESTIMATE_REFUSED_NO_FDA
+      );
 
-    renderStrict();
+      renderStrict();
 
-    await screen.findByTestId("macos-fda-denied-notice");
-    const importButton = await screen.findByRole("button", {
-      name: /Import Messages/i,
-    });
-    await waitFor(() =>
+      await screen.findByTestId("macos-fda-denied-notice");
+      await waitFor(() =>
+        expect(screen.getByTestId("skip-attachments-toggle")).toBeChecked()
+      );
+      const importButton = screen.getByRole("button", {
+        name: /Import Messages/i,
+      });
+      await waitFor(() => expect(importButton).toBeDisabled());
       expect(importButton).toHaveAttribute(
         "title",
         "Keepr needs Full Disk Access to read your messages"
-      )
-    );
-    expect(importButton).toBeDisabled();
-  });
-
-  it("still blames the unknown size in the Import tooltip when permission is not the reason", async () => {
-    systemApi().checkPermissions.mockResolvedValue(FDA_GRANTED);
-    (window.api.messages.getImportCount as jest.Mock).mockResolvedValue({
-      success: false,
-      error: "SQLITE_BUSY: database is locked",
+      );
+      expect(
+        screen.getByRole("button", { name: /Force Re-import/i })
+      ).toBeDisabled();
     });
 
-    renderStrict();
+    it("still refuses for an unknown size, in the original words, when permission is not the reason", async () => {
+      systemApi().checkPermissions.mockResolvedValue(FDA_GRANTED);
+      (window.api.messages.getImportCount as jest.Mock).mockResolvedValue({
+        success: false,
+        error: "SQLITE_BUSY: database is locked",
+      });
 
-    await screen.findByTestId("import-estimate-unavailable");
-    const importButton = screen.getByRole("button", {
-      name: /Import Messages/i,
+      renderStrict();
+
+      await screen.findByTestId("import-estimate-unavailable");
+      const importButton = screen.getByRole("button", {
+        name: /Import Messages/i,
+      });
+      expect(importButton).toBeDisabled();
+      expect(importButton).toHaveAttribute(
+        "title",
+        "Keepr could not work out how much space this import needs"
+      );
     });
-    expect(importButton).toHaveAttribute(
-      "title",
-      "Keepr could not work out how much space this import needs"
-    );
+
+    it("leaves the import available, with no tooltip, when nothing is refusing it", async () => {
+      systemApi().checkPermissions.mockResolvedValue(FDA_GRANTED);
+      (window.api.messages.getImportCount as jest.Mock).mockResolvedValue(
+        ESTIMATE_OK
+      );
+
+      renderStrict();
+
+      const importButton = await screen.findByRole("button", {
+        name: /Import Messages/i,
+      });
+      await waitFor(() => expect(importButton).toBeEnabled());
+      expect(importButton).not.toHaveAttribute("title");
+      expect(
+        screen.getByRole("button", { name: /Force Re-import/i })
+      ).toBeEnabled();
+    });
   });
 
   /**
