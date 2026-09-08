@@ -96,6 +96,16 @@ export interface UserData {
   needsDriverSetup: boolean;
   /** True if macOS user has granted Full Disk Access */
   hasPermissions: boolean;
+  /**
+   * BACKLOG-3212: true if the user chose "Skip for now" on the Full Disk
+   * Access step at some point (Supabase user_preferences
+   * `onboarding.fdaSkipped`). Distinct from `hasPermissions` on purpose —
+   * skipping does NOT grant access to the local Messages database, it only
+   * records that the user was already asked and declined. Optional: absent
+   * (the pre-3212 shape) means "never skipped", so every existing
+   * construction site keeps its meaning.
+   */
+  fdaSkipped?: boolean;
 }
 
 // ============================================
@@ -209,6 +219,12 @@ export interface OnboardingState {
   hasEmailConnected?: boolean;
   /** True if macOS Full Disk Access is granted (checked during loading) */
   hasPermissions?: boolean;
+  /**
+   * BACKLOG-3212: the persisted "Skip for now" choice from a previous
+   * session, carried onto onboarding state so the queue can seed `permissions`
+   * as already-answered instead of re-asking. Never implies FDA is granted.
+   */
+  fdaSkipped?: boolean;
   /** Phone type selected during onboarding (iphone or android) */
   selectedPhoneType?: "iphone" | "android";
   /**
