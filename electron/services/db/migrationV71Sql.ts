@@ -143,7 +143,17 @@ export const V71_DELETE_ATTACHMENT_SQL = "DELETE FROM attachments WHERE id = ?";
  * baseline and then runs v71 like any other database.
  *
  * Legacy rows carry NULL and are excluded by the partial predicate, so nothing
- * pre-existing can collide. Gmail rows also carry NULL by design (BACKLOG-3187).
+ * pre-existing can collide.
+ *
+ * BACKLOG-3187 SUPERSEDES what this comment used to say next. Gmail rows carried
+ * NULL when v71 shipped because no field of Gmail's had been established as a
+ * durable identity. One has since: `partId`, which Google documents as immutable
+ * and which was measured stable across fetches while `attachmentId` rotated. Gmail
+ * rows written after 3187 therefore carry a `partId` and ARE covered by this index.
+ * Rows written BEFORE it keep NULL and stay excluded until a write touches them —
+ * there is no migration that fills them, because `partId` is not stored locally and
+ * cannot be derived; the adopt in `findEmailAttachmentRow` step 2 stamps it from the
+ * provider on the next write instead.
  */
 export const V71_CREATE_PROVIDER_INDEX_SQL =
   "CREATE UNIQUE INDEX IF NOT EXISTS idx_attachments_email_provider " +

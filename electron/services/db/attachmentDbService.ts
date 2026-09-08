@@ -56,7 +56,10 @@ export function createAttachmentRecord(params: {
   mimeType: string;
   fileSizeBytes: number;
   storagePath: string;
-  /** BACKLOG-2551: the provider's own id. NULL for Gmail by design (BACKLOG-3187). */
+  /**
+   * BACKLOG-2551: the provider's own id — Gmail's `partId` or Outlook's Graph id
+   * (BACKLOG-3187), never a Gmail `attachmentId`. Null where no identity exists.
+   */
   providerAttachmentId?: string | null;
 }): void {
   const db = ensureDb();
@@ -100,11 +103,15 @@ export function upsertEmailAttachmentMetadata(params: {
   mimeType?: string | null;
   fileSizeBytes?: number | null;
   /**
-   * BACKLOG-2551: the provider's own attachment id, or null. Gmail passes null by
-   * design (Google documents no stability property for its attachmentId — see
-   * BACKLOG-3187), so every Gmail row takes step 4 and behaves exactly as it did
-   * before v71. The gate that decides this lives at the two call-site chokepoints,
-   * never here: the database layer must not know which provider a row came from.
+   * BACKLOG-2551: the provider's own attachment id, or null.
+   *
+   * BACKLOG-3187: for Gmail this is the `partId` — the immutable id of the MIME
+   * part — and NEVER the `attachmentId`, which is a fetch token measured rotating
+   * between two fetches of the same attachment. For Outlook it is the Graph id.
+   * Null still arrives here, from a legacy row's re-write or from a call site whose
+   * provider could not supply an identity, and step 4 handles it exactly as before.
+   * The gate that decides this lives at the three call-site chokepoints, never
+   * here: the database layer must not know which provider a row came from.
    */
   providerAttachmentId?: string | null;
 }): string {
@@ -253,8 +260,10 @@ export function getEmailAttachmentByFilename(
  *                        `IS NULL` guard is what keeps step 2 from swallowing a
  *                        legitimate same-named sibling that already has its own id.
  *   3. (caller inserts)
- *   4. no provider id  — filename only: byte-for-byte the pre-v71 behaviour, which
- *                        is the path every Gmail row takes by design.
+ *   4. no provider id  — filename only: byte-for-byte the pre-v71 behaviour. Until
+ *                        BACKLOG-3187 this was the path every Gmail row took; it is
+ *                        now the path taken only by rows written before it and by
+ *                        call sites that cannot supply an identity.
  *
  * This function knows the ORDER, never the provider: no gmail/outlook branch
  * belongs in the database layer.

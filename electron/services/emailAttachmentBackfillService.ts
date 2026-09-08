@@ -70,7 +70,11 @@ interface AttachmentMetaLite {
   filename: string;
   mimeType: string | null;
   size: number | null;
-  /** BACKLOG-2551: the provider's own attachment id, pre-gated by provider. */
+  /**
+   * BACKLOG-2551: the provider's own attachment id, pre-gated at normalisation.
+   * BACKLOG-3187: for Gmail this is the `partId` (identity), never the
+   * `attachmentId` (fetch token, measured rotating).
+   */
   providerAttachmentId: string | null;
 }
 
@@ -91,6 +95,8 @@ function normalizeAttachmentMeta(
     mimeType?: string | null;
     contentType?: string | null;
     size?: number | null;
+    /** BACKLOG-3187: Gmail identity. Absent on every Outlook shape. */
+    partId?: string | null;
     attachmentId?: string | null;
     id?: string | null;
   },
@@ -105,9 +111,12 @@ function normalizeAttachmentMeta(
     // BACKLOG-2551: this service is a THIRD write path into
     // upsertEmailAttachmentMetadata, reached from neither of the two chokepoints
     // in emailSyncService / emailAttachmentService, so it carries the same gate.
-    // Gmail -> null by design (BACKLOG-3187); Outlook Graph supplies `id`.
+    // BACKLOG-3187: identity from the data shape — Gmail's immutable `partId`
+    // when the part carries one, Outlook Graph's `id` otherwise. A Gmail
+    // `attachmentId` is a fetch token and never reaches the column.
     providerAttachmentId:
-      provider === "gmail" ? null : (raw.attachmentId ?? raw.id ?? null),
+      raw.partId ||
+      (provider === "gmail" ? null : (raw.attachmentId ?? raw.id ?? null)),
   };
 }
 
