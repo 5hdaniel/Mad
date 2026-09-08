@@ -68,6 +68,71 @@ function formatSinceMessage(lastSyncAt: string | null | undefined): string | und
 }
 
 /**
+ * BACKLOG-3219 / BACKLOG-3210 (part 2) — give a Full Disk Access denial a
+ * button that does something.
+ *
+ * `permissionService.checkAllPermissions()` returns bare `PermissionResult`
+ * objects: `{ hasPermission, error, errorCode, userMessage, action }`. They
+ * carry no `actionHandler`, and the health banner keys its button entirely off
+ * that field — `SystemHealthMonitor.handleAction` falls through to its
+ * `default:` branch, logs "Unknown action handler" and does nothing. Until
+ * BACKLOG-3219 nobody noticed, because `AppShell` gated the whole banner on
+ * the permission being GRANTED, so this issue could never render.
+ *
+ * With that gate gone the row appears, and it needs two things it did not have:
+ *
+ *   - a button LABEL short enough to be a button. `action` is a 78-character
+ *     sentence ("Please grant Full Disk Access in System Settings > ...") and
+ *     is rendered directly as the label.
+ *   - a HANDLER. `open-fda-explainer` opens the same explainer the Settings →
+ *     Messages notice opens, rather than dropping the user straight into the
+ *     macOS Privacy pane. The pane is still one click further in.
+ *
+ * Decorating HERE rather than in `permissionService` is deliberate: `action`
+ * and `actionHandler` are health-banner presentation, this is where the
+ * banner's issue list is assembled, and `checkAllPermissions` has three other
+ * consumers (`systemHandlers`, `usePermissionsFlow` via `systemService`, and
+ * the preload type mirror) that must not inherit a copy change.
+ *
+ * WHICH CODES. `FULL_DISK_ACCESS_DENIED` and `CONTACTS_ACCESS_DENIED` — both
+ * ARE Full Disk Access denials (`~/Library/Application Support/AddressBook` is
+ * FDA-protected, and the contacts error's own text already says Full Disk
+ * Access is what grants it). On a denied Mac both fire, and leaving one row
+ * with a dead button beside a live one would be its own defect.
+ *
+ * `CONTACTS_STORE_NOT_FOUND` is deliberately NOT decorated. Per the BACKLOG-3210
+ * review, that code means the address book is absent, not refused; pointing
+ * that user at a permission prompt is the BACKLOG-2392 bug — telling someone to
+ * grant something she may already hold. It keeps today's behaviour untouched.
+ *
+ * Anything else is passed through byte-identical.
+ */
+export const FDA_EXPLAINER_ACTION = "Show me how";
+export const FDA_EXPLAINER_ACTION_HANDLER = "open-fda-explainer";
+
+/** Error codes that mean "macOS refused us, and Full Disk Access is the fix". */
+const FDA_DENIAL_ERROR_CODES = new Set([
+  "FULL_DISK_ACCESS_DENIED",
+  "CONTACTS_ACCESS_DENIED",
+]);
+
+export function decorateFdaPermissionIssues(
+  errors: ReadonlyArray<unknown>,
+): unknown[] {
+  return errors.map((issue) => {
+    const errorCode = (issue as { errorCode?: unknown } | null)?.errorCode;
+    if (typeof errorCode !== "string" || !FDA_DENIAL_ERROR_CODES.has(errorCode)) {
+      return issue;
+    }
+    return {
+      ...(issue as Record<string, unknown>),
+      action: FDA_EXPLAINER_ACTION,
+      actionHandler: FDA_EXPLAINER_ACTION_HANDLER,
+    };
+  });
+}
+
+/**
  * Register all diagnostic IPC handlers
  */
 export function registerDiagnosticHandlers(): void {
@@ -114,9 +179,13 @@ export function registerDiagnosticHandlers(): void {
 
         const issues: unknown[] = [];
 
-        // Add permission issues
+        // Add permission issues.
+        // BACKLOG-3219: decorated on the way in so the Full Disk Access row
+        // has a short label and a handler that goes somewhere — see
+        // decorateFdaPermissionIssues above. Non-FDA issues pass through
+        // unchanged.
         if (!permissions.allGranted) {
-          issues.push(...permissions.errors);
+          issues.push(...decorateFdaPermissionIssues(permissions.errors));
         }
 
         // Add contacts loading issue

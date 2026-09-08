@@ -4,6 +4,7 @@ import type { OAuthProvider } from "../../electron/types/models";
 import { systemService, authService } from '../services';
 import logger from '../utils/logger';
 import { openEmailSettings } from '../utils/openEmailSettings';
+import { FdaHelpSheet } from './permissions/FdaHelpSheet';
 
 interface SystemHealthMonitorProps {
   userId: string;
@@ -43,6 +44,15 @@ function SystemHealthMonitor({
   const [issues, setIssues] = useState<SystemIssue[]>([]);
   const [dismissed, setDismissed] = useState(new Set<number>());
   const checkingRef = useRef(false);
+  /**
+   * BACKLOG-3210 (part 2): the Full Disk Access explainer, opened from this
+   * banner's action button.
+   *
+   * Rendered here rather than routed through `onOpenSettings` because it needs
+   * nothing from the Settings modal — sending the user to Settings first would
+   * reproduce, one screen out, the dead-end this is fixing.
+   */
+  const [showFdaExplainer, setShowFdaExplainer] = useState(false);
 
   const checkSystemHealth = useCallback(async () => {
     if (checkingRef.current) return;
@@ -87,6 +97,19 @@ function SystemHealthMonitor({
     switch (issue.actionHandler) {
       case "open-system-settings":
         await systemService.openPrivacyPane("fullDiskAccess");
+        break;
+
+      // BACKLOG-3210 (part 2) / BACKLOG-3219: a Full Disk Access denial opens
+      // the explainer, not the raw macOS pane. `diagnosticHandlers` attaches
+      // this handler to the FDA denial issues; before it, those rows reached
+      // the `default:` branch below and the button did nothing at all.
+      //
+      // The row is NOT dismissed here: the permission is still missing when
+      // the sheet closes, and a banner that disappears because you asked for
+      // help is a worse dead-end than the one being fixed. It reappears on the
+      // next health check anyway; keeping it makes the state honest now.
+      case "open-fda-explainer":
+        setShowFdaExplainer(true);
         break;
 
       case "connect-google":
@@ -177,6 +200,9 @@ function SystemHealthMonitor({
 
   return (
     <div className="space-y-0">
+      {showFdaExplainer && (
+        <FdaHelpSheet onClose={() => setShowFdaExplainer(false)} />
+      )}
       {visibleIssues.map((issue, _index) => {
         const originalIndex = issues.findIndex(
           (i, idx) => i === issue && !dismissed.has(idx),
