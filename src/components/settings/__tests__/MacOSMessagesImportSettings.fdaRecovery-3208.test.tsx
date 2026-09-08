@@ -422,6 +422,47 @@ describe("BACKLOG-3208 — the Messages panel offers Full Disk Access after onbo
       ).toBeDisabled();
     });
 
+    /**
+     * The panel's OWN answer refuses the import, without waiting for the
+     * estimate to agree.
+     *
+     * Written because a mutation exposed the gap: reducing the permission term
+     * to the estimate-derived half alone left all other tests green. That half
+     * requires the estimate to have RESOLVED unavailable, so with the estimate
+     * still in flight and "import text only" on — the space term false — the
+     * buttons would have been live for as long as the estimate took, while the
+     * panel already knew Full Disk Access was denied.
+     */
+    it("refuses the import on the panel's own answer, before the estimate has resolved", async () => {
+      mockGetPreferences.mockResolvedValue({
+        success: true,
+        data: { messageImport: { filters: { skipAttachments: true } } },
+      });
+      systemApi().checkPermissions.mockResolvedValue(FDA_DENIED);
+      // The estimate never comes back, so nothing derived from it can be doing
+      // the refusing here.
+      (window.api.messages.getImportCount as jest.Mock).mockReturnValue(
+        new Promise(() => {})
+      );
+
+      renderStrict();
+
+      await screen.findByTestId("macos-fda-denied-notice");
+      await waitFor(() =>
+        expect(screen.getByTestId("skip-attachments-toggle")).toBeChecked()
+      );
+      expect(screen.queryByTestId("import-estimate-unavailable")).toBeNull();
+
+      const importButton = screen.getByRole("button", {
+        name: /Import Messages/i,
+      });
+      await waitFor(() => expect(importButton).toBeDisabled());
+      expect(importButton).toHaveAttribute(
+        "title",
+        "Keepr needs Full Disk Access to read your messages"
+      );
+    });
+
     it("still refuses for an unknown size, in the original words, when permission is not the reason", async () => {
       systemApi().checkPermissions.mockResolvedValue(FDA_GRANTED);
       (window.api.messages.getImportCount as jest.Mock).mockResolvedValue({
