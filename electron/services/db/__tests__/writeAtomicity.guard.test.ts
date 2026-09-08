@@ -355,8 +355,47 @@ function wrapsItself(body: string): boolean {
  *
  * Two write statements, never two writes. Counting them textually is what made
  * the first version of this guard report four functions that cannot leave a
- * partial state. Approximated by: a `return` sits between the writes at the
- * same or shallower brace depth.
+ * partial state.
+ *
+ * ===========================================================================
+ * BACKLOG-2584 — THE RULE AS IMPLEMENTED, BECAUSE IT USED TO BE STATED WRONG
+ * ===========================================================================
+ * This paragraph used to read "a `return` sits between the writes at the same
+ * or shallower brace depth" while the implementation COMPUTED NO DEPTH AT ALL.
+ * One function, two accounts — the BACKLOG-2569 class, inside the very function
+ * 2569 fixed. Two real false clears followed, both read in source, not inferred:
+ *
+ *   - `messageMatchingService.ts:386 autoLinkTextsToTransaction` —
+ *     `createCommunicationReference` at :483 runs inside a `for` loop, then
+ *     `dbRun(claimMessagesForTransactionSql09(...))` at :516 runs after it.
+ *     Strictly sequential. Cleared by a `} else {` at :493 closing an unrelated
+ *     inner `if (refId)` — a SIBLING of the first write, not its branch.
+ *   - `autoLinkEmailsToTransaction` (:645), the same shape at :776/:809.
+ *
+ * THE RULE, exactly as the code below implements it. An exit clears two writes
+ * when, between them, there is either:
+ *
+ *   (a) a `return` — at ANY depth, because it leaves the function; or
+ *   (b) a `} else` whose depth is STRICTLY LESS than the preceding write's,
+ *       i.e. the write was inside the branch that the `else` closes.
+ *
+ * Strictly less, not "at or below". The upsert's `return` sits at the SAME
+ * depth as the write above it, and an `} else` at the same depth as a write is
+ * the sibling case that produced both false clears. Two rules because a
+ * `return` and an `} else` mean different things, and one condition covering
+ * both is what let the sibling case through.
+ *
+ * MEASURED, not assumed: 0 classification changes across all 439 exported
+ * functions in `electron/services/db` at `0dca6beb1` — the bar BACKLOG-2569 set
+ * for its own change to this function. The upsert shape and the
+ * one-write-per-branch shape both still clear; the fixtures below pin that.
+ *
+ * STATED FLOOR, not fixed (BACKLOG-2584, cut from that task's scope by SR): a
+ * `return` INSIDE A CLOSURE still clears at any depth. Two writes separated by
+ * a `.filter((x) => { return x.ok; })` read as branch-exclusive. Pre-existing —
+ * the old depth-blind rule cleared it too, so this is not a regression — but it
+ * is a floor, not a guarantee. Closing it needs the exits to be attributed to
+ * the function they actually leave.
  *
  * ===========================================================================
  * BACKLOG-2569 — WHY THIS READS THE JOINED BODY AND NOT LINES
@@ -375,34 +414,80 @@ function wrapsItself(body: string): boolean {
  * `stripComments(body)`, and ordering is by CHARACTER OFFSET rather than line
  * index — which is what makes a multi-line write positionable at all.
  */
+/**
+ * Brace depth at every character offset. A `{` reports the depth it OPENS; a
+ * `}` reports the depth it CLOSES, so the character AFTER a `}` is already at
+ * the outer depth. That is what lets `} else` be read at the depth of the `if`
+ * it belongs to rather than the depth of the block it just closed.
+ */
+function braceDepths(src: string): number[] {
+  const depths = new Array<number>(src.length).fill(0);
+  let cur = 0;
+  for (let i = 0; i < src.length; i++) {
+    const ch = src[i];
+    if (ch === "{") {
+      cur++;
+      depths[i] = cur;
+    } else if (ch === "}") {
+      depths[i] = cur;
+      cur--;
+    } else {
+      depths[i] = cur;
+    }
+  }
+  return depths;
+}
+
 function writesAreBranchExclusive(body: string): boolean {
   const src = stripComments(body);
+  const depths = braceDepths(src);
 
   // Writes and exits as one offset-ordered stream. A write at the same offset
   // as an exit sorts first, preserving the old `else if` precedence where a
   // line containing a write was never also read as an exit.
-  const tokens: { at: number; isWrite: boolean }[] = [];
+  const tokens: { at: number; isWrite: boolean; depth: number; isReturn: boolean }[] = [];
   for (const m of src.matchAll(new RegExp(WRITE_PATTERN, "gi"))) {
-    tokens.push({ at: m.index ?? 0, isWrite: true });
+    const at = m.index ?? 0;
+    tokens.push({ at, isWrite: true, depth: depths[at] ?? 0, isReturn: false });
   }
   // Anchored per line via /m. `[ \t]*` NOT `\s*`, and `\}[ \t]*else` NOT
   // `\}\s*else`: under /m, `\s` spans newlines, which would let a `}` and an
   // `else` on separate lines register as an exit the original never accepted.
   // A LOOSENED exit anchor creates new masking — the opposite of this fix.
   for (const m of src.matchAll(/^[ \t]*(return\b|\}[ \t]*else\b)/gm)) {
-    tokens.push({ at: m.index ?? 0, isWrite: false });
+    const at = m.index ?? 0;
+    // Depth is read at the LAST character of the match, so for `} else` it is
+    // the depth AFTER the `}` closed — the depth of the `if` this `else` pairs
+    // with. For `return` the depth is where it stands.
+    const depthAt = at + m[0].length - 1;
+    tokens.push({
+      at,
+      isWrite: false,
+      depth: depths[depthAt] ?? 0,
+      isReturn: /return/.test(m[1]),
+    });
   }
   tokens.sort((a, b) => a.at - b.at || (a.isWrite ? -1 : 1));
 
   let seenWrite = false;
-  let exitedSinceWrite = false;
+  let lastWriteDepth = 0;
+  let exitsSinceWrite: { depth: number; isReturn: boolean }[] = [];
   for (const t of tokens) {
     if (t.isWrite) {
-      if (seenWrite && !exitedSinceWrite) return false; // two writes, no exit between
+      if (seenWrite) {
+        // (a) a `return` leaves the function from any depth; (b) a `} else`
+        // only separates the two writes if the earlier one was INSIDE the
+        // branch it closes — strictly deeper than the `else` itself.
+        const separated = exitsSinceWrite.some(
+          (e) => e.isReturn || e.depth < lastWriteDepth
+        );
+        if (!separated) return false; // two writes, nothing exclusive between
+      }
       seenWrite = true;
-      exitedSinceWrite = false;
+      lastWriteDepth = t.depth;
+      exitsSinceWrite = [];
     } else if (seenWrite) {
-      exitedSinceWrite = true;
+      exitsSinceWrite.push({ depth: t.depth, isReturn: t.isReturn });
     }
   }
   return seenWrite;
@@ -520,6 +605,74 @@ describe("the write heuristics themselves (BACKLOG-2569)", () => {
     // set is unaffected. This test is what pins that flip.
     expect(writesAreBranchExclusive(LONE_MULTILINE_WRITE)).toBe(true);
     expect(writeCount(LONE_MULTILINE_WRITE)).toBe(1);
+  });
+
+  // ==========================================================================
+  // BACKLOG-2584 — a SIBLING `} else` is not an exclusivity witness
+  // ==========================================================================
+  // Control flow transcribed from `autoLinkTextsToTransaction`,
+  // electron/services/messageMatchingService.ts:481-516 @ 0dca6beb1. The writes
+  // are strictly sequential: N junction inserts inside the loop, then one bulk
+  // messages UPDATE after it. The `} else {` at :493 closes `if (refId)`, which
+  // is a SIBLING of the first write, not the branch containing it.
+  //
+  // The first write is shown as the SQL it actually executes, RESOLVED not
+  // invented: the real line is `await createCommunicationReference(...)`, whose
+  // body runs `dbRun(INSERT_COMMUNICATION_SQL, params)`, and that constant is
+  // declared at electron/services/db/messageMatchingSql.ts:145-150 with exactly
+  // the INSERT below. Resolving it keeps this heuristic test independent of the
+  // call-token rule — and the need to resolve it at all is the hoisted-SQL floor
+  // stated in the scan docblock.
+  //
+  // This fixture outlives its subject on purpose: BACKLOG-2550 will wrap this
+  // path, and after that this is the only thing still proving the guard can
+  // catch the shape. Same reason fixture 1 survives `updateContactRole`.
+  const SIBLING_ELSE_BETWEEN_SEQUENTIAL_WRITES = `
+  for (const match of filteredMatches) {
+    try {
+      dbRun(\`
+        INSERT INTO communications (
+          id, user_id, transaction_id, message_id,
+          link_source, link_confidence, linked_at
+        ) VALUES (?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+      \`, params);
+      const refId = existingId ?? newId;
+
+      if (refId) {
+        result.linked++;
+      } else {
+        result.skipped++;
+      }
+    } catch (error) {
+      result.errors.push(\`Failed to link message \${match.messageId}\`);
+    }
+  }
+
+  if (result.linked > 0) {
+    const linkedMessageIds = filteredMatches
+      .slice(0, result.linked)
+      .map((m) => m.messageId);
+
+    dbRun(\`UPDATE messages SET transaction_id = ? WHERE id IN (?)\`, [transactionId, ...linkedMessageIds]);
+  }
+`;
+
+  it("a SIBLING `} else` does not make two sequential writes exclusive (BACKLOG-2584)", () => {
+    // THE SECOND BUG, pinned. Under the depth-blind rule any `} else` between
+    // two writes cleared them, so this read as branch-exclusive and
+    // `autoLinkTextsToTransaction` passed the guard. Revert the `} else` arm of
+    // `writesAreBranchExclusive` to depth-blind and THIS TEST GOES RED.
+    //
+    expect(writesAreBranchExclusive(SIBLING_ELSE_BETWEEN_SEQUENTIAL_WRITES)).toBe(false);
+  });
+
+  it("an `} else` that DOES enclose the earlier write still clears it", () => {
+    // The other direction, so the fix cannot pass by rejecting every `else`.
+    // Same shape as IF_ELSE_ONE_WRITE_PER_BRANCH above, stated at depth: the
+    // `} else` is strictly shallower than the write it separates.
+    expect(writesAreBranchExclusive(IF_ELSE_ONE_WRITE_PER_BRANCH)).toBe(true);
+    // And a `return` still clears from inside a deeper branch — the upsert.
+    expect(writesAreBranchExclusive(UPSERT_SHAPE)).toBe(true);
   });
 
   // ==========================================================================
