@@ -62,6 +62,61 @@ const REPO_ROOT = path.resolve(__dirname, "..", "..", "..", "..");
 const DB_DIR = path.join(REPO_ROOT, "electron", "services", "db");
 
 /**
+ * ===========================================================================
+ * BACKLOG-2584 — THE SCAN ROOT, AND WHY WIDENING IT ALONE WOULD PROVE NOTHING
+ * ===========================================================================
+ * This used to be `DB_DIR`. Orchestration services in `electron/services/` and
+ * IPC handlers in `electron/handlers/` were never enumerated, so a multi-write
+ * ADDED LATER to any of them shipped with no standing red.
+ *
+ * Widening the ROOT alone does not fix that, and the measurement says so.
+ * At `0dca6beb1`, with the enumerator unchanged:
+ *
+ *   root electron/services/db   96 files   439 fns   13 multi-write   0 new offenders
+ *   root electron/services     269 files   820 fns   13 multi-write   0 new offenders
+ *   root electron/services+handlers 317    890 fns   13 multi-write   0 new offenders
+ *   root electron/             498 files  1131 fns   13 multi-write   0 new offenders
+ *
+ * Thirteen to thirteen. The 402 added files contain no exported function with
+ * two SQL write STATEMENTS, because these files hold no SQL: epic 9 moved the
+ * SQL into `db/` and left them composing db-layer CALLS. A textual write rule
+ * cannot see a composition, so a root-only widening ships a green test that
+ * proves nothing — the exact failure this guard exists to prevent.
+ *
+ * What makes the widening real is the composition rule below: a call to a
+ * db-layer function that writes COUNTS AS A WRITE. That is what turns the
+ * orchestration layer red, and it re-derives BACKLOG-2549, 2550, 2845 and part
+ * of 2546 from source without being told about them.
+ *
+ * `__typefixtures__` is excluded deliberately: it holds `mustNotCompile-*.ts`
+ * fixtures for `dbTransaction` itself, which are not shipped code. The exclusion
+ * is pinned by a PRECONDITION below, because an exclusion held only by a string
+ * literal is silently undone by a directory rename.
+ *
+ * ===========================================================================
+ * STRUCTURAL FLOOR — WRITES SPREAD ACROSS NON-EXPORTED MODULE-LOCAL HELPERS
+ * ===========================================================================
+ * A unit is an exported function or an `ipcMain.handle` registration. Writes
+ * split across TWO non-exported module-local helpers belong to no unit and are
+ * invisible at any root. The depth-1 closure in `unitsInFile` only helps when
+ * an enumerated unit calls both.
+ *
+ * This is not hypothetical and it hides part of an open critical.
+ * BACKLOG-2546's own named sites `systemHandlers.ts:156` and `:198` sit inside
+ * `createLocalUserFromCloud` (declared `:135`) and `persistSessionForUser`
+ * (declared `:192`) — both `async function`, neither exported. The guard reads
+ * green over them.
+ *
+ * SO: GUARD-GREEN IS NOT ITEM-COMPLETE, and the disposition must say which
+ * sites each item has covered. BACKLOG-2546 names five entry points; this guard
+ * sees three of them (`googleAuthHandlers.ts:116` and `:423`,
+ * `microsoftAuthHandlers.ts:94`) and does not see the `systemHandlers` pair.
+ * Closing 2546 requires reading the item, not re-running this file.
+ */
+const SCAN_ROOT = path.join(REPO_ROOT, "electron");
+const EXCLUDED_DIR_NAMES = ["__tests__", "__typefixtures__"];
+
+/**
  * Functions allowed to issue multiple writes unwrapped. EVERY entry needs a
  * reason. An entry whose reason is "it's fine" is a bug report.
  */
@@ -220,6 +275,56 @@ const EXEMPT: Record<string, string> = {
  * Re-derive them; do not hand-copy them forward.
  */
 const KNOWN_UNWRAPPED: Record<string, string> = {
+  // ==========================================================================
+  // POPULATED BY BACKLOG-2584, from THIS GUARD'S OWN OUTPUT at `0dca6beb1`.
+  // ==========================================================================
+  // Not from a scratch harness: the list was emptied, the suite run, and these
+  // thirteen are the offender test's own failure output. Each was then opened
+  // and read before being classified — a tool that reports a violation has not
+  // established one.
+  //
+  // Each damage string is TRANSCRIBED from its item's "Crash leaves" section,
+  // not paraphrased. Line numbers here are as measured at `0dca6beb1` and drift;
+  // the `file::function` keys do not.
+
+  // --- BACKLOG-2546 (critical, open): login/provisioning chain -------------
+  "electron/handlers/googleAuthHandlers.ts::handleGoogleLogin":
+    "BACKLOG-2546 @0dca6beb1 (:116, createUser + createSession): after createUser, before saveOAuthToken/createSession, a users_local row with no token and no session — the next login takes the update branch and never re-runs new-user provisioning, so the account stays a ghost",
+  "electron/handlers/googleAuthHandlers.ts::handleGoogleCompleteLogin":
+    "BACKLOG-2546 @0dca6beb1 (:423, createUser/updateUser/updateLastLogin/saveOAuthToken/createSession): after saveOAuthToken and before createSession, a token row with no session row and no session.json; after createSession but before the file write, a DB session row orphaned on restart",
+  "electron/handlers/microsoftAuthHandlers.ts::handleMicrosoftLogin":
+    "BACKLOG-2546 @0dca6beb1 (:94, same five writes as the Google path): a users_local row committed with no token and no session, and the getUserByOAuthId check at the top is separated from createUser by awaits, so a second concurrent callback writes a second session row",
+
+  // --- BACKLOG-2549 (critical, open): export status vs freeze stamp -------
+  "electron/handlers/transactionExportHandlers.ts::ipc:transactions:export-enhanced":
+    "BACKLOG-2549 @0dca6beb1 (:234, updateTransaction export-tracking then markFirstExport): a transaction marked exported with first_exported_at NULL — NOT frozen, so address, type and audit-start stay editable although an exported artifact already exists on disk",
+  "electron/handlers/transactionExportHandlers.ts::ipc:transactions:export-folder":
+    "BACKLOG-2549 @0dca6beb1 (:386, same pair on the folder path): exported and frozen flip separately, and markFirstExport is deliberately non-throwing, so a stamp FAILURE — not only a crash — leaves an exported deal the user can still edit",
+
+  // --- BACKLOG-2550 (critical, open): message link pointer vs junction ----
+  "electron/services/messageMatchingService.ts::autoLinkTextsToTransaction":
+    "BACKLOG-2550 @0dca6beb1 (:386, junction INSERT loop then one bulk messages UPDATE): junction rows with messages.transaction_id still NULL, so the message is re-offered as unlinked and the re-link is blocked only by the unique index",
+  "electron/services/messageMatchingService.ts::autoLinkEmailsToTransaction":
+    "BACKLOG-2550 @0dca6beb1 (:645, same shape on the email path): the pointer set with no junction row leaves the message invisible to every reader that joins through communications, while the messages table claims it is linked",
+  "electron/services/autoLinkService.ts::expandAttachedThreadsForUser":
+    "BACKLOG-2550 @0dca6beb1 (:1501, linkMessageToTransaction + createCommunicationReference): a thread expansion that half-ran leaves some messages of one attached conversation linked and the rest not, which reads to the user as a conversation that imported incompletely",
+
+  // --- BACKLOG-2845 (open): review queue approve/reject -------------------
+  "electron/services/reviewStateService.ts::approveReviewItems":
+    "BACKLOG-2845 @0dca6beb1 (:1018, confirmEmailLinksByEmailIds + resolveLegacyTwins + createThreadCommunicationReference, in a for loop over itemIds): a crash part-way through approving a selection leaves some emails promoted and the rest still queued, with the pending_review row deleted for only some of them",
+  "electron/services/reviewStateService.ts::rejectReviewItems":
+    "BACKLOG-2845 @0dca6beb1 (:1071, addIgnoredCommunication + resolveLegacyTwins): a failure after the suppression row is written leaves the legacy address_missing link alive — the email is hidden from future discovery but still counted by getReviewState(), so the Complete gate never clears",
+
+  // --- Filed by BACKLOG-2584 itself, before being listed here -------------
+  "electron/handlers/contactHandlers.ts::ipc:contacts:import":
+    "BACKLOG-3220 @0dca6beb1 (:1858, markContactAsImported + linkImportedContact across three for loops, no wrapper in the 522-line handler): some contacts marked imported with their crosswalk link written and others marked imported with no link, so those source rows are never suppressed and re-offer on the next pass",
+  "electron/handlers/emailLinkingHandlers.ts::ipc:transactions:link-emails":
+    "BACKLOG-3221 @0dca6beb1 (:169, createCommunication + createEmail unwrapped): a communications junction row whose email_id points at an emails row that was never written, so the email is invisible to every reader that joins through it — or the inverse, an email row with no link, absent from the transaction it was just attached to",
+  "electron/handlers/messageImportHandlers.ts::ipc:messages:import-macos":
+    "BACKLOG-3222 @0dca6beb1 (:148, backfillContactCommunicationDates :278 + backfillPhoneLastMessageTable :302): contacts showing a refreshed last-communication date while phone_last_message still holds the pre-import value, so the contact list and the phone-keyed views disagree until the next successful import",
+
+  // ORIGINAL NOTE, kept because it records why this list was empty and why the
+  // nine-entry version of it was discarded rather than merged:
   // EMPTY — and that is the honest result. Six of the nine this list started
   // with were false positives (see the correction above); `deleteBySessionId`
   // was fixed by BACKLOG-2480, `linkContactToTransaction` by BACKLOG-2543, and
@@ -237,6 +342,11 @@ interface Fn {
   name: string;
   line: number;
   body: string;
+  /**
+   * Predicate for "this identifier is a db-layer write", or `null` INSIDE the
+   * db layer. See `dbLayerWriters` for why `db/` keeps the raw-SQL rule.
+   */
+  isDbWriterCall: ((name: string) => boolean) | null;
 }
 
 function sourceFiles(dir: string): string[] {
@@ -244,7 +354,7 @@ function sourceFiles(dir: string): string[] {
   for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
     const p = path.join(dir, entry.name);
     if (entry.isDirectory()) {
-      if (entry.name === "__tests__") continue;
+      if (EXCLUDED_DIR_NAMES.includes(entry.name)) continue;
       out.push(...sourceFiles(p));
     } else if (entry.name.endsWith(".ts") && !entry.name.endsWith(".test.ts")) {
       out.push(p);
@@ -253,7 +363,43 @@ function sourceFiles(dir: string): string[] {
   return out;
 }
 
-/** Brace-matched body of the function starting at `startLine`. */
+/**
+ * Brace-matched body of the function starting at `startLine`.
+ *
+ * ===========================================================================
+ * STATED FLOOR — BACKLOG-3225, FOUND BY A CONTROL THAT DID NOT GO RED
+ * ===========================================================================
+ * This matches braces from the DECLARATION line, so a parameter list holding an
+ * INLINE OBJECT TYPE closes the capture before the body opens:
+ *
+ *     export function f(row: { a: string; b: string }): void {   // capture ends
+ *       dbRun(`INSERT INTO x ...`);                              // never seen
+ *
+ * The function then reads as having NO BODY: zero writes, zero transaction.
+ *
+ * Measured at `0dca6beb1` across scan root `electron/`: 56 exported functions
+ * have a truncated capture, and FOUR have >= 2 SQL writes in their true body
+ * while this guard counts 0 — `contactDbService.ts:520 createContactsBatch`,
+ * `:2729 syncContactEmails`, `:2825 syncContactPhones`, and
+ * `emailSyncStateService.ts:104 updateCachedBounds`. All four are in `db/`, so
+ * this floor predates the widened root; it is not a cost of BACKLOG-2584.
+ *
+ * Severity today is ONE defect: the first three are self-wrapped and would not
+ * be offenders if visible, and `updateCachedBounds` is already filed in
+ * BACKLOG-2554. Severity tomorrow is not bounded — any new multi-write written
+ * with an inline-typed parameter is invisible, and 56 functions already have the
+ * shape.
+ *
+ * Filed as BACKLOG-3225 with the fix (capture from the matching `)` of the
+ * parameter list). Not fixed here: this PR is capped at two heuristic changes
+ * and already carries both.
+ *
+ * HOW IT WAS FOUND, because the method matters more than the bug: control 5 of
+ * BACKLOG-2584 planted a deliberately unwrapped multi-write and the guard stayed
+ * GREEN. The rule is to suspect the fixture before the control — the planted
+ * function had an inline object type in its parameters. The plant was wrong AND
+ * the guard was wrong, and only chasing the silent control found the second one.
+ */
 function captureBody(lines: string[], startLine: number): string {
   let depth = 0;
   let started = false;
@@ -274,22 +420,217 @@ function captureBody(lines: string[], startLine: number): string {
   return buf.join("\n");
 }
 
-function exportedFunctions(): Fn[] {
-  const fns: Fn[] = [];
+/**
+ * An `ipcMain.handle(...)` registration as its own unit, captured by PARENTHESIS
+ * span rather than by brace matching.
+ *
+ * BACKLOG-2584: brace matching is wrong here in both directions. A registrar
+ * function's body brace-matches every handler it registers, so
+ * `registerContactHandlers` reads as one function issuing eight writes — the
+ * headline is then a function that does not exist. And a ONE-LINE registration
+ * (`ipcMain.handle("x", handlerFn);`) contains no brace at all, so a
+ * brace-matched capture runs on into the FOLLOWING handlers and reports several
+ * registrations with identical write sets. Both were live in an earlier
+ * measurement of this task; three `sharedAuthHandlers` rows were the same body.
+ *
+ * Reading the channel from the `handle(` line alone is also wrong: at
+ * `0dca6beb1` only 80 of 323 registrations put the channel on that line, so 243
+ * would go unenumerated — 75% of the IPC surface, silently.
+ *
+ * So: track paren depth from `handle(`. If a `{` opens first, the unit is that
+ * block. If the paren closes with no block, the handler was registered BY NAME
+ * and the identifier is resolved to its declaration in the same file.
+ */
+function captureHandlerUnit(
+  lines: string[],
+  startLine: number
+): { body: string | null; channel: string | null; refName: string | null } {
+  let paren = 0;
+  let sawParen = false;
+  let brace = 0;
+  let sawBrace = false;
+  const buf: string[] = [];
+  let flat = "";
+  const startCol = lines[startLine].indexOf("ipcMain.handle(");
+  for (let i = startLine; i < lines.length; i++) {
+    const line = lines[i];
+    buf.push(line);
+    flat += line + " ";
+    for (let j = i === startLine ? startCol : 0; j < line.length; j++) {
+      const ch = line[j];
+      if (ch === "(") {
+        paren++;
+        sawParen = true;
+      } else if (ch === ")") {
+        paren--;
+        if (sawParen && paren <= 0 && !sawBrace) {
+          const m = /ipcMain\.handle\(\s*["'`]([^"'`]+)["'`]\s*,\s*([A-Za-z0-9_.]+)\s*\)/.exec(flat);
+          return { body: null, channel: m ? m[1] : null, refName: m ? m[2] : null };
+        }
+      } else if (ch === "{") {
+        brace++;
+        sawBrace = true;
+      } else if (ch === "}") {
+        brace--;
+        if (sawBrace && brace <= 0) {
+          const m = /ipcMain\.handle\(\s*["'`]([^"'`]+)/.exec(flat);
+          return { body: buf.join("\n"), channel: m ? m[1] : null, refName: null };
+        }
+      }
+    }
+  }
+  return { body: null, channel: null, refName: null };
+}
+
+/**
+ * Every function exported from `electron/services/db` that issues at least one
+ * SQL write in its own body — the ground truth the composition rule stands on.
+ * 114 of 439 at `0dca6beb1`.
+ *
+ * STATED FLOOR: this is derived from body TEXT, so a db-layer function that
+ * writes through a hoisted SQL constant is missing from it. Exactly one is, at
+ * `0dca6beb1` — `emailSyncSql.ts:263 clearSyncCursor`, which runs
+ * `dbRun(CLEAR_SYNC_CURSOR_SQL, ...)` against a constant declared at :148. The
+ * count is written down so the floor can be re-measured rather than assumed.
+ *
+ * A builder that RETURNS SQL rather than executing it is also in this set —
+ * `claimMessagesForTransactionSql09` builds a `SafeSql`. A builder call is not
+ * itself a write, and a builder-plus-executor pair for one logical write counts
+ * as two. That is why every reported offender is dispositioned by reading the
+ * function, never by trusting this set.
+ */
+function dbLayerWriters(): Set<string> {
+  const writers = new Set<string>();
   for (const file of sourceFiles(DB_DIR)) {
     const lines = fs.readFileSync(file, "utf8").split("\n");
     for (let i = 0; i < lines.length; i++) {
       const m = /^export\s+(?:async\s+)?function\s+([A-Za-z0-9_]+)/.exec(lines[i]);
       if (!m) continue;
-      fns.push({
-        file: path.relative(REPO_ROOT, file).split(path.sep).join("/"),
-        name: m[1],
-        line: i + 1,
-        body: captureBody(lines, i),
-      });
+      if (writeCount(captureBody(lines, i)) >= 1) writers.add(m[1]);
     }
   }
-  return fns;
+  return writers;
+}
+
+/**
+ * The units of one file: exported functions, plus each `ipcMain.handle`
+ * registration. A registrar function is dropped once its handlers are units in
+ * their own right — otherwise the same writes are counted twice, at a
+ * granularity that names no real function.
+ *
+ * Exported as its own function so a fixture can run the real enumeration over a
+ * transcribed source string. That is what makes the "we do NOT see a
+ * non-violation" control possible at all.
+ */
+function unitsInFile(rel: string, lines: string[], dbWriters: Set<string>): Fn[] {
+  const inDbLayer = rel.startsWith("electron/services/db/");
+
+  // Declarations in this file, for identifier-registered handlers and for the
+  // local-helper closure below.
+  const declared = new Map<string, { line: number; body: string; exported: boolean }>();
+  for (let i = 0; i < lines.length; i++) {
+    const m = /^(export\s+)?(?:async\s+)?function\s+([A-Za-z0-9_]+)/.exec(lines[i]);
+    if (m) {
+      declared.set(m[2], { line: i + 1, body: captureBody(lines, i), exported: Boolean(m[1]) });
+    }
+  }
+
+  // A NON-EXPORTED helper in the same file that reaches a db-layer write counts
+  // as a write at its call site. Depth 1, no propagation into exported units:
+  // full closure makes every caller-of-two-callers an offender, and an async
+  // orchestrator cannot be fixed with a `dbTransaction` anyway.
+  //
+  // This is what sees BACKLOG-2549: `markFirstExport` in
+  // `transactionExportHandlers.ts` is exactly this shape, wrapping
+  // `stampFirstExportedAt`.
+  const localWriters = new Set<string>();
+  for (const [name, decl] of declared) {
+    if (decl.exported) continue;
+    let reaches = writeCount(decl.body) >= 1;
+    if (!reaches) {
+      for (const call of stripComments(decl.body).matchAll(/\b([A-Za-z0-9_]+)\s*\(/g)) {
+        if (call[1] !== name && dbWriters.has(call[1])) {
+          reaches = true;
+          break;
+        }
+      }
+    }
+    if (reaches) localWriters.add(name);
+  }
+
+  // Inside `db/` the raw-SQL rule stands and call tokens are OFF. `db/` is the
+  // leaf layer: its functions hold the SQL, so a uniform rule would have them
+  // counting each other, and a writer's own declaration line matches its own
+  // call pattern.
+  //
+  // MEASURED, not assumed. With call tokens ON inside `db/` and own-name
+  // stripping applied, the offender set goes 13 -> 21 at `0dca6beb1`. The eight
+  // additions are all in `db/`: communicationDbService.ts createCommunication
+  // (:80), deleteCommunication (:333), deleteCommunicationByMessageId (:367),
+  // createCommunicationReference (:732), createThreadCommunicationReference
+  // (:1017), deleteCommunicationByThread (:1061), and emailSyncStateService.ts
+  // recordSyncSuccess (:158) / recordSyncFailure (:173).
+  //
+  // The delta is NOT noise: the last two are named in BACKLOG-2554 as "two
+  // unwrapped statements" already. They are invisible to the raw-SQL rule
+  // because one of each pair goes through a hoisted SQL constant. So the
+  // scoped-out decision is a FLOOR, not a proof of absence, and the floor has a
+  // measured size. Not adopted here — eight new dispositions inside the
+  // write-densest directory in the repo is its own task, and SR ruled it comes
+  // back for review rather than being absorbed.
+  const isDbWriterCall = inDbLayer
+    ? null
+    : (name: string) => dbWriters.has(name) || localWriters.has(name);
+
+  const found: Fn[] = [];
+  for (let i = 0; i < lines.length; i++) {
+    if (/ipcMain\.handle\s*\(/.test(lines[i])) {
+      const handler = captureHandlerUnit(lines, i);
+      if (handler.body) {
+        found.push({
+          file: rel,
+          name: `ipc:${handler.channel ?? "<unnamed>"}`,
+          line: i + 1,
+          body: handler.body,
+          isDbWriterCall,
+        });
+      } else if (handler.refName) {
+        const base = handler.refName.split(".").pop() as string;
+        const decl = declared.get(base);
+        if (decl) {
+          found.push({ file: rel, name: base, line: decl.line, body: decl.body, isDbWriterCall });
+        }
+      }
+      continue;
+    }
+    const m = /^export\s+(?:async\s+)?function\s+([A-Za-z0-9_]+)/.exec(lines[i]);
+    if (m) {
+      found.push({ file: rel, name: m[1], line: i + 1, body: captureBody(lines, i), isDbWriterCall });
+    }
+  }
+
+  const registrars = new Set(
+    found
+      .filter((u) => !u.name.startsWith("ipc:") && /ipcMain\.handle\s*\(/.test(u.body))
+      .map((u) => `${u.file}:${u.line}`)
+  );
+  const seen = new Set<string>();
+  return found.filter((u) => {
+    const key = `${u.file}:${u.line}`;
+    if (registrars.has(key) || seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
+
+function scanUnits(): Fn[] {
+  const dbWriters = dbLayerWriters();
+  const units: Fn[] = [];
+  for (const file of sourceFiles(SCAN_ROOT)) {
+    const rel = path.relative(REPO_ROOT, file).split(path.sep).join("/");
+    units.push(...unitsInFile(rel, fs.readFileSync(file, "utf8").split("\n"), dbWriters));
+  }
+  return units;
 }
 
 /**
@@ -477,7 +818,45 @@ function braceDepths(src: string): number[] {
   return depths;
 }
 
-function writesAreBranchExclusive(body: string): boolean {
+/**
+ * Every write in a body as an offset-ordered stream — the ONE view both
+ * `unitWriteCount` and `writesAreBranchExclusive` read, for the reason
+ * BACKLOG-2569 gave: two heuristics over two different views of one body is how
+ * `updateContactRole` was silently cleared.
+ *
+ * A write is a raw SQL statement, or — outside `db/` — a CALL to a db-layer
+ * writer. `selfName` is stripped so a function never counts its own declaration
+ * line or its own recursion: `export function createLink(` matches
+ * `\bcreateLink\s*\(`.
+ */
+function writeOffsets(
+  src: string,
+  isDbWriterCall: ((name: string) => boolean) | null,
+  selfName: string | null
+): { at: number; label: string }[] {
+  const out: { at: number; label: string }[] = [];
+  for (const m of src.matchAll(new RegExp(WRITE_PATTERN, "gi"))) {
+    out.push({ at: m.index ?? 0, label: "<sql>" });
+  }
+  if (isDbWriterCall) {
+    for (const m of src.matchAll(/\b([A-Za-z0-9_]+)\s*\(/g)) {
+      if (selfName !== null && m[1] === selfName) continue;
+      if (isDbWriterCall(m[1])) out.push({ at: m.index ?? 0, label: m[1] });
+    }
+  }
+  return out;
+}
+
+/** Writes a unit issues, under the rule that applies to the layer it lives in. */
+function unitWrites(unit: Fn): { at: number; label: string }[] {
+  return writeOffsets(stripComments(unit.body), unit.isDbWriterCall, unit.name);
+}
+
+function writesAreBranchExclusive(
+  body: string,
+  isDbWriterCall: ((name: string) => boolean) | null = null,
+  selfName: string | null = null
+): boolean {
   const src = stripComments(body);
   const depths = braceDepths(src);
 
@@ -485,9 +864,8 @@ function writesAreBranchExclusive(body: string): boolean {
   // as an exit sorts first, preserving the old `else if` precedence where a
   // line containing a write was never also read as an exit.
   const tokens: { at: number; isWrite: boolean; depth: number; isReturn: boolean }[] = [];
-  for (const m of src.matchAll(new RegExp(WRITE_PATTERN, "gi"))) {
-    const at = m.index ?? 0;
-    tokens.push({ at, isWrite: true, depth: depths[at] ?? 0, isReturn: false });
+  for (const w of writeOffsets(src, isDbWriterCall, selfName)) {
+    tokens.push({ at: w.at, isWrite: true, depth: depths[w.at] ?? 0, isReturn: false });
   }
   // Anchored per line via /m. `[ \t]*` NOT `\s*`, and `\}[ \t]*else` NOT
   // `\}\s*else`: under /m, `\s` spans newlines, which would let a `}` and an
@@ -532,10 +910,42 @@ function writesAreBranchExclusive(body: string): boolean {
   return seenWrite;
 }
 
-/** Every identifier called inside some `dbTransaction(() => { ... })` anywhere in the db layer. */
+/**
+ * Every identifier called inside some `dbTransaction(() => { ... })` anywhere in
+ * the scanned tree — rule (b), the sync-core pattern.
+ *
+ * BACKLOG-2584: this scans `SCAN_ROOT`, not `DB_DIR`, or a db-layer function
+ * composed inside a HANDLER's transaction reads as unwrapped
+ * (`contactHandlers.ts:2884` is such a transaction). The set goes 54 -> 81 bare
+ * names at `0dca6beb1`.
+ *
+ * STATED FLOOR, and the sharp edge of this widening: this is a CLEARING set,
+ * matched by BARE NAME against 1131 functions with 15 duplicate names. A
+ * function wrapped by one caller and unwrapped by another is cleared by the
+ * wrapped one.
+ *
+ * AUDITED, not assumed. Exactly TWO multi-write units are cleared ONLY by this
+ * set at `0dca6beb1`, and both FAIL the reachability check that
+ * `relabelTypedContactValues` gets in EXEMPT:
+ *
+ *   - `contactSourceValues.ts:233 applyLinkedSourceValues` — 5 call sites, and
+ *     3 are NOT inside any transaction (`contactHandlers.ts:466`,
+ *     `contactNameAutoLink.ts:621`, `contactSourceLinker.ts:823`). Two are
+ *     (`contactLinkReview.ts:383`, `contactManualLink.ts:362`), and those two
+ *     clear it everywhere.
+ *   - `transactionContactDbService.ts:292 assignContactToTransactionSync` —
+ *     reachable unwrapped through its own async seam at `:274`. Pre-existing:
+ *     this was cleared under the `db/`-only scan too.
+ *
+ * Filed as BACKLOG-3223, which also carries the fix to this rule: clear a name
+ * only when NO call path reaches it outside a transaction. Not fixed here — it
+ * is a heuristic change beyond this task's budget, and neither function is
+ * REPORTED today, which is precisely the point. A clearing set nobody audits is
+ * how a real violation goes quiet.
+ */
 function namesCalledInsideATransaction(): Set<string> {
   const inside = new Set<string>();
-  for (const file of sourceFiles(DB_DIR)) {
+  for (const file of sourceFiles(SCAN_ROOT)) {
     const src = fs.readFileSync(file, "utf8");
     const lines = src.split("\n");
     for (let i = 0; i < lines.length; i++) {
@@ -777,19 +1187,171 @@ describe("the write heuristics themselves (BACKLOG-2569)", () => {
   });
 });
 
+describe("the enumerator does NOT see a non-violation (BACKLOG-2584)", () => {
+  // ==========================================================================
+  // THE DIRECTION EVERY OTHER CONTROL MISSES
+  // ==========================================================================
+  // Every other test here proves "we can still SEE a violation." None proves
+  // "we do not see a NON-violation" — and that is the direction this guard has
+  // actually failed in: its first run reported nine offenders, SIX of them false
+  // positives. Under the rule above, a false positive can only be quieted by
+  // filing a bogus item or bending EXEMPT. Both are silencing.
+  //
+  // Transcribed from `electron/handlers/sharedAuthHandlers.ts:488-545` @0dca6beb1:
+  // two SEPARATE dev-only registrations, ONE write each. An earlier version of
+  // this task reported this file as a violation, because a brace-matched capture
+  // ran the first registration's body on into the second and added their writes
+  // together. That is the regression this fixture exists to catch.
+  const TWO_HANDLERS_ONE_WRITE_EACH = `
+  ipcMain.handle(
+    "auth:dev:expire-mailbox-token",
+    async (_event, userId, provider) => {
+      try {
+        const token = await databaseService.getOAuthToken(userId, provider, "mailbox");
+        if (!token) {
+          return { success: false, error: "No token found" };
+        }
+        const expiredTime = new Date(Date.now() - 60 * 60 * 1000).toISOString();
+        await databaseService.updateOAuthToken(token.id, {
+          token_expires_at: expiredTime,
+        });
+        return { success: true };
+      } catch (error) {
+        return { success: false, error: String(error) };
+      }
+    }
+  );
+
+  ipcMain.handle(
+    "auth:dev:reset-onboarding",
+    async (_event, userId) => {
+      try {
+        const db = databaseService.getRawDatabase();
+        db.prepare(
+          "UPDATE users_local SET email_onboarding_completed_at = NULL WHERE id = ?"
+        ).run(userId);
+        return { success: true };
+      } catch (error) {
+        return { success: false, error: String(error) };
+      }
+    }
+  );
+`;
+
+  it("two handlers with one write each are TWO units, and neither is an offender", () => {
+    const units = unitsInFile(
+      "electron/handlers/fixture.ts",
+      TWO_HANDLERS_ONE_WRITE_EACH.split("\n"),
+      dbLayerWriters()
+    );
+
+    // TWO units, not one. If the capture regresses to brace matching, the first
+    // registration swallows the second and this drops to 1 — at which point the
+    // write counts add up and a non-violation is reported as an offender.
+    expect(units.map((u) => u.name)).toEqual([
+      "ipc:auth:dev:expire-mailbox-token",
+      "ipc:auth:dev:reset-onboarding",
+    ]);
+
+    // One write each: a db-layer writer CALL in the first, raw SQL in the second.
+    // Asserted as the exact per-unit counts, not a total — a total of two cannot
+    // tell "one each" from "both in one handler", which is the whole question.
+    expect(units.map((u) => unitWrites(u).length)).toEqual([1, 1]);
+
+    // And therefore nothing to report. This is the offender predicate itself,
+    // minus the two repo-global clearing sets, which a fixture cannot supply.
+    const offenders = units
+      .filter((u) => unitWrites(u).length >= 2)
+      .filter((u) => !wrapsItself(u.body))
+      .filter((u) => !writesAreBranchExclusive(u.body, u.isDbWriterCall, u.name));
+    expect(offenders).toEqual([]);
+  });
+
+  // The same two writes, in ONE registration. Written out rather than derived
+  // from the fixture above, because a fixture built by editing another fixture
+  // is a fixture nobody has read.
+  const BOTH_WRITES_IN_ONE_HANDLER = `
+  ipcMain.handle(
+    "auth:dev:expire-and-reset",
+    async (_event, userId, provider) => {
+      const token = await databaseService.getOAuthToken(userId, provider, "mailbox");
+      await databaseService.updateOAuthToken(token.id, {
+        token_expires_at: expiredTime,
+      });
+      const db = databaseService.getRawDatabase();
+      db.prepare(
+        "UPDATE users_local SET email_onboarding_completed_at = NULL WHERE id = ?"
+      ).run(userId);
+      return { success: true };
+    }
+  );
+`;
+
+  it("the same two writes in ONE handler ARE reported", () => {
+    // The other half, so the test above cannot pass by the enumerator seeing
+    // nothing at all. One registration, two writes, no transaction, and no exit
+    // between them — the shape the guard exists to catch.
+    const units = unitsInFile(
+      "electron/handlers/fixture.ts",
+      BOTH_WRITES_IN_ONE_HANDLER.split("\n"),
+      dbLayerWriters()
+    );
+    expect(units.map((u) => u.name)).toEqual(["ipc:auth:dev:expire-and-reset"]);
+    expect(unitWrites(units[0]).length).toBe(2);
+
+    const offenders = units
+      .filter((u) => unitWrites(u).length >= 2)
+      .filter((u) => !wrapsItself(u.body))
+      .filter((u) => !writesAreBranchExclusive(u.body, u.isDbWriterCall, u.name));
+    expect(offenders.map((u) => u.name)).toEqual(["ipc:auth:dev:expire-and-reset"]);
+  });
+});
+
 describe("a multi-statement write may not ship without a transaction (BACKLOG-2530)", () => {
-  const fns = exportedFunctions();
+  const units = scanUnits();
   const insideATransaction = namesCalledInsideATransaction();
 
-  it("PRECONDITION: the scan actually finds the db layer", () => {
-    expect(fns.length).toBeGreaterThan(50);
+  it("PRECONDITION: the scan reaches the db layer AND the orchestration layer", () => {
+    expect(units.length).toBeGreaterThan(50);
     // If this ever drops to zero the guard below passes vacuously — which is
     // the failure mode every check in this repo is now written to avoid.
-    expect(fns.some((f) => f.name === "createContact")).toBe(true);
+    expect(units.some((u) => u.name === "createContact")).toBe(true);
+
+    // BACKLOG-2584: the db-layer name above passed for this guard's whole life
+    // while the orchestration layer was unscanned. Name one function from the
+    // widened root, so a root that silently reverts to `db/` cannot pass.
+    expect(units.some((u) => u.name === "unlinkContactSource")).toBe(true);
+  });
+
+  it("PRECONDITION: the IPC surface is enumerated at handler granularity", () => {
+    // 243 of 323 `ipcMain.handle(` registrations put the channel on a LATER
+    // line. A capture that reads only the `handle(` line misses 75% of handlers
+    // and reports green over them. This channel is registered multi-line.
+    expect(units.some((u) => u.name === "ipc:transactions:export-enhanced")).toBe(true);
+
+    // And one registered through a wrapper — `wrapHandler(async (...) => {` —
+    // which the paren-bounded capture has to see through.
+    expect(units.some((u) => u.name === "ipc:transactions:link-emails")).toBe(true);
+
+    // A registrar must NOT survive as its own unit: its brace-matched body
+    // swallows every handler it registers, and it would report their writes
+    // added together under a function that issues none.
+    expect(units.some((u) => u.name === "registerContactHandlers")).toBe(false);
+  });
+
+  it("PRECONDITION: the db-layer writer set is populated and type fixtures are excluded", () => {
+    // The composition rule stands entirely on this set. Empty set, green guard.
+    expect(dbLayerWriters().size).toBeGreaterThan(50);
+
+    // The exclusion is pinned, not merely written: assert the directory EXISTS
+    // and that nothing from it was enumerated. Asserting absence alone would
+    // pass just as well if the directory were renamed or deleted.
+    expect(fs.existsSync(path.join(REPO_ROOT, "electron", "types", "__typefixtures__"))).toBe(true);
+    expect(units.some((u) => u.file.includes("__typefixtures__"))).toBe(false);
   });
 
   it("PRECONDITION: it can tell a wrapped write from an unwrapped one", () => {
-    const wrapped = fns.filter((f) => writeCount(f.body) >= 2 && wrapsItself(f.body));
+    const wrapped = units.filter((u) => unitWrites(u).length >= 2 && wrapsItself(u.body));
     expect(wrapped.length).toBeGreaterThan(0);
 
     // BACKLOG-2569: the positive half alone passes vacuously if `wrapsItself`
@@ -800,18 +1362,18 @@ describe("a multi-statement write may not ship without a transaction (BACKLOG-25
   });
 
   function unwrapped(): Fn[] {
-    return fns
-      .filter((f) => writeCount(f.body) >= 2)
-      .filter((f) => !wrapsItself(f.body))
-      .filter((f) => !writesAreBranchExclusive(f.body))
-      .filter((f) => !insideATransaction.has(f.name))
-      .filter((f) => !(exemptKey(f) in EXEMPT));
+    return units
+      .filter((u) => unitWrites(u).length >= 2)
+      .filter((u) => !wrapsItself(u.body))
+      .filter((u) => !writesAreBranchExclusive(u.body, u.isDbWriterCall, u.name))
+      .filter((u) => !insideATransaction.has(u.name))
+      .filter((u) => !(exemptKey(u) in EXEMPT));
   }
 
   it("NO NEW multi-write function ships without a transaction", () => {
     const offenders = unwrapped()
       .filter((f) => !(exemptKey(f) in KNOWN_UNWRAPPED))
-      .map((f) => `${f.file}:${f.line}  ${f.name}  (${writeCount(f.body)} writes)`);
+      .map((f) => `${f.file}:${f.line}  ${f.name}  (${unitWrites(f).length} writes)`);
 
     // Exact set, not a count — a count cannot tell a new violation from a
     // different one that replaced it.
