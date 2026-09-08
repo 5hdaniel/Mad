@@ -1018,8 +1018,20 @@ export function MacOSMessagesImportSettings({
   // BACKLOG-2749: the third reason ("not enough free disk space") is gone from
   // here because that state no longer disables the button — it opens the
   // refusal dialog, which says considerably more than a tooltip could.
-  const spaceBlockedReason =
-    estimateStatus === "pending"
+  //
+  // BACKLOG-3208: the permission case is FIRST, because neither of the other
+  // two describes it. With Full Disk Access missing the estimate fails, so
+  // `estimateStatus` is `unavailable` and the fallback fired — the disabled
+  // Import button told the user, in a tooltip, that Keepr could not work out
+  // how much SPACE the import needs. That is the same misattribution the
+  // inline copy carried, surviving in the one place that is only read once the
+  // user has already tried to click. The other two branches are untouched:
+  // they are still exactly right for the states they describe, and the test
+  // below holds the non-permission failure to the disk-space wording so the
+  // two cases cannot collapse into one again.
+  const spaceBlockedReason = estimateBlockedByPermission
+    ? "Keepr needs Full Disk Access to read your messages"
+    : estimateStatus === "pending"
       ? "Still checking how much space this import needs"
       : "Keepr could not work out how much space this import needs";
 

@@ -364,6 +364,62 @@ describe("BACKLOG-3208 — the Messages panel offers Full Disk Access after onbo
   });
 
   /**
+   * SR review of PR #2578 — the misattribution survived in the Import button's
+   * tooltip, which is the one place a user reads only AFTER trying to click.
+   *
+   * `spaceBlockedReason` had two branches, "still checking" and "could not work
+   * out how much space", and neither described a missing permission. With Full
+   * Disk Access denied the estimate fails, so the fallback fired and the
+   * disabled button explained itself as a disk-space problem.
+   *
+   * These two tests are a PAIR and neither is optional. The first fixes the
+   * wording for the permission case; the second holds every OTHER estimate
+   * failure to the original disk-space wording. Without the second, "make the
+   * tooltip mention Full Disk Access" could be satisfied by making it say that
+   * always — which is the same two-states-collapsed-into-one defect this whole
+   * item is about, pointing the other way.
+   */
+  it("names Full Disk Access in the Import tooltip when that is why the import is refused", async () => {
+    systemApi().checkPermissions.mockResolvedValue(FDA_DENIED);
+    (window.api.messages.getImportCount as jest.Mock).mockResolvedValue(
+      ESTIMATE_REFUSED_NO_FDA
+    );
+
+    renderStrict();
+
+    await screen.findByTestId("macos-fda-denied-notice");
+    const importButton = await screen.findByRole("button", {
+      name: /Import Messages/i,
+    });
+    await waitFor(() =>
+      expect(importButton).toHaveAttribute(
+        "title",
+        "Keepr needs Full Disk Access to read your messages"
+      )
+    );
+    expect(importButton).toBeDisabled();
+  });
+
+  it("still blames the unknown size in the Import tooltip when permission is not the reason", async () => {
+    systemApi().checkPermissions.mockResolvedValue(FDA_GRANTED);
+    (window.api.messages.getImportCount as jest.Mock).mockResolvedValue({
+      success: false,
+      error: "SQLITE_BUSY: database is locked",
+    });
+
+    renderStrict();
+
+    await screen.findByTestId("import-estimate-unavailable");
+    const importButton = screen.getByRole("button", {
+      name: /Import Messages/i,
+    });
+    expect(importButton).toHaveAttribute(
+      "title",
+      "Keepr could not work out how much space this import needs"
+    );
+  });
+
+  /**
    * The other half of control 5: a refusal that is NOT about permission still
    * gets the space copy. Without this, "suppress the message" would pass by
    * deleting the message.
