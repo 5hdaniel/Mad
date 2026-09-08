@@ -1762,6 +1762,10 @@ export function MacOSMessagesImportSettings({
             <FdaHelpSheet
               onClose={() => setShowFdaExplainer(false)}
               onOpenedSettings={refreshFdaStatus}
+              // BACKLOG-3210 (part 2): the explainer closes itself on the
+              // grant; this is what takes the notice around it down at the
+              // same moment rather than on the next window focus.
+              onPermissionGranted={refreshFdaStatus}
             />
           )}
         </div>

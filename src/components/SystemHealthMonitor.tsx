@@ -63,8 +63,33 @@ function SystemHealthMonitor({
       // Pass provider so we only check the relevant OAuth connection
       const result = await systemService.healthCheck(userId, provider);
 
-      if (result.success && result.data && !result.data.healthy && result.data.issues && Array.isArray(result.data.issues)) {
-        setIssues(result.data.issues as SystemIssue[]);
+      // BACKLOG-3210 (part 2): the `!result.data.healthy` condition that used
+      // to sit in this guard is GONE, and its absence is the fix.
+      //
+      // With it, the issue list could only ever be REPLACED by a non-empty one.
+      // A recovered system reports `healthy: true` with `issues: []`, that
+      // branch was skipped, and the previous issues stayed in state — so a
+      // banner could appear and never disappear. A user who granted Full Disk
+      // Access, or reconnected a mailbox, went on being told it was missing
+      // until the app was restarted. It is the same shape as the bug in
+      // BACKLOG-3219 one layer up: the surface that reports a problem could not
+      // report the problem's end.
+      //
+      // `Array.isArray` still guards the whole write, so a check that could NOT
+      // answer (the handler's error path returns no `issues` at all) leaves the
+      // banner exactly as it was rather than silently clearing it. An
+      // unanswerable check is not a recovery.
+      if (result.success && result.data && Array.isArray(result.data.issues)) {
+        const nextIssues = result.data.issues as SystemIssue[];
+        setIssues(nextIssues);
+        // `dismissed` holds INDICES into the issue array. Now that the array
+        // can shrink, a stale index would suppress an unrelated future issue
+        // that happened to land in the same slot. Clearing the set when there
+        // is nothing left to dismiss keeps the two in step; a non-empty update
+        // is left alone, which is the pre-existing behaviour.
+        if (nextIssues.length === 0) {
+          setDismissed(new Set<number>());
+        }
       }
     } catch (error) {
       logger.error("[SystemHealthMonitor] System health check failed:", error);
@@ -201,7 +226,15 @@ function SystemHealthMonitor({
   return (
     <div className="space-y-0">
       {showFdaExplainer && (
-        <FdaHelpSheet onClose={() => setShowFdaExplainer(false)} />
+        <FdaHelpSheet
+          onClose={() => setShowFdaExplainer(false)}
+          // BACKLOG-3210 (part 2): when the explainer observes the grant it
+          // closes itself; re-running the health check is what makes THIS row
+          // go away with it. Without this the banner would linger until the
+          // 2-minute poll came round, so the user would fix the permission and
+          // still be told it was missing.
+          onPermissionGranted={checkSystemHealth}
+        />
       )}
       {visibleIssues.map((issue, _index) => {
         const originalIndex = issues.findIndex(

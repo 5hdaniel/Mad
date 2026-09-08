@@ -224,11 +224,11 @@ describe("BACKLOG-3208 — the Messages panel offers Full Disk Access after onbo
 
     // The explainer — the SAME component the dashboard health banner opens
     // (`components/permissions/FdaHelpSheet`, testid asserted in
-    // `src/components/__tests__/SystemHealthMonitor.test.tsx`).
+    // `src/components/__tests__/SystemHealthMonitor.test.tsx`), showing the
+    // SAME instruction steps onboarding renders.
     expect(await screen.findByTestId("fda-help-sheet")).toBeInTheDocument();
-    expect(
-      screen.getByText("Your messages stay on this Mac. Period.")
-    ).toBeInTheDocument();
+    expect(screen.getByTestId("fda-instruction-steps")).toBeInTheDocument();
+    expect(screen.getByText("Flip the Keepr toggle on")).toBeInTheDocument();
 
     expect(systemApi().openSystemSettings).not.toHaveBeenCalled();
     expect(systemApi().triggerFullDiskAccess).not.toHaveBeenCalled();
@@ -255,7 +255,7 @@ describe("BACKLOG-3208 — the Messages panel offers Full Disk Access after onbo
 
     await act(async () => {
       fireEvent.click(
-        screen.getByRole("button", { name: "Open System Settings" })
+        screen.getByTestId("onboarding-permissions-open-settings")
       );
     });
 
@@ -287,7 +287,7 @@ describe("BACKLOG-3208 — the Messages panel offers Full Disk Access after onbo
 
     await act(async () => {
       fireEvent.click(
-        screen.getByRole("button", { name: "Open System Settings" })
+        screen.getByTestId("onboarding-permissions-open-settings")
       );
     });
 
@@ -311,7 +311,7 @@ describe("BACKLOG-3208 — the Messages panel offers Full Disk Access after onbo
     await screen.findByTestId("fda-help-sheet");
 
     await act(async () => {
-      fireEvent.click(screen.getByRole("button", { name: "Not now" }));
+      fireEvent.click(screen.getByTestId("fda-help-not-now"));
     });
 
     await waitFor(() =>
@@ -319,6 +319,93 @@ describe("BACKLOG-3208 — the Messages panel offers Full Disk Access after onbo
     );
     expect(screen.getByTestId("macos-fda-denied-notice")).toBeInTheDocument();
     expect(systemApi().openSystemSettings).not.toHaveBeenCalled();
+  });
+
+  /**
+   * BACKLOG-3210 (part 2) — dismissal on grant, at THIS surface.
+   *
+   * The explainer closes itself when it sees the permission granted, and hands
+   * this panel a re-check so the notice around it goes too. Both halves are
+   * asserted, and so is the inverse: still denied, both must REMAIN. A change
+   * that simply hid either surface would pass the first half alone.
+   */
+  it("GRANTED — checking from the explainer clears the explainer AND the notice", async () => {
+    systemApi().checkPermissions.mockResolvedValue(FDA_DENIED);
+
+    renderStrict();
+
+    const showMeHow = await screen.findByTestId("macos-fda-open-settings");
+    await act(async () => {
+      fireEvent.click(showMeHow);
+    });
+    await screen.findByTestId("fda-help-sheet");
+
+    // The permission is now held, as it would be after the toggle + restart.
+    systemApi().checkPermissions.mockResolvedValue(FDA_GRANTED);
+
+    await act(async () => {
+      fireEvent.click(screen.getByTestId("fda-help-check"));
+    });
+
+    await waitFor(() =>
+      expect(screen.queryByTestId("fda-help-sheet")).toBeNull()
+    );
+    await waitFor(() =>
+      expect(screen.queryByTestId("macos-fda-denied-notice")).toBeNull()
+    );
+    // BACKLOG-3208's restart notice takes its place, because this process was
+    // denied at launch and macOS does not revisit that until it restarts.
+    // Silence here would tell the user she is done when she is not.
+    expect(
+      await screen.findByTestId("macos-fda-restart-notice")
+    ).toBeInTheDocument();
+  });
+
+  it("STILL DENIED — both the explainer and the notice REMAIN", async () => {
+    systemApi().checkPermissions.mockResolvedValue(FDA_DENIED);
+
+    renderStrict();
+
+    const showMeHow = await screen.findByTestId("macos-fda-open-settings");
+    await act(async () => {
+      fireEvent.click(showMeHow);
+    });
+    await screen.findByTestId("fda-help-sheet");
+
+    await act(async () => {
+      fireEvent.click(screen.getByTestId("fda-help-check"));
+    });
+
+    expect(
+      await screen.findByTestId("fda-help-check-failed")
+    ).toBeInTheDocument();
+    expect(screen.getByTestId("fda-help-sheet")).toBeInTheDocument();
+    expect(screen.getByTestId("macos-fda-denied-notice")).toBeInTheDocument();
+  });
+
+  it("an UNANSWERABLE check clears nothing — it is not a grant", async () => {
+    // The panel's own three-state contract, now reaching the explainer too.
+    systemApi().checkPermissions.mockResolvedValue(FDA_DENIED);
+
+    renderStrict();
+
+    const showMeHow = await screen.findByTestId("macos-fda-open-settings");
+    await act(async () => {
+      fireEvent.click(showMeHow);
+    });
+    await screen.findByTestId("fda-help-sheet");
+
+    systemApi().checkPermissions.mockResolvedValue({ somethingElse: true });
+
+    await act(async () => {
+      fireEvent.click(screen.getByTestId("fda-help-check"));
+    });
+
+    expect(
+      await screen.findByTestId("fda-help-check-failed")
+    ).toBeInTheDocument();
+    expect(screen.getByTestId("fda-help-sheet")).toBeInTheDocument();
+    expect(screen.getByTestId("macos-fda-denied-notice")).toBeInTheDocument();
   });
 
   /**

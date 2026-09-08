@@ -25,12 +25,17 @@ const mockHealthCheck = jest.fn();
 // ways — not called when the button is clicked, called when the explainer's
 // own primary is.
 const mockOpenFullDiskAccessSettings = jest.fn();
+// The explainer re-checks the permission on its own (an explicit "Check
+// permissions" and a window-focus re-check), and closes when it sees a grant.
+const mockCheckMessagesPermission = jest.fn();
 jest.mock("../../services", () => ({
   systemService: {
     healthCheck: (...args: unknown[]) => mockHealthCheck(...args),
     openPrivacyPane: jest.fn(),
     openFullDiskAccessSettings: (...args: unknown[]) =>
       mockOpenFullDiskAccessSettings(...args),
+    checkMessagesPermission: (...args: unknown[]) =>
+      mockCheckMessagesPermission(...args),
   },
   authService: {
     googleConnectMailbox: jest.fn(),
@@ -78,6 +83,10 @@ describe("SystemHealthMonitor (BACKLOG-2127)", () => {
     jest.useFakeTimers();
     mockHealthCheck.mockResolvedValue(healthResult([brokenOutlookIssue]));
     mockOpenFullDiskAccessSettings.mockResolvedValue({ success: true });
+    mockCheckMessagesPermission.mockResolvedValue({
+      success: true,
+      data: { hasPermission: false, reason: "EPERM: operation not permitted" },
+    });
   });
 
   afterEach(() => {
@@ -150,6 +159,10 @@ describe("SystemHealthMonitor — Full Disk Access (BACKLOG-3219 / BACKLOG-3210 
     jest.useFakeTimers();
     mockHealthCheck.mockResolvedValue(healthResult([FDA_DENIED_BANNER_ISSUE]));
     mockOpenFullDiskAccessSettings.mockResolvedValue({ success: true });
+    mockCheckMessagesPermission.mockResolvedValue({
+      success: true,
+      data: { hasPermission: false, reason: "EPERM: operation not permitted" },
+    });
   });
 
   afterEach(() => {
@@ -208,11 +221,12 @@ describe("SystemHealthMonitor — Full Disk Access (BACKLOG-3219 / BACKLOG-3210 
       screen.getByRole("button", { name: FDA_EXPLAINER_ACTION_LABEL })
     );
 
-    // The explainer — the same component the Settings notice opens.
+    // The explainer — the same component the Settings notice opens, showing
+    // the SHARED instruction steps (the ones onboarding renders), not the
+    // consent sheet and not a raw macOS pane.
     expect(await screen.findByTestId("fda-help-sheet")).toBeInTheDocument();
-    expect(
-      screen.getByText("Your messages stay on this Mac. Period.")
-    ).toBeInTheDocument();
+    expect(screen.getByTestId("fda-instruction-steps")).toBeInTheDocument();
+    expect(screen.getByText("Flip the Keepr toggle on")).toBeInTheDocument();
     // The whole point of the item: the user is NOT dropped into System
     // Settings by this click.
     expect(mockOpenFullDiskAccessSettings).not.toHaveBeenCalled();
@@ -225,9 +239,7 @@ describe("SystemHealthMonitor — Full Disk Access (BACKLOG-3219 / BACKLOG-3210 
     );
     await screen.findByTestId("fda-help-sheet");
 
-    fireEvent.click(
-      screen.getByRole("button", { name: "Open System Settings" })
-    );
+    fireEvent.click(screen.getByTestId("onboarding-permissions-open-settings"));
 
     await waitFor(() =>
       expect(mockOpenFullDiskAccessSettings).toHaveBeenCalledTimes(1)
@@ -257,11 +269,81 @@ describe("SystemHealthMonitor — Full Disk Access (BACKLOG-3219 / BACKLOG-3210 
     );
     await screen.findByTestId("fda-help-sheet");
 
-    fireEvent.click(screen.getByRole("button", { name: "Not now" }));
+    fireEvent.click(screen.getByTestId("fda-help-not-now"));
 
     await waitFor(() =>
       expect(screen.queryByTestId("fda-help-sheet")).not.toBeInTheDocument()
     );
     expect(mockOpenFullDiskAccessSettings).not.toHaveBeenCalled();
+  });
+
+  /**
+   * BACKLOG-3210 (part 2) — dismissal on grant, at THIS surface.
+   *
+   * The explainer closes itself when it sees the permission granted; the
+   * banner behind it clears because the explainer asks this component to
+   * re-run its health check. Without that hand-off the row would linger until
+   * the 2-minute poll came round — the user would fix the permission and still
+   * be told it was missing.
+   */
+  it("GRANTED — checking from the explainer clears the explainer AND the banner", async () => {
+    mockCheckMessagesPermission.mockResolvedValue({
+      success: true,
+      data: { hasPermission: true },
+    });
+    await renderAndCheck();
+    fireEvent.click(
+      screen.getByRole("button", { name: FDA_EXPLAINER_ACTION_LABEL })
+    );
+    await screen.findByTestId("fda-help-sheet");
+
+    // The health check now reports a healthy system, as it would once the
+    // permission is actually held.
+    mockHealthCheck.mockResolvedValue(healthResult([]));
+
+    await act(async () => {
+      fireEvent.click(screen.getByTestId("fda-help-check"));
+      await Promise.resolve();
+    });
+
+    await waitFor(() =>
+      expect(screen.queryByTestId("fda-help-sheet")).not.toBeInTheDocument()
+    );
+    await waitFor(() =>
+      expect(
+        screen.queryByText(
+          "Full Disk Access permission is required to read iMessages."
+        )
+      ).not.toBeInTheDocument()
+    );
+  });
+
+  it("STILL DENIED — both the explainer and the banner REMAIN", async () => {
+    // The control that makes the test above real. A change that simply hid
+    // either surface would pass "granted -> cleared" on its own.
+    mockCheckMessagesPermission.mockResolvedValue({
+      success: true,
+      data: { hasPermission: false, reason: "EPERM: operation not permitted" },
+    });
+    await renderAndCheck();
+    fireEvent.click(
+      screen.getByRole("button", { name: FDA_EXPLAINER_ACTION_LABEL })
+    );
+    await screen.findByTestId("fda-help-sheet");
+
+    await act(async () => {
+      fireEvent.click(screen.getByTestId("fda-help-check"));
+      await Promise.resolve();
+    });
+
+    expect(
+      await screen.findByTestId("fda-help-check-failed")
+    ).toBeInTheDocument();
+    expect(screen.getByTestId("fda-help-sheet")).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        "Full Disk Access permission is required to read iMessages."
+      )
+    ).toBeInTheDocument();
   });
 });

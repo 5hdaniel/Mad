@@ -46,8 +46,13 @@ export interface FdaSafetySheetProps {
   onClose?: () => void;
   /** Label for the primary button. Defaults to the onboarding copy. */
   primaryLabel?: React.ReactNode;
-  /** Label for the secondary button. Defaults to the onboarding copy. */
-  secondaryLabel?: React.ReactNode;
+  /**
+   * NOTE: the secondary button's label is deliberately NOT overridable. It is
+   * "Skip for now" in every context, because outside onboarding it is still a
+   * skip — the founder's stated reason for keeping this sheet reachable at all
+   * is that it is how a user who cannot make Full Disk Access work gets out.
+   * Renaming it there would hide the exit behind a different word.
+   */
   /**
    * Trailing explanatory paragraph under the buttons. Defaults to the
    * onboarding copy, which talks about skipping a step that only exists
@@ -82,7 +87,6 @@ export function FdaSafetySheet({
   onSkip,
   onClose,
   primaryLabel,
-  secondaryLabel,
   footer,
   testId,
 }: FdaSafetySheetProps) {
@@ -176,7 +180,7 @@ export function FdaSafetySheet({
         data-testid="fda-safety-skip"
         className="w-full bg-gray-100 text-gray-700 py-2.5 px-6 rounded-lg font-semibold hover:bg-gray-200 transition-colors"
       >
-        {secondaryLabel ?? <>Skip for now</>}
+        Skip for now
       </button>
       <p className="text-center text-[11px] text-gray-500 mt-3 leading-relaxed">
         {footer ?? (
