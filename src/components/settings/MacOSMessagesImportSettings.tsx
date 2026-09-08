@@ -528,6 +528,43 @@ export function MacOSMessagesImportSettings({
   //      from a window that fits to one that does not leaves the old "fits"
   //      verdict on screen — and Import clickable — for as long as the new
   //      estimate takes, which on a large library is seconds of open door.
+  /**
+   * BACKLOG-3208: ask the main process whether Full Disk Access is usable, and
+   * record the answer.
+   *
+   * Uses the EXISTING `check-permissions` IPC (via `systemService`, so this
+   * component keeps its `window.api` calls where the rest of the panel already
+   * has them: none of this is a new channel). No new main-process code exists
+   * for this feature.
+   */
+  const refreshFdaStatus = useCallback(async () => {
+    if (!isMacOS) return;
+    const result = await systemService.checkMessagesPermission();
+    if (!result.success || result.data?.hasPermission === undefined) {
+      // The check did not answer. Leave the status alone rather than inventing
+      // a verdict — see the `unknown` note on `fdaStatus`.
+      logger.warn(
+        "[MacOSMessagesImportSettings] Full Disk Access check did not answer:",
+        result.error
+      );
+      return;
+    }
+    if (result.data.hasPermission) {
+      setFdaStatus("granted");
+      return;
+    }
+    // Log the reason main gave (the raw `EPERM: operation not permitted,
+    // access '<home>/Library/Messages/chat.db'` from `fs.access`). It is not
+    // shown to the user — the notice says the useful thing — but a support
+    // log that says only "denied" cannot distinguish this from a missing file.
+    logger.warn(
+      "[MacOSMessagesImportSettings] Full Disk Access denied:",
+      result.data.reason
+    );
+    setFdaStatus("denied");
+    setFdaWasDenied(true);
+  }, [isMacOS]);
+
   useEffect(() => {
     if (!isMacOS) return;
     if (!estimateInputsReady) return;
@@ -585,6 +622,20 @@ export function MacOSMessagesImportSettings({
           );
           setEstimateFailureReason(result.error ?? null);
           setEstimateStatus("unavailable");
+          if (
+            (result.error ?? "").toLowerCase().includes("full disk access")
+          ) {
+            // BACKLOG-3208: main and this panel read the permission at
+            // different moments, so main can refuse for want of Full Disk
+            // Access while this panel still holds an older `granted` or
+            // `unknown`. Left alone that is the worst of both: the space copy
+            // is suppressed as a permission problem, and no permission notice
+            // renders to replace it — a refused import with nothing on screen
+            // explaining it, which is the failure BACKLOG-2760 exists to
+            // prevent. Re-asking makes the authoritative check catch up, and
+            // the notice appears.
+            void refreshFdaStatus();
+          }
           return;
         }
 
@@ -636,44 +687,10 @@ export function MacOSMessagesImportSettings({
     // BACKLOG-2749: re-estimate when the cap changes — see the selection above.
     maxMessages,
     effectiveWindow?.effectiveCutoffISO,
+    // BACKLOG-3208: the self-heal call above. Stable (`[isMacOS]`), so it does
+    // not re-run the estimate.
+    refreshFdaStatus,
   ]);
-
-  /**
-   * BACKLOG-3208: ask the main process whether Full Disk Access is usable, and
-   * record the answer.
-   *
-   * Uses the EXISTING `check-permissions` IPC (via `systemService`, so this
-   * component keeps its `window.api` calls where the rest of the panel already
-   * has them: none of this is a new channel). No new main-process code exists
-   * for this feature.
-   */
-  const refreshFdaStatus = useCallback(async () => {
-    if (!isMacOS) return;
-    const result = await systemService.checkMessagesPermission();
-    if (!result.success || result.data?.hasPermission === undefined) {
-      // The check did not answer. Leave the status alone rather than inventing
-      // a verdict — see the `unknown` note on `fdaStatus`.
-      logger.warn(
-        "[MacOSMessagesImportSettings] Full Disk Access check did not answer:",
-        result.error
-      );
-      return;
-    }
-    if (result.data.hasPermission) {
-      setFdaStatus("granted");
-      return;
-    }
-    // Log the reason main gave (the raw `EPERM: operation not permitted,
-    // access '<home>/Library/Messages/chat.db'` from `fs.access`). It is not
-    // shown to the user — the notice says the useful thing — but a support
-    // log that says only "denied" cannot distinguish this from a missing file.
-    logger.warn(
-      "[MacOSMessagesImportSettings] Full Disk Access denied:",
-      result.data.reason
-    );
-    setFdaStatus("denied");
-    setFdaWasDenied(true);
-  }, [isMacOS]);
 
   /**
    * BACKLOG-3208: check on mount, and again whenever the window regains focus.

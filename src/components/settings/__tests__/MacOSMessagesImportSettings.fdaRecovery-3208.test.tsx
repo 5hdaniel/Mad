@@ -337,6 +337,33 @@ describe("BACKLOG-3208 — the Messages panel offers Full Disk Access after onbo
   });
 
   /**
+   * The two reads happen at different moments, so they can disagree: main can
+   * refuse for want of Full Disk Access while this panel still holds `granted`
+   * (or has not answered yet).
+   *
+   * That disagreement is the one state where suppressing the space copy could
+   * do harm — suppressed AND no notice would be a refused import with nothing
+   * on screen explaining it, which is exactly what BACKLOG-2760 exists to
+   * prevent. The panel re-asks instead, and the notice arrives.
+   */
+  it("re-asks and shows the notice when main refuses for permission before the panel knows", async () => {
+    systemApi().checkPermissions.mockResolvedValue(FDA_GRANTED);
+    (window.api.messages.getImportCount as jest.Mock).mockImplementation(() => {
+      // From this point on the panel's own check would find it denied too —
+      // it simply has not asked since.
+      systemApi().checkPermissions.mockResolvedValue(FDA_DENIED);
+      return Promise.resolve(ESTIMATE_REFUSED_NO_FDA);
+    });
+
+    renderStrict();
+
+    expect(
+      await screen.findByTestId("macos-fda-denied-notice")
+    ).toHaveTextContent("Keepr does not have Full Disk Access");
+    expect(screen.queryByTestId("import-estimate-unavailable")).toBeNull();
+  });
+
+  /**
    * The other half of control 5: a refusal that is NOT about permission still
    * gets the space copy. Without this, "suppress the message" would pass by
    * deleting the message.
