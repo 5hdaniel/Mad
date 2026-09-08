@@ -40,6 +40,15 @@
  * (BACKLOG-3232). This suite is the only control. It has to carry the bar
  * alone, which is why the sweep is exhaustive rather than sampled.
  *
+ * Do not read that as "the atomicity guard is inert for this change". It is
+ * inert as a control OVER `unlinkMessages`, and separately it goes RED on this
+ * change for an unrelated reason: `dbLayerWriters()` reads only a function's
+ * OWN body, so splitting a writer into `<name>Sync` + a one-line wrapper drops
+ * `<name>` from its writer set and de-detects every caller outside `db/` that
+ * names it. Three units in other lanes' files stop being seen. That is a defect
+ * in the guard's model of the BACKLOG-2960 seam recipe, not a fix to those
+ * units, and it is filed rather than silenced here.
+ *
  * ===========================================================================
  * HOW THE CRASH IS INJECTED
  * ===========================================================================
