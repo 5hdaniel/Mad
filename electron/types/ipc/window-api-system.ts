@@ -29,6 +29,15 @@ export interface WindowApiSystem {
     hasPermission?: boolean;
     fullDiskAccess?: boolean;
     contacts?: boolean;
+    /**
+     * BACKLOG-3208: the producer has always set this on the denied path
+     * (`permissionHandlers.ts` check-permissions returns
+     * `{ hasPermission: false, error: (error as Error).message }` — the raw
+     * `EPERM: operation not permitted, access '<home>/Library/Messages/chat.db'`
+     * from `fs.access`). The type omitted it, so no consumer could read it
+     * without an `as` cast. Declared here so the reason can be logged.
+     */
+    error?: string;
   }>;
   triggerFullDiskAccess: () => Promise<{ granted: boolean }>;
   requestPermissions: () => Promise<Record<string, unknown>>;
