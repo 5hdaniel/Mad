@@ -180,6 +180,45 @@ const EXEMPT: Record<string, string> = {
  * reports a violation has not established one.** The list below is what a human
  * confirmed by opening the function, not what the scan emitted.
  */
+/**
+ * ===========================================================================
+ * BACKLOG-2584 — KEYED `file::function`, AND WHAT MAY GO IN IT
+ * ===========================================================================
+ * This map was keyed by BARE NAME while `EXEMPT` above was re-keyed to
+ * `file::function` by BACKLOG-2990 chunk 5. Both filters that read it — the
+ * offender test's `exemptKey(f) in KNOWN_UNWRAPPED` and the shrink test's
+ * `unwrapped().map(exemptKey)` — now use the same key, and they must be changed
+ * together or the re-key is half-applied and the shrink test compares
+ * `file::function` strings against bare names.
+ *
+ * The reason is the same one chunk 5 gave for `EXEMPT`, and it got stronger when
+ * this guard's scan root widened to `electron/`. Measured at `0dca6beb1`:
+ *
+ *   electron/services/db  —  439 exported functions,  6 duplicate bare names
+ *   electron/             — 1131 exported functions, 15 duplicate bare names
+ *
+ * `deleteLiveForceSet` — the exact name that motivated chunk 5 — is one of the
+ * fifteen. A bare-name key across 1131 functions silences every namesake, and
+ * this list went from 0 entries to a populated one in the same change.
+ *
+ * ---------------------------------------------------------------------------
+ * WHAT MAY BE LISTED HERE — this is the rule, not a preference
+ * ---------------------------------------------------------------------------
+ * **An entry is a CONFIRMED REAL VIOLATION with a filed BACKLOG item, and it is
+ * DELETED as that item ships.** A FALSE POSITIVE is never listed: it is fixed in
+ * the heuristic, or exempted in `EXEMPT` above with a written reason under the
+ * cap of 6.
+ *
+ * Stated because the widened root and the cite-an-item rule together create a
+ * pressure that runs the wrong way — quieting a false positive by filing a bogus
+ * item to cite. That is silencing by another route, and it is the failure
+ * BACKLOG-3053 recorded: a known-list entry that made a refactor tidy while
+ * preserving a live data-integrity defect.
+ *
+ * Every entry cites the SHA it was measured at, because a `file::function` key
+ * survives line drift but the LINE NUMBERS inside these reason strings do not.
+ * Re-derive them; do not hand-copy them forward.
+ */
 const KNOWN_UNWRAPPED: Record<string, string> = {
   // EMPTY — and that is the honest result. Six of the nine this list started
   // with were false positives (see the correction above); `deleteBySessionId`
@@ -771,7 +810,7 @@ describe("a multi-statement write may not ship without a transaction (BACKLOG-25
 
   it("NO NEW multi-write function ships without a transaction", () => {
     const offenders = unwrapped()
-      .filter((f) => !(f.name in KNOWN_UNWRAPPED))
+      .filter((f) => !(exemptKey(f) in KNOWN_UNWRAPPED))
       .map((f) => `${f.file}:${f.line}  ${f.name}  (${writeCount(f.body)} writes)`);
 
     // Exact set, not a count — a count cannot tell a new violation from a
@@ -780,7 +819,7 @@ describe("a multi-statement write may not ship without a transaction (BACKLOG-25
   });
 
   it("the known list may only SHRINK — an entry removed without a fix goes red", () => {
-    const stillUnwrapped = unwrapped().map((f) => f.name).sort();
+    const stillUnwrapped = unwrapped().map(exemptKey).sort();
     const claimed = Object.keys(KNOWN_UNWRAPPED).sort();
 
     // Anything claimed as known that is no longer unwrapped has been FIXED —
