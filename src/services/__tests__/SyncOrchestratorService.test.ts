@@ -640,8 +640,12 @@ describe('SyncOrchestratorService', () => {
       expect(item?.reconnectProvider).toBeUndefined();
     });
 
-    // A dead token still outranks a reconnect signal, and keeps its own copy.
-    it('prefers the dead-token cause and its copy when Outlook is dead and Gmail merely needs reconnecting', async () => {
+    // The rule is ORDER, not cause: `contactsReconnect ??=` means the first
+    // failing provider wins, and the Outlook phase runs first. Both directions
+    // are pinned below, because a name claiming "dead tokens outrank reconnect
+    // signals" would describe a precedence the code does not implement — the
+    // second test would fail under it.
+    it('lets the first failing provider win, keeping its own cause and copy (Outlook dead, Gmail unreadable)', async () => {
       (window as any).api.contacts.syncOutlookContacts = jest.fn().mockResolvedValue({
         success: false, tokenExpired: true, error: 'Outlook token expired',
       });
@@ -656,6 +660,24 @@ describe('SyncOrchestratorService', () => {
       expect(item?.status).toBe('error');
       expect(item?.reconnectProvider).toBe('microsoft');
       expect(item?.error).toBe('Outlook connection expired — reconnect to sync contacts');
+    });
+
+    it('lets the first failing provider win even when the LATER one is the dead token (Outlook unreadable, Gmail dead)', async () => {
+      (window as any).api.contacts.syncOutlookContacts = jest.fn().mockResolvedValue({
+        success: false, reconnectRequired: true, error: 'Contacts.Read permission not granted',
+      });
+      (window as any).api.contacts.syncGoogleContacts = jest.fn().mockResolvedValue({
+        success: false, tokenExpired: true, error: 'Gmail token expired',
+      });
+
+      syncOrchestrator.requestSync({ types: ['contacts'], userId: 'test-user' });
+      await new Promise(resolve => setTimeout(resolve, 0));
+
+      const item = syncOrchestrator.getState().queue.find(q => q.type === 'contacts');
+      expect(item?.status).toBe('error');
+      // Outlook ran first, so Outlook is reported — cause does not jump the queue.
+      expect(item?.reconnectProvider).toBe('microsoft');
+      expect(item?.error).toBe('Outlook needs to be reconnected to sync contacts');
     });
 
     it('completes the contacts item on a clean sync of all sources', async () => {
