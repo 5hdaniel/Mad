@@ -212,11 +212,46 @@ export function Content({ context, onAction }: OnboardingStepContentProps) {
   // (unchanged contract for the resume-skip logic), this is purely a
   // "move on without granting" navigation, same mechanism ContactSourceStep
   // and DataSyncStep already use.
+  //
+  // BACKLOG-3212: NAVIGATE_NEXT alone marks the step complete in the queue's
+  // `manuallyCompletedIds`, which is a React useState Set — process memory.
+  // The choice therefore died with the process and the user was asked again
+  // on every launch. Persist it to the same Supabase user_preferences bag
+  // that already holds phoneType / contactSources / the 1842 resume marker,
+  // via the existing `preferences:update` deep-merge channel — the same call
+  // ContactSourceStep.onSkip already uses to record its own skip. Deep-merge
+  // (preferenceHandlers.ts deepMerge) recurses into `onboarding`, so the 1842
+  // resumeStep marker living under the same key survives this write.
+  //
+  // Best-effort and non-blocking: a write failure must never trap the user on
+  // this step — the worst case is the pre-3212 behaviour, being asked again
+  // next launch.
   const handleSkipForNow = useCallback(() => {
     telemetryRef.current.skipped();
     setShowSafetySheet(false);
+
+    const userId = context.userId;
+    if (userId) {
+      void Promise.resolve(
+        window.api.preferences.update(userId, {
+          onboarding: { fdaSkipped: true, fdaSkippedAt: Date.now() },
+        }),
+      )
+        .then((result) => {
+          if (!result?.success) {
+            logger.warn(
+              "[PermissionsStep] Persisting the FDA skip did not succeed (non-fatal):",
+              result?.error,
+            );
+          }
+        })
+        .catch((error) => {
+          logger.warn("[PermissionsStep] Persisting the FDA skip failed (non-fatal):", error);
+        });
+    }
+
     onAction({ type: "NAVIGATE_NEXT" });
-  }, [onAction]);
+  }, [onAction, context.userId]);
 
   /**
    * BACKLOG-1842: Relaunch the app so the fresh process picks up the newly

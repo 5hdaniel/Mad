@@ -606,8 +606,13 @@ export function LoadingOrchestrator({
       const userId = user.id;
 
       // Load all user data in parallel for faster loading
-      const [phoneTypeResult, emailOnboardingResult, connectionsResult, permissionsResult] =
-        await Promise.all([
+      const [
+        phoneTypeResult,
+        emailOnboardingResult,
+        connectionsResult,
+        permissionsResult,
+        onboardingPrefsResult,
+      ] = await Promise.all([
           // Get phone type from database
           window.api.user.getPhoneType(userId).catch(() => ({
             success: false,
@@ -636,6 +641,28 @@ export function LoadingOrchestrator({
                 fullDiskAccess: false,
               }))
             : Promise.resolve({ hasPermission: true, fullDiskAccess: true }),
+
+          // BACKLOG-3212: read the persisted "Skip for now" choice for Full
+          // Disk Access (Supabase user_preferences `onboarding.fdaSkipped`,
+          // written by PermissionsStep via preferences:update). macOS only —
+          // the flag has no meaning elsewhere, so Windows pays nothing.
+          //
+          // Cloud-backed, matching phoneType/contactSources/the 1842 resume
+          // marker: readable without local DB init, which matters because this
+          // phase can run while init is still deferred.
+          //
+          // Wrapped in Promise.resolve().then() rather than called bare: this
+          // array is built eagerly, so a `window.api.preferences` that is
+          // absent (older preload, or a test harness that stubs only part of
+          // the bridge) would throw synchronously here and reject the whole
+          // Promise.all — sending an otherwise-fine user down the fallback
+          // path. Optional-chained and defaulted so a missing bridge simply
+          // means "no recorded skip".
+          platform.isMacOS
+            ? Promise.resolve()
+                .then(() => window.api.preferences?.get?.(userId))
+                .catch(() => undefined)
+            : Promise.resolve(undefined),
         ]);
 
       // Determine phone type
@@ -663,6 +690,16 @@ export function LoadingOrchestrator({
           permissionsResult.fullDiskAccess === true
         : true; // Windows doesn't require permissions
 
+      // BACKLOG-3212: whether the user has already declined Full Disk Access.
+      // Read from the preferences bag written by PermissionsStep's "Skip for
+      // now" (verified shape: preferenceHandlers.onboardingSkip.test.ts).
+      // Strict === true so a malformed/absent value can only ever mean "not
+      // skipped" — the fix must never make the app stop asking by accident.
+      const onboardingPrefs = (
+        onboardingPrefsResult as { preferences?: { onboarding?: { fdaSkipped?: unknown } } } | undefined
+      )?.preferences?.onboarding;
+      const fdaSkipped = onboardingPrefs?.fdaSkipped === true;
+
       // Determine if driver setup is needed (Windows + iPhone only)
       let needsDriverSetup = false;
       if (platform.isWindows && phoneType === "iphone") {
@@ -689,6 +726,7 @@ export function LoadingOrchestrator({
         hasEmailConnected,
         needsDriverSetup,
         hasPermissions,
+        fdaSkipped,
       };
     };
 
@@ -722,6 +760,10 @@ export function LoadingOrchestrator({
             hasEmailConnected: false,
             needsDriverSetup: platform.isWindows,
             hasPermissions: !platform.isMacOS,
+            // BACKLOG-3212: the fallback deliberately claims no recorded skip.
+            // We could not read preferences, so we do not know — and "ask
+            // again" is the safe direction to be wrong in.
+            fdaSkipped: false,
           };
 
           dispatch({
