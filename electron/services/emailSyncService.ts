@@ -285,8 +285,15 @@ export interface StoreableEmail {
     mimeType?: string;
     contentType?: string;
     size?: number;
-    attachmentId?: string;
+    /**
+     * BACKLOG-3187: Gmail's immutable MIME part id — the attachment's IDENTITY.
+     * Undeclared until now, which is why it was structurally invisible to the
+     * writer no matter what the fetch service parsed. Absent for Outlook.
+     */
+    partId?: string;
     id?: string;
+    /** Fetch token only — Gmail's rotates between calls. Never identity. */
+    attachmentId?: string;
   }>;
   // BACKLOG-1722: structured participants for the junction
   participants?: import("../types/models").ParsedParticipant[];
@@ -362,6 +369,24 @@ interface AttachmentMetaLite {
   filename: string;
   mimeType: string | null;
   size: number | null;
+  /**
+   * BACKLOG-3187: Gmail's IDENTITY — the immutable id of the MIME part. Null for
+   * Outlook, which has no such concept (a Graph attachment is addressed by its id
+   * and nothing else). Empty string is normalised to null here, so downstream code
+   * never has to remember that the payload's own partId is "".
+   */
+  partId: string | null;
+  /**
+   * BACKLOG-2551: the provider's own attachment id. Both providers supply one —
+   * Gmail as `part.body.attachmentId`, Outlook Graph as `id` — and this normaliser
+   * used to DISCARD it, which is why the column could not be populated at all.
+   * Whether it is then STORED is decided by the gate in
+   * persistEmailAttachmentMetadata, not here.
+   *
+   * BACKLOG-3187: for Gmail this is a FETCH TOKEN and was measured rotating
+   * between two fetches of the same attachment. It never becomes identity.
+   */
+  providerAttachmentId: string | null;
 }
 
 /**
@@ -378,6 +403,10 @@ function normalizeAttachmentMeta(
     mimeType?: string | null;
     contentType?: string | null;
     size?: number | null;
+    /** BACKLOG-3187: Gmail identity. Absent on every Outlook shape. */
+    partId?: string | null;
+    attachmentId?: string | null;
+    id?: string | null;
   }>,
 ): AttachmentMetaLite[] {
   const out: AttachmentMetaLite[] = [];
@@ -388,6 +417,10 @@ function normalizeAttachmentMeta(
       filename,
       mimeType: a.mimeType ?? a.contentType ?? null,
       size: typeof a.size === "number" ? a.size : null,
+      // BACKLOG-3187: `|| null`, not `?? null` — "" means absent (see partId).
+      partId: a.partId || null,
+      // Gmail parses `attachmentId`; Outlook Graph carries `id`.
+      providerAttachmentId: a.attachmentId ?? a.id ?? null,
     });
   }
   return out;
@@ -413,6 +446,8 @@ function normalizeAttachmentMeta(
 async function persistEmailAttachmentMetadata(args: {
   emailsToInsert: StoreableEmail[];
   insertedEmailMap: Map<string, string>;
+  /** BACKLOG-2551: which provider this batch came from — see the gate below. */
+  provider: "outlook" | "gmail";
   getAttachmentsFn?: (
     messageId: string,
   ) => Promise<
@@ -426,7 +461,30 @@ async function persistEmailAttachmentMetadata(args: {
    */
   force?: EmailForceStaging;
 }): Promise<void> {
-  const { emailsToInsert, insertedEmailMap, getAttachmentsFn, force } = args;
+  const { emailsToInsert, insertedEmailMap, provider, getAttachmentsFn, force } = args;
+
+  // BACKLOG-2551 — THE sync-side gate, the counterpart to the one inside
+  // emailAttachmentService.downloadEmailAttachments. Two chokepoints, both of
+  // which every write path must pass through; the decision is never replicated
+  // out to individual call sites, where missing one would be silent.
+  //
+  // BACKLOG-3187 — identity comes from the DATA SHAPE, not the provider label.
+  //
+  // `partId` exists only on a Gmail MIME part; a Graph attachment has no such
+  // field, so an Outlook row is unaffected by the first term and keeps the
+  // behaviour v71 shipped. A Gmail row now keys on `partId` — the field Google
+  // documents as immutable — and never on `attachmentId`, which was MEASURED
+  // rotating between two fetches of the same attachment (2026-09-07).
+  //
+  // Reading the shape rather than `provider` also matters because `provider` is
+  // not always derived: at one of the nine download call sites
+  // (transactionService.ts, BACKLOG-3189) it is GUESSED from the sender's address.
+  // Under a label-only gate a Gmail message misread as "outlook" would persist a
+  // rotating fetch token AS IDENTITY. It cannot now: no `partId`, no Gmail part.
+  // 3189 stays open — the reverse case, an Outlook message misread as "gmail",
+  // still has its Graph id nulled — but it is not made worse here.
+  const providerIdFor = (m: AttachmentMetaLite): string | null =>
+    m.partId || (provider === "gmail" ? null : m.providerAttachmentId);
 
   for (const email of emailsToInsert) {
     const internalId = insertedEmailMap.get(email.id);
@@ -451,6 +509,7 @@ async function persistEmailAttachmentMetadata(args: {
           filename: m.filename,
           mimeType: m.mimeType,
           fileSizeBytes: m.size,
+          providerAttachmentId: providerIdFor(m),
         };
         if (force) {
           force.attachmentMeta.push(row);
@@ -894,6 +953,7 @@ async function fetchStoreAndDedup(params: {
       // here so filenames are searchable after a normal sync. Runs after the insert
       // transaction, is idempotent, and never downloads bytes.
       await persistEmailAttachmentMetadata({
+        provider,
         emailsToInsert,
         insertedEmailMap,
         getAttachmentsFn,

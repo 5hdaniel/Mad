@@ -27,14 +27,21 @@ import type { RemovedContactRow } from "../services/db/contactDbService";
 import { dbTransaction } from "../services/db/core/dbConnection";
 import { getLiveSourcesForContact } from "../services/db/contactSourceSets";
 import { getContactNames } from "../services/contactsService";
-import type { ContactInfo, PhoneToContactInfo } from "../services/contactsService";
+// BACKLOG-3210 — consulted ONLY to explain an empty macOS contacts read.
+// See `classifyEmptyMacOSRead` below for why this probe exists and for the
+// precedence rule that keeps it from overruling a successful read.
+import permissionService from "../services/permissionService";
+import type { ContactInfo, LoadStatus, PhoneToContactInfo } from "../services/contactsService";
 import { resolveHandles } from "../services/contactResolutionService";
 import auditService from "../services/auditService";
 import logService from "../services/logService";
 import * as externalContactDb from "../services/db/externalContactDbService";
 import type { ExternalContactSource } from "../services/db/externalContactDbService";
 import { recordPicker, recordLinks } from "../services/contactIngestionFunnel";
-import { toPersistedContactSource } from "../utils/contactSourceVocabulary";
+import {
+  toPersistedContactSource,
+  toStorableContactSource,
+} from "../utils/contactSourceVocabulary";
 import {
   cancelPendingContactLinking,
   configureContactLinking,
@@ -121,8 +128,9 @@ import {
 // "in case" is how a deleted rule grows a second call site.
 import { contactInfoSourceFor } from "../utils/contactValueProvenance";
 import {
-  hasNothingToImport,
-  NOTHING_TO_IMPORT_REASON,
+  hasNothingToSave,
+  importRefusalReason,
+  type ImportableRecordParts,
 } from "../utils/importableRecord";
 import { applyLinkedSourceValues } from "../services/contactSourceValues";
 // BACKLOG-2617: `recordContactOrigin` was imported here for the duplicate-by-name
@@ -211,6 +219,98 @@ interface RemovedContactsResponse {
  * (which cannot import from `electron/`) and held in step by a parity test.
  */
 
+
+// ============================================================================
+// BACKLOG-3210 — WHY A macOS CONTACTS READ CAME BACK EMPTY
+// ============================================================================
+//
+// `contacts:syncExternal` used to answer this with one sentence for every
+// cause: "No contacts found in macOS Contacts". Without Full Disk Access the
+// read returns EMPTY rather than failing, so a user who had simply not granted
+// the permission was told, plausibly and wrongly, that her address book was
+// empty. Nothing looked broken, so nothing got investigated — that is the
+// shape of the defect, and it is worse than an error.
+//
+// THE THREE CAUSES, AND WHAT SEPARATES THEM:
+//
+//   ACCESS_DENIED  We were not permitted to look. `addressBookDiscovery`
+//                  swallows its own `readdir` rejection, so a denied directory
+//                  and an absent one BOTH arrive here as `booksFound: 0` —
+//                  the same ambiguity, one level down. The reader cannot tell
+//                  them apart, so a probe must: `checkContactsPermission`
+//                  distinguishes EPERM (TCC refusal) from ENOENT (not there).
+//
+//   UNREADABLE     Address books ARE on disk and not one of them opened. If
+//                  the directory listed, TCC allowed the tree — so this is a
+//                  locked or damaged store, not a permissions problem. Calling
+//                  it a Full Disk Access failure would send a user to grant a
+//                  permission she already holds, which is BACKLOG-2392's bug
+//                  reintroduced; calling it "empty" is BACKLOG-3210's. It gets
+//                  its own answer because it is its own cause.
+//
+//   EMPTY          We opened an address book and it held nobody, or the
+//                  directory is readable and holds no address book at all.
+//                  The original message, now said only when it is true.
+//
+// PRECEDENCE — DIRECT EVIDENCE OUTRANKS THE PROBE. `booksRead > 0` is tested
+// FIRST and short-circuits: if a store actually opened, we were demonstrably
+// not denied, and no probe result may overrule that. The probe is a weaker
+// signal (a different path, a moment later, and cached), so it is consulted
+// only where the read itself could not answer.
+type MacOSEmptyReadCause =
+  | "CONTACTS_ACCESS_DENIED"
+  | "CONTACTS_UNREADABLE"
+  | "CONTACTS_EMPTY";
+
+/**
+ * What the user reads. Keyed by cause so the two can never drift apart, and so
+ * tests can assert the CAUSE (stable) while the copy stays free to change.
+ */
+const MACOS_EMPTY_READ_MESSAGE: Record<MacOSEmptyReadCause, string> = {
+  CONTACTS_ACCESS_DENIED:
+    "Keepr could not read macOS Contacts because Full Disk Access is not granted. " +
+    "Open System Settings > Privacy & Security > Full Disk Access, turn Keepr on, " +
+    "then run the sync again.",
+  CONTACTS_UNREADABLE:
+    "Keepr found address books on this Mac but could not open any of them. " +
+    "The Contacts store may be in use or damaged — open the Contacts app, then " +
+    "run the sync again.",
+  // Unchanged wording. This is the sentence that was previously said for all
+  // three causes; it stays exactly as it was for the one case where it is true.
+  CONTACTS_EMPTY: "No contacts found in macOS Contacts",
+};
+
+/**
+ * Decide why a macOS contacts read produced nobody. Called ONLY once the read
+ * has already come back empty.
+ *
+ * The permission probe runs at most once, and never at all when the reader
+ * already proved a store opened.
+ */
+async function classifyEmptyMacOSRead(
+  status: LoadStatus | undefined,
+): Promise<MacOSEmptyReadCause> {
+  // A store opened. We were not denied, whatever any probe says next.
+  if (status && status.booksRead > 0) {
+    return "CONTACTS_EMPTY";
+  }
+
+  const permission = await permissionService.checkContactsPermission();
+  if (
+    !permission.hasPermission &&
+    permission.errorCode === "CONTACTS_ACCESS_DENIED"
+  ) {
+    return "CONTACTS_ACCESS_DENIED";
+  }
+
+  // Not denied. Stores on disk that would not open are a different failure
+  // from an address book with nobody in it.
+  if (status && status.booksFound > 0) {
+    return "CONTACTS_UNREADABLE";
+  }
+
+  return "CONTACTS_EMPTY";
+}
 
 /**
  * BACKLOG-2316: Build the macOS shadow-table sync payload from a person-deduped
@@ -1945,9 +2045,13 @@ export function registerContactHandlers(mainWindow: BrowserWindow): void {
            * silently-dropped import is worse than a rejected one: the caller
            * would have no way to tell which of its records landed.
            */
-          if (hasNothingToImport(sanitizedContact)) {
+          const importRefusal = importRefusalReason(sanitizedContact);
+          if (importRefusal) {
+            // BACKLOG-2707: the reason is chosen per record rather than fixed,
+            // so a company-only record is refused with a sentence that is TRUE
+            // beside the label its own row renders — which is the company name.
             throw new ValidationError(
-              `Record ${index + 1} has ${NOTHING_TO_IMPORT_REASON.toLowerCase()}`,
+              `Record ${index + 1}: ${importRefusal}`,
               "contactsToImport",
             );
           }
@@ -1955,23 +2059,79 @@ export function registerContactHandlers(mainWindow: BrowserWindow): void {
           const validatedData = validateContactData(sanitizedContact, false);
           const sourceIdentities = toSourceIdentities(sanitizedContact);
 
+          /**
+           * BACKLOG-2481 — THE DOOR BOTH LIVE SCREENS USE, AND THE ONE THAT
+           * COULD NOT STORE A PERSON FROM A TEXT THREAD.
+           *
+           * This handler had no allow-list at all. `source` went straight into
+           * the insert, so a message-derived record — which carries
+           * `source: "messages"`, a SELECT-time label the `contacts.source`
+           * CHECK has never admitted — took the whole call down with it: no
+           * contact row, no origin link, nothing saved.
+           *
+           * DECIDED ONCE, HERE, rather than at each of the two writes below, so
+           * the create branch and the `markContactAsImported` branch cannot
+           * disagree about the same record.
+           *
+           * `null` means the value is neither storable nor a synthetic one this
+           * vocabulary knows how to place. THAT IS REFUSED, NOT DEFAULTED, and
+           * the refusal is deliberate: on this door an unrecognised string is
+           * refused TODAY (measured — it reaches the CHECK and the batch fails),
+           * and defaulting it to `contacts_app` would silently start claiming
+           * that every unknown record came out of the macOS address book. The
+           * outcome is unchanged; only the message improves — a stated reason
+           * instead of a raw SQLite constraint error.
+           *
+           * REFUSES THE WHOLE BATCH, like every other refusal in this loop. See
+           * the note above `importRefusalReason`.
+           */
+          const storableSource = toStorableContactSource(
+            sanitizedContact.source,
+            "contacts_app",
+          );
+          if (storableSource === null) {
+            throw new ValidationError(
+              `Record ${index + 1}: "${sanitizedContact.source}" is not a contact source this app can store`,
+              "contactsToImport",
+            );
+          }
+
           if (
             sanitizedContact.isFromDatabase &&
             sanitizedContact.id &&
             !sanitizedContact.id.startsWith("contacts-app-")
           ) {
             logService.warn(`[DIAG-1270] Import path: ${sanitizedContact.name || validatedData.name} → existingDB, allEmails=[${(sanitizedContact.allEmails || []).join(', ')}]`, 'Contacts');
-            existingDbContacts.push({ id: sanitizedContact.id, contact: sanitizedContact });
+            existingDbContacts.push({
+              id: sanitizedContact.id,
+              contact: sanitizedContact,
+              source: storableSource,
+            });
           } else {
             logService.warn(`[DIAG-1270] Import path: ${sanitizedContact.name || validatedData.name} → newCreate, allEmails=[${(sanitizedContact.allEmails || []).join(', ')}]`, 'Contacts');
             newContactsToCreate.push({
               user_id: validatedUserId,
-              display_name: validatedData.name || "Unknown",
+              /**
+               * BACKLOG-2707 — `?? ""`, NOT `|| "Unknown"`.
+               *
+               * The literal was unreachable before this item (the validator
+               * refused every nameless record on the way here) and would have
+               * become reachable the moment it stopped. Storing it writes the
+               * state BACKLOG-2461 exists to remove, and a row `contacts:import`
+               * would itself refuse on input: `hasNothingToImport` reads
+               * "Unknown" as no name at all.
+               *
+               * `??` rather than `||` so a future non-empty falsy value is not
+               * swallowed. The writer no longer substitutes either — see
+               * `contactDbService.createContactsBatch`.
+               */
+              display_name: validatedData.name ?? "",
               email: validatedData.email ?? undefined,
               phone: validatedData.phone ?? undefined,
               company: validatedData.company ?? undefined,
               title: validatedData.title ?? undefined,
-              source: sanitizedContact.source || "contacts_app",
+              // BACKLOG-2481: the value decided above, not the raw input.
+              source: storableSource,
               is_imported: true,
               allPhones: sanitizedContact.allPhones || [],
               allEmails: sanitizedContact.allEmails || [],
@@ -1984,9 +2144,22 @@ export function registerContactHandlers(mainWindow: BrowserWindow): void {
 
         // Mark existing DB contacts as imported and backfill any missing emails/phones
         // Also update source to "contacts_app" when importing from macOS Contacts
-        for (const { id, contact } of existingDbContacts) {
+        for (const { id, contact, source: storedSource } of existingDbContacts) {
           logService.warn(`[DIAG-1270] DB contact backfill: ${contact.name}, contact.allEmails=[${(contact.allEmails || []).join(', ')}], contact.allPhones=[${(contact.allPhones || []).join(', ')}]`, 'Contacts');
-          await databaseService.markContactAsImported(id, contact.source || "contacts_app");
+          /**
+           * BACKLOG-2481 — the THIRD write of `contacts.source`, and the third
+           * that could hit the CHECK. This is an `UPDATE contacts SET source = ?`
+           * (`contactDbService.markContactAsImported`), so a raw `messages` here
+           * would throw exactly as the insert did.
+           *
+           * It takes the value decided in the loop above rather than re-reading
+           * `contact.source`, so there is no second rule to drift. It is not
+           * reachable by a message-derived record today — that path needs
+           * `isFromDatabase`, which the pseudo-contact does not carry — and it is
+           * changed anyway, because a value no door may store should not be
+           * storable through a door nobody is currently looking at.
+           */
+          await databaseService.markContactAsImported(id, storedSource);
 
           // BACKLOG-2401 / BACKLOG-2458: record WHERE this contact came from, at
           // the one moment the answer is known for certain, for EVERY source
@@ -2394,6 +2567,90 @@ export function registerContactHandlers(mainWindow: BrowserWindow): void {
         const validatedData = validateContactData(contactData, false);
 
         /**
+         * BACKLOG-2707 — THE DOOR STILL REFUSES A RECORD WITH NOTHING ON IT.
+         *
+         * `validateContactData` no longer requires a name (see its comment), so
+         * without this block `contacts:create` would accept `{}` and mint a row
+         * with no name, no company, no phone and no email — the exact state
+         * BACKLOG-2684 put this predicate on `contacts:import` to prevent.
+         *
+         * THIS CHANNEL IS LIVE, not dormant. `contactBridge.ts` bridges it and
+         * `ContactFormModal.tsx` calls it, mounted in four places. What kept
+         * the relaxation off the founder's screen is a RENDERER guard
+         * (`ContactFormModal.tsx`, which refuses an empty name box before the
+         * call), and a renderer guard cannot protect a caller that does not go
+         * through the renderer — which is the whole reason BACKLOG-2684 exists.
+         *
+         * ITS OWN MESSAGE, AND ITS OWN PREDICATE. This gate asks
+         * `hasNothingToSave`, the LOOSER rule — not `hasNothingToImport`.
+         * PM decision `5fac2d84` (2026-09-07, on the founder's delegated
+         * authority): a company-only contact may be CREATED by hand even though
+         * it may not be IMPORTED. Import is inference, creation is intent, and
+         * blocking hand-creation does not stop the data — it makes the user type
+         * the company into the NAME field, which is strictly worse for every
+         * name-based match. The message below therefore still names `company`
+         * and is still true; do not "tidy" it to match the import string.
+         *
+         * -------------------------------------------------------------------
+         * TYPES FIRST, THEN EMPTINESS — AND THE ORDER IS THE WHOLE FIX
+         * -------------------------------------------------------------------
+         * This ran BEFORE the validator in the first cut of BACKLOG-2707, on
+         * the argument that "nothing to make a contact out of" is the truer
+         * reason than a missing `name` field. That was wrong, in two axes, and
+         * both were measured through the registered handler rather than read:
+         *
+         *   createContact(null)        -> "Cannot read properties of null"
+         *   createContact({name: 42})  -> "(name || \"\").trim is not a function"
+         *   createContact({allPhones: [42]})  -> the same TypeError
+         *
+         * `hasNothingToImport` reads fields off its argument and hands each to
+         * `realContactName`, which is `(name || "").trim()`. It therefore
+         * assumes BOTH that the payload is an object AND that every field it
+         * reads is a string. Neither is guaranteed at an IPC boundary. Asking
+         * "is this record empty?" of a record whose fields are not strings is
+         * not a question with an answer — the type check is the prior question,
+         * and `validateContactData` already asks it and answers it well
+         * ("Contact data must be an object", "name must be a string").
+         *
+         * So the predicate now runs SECOND, on values the validator has already
+         * proven are strings or null. The plural arrays are the one thing the
+         * validator does not inspect, so non-string entries are dropped here
+         * rather than handed to `.trim()`: an entry that is not a string is not
+         * a usable identifier, so removing it cannot make an empty record look
+         * full. `{allPhones: [42]}` is still refused, with the message below.
+         *
+         * NOT FIXED HERE, and not claimed to be: `contacts:import` calls this
+         * same predicate with the same hazard at its own site above, and
+         * `sanitizeObject` copies values without coercing them, so it does not
+         * protect that path either. Pre-existing since BACKLOG-2684. Recorded
+         * for filing in the SR review of this PR (pm_comments `965a95f0`) —
+         * "recorded", not "filed", because at the time of writing no item
+         * exists for it and a comment that promises one is how a hazard gets
+         * considered handled.
+         */
+        const rawContact = contactData as Record<string, unknown>;
+        const usableStrings = (value: unknown): string[] =>
+          Array.isArray(value)
+            ? value.filter((entry): entry is string => typeof entry === "string")
+            : [];
+
+        if (
+          hasNothingToSave({
+            name: validatedData.name,
+            company: validatedData.company,
+            phone: validatedData.phone,
+            email: validatedData.email,
+            allPhones: usableStrings(rawContact.allPhones),
+            allEmails: usableStrings(rawContact.allEmails),
+          } satisfies ImportableRecordParts)
+        ) {
+          throw new ValidationError(
+            "A contact needs at least a name, company, phone, or email",
+            "contactData",
+          );
+        }
+
+        /**
          * CREATING A CONTACT CREATES A CONTACT (BACKLOG-2617).
          *
          * A duplicate-by-name branch used to sit on this line. It called
@@ -2435,18 +2692,35 @@ export function registerContactHandlers(mainWindow: BrowserWindow): void {
          * required argument and writes it in the same transaction.
          */
 
-        // Extract source from input data (falls back to "manual" if not provided)
-        // BACKLOG-1900 (P0.1): allow distinct per-origin sources so an inbound
-        // 'iphone'/'outlook'/'android_sync' value is preserved, not coerced to "manual".
-        const validSources: ContactSource[] = ["manual", "email", "sms", "messages", "contacts_app", "inferred", "google_contacts", "outlook", "android_sync", "iphone"];
+        /**
+         * Extract source from input data.
+         *
+         * BACKLOG-1900 (P0.1): allow distinct per-origin sources so an inbound
+         * 'iphone'/'outlook'/'android_sync' value is preserved, not coerced to
+         * "manual".
+         *
+         * BACKLOG-2481 — THE ALLOW-LIST THAT USED TO BE HERE ADMITTED A VALUE
+         * THE DATABASE REFUSES. It was a hand-copied second enumeration of the
+         * vocabulary, and it had drifted: it listed `messages`, which is a
+         * SELECT-time label and has never been in the `contacts.source` CHECK.
+         * So a contact whose source was `messages` did not arrive mislabelled —
+         * `createContact` threw on the CHECK and NO CONTACT WAS CREATED.
+         *
+         * `toStorableContactSource` is that enumeration's only copy now, beside
+         * the constant it is derived from. `null` back means "not storable"; on
+         * THIS door that folds to `manual`, which is exactly what the old
+         * allow-list did with an unrecognised value, so nothing else changes.
+         */
         const inputSource = (contactData as { source?: string })?.source;
-        const source: ContactSource = validSources.includes(inputSource as ContactSource)
-          ? (inputSource as ContactSource)
-          : "manual";
+        const source: ContactSource =
+          toStorableContactSource(inputSource, "manual") ?? "manual";
         const contact = await databaseService.createContact(
           {
             user_id: validatedUserId,
-            display_name: validatedData.name || "Unknown",
+            // BACKLOG-2707 — `?? ""`, not `|| "Unknown"`. Same reason as the
+            // import loop above; one substitution site left behind is how this
+            // recurs.
+            display_name: validatedData.name ?? "",
             email: validatedData.email ?? undefined,
             phone: validatedData.phone ?? undefined,
             company: validatedData.company ?? undefined,
@@ -3370,6 +3644,12 @@ export function registerContactHandlers(mainWindow: BrowserWindow): void {
         coverage: "complete" | "partial" | "none";
       };
       error?: string;
+      /**
+       * BACKLOG-3210 — WHY the sync produced nothing, as a value rather than
+       * as prose. `error` is what the user reads and will be reworded; this is
+       * what code and tests may depend on. Absent on success.
+       */
+      errorCode?: MacOSEmptyReadCause;
     }> => {
       try {
         logService.info("[Main] Manual external contacts sync requested", "Contacts", { userId });
@@ -3415,7 +3695,24 @@ export function registerContactHandlers(mainWindow: BrowserWindow): void {
           (!contacts || contacts.length === 0) &&
           (!phoneToContactInfo || Object.keys(phoneToContactInfo).length === 0)
         ) {
-          return { success: false, read, error: "No contacts found in macOS Contacts" };
+          // BACKLOG-3210: an empty read is a QUESTION, not an answer. Ask it.
+          const cause = await classifyEmptyMacOSRead(status);
+          logService.warn(
+            "[Main] macOS contacts sync produced nothing",
+            "Contacts",
+            {
+              cause,
+              booksFound: status?.booksFound,
+              booksRead: status?.booksRead,
+              coverage: status?.coverage,
+            },
+          );
+          return {
+            success: false,
+            read,
+            error: MACOS_EMPTY_READ_MESSAGE[cause],
+            errorCode: cause,
+          };
         }
 
         // BACKLOG-2316: person-deduped payload (see initial-sync path).
