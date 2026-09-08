@@ -143,7 +143,26 @@ export const V71_DELETE_ATTACHMENT_SQL = "DELETE FROM attachments WHERE id = ?";
  * baseline and then runs v71 like any other database.
  *
  * Legacy rows carry NULL and are excluded by the partial predicate, so nothing
- * pre-existing can collide. Gmail rows also carry NULL by design (BACKLOG-3187).
+ * pre-existing can collide.
+ *
+ * BACKLOG-3187 SUPERSEDES what this comment used to say next. Gmail rows carried
+ * NULL when v71 shipped because no field of Gmail's had been established as a
+ * durable identity. One has since: `partId`, which Google documents as immutable
+ * and which was measured stable across fetches while `attachmentId` rotated. Gmail
+ * rows written after 3187 therefore carry a `partId` and ARE covered by this index.
+ *
+ * Rows written BEFORE it keep NULL, and there is no migration that fills them:
+ * `partId` is not stored locally, cannot be derived from any column, and a
+ * migration cannot re-fetch. What happens to such a row depends on whether its
+ * bytes are already on disk:
+ *
+ *   storage_path IS NULL — the next on-demand download resolves it through
+ *     `findEmailAttachmentRow` step 2 and `setEmailAttachmentStorage` stamps the
+ *     `partId`. The row enters this index at that point.
+ *   storage_path SET     — `processAttachment` returns "already downloaded" BEFORE
+ *     reaching the stamping call, so the row is NEVER stamped by any path. It keeps
+ *     NULL permanently and stays on the filename-keyed lookup. Only a backfill that
+ *     re-fetches part metadata from Gmail could reach it.
  */
 export const V71_CREATE_PROVIDER_INDEX_SQL =
   "CREATE UNIQUE INDEX IF NOT EXISTS idx_attachments_email_provider " +

@@ -63,6 +63,9 @@ describe("EmailAttachmentService", () => {
     filename: "document.pdf",
     mimeType: "application/pdf",
     size: 1024,
+    // BACKLOG-3187: null keeps every assertion in this file on the behaviour it
+    // was written for. The partId cases are their own tests, below.
+    partId: null,
     attachmentId: "att-123",
   };
 
@@ -204,7 +207,7 @@ describe("EmailAttachmentService", () => {
       ).toMatchObject({ filename: "image001.png", providerAttachmentId: "att-2" });
     });
 
-    it("BACKLOG-2551: a GMAIL download passes NO provider id — the gate, at the chokepoint", async () => {
+    it("BACKLOG-3187: a Gmail attachment with NO partId still passes null — never the fetch token", async () => {
       await emailAttachmentService.downloadEmailAttachments(
         mockUserId,
         mockEmailId,
@@ -212,10 +215,11 @@ describe("EmailAttachmentService", () => {
         "gmail",
         [mockAttachment]
       );
-      // Gmail's attachmentId reaches this function and is deliberately not stored:
-      // Google documents partId as immutable and documents no stability property
-      // for attachmentId (BACKLOG-3187). A non-null here would put Gmail rows into
-      // idx_attachments_email_provider.
+      // `mockAttachment` carries partId: null, so this is the FALLBACK branch of
+      // the gate — the one a pre-BACKLOG-3187 caller and an empty payload partId
+      // both take. The fallback is null, exactly as before; it is never the
+      // rotating `attachmentId`, which is what a naive "store something" fix would
+      // have written here.
       expect(databaseService.findEmailAttachmentRow).toHaveBeenCalledWith(
         mockEmailId,
         mockAttachment.filename,
@@ -224,6 +228,83 @@ describe("EmailAttachmentService", () => {
       expect(
         (databaseService.createAttachmentRecord as jest.Mock).mock.calls[0][0]
       ).toMatchObject({ providerAttachmentId: null });
+    });
+
+    it("BACKLOG-3187: a Gmail download keyed on partId passes the PART id, not the fetch token", async () => {
+      const withPart: EmailAttachmentMeta = {
+        ...mockAttachment,
+        partId: "1",
+        attachmentId: "fetch-token-run-1",
+      };
+
+      await emailAttachmentService.downloadEmailAttachments(
+        mockUserId,
+        mockEmailId,
+        mockExternalEmailId,
+        "gmail",
+        [withPart]
+      );
+
+      // The row is resolved and written by IDENTITY...
+      expect(databaseService.findEmailAttachmentRow).toHaveBeenCalledWith(
+        mockEmailId,
+        withPart.filename,
+        "1"
+      );
+      expect(
+        (databaseService.createAttachmentRecord as jest.Mock).mock.calls[0][0]
+      ).toMatchObject({ providerAttachmentId: "1" });
+
+      // ...while the FETCH still uses the token, which is the only thing it is for.
+      expect(gmailFetchService.getAttachment).toHaveBeenCalledWith(
+        mockExternalEmailId,
+        "fetch-token-run-1"
+      );
+    });
+
+    it("BACKLOG-3187: the same Gmail attachment on a later fetch keeps its identity when the token has rotated", async () => {
+      const run2: EmailAttachmentMeta = {
+        ...mockAttachment,
+        partId: "1",
+        attachmentId: "fetch-token-run-2",
+      };
+
+      await emailAttachmentService.downloadEmailAttachments(
+        mockUserId,
+        mockEmailId,
+        mockExternalEmailId,
+        "gmail",
+        [run2]
+      );
+
+      const written = (databaseService.createAttachmentRecord as jest.Mock).mock
+        .calls[0][0] as { providerAttachmentId: string | null };
+      expect(written.providerAttachmentId).toBe("1");
+      // The measured hazard, asserted directly: no fetch token is ever the key.
+      expect(written.providerAttachmentId).not.toBe("fetch-token-run-1");
+      expect(written.providerAttachmentId).not.toBe("fetch-token-run-2");
+    });
+
+    it("BACKLOG-3187 CONTROL 2: an OUTLOOK download is untouched — the Graph id still keys the row", async () => {
+      // Outlook shapes carry no partId, so the first term of the gate is always
+      // null for them and the second is the behaviour v71 shipped. If this test
+      // ever needs changing, Outlook has been affected and the change is wrong.
+      await emailAttachmentService.downloadEmailAttachments(
+        mockUserId,
+        mockEmailId,
+        mockExternalEmailId,
+        "outlook",
+        [{ ...mockAttachment, partId: null, attachmentId: "graph-att-1" }]
+      );
+
+      expect(databaseService.findEmailAttachmentRow).toHaveBeenCalledWith(
+        mockEmailId,
+        mockAttachment.filename,
+        "graph-att-1"
+      );
+      expect(
+        (databaseService.createAttachmentRecord as jest.Mock).mock.calls[0][0]
+      ).toMatchObject({ providerAttachmentId: "graph-att-1" });
     });
 
     it("should skip oversized attachments", async () => {
@@ -347,6 +428,7 @@ describe("EmailAttachmentService", () => {
             filename: rawFilename,
             mimeType: "application/pdf",
             size: 2048,
+            partId: null,
             attachmentId: "att-x",
           },
         ]
@@ -394,6 +476,7 @@ describe("EmailAttachmentService", () => {
             filename: rawFilename,
             mimeType: "application/pdf",
             size: 1024,
+            partId: null,
             attachmentId: "att-y",
           },
         ]
@@ -458,6 +541,7 @@ describe("EmailAttachmentService", () => {
         filename: "../../../etc/passwd",
         mimeType: "text/plain",
         size: 100,
+        partId: null,
         attachmentId: "att-malicious",
       };
 
@@ -495,6 +579,7 @@ describe("EmailAttachmentService", () => {
         filename: "file\x00.pdf",
         mimeType: "application/pdf",
         size: 100,
+        partId: null,
         attachmentId: "att-null",
       };
 
@@ -519,6 +604,7 @@ describe("EmailAttachmentService", () => {
         filename: "",
         mimeType: "application/pdf",
         size: 100,
+        partId: null,
         attachmentId: "att-empty",
       };
 

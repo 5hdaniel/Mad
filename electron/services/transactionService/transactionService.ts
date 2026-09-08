@@ -605,6 +605,9 @@ class TransactionService {
               filename: att.filename || att.name || "attachment",
               mimeType: att.mimeType || att.contentType || "application/octet-stream",
               size: att.size || 0,
+              // BACKLOG-3187: identity (Gmail's immutable MIME part id) travels
+              // separately from the fetch token below, which rotates between calls.
+              partId: att.partId ?? null,
               attachmentId: att.attachmentId || att.id || "",
             }))
           );
