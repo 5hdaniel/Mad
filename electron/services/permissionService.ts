@@ -181,10 +181,42 @@ class PermissionService {
       this.permissionCache.contacts = false;
       this.permissionCache.cachedAt = Date.now();
 
+      // ---------------------------------------------------------------------
+      // BACKLOG-3210 — WHICH errno, not merely "it threw".
+      // ---------------------------------------------------------------------
+      // macOS TCC refuses a protected path with EPERM. A path that simply is
+      // not on this Mac fails with ENOENT. Collapsing the two into one
+      // `errorCode` is what left `contacts:syncExternal` unable to tell a Full
+      // Disk Access denial from an address book that genuinely holds nobody —
+      // and it told the user the second thing while the first was true.
+      //
+      // Measured 2026-09-07 on macOS 15, from a process WITHOUT Full Disk
+      // Access (so this is the denied state, not a description of it):
+      //   ~/Library/Application Support/AddressBook          -> EPERM
+      //   ~/Library/Application Support/AddressBook/Sources   -> EPERM
+      //   a non-existent sibling of the same directory        -> ENOENT
+      //
+      // THE DEFAULT IS DENIED, DELIBERATELY. Only the errnos that positively
+      // mean "nothing is there" are carved out; an unknown errno, or a
+      // rejection carrying no `code` at all, stays `CONTACTS_ACCESS_DENIED`.
+      // Defaulting the other way would restate the bug being fixed here —
+      // an unrecognised failure reported to the user as an empty address book.
+      const code = (error as NodeJS.ErrnoException).code;
+      const storeIsAbsent = code === "ENOENT" || code === "ENOTDIR";
+
       return {
         hasPermission: false,
         error: (error as Error).message,
-        errorCode: "CONTACTS_ACCESS_DENIED",
+        errorCode: storeIsAbsent
+          ? "CONTACTS_STORE_NOT_FOUND"
+          : "CONTACTS_ACCESS_DENIED",
+        // `hasPermission`, `userMessage` and `action` are UNCHANGED on both
+        // paths, and that is on purpose. `checkAllPermissions` pushes these
+        // objects into the System Health banner (`diagnosticHandlers.ts` ->
+        // `SystemHealthMonitor.tsx:255`, which renders `userMessage`), so
+        // rewording them here would be a user-facing change to a surface this
+        // item does not cover. `errorCode` is the field callers branch on, and
+        // it is the only thing this change moves.
         userMessage:
           "Contacts permission is required to match phone numbers to names.",
         action:
