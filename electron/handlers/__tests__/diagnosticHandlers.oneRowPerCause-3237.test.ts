@@ -36,6 +36,10 @@ import {
   FDA_EXPLAINER_ACTION_HANDLER,
 } from "../../../tests/fixtures/fdaDeniedIssue-3219";
 import {
+  FDA_COLLAPSED_TITLE_TEXT,
+  FDA_COLLAPSED_MESSAGE_TEXT,
+} from "../../../tests/fixtures/fdaDeniedIssue-3219";
+import {
   CONTACTS_LOADING_FAILED_ISSUE,
   CONTACTS_CHECK_FAILED_ISSUE,
   OAUTH_RECONNECT_CONNECTION_ERROR,
@@ -325,6 +329,17 @@ describe("BACKLOG-3237 — the health banner shows one row per cause", () => {
       const [row] = (await getHealthCheckHandler()({}, null, null)).issues as Issue[];
 
       expect(row).not.toHaveProperty("severity");
+    });
+  });
+
+  describe("the renderer fixture is tied to these constants", () => {
+    it("pins FDA_DENIED_BANNER_ISSUE's heading and subtitle to what the handler emits", () => {
+      // `SystemHealthMonitor.test.tsx` renders from that fixture. If these two
+      // strings drifted apart, the renderer suite would go on asserting a
+      // heading the main process no longer sends — the failure
+      // tests/fixtures/fdaDeniedIssue-3219.ts's own header warns about.
+      expect(FDA_COLLAPSED_TITLE).toBe(FDA_COLLAPSED_TITLE_TEXT);
+      expect(FDA_COLLAPSED_MESSAGE).toBe(FDA_COLLAPSED_MESSAGE_TEXT);
     });
   });
 

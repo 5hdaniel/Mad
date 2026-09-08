@@ -174,15 +174,32 @@ describe("SystemHealthMonitor — Full Disk Access (BACKLOG-3219 / BACKLOG-3210 
     // shape cannot make the assertions below pass for the wrong reason.
     expect(FDA_DENIED_BANNER_ISSUE.errorCode).toBe("FULL_DISK_ACCESS_DENIED");
     expect(FDA_DENIED_BANNER_ISSUE.actionHandler).toBe("open-fda-explainer");
+    // BACKLOG-3237: and it is the COLLAPSED row — one row for the whole
+    // denial, carrying the consequences that used to be rows of their own.
+    expect(FDA_DENIED_BANNER_ISSUE.title).toBe("Full Disk Access Required");
   });
 
   it("STATE 1 — renders a banner that NAMES the permission", async () => {
     await renderAndCheck();
 
+    // BACKLOG-3237 CHANGED WHAT THIS ASSERTS, AND THE CHANGE IS THE POINT.
+    //
+    // It used to assert the producer's `userMessage` — "Full Disk Access
+    // permission is required to read iMessages." — because that was the
+    // heading when the denial owned two rows and the component fell back to
+    // `userMessage` for want of a `title`. The collapsed row has a `title`,
+    // and `SystemHealthMonitor` renders `title || userMessage`, so asserting
+    // the old string would be asserting a heading production no longer shows.
+    expect(screen.getByText("Full Disk Access Required")).toBeInTheDocument();
+  });
+
+  it("STATE 1 — names both consequences on that one row, as secondary text", async () => {
+    // BACKLOG-3237: the Messages and contact-matching consequences used to be
+    // two more rows. They are one subtitle now, and it has to actually render.
+    await renderAndCheck();
+
     expect(
-      screen.getByText(
-        "Full Disk Access permission is required to read iMessages."
-      )
+      screen.getByText(FDA_DENIED_BANNER_ISSUE.message)
     ).toBeInTheDocument();
   });
 
@@ -255,10 +272,11 @@ describe("SystemHealthMonitor — Full Disk Access (BACKLOG-3219 / BACKLOG-3210 
 
     // A banner that vanished because you asked for help would be a worse
     // dead-end than the one being fixed.
+    // BACKLOG-3237: the row's heading is the collapsed title now. Taken from
+    // the fixture rather than retyped, so this cannot drift from what the
+    // handler emits.
     expect(
-      screen.getByText(
-        "Full Disk Access permission is required to read iMessages."
-      )
+      screen.getByText(FDA_DENIED_BANNER_ISSUE.title)
     ).toBeInTheDocument();
   });
 
@@ -309,11 +327,14 @@ describe("SystemHealthMonitor — Full Disk Access (BACKLOG-3219 / BACKLOG-3210 
     await waitFor(() =>
       expect(screen.queryByTestId("fda-help-sheet")).not.toBeInTheDocument()
     );
+    // BACKLOG-3237: this asserted the producer's `userMessage`, which the
+    // collapsed row no longer renders as a heading — so it had become a
+    // negative assertion about a string that was never on screen, and would
+    // have passed with the banner still showing. It now names the heading the
+    // row actually has.
     await waitFor(() =>
       expect(
-        screen.queryByText(
-          "Full Disk Access permission is required to read iMessages."
-        )
+        screen.queryByText(FDA_DENIED_BANNER_ISSUE.title)
       ).not.toBeInTheDocument()
     );
   });
@@ -341,9 +362,7 @@ describe("SystemHealthMonitor — Full Disk Access (BACKLOG-3219 / BACKLOG-3210 
     ).toBeInTheDocument();
     expect(screen.getByTestId("fda-help-sheet")).toBeInTheDocument();
     expect(
-      screen.getByText(
-        "Full Disk Access permission is required to read iMessages."
-      )
+      screen.getByText(FDA_DENIED_BANNER_ISSUE.title)
     ).toBeInTheDocument();
   });
 });
