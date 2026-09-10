@@ -1,8 +1,0 @@
-Temporary file. BACKLOG-3242.
-
-Exists only to make check-changes classify this branch as non-docs-only, so the
-Build Application job actually runs and the workflow change can be observed
-rather than asserted. A diff touching only .github/workflows/ is treated as
-documentation, which skips the very job being changed.
-
-Removed before this PR is marked ready for review.
