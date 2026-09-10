@@ -813,6 +813,17 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
 
+      # TEMPORARY (BACKLOG-3242) -- REMOVED IN THE NEXT COMMIT ON THIS BRANCH.
+      # Control for the `fail-fast: false` added above. Fails the macOS leg early,
+      # so that if Windows still reaches a conclusion instead of being cancelled,
+      # the setting demonstrably took effect. Asserting it from the YAML alone
+      # would be an unrun control.
+      - name: TEMPORARY fail-fast control (macOS only)
+        if: matrix.os == 'macos-latest'
+        run: |
+          echo "BACKLOG-3242 fail-fast control: failing the macOS leg on purpose."
+          exit 1
+
       - name: Setup Node.js
         uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
