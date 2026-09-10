@@ -800,6 +800,12 @@ jobs:
     if: needs.check-changes.outputs.docs-only != 'true'
 
     strategy:
+      # BACKLOG-3242: without this, `fail-fast` defaults to true and one platform's
+      # failure CANCELS the other, so a single-platform problem destroys the signal
+      # for both. On 2026-09-08 the macOS job failed and Windows was cancelled mid-run,
+      # leaving no evidence of whether Windows would have built. Same form as the
+      # `test` job above, which has carried it for the same reason.
+      fail-fast: false
       matrix:
         os: ${{ fromJson(needs.check-changes.outputs.os-matrix) }}
 
@@ -816,8 +822,20 @@ jobs:
       - name: Install Python setuptools
         run: pip install setuptools
 
+      # BACKLOG-3242: this job's only output is the `dist/` upload below, and
+      # `npm run build` is vite + tsc + a file copy + esbuild -- none of which load a
+      # compiled native binary. Without ignore-scripts, `npm install` still ran the
+      # native module's own install script (a from-source compile fallback) plus the
+      # root postinstall's Electron-ABI rebuild, so the job did two builds of a module
+      # it never uses and made two downloads it did not need. One of those downloads
+      # timing out on 2026-09-08 failed the job and, via fail-fast, cancelled the other
+      # platform. Skipping the scripts removes the work and the failure mode together.
+      # Same form as the seven sibling jobs above. Jobs that DO need the native module
+      # (`package` below, and the release workflow) are deliberately untouched.
       - name: Install dependencies
         run: npm install
+        env:
+          npm_config_ignore_scripts: true
 
       - name: Build Vite app
         run: npm run build
