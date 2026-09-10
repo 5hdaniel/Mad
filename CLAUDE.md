@@ -169,6 +169,30 @@ On 2026-08-04, nine PRs on one integration branch produced **four** merge-order 
 
 Three occurrences in one night, 10–11 Aug 2026 (BACKLOG-2645). Worked example: `.claude/docs/PR-SOP.md` → §4.4.
 
+### Read the guard before filing a gap (MANDATORY)
+
+**An item claiming "X is not verified" must first enumerate what IS verified — by opening the guard and reading it.** One failing probe is not a gap; it is one input to a question the guard's own source already answers.
+
+A gap filed without that reading costs far more than it looks. It arrives with a real measurement attached, so it reads as established. It survives review for the same reason. And it consumes the founder's attention until somebody finally opens the file.
+
+**Worked example — BACKLOG-3241, filed and closed 2026-09-10, three corrections deep, ~a dozen founder messages, net change zero.**
+
+*Filed as:* `spctl -a -t install` on the published DMG returned `rejected / Unnotarized Developer ID`, therefore "the release gate verifies the .app and never the .dmg." `release.yml` was never opened.
+
+| Correction | What was actually true |
+|---|---|
+| DMG stapling is not failing silently | It is **absent and always was** — electron-builder runs `afterSign` before the DMG exists, and app-builder-lib 26 exposes no DMG-notarize option. Nothing regressed. |
+| "The gate verifies a different copy of the app than the one that ships" | **False, and relayed untested.** The app in the update zip and the app installed from the DMG share the identical `CDHash`; electron-builder builds one app and wraps it in both containers. |
+| The gate is deficient | `release.yml:222-250` already runs **four** checks per architecture: `codesign --verify --deep --strict`, an assertion that `Notarization Ticket=stapled` is present, `xcrun stapler validate`, and `spctl -a -t exec`. |
+
+**Rules that follow:**
+
+1. **Open the guard and paste what it checks into the item.** If it already covers the claim, there is no item.
+2. **A failing probe on ONE artifact is not a gap.** Establish whether the guard's target and your probe's target are the same object. For macOS bundles, `codesign -dvvv --verbose=4 <app> | grep CDHash` settles it in one command.
+3. **Never relay a subagent's structural claim as fact.** It is trusted more than an original claim and therefore checked less. This item's central error was a plausible, specific, wrong sentence repeated without measurement.
+4. **Check the standard before proposing a practice.** Notarizing and stapling the `.app` is universal. Verifying container *contents* in CI is not — proposing it would have been inventing a practice and calling it a standard.
+5. **"Are you 100% sure?" almost always means no.** Say so and go measure, rather than defending the claim.
+
 ### Derive sets by execution, not by grep (MANDATORY)
 
 **grep finds a TOKEN. It does not find the PROPERTY you are counting.** A symbol appears in a comment, a test, a dead branch, a file grep skips because one raw NUL byte makes it read as binary. Every one of those inflates or deflates a count, and the number reaches the founder with no way to tell.
