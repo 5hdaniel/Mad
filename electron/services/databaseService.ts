@@ -1830,6 +1830,10 @@ class DatabaseService implements IDatabaseService {
   /**
    * BACKLOG-2013 — write-once stamp of the export-freeze marker. Enforced in SQL
    * (`WHERE first_exported_at IS NULL`); returns true only when this call set it.
+   *
+   * BACKLOG-3234 — no production caller. All three export channels now stamp the
+   * marker through `recordExportCompletion` below. Retained as the standalone
+   * primitive and as the seam the BACKLOG-2549 suite injects faults at.
    */
   stampFirstExportedAt(transactionId: string, timestamp: string): boolean {
     return transactionDb.stampFirstExportedAt(transactionId, timestamp);

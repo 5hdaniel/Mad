@@ -53,53 +53,6 @@ interface ExportOptions {
 }
 
 /**
- * BACKLOG-2013 — stamp the freeze boundary on the FIRST successful export.
- *
- * Write-once: the marker is only set when it is currently NULL, so re-exports
- * never move the boundary (the exported PDF is a snapshot; the freeze anchors
- * to the first extraction). Enforcement lives in SQL — `stampFirstExportedAt`
- * runs `UPDATE ... WHERE first_exported_at IS NULL` — so the write-once rule
- * holds even against a racing export, not just by caller convention. The
- * in-memory `currentFirstExportedAt` short-circuit is a cheap fast-path only.
- * Non-throwing — a failure to stamp must never fail the export the user just
- * performed; it is logged and the next export retries.
- *
- * BACKLOG-2549 — THIS IS NO LONGER A SHARED FUNNEL, and the sentence that said
- * so has been removed rather than left to read as live. Only
- * `transactions:export-pdf` still calls this. The enhanced and folder paths
- * fold the stamp into their single export-completion UPDATE
- * (`recordExportCompletion`, write-once via `COALESCE`), because writing the
- * marker separately from `export_status` left a window in which a deal was
- * exported and still editable.
- *
- * What the swallow means on the one path that remains: a stamp failure is still
- * silent here. It cannot produce that window, because the PDF path never sets
- * `export_status` at all — it produces the INVERSE state (frozen, artifact on
- * disk, still reading as `not_exported`), which is a separate defect reported
- * out of BACKLOG-2549 and deliberately not changed here.
- */
-async function markFirstExport(
-  transactionId: string,
-  currentFirstExportedAt: string | null | undefined,
-): Promise<void> {
-  if (currentFirstExportedAt && String(currentFirstExportedAt).trim().length > 0) {
-    return; // Already frozen — boundary is immutable except via admin unfreeze.
-  }
-  try {
-    databaseService.stampFirstExportedAt(
-      transactionId,
-      new Date().toISOString(),
-    );
-  } catch (err) {
-    logService.warn(
-      "Failed to stamp first_exported_at freeze marker (BACKLOG-2013)",
-      "Transactions",
-      { transactionId, error: err instanceof Error ? err.message : String(err) },
-    );
-  }
-}
-
-/**
  * Cleanup transaction export handlers (call on app quit)
  */
 export const cleanupTransactionHandlers = (): void => {
@@ -206,6 +159,26 @@ export function registerTransactionExportHandlers(
         pdfPath,
       );
 
+      // BACKLOG-3234 — a PDF export IS an export. Export tracking AND the
+      // BACKLOG-2013 freeze boundary in ONE statement (see the enhanced path
+      // below), so this path can no longer freeze a deal that every reader
+      // still sees as `not_exported`. Write-once on the marker is enforced in
+      // SQL by COALESCE.
+      //
+      // ORDER IS LOAD-BEARING, and this is a behaviour change rather than a
+      // relocation: the write goes BEFORE the export-completed funnel, as the
+      // enhanced and folder paths already do. Written after it, a throwing
+      // completion write leaves the BACKLOG-2006a paywall/usage funnel told
+      // that an export happened while the row still says `not_exported` — this
+      // item's own inverse state, moved into the billing layer.
+      const pdfExportedAt = new Date().toISOString();
+      databaseService.recordExportCompletion(validatedTransactionId, {
+        exportFormat: "pdf",
+        exportedAt: pdfExportedAt,
+        exportCount: (details.export_count || 0) + 1,
+        firstExportedAt: pdfExportedAt,
+      });
+
       // BACKLOG-2006a — funnel: export-completed (main-side, non-throwing).
       await emitExportCompleted({
         userId: details.user_id,
@@ -213,9 +186,6 @@ export function registerTransactionExportHandlers(
         mode: pdfGate.decision.mode,
         format: "pdf",
       });
-
-      // BACKLOG-2013 — stamp the freeze boundary on first successful export.
-      await markFirstExport(validatedTransactionId, details.first_exported_at);
 
       // Audit log data export
       await auditService.log({

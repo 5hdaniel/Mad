@@ -337,7 +337,7 @@ export const TRANSACTION_COLUMN_POLICY: Record<TransactionColumn, ColumnPolicy> 
   first_exported_at: {
     insert: "db-default",
     update: "writable",
-    why: "BACKLOG-2013 freeze marker. Set write-once at the SQL layer by TWO writers — `recordExportCompletion` folds it into the export-completion UPDATE (BACKLOG-2549; the enhanced and folder paths) and `stampFirstExportedAt` sets it alone (the PDF path) — and cleared by admin unfreeze via the override path below. Both enforce write-once in SQL, one with COALESCE and one with a NULL predicate. A brand-new deal has never been exported.",
+    why: "BACKLOG-2013 freeze marker. Set write-once at the SQL layer by ONE production writer — `recordExportCompletion`, which folds it into the export-completion UPDATE on all THREE export channels (BACKLOG-2549 for enhanced and folder, BACKLOG-3234 for pdf) — and cleared by admin unfreeze via the override path below. Write-once is enforced in SQL by COALESCE. `stampFirstExportedAt` remains as the standalone write-once primitive (a NULL predicate rather than a COALESCE) but has had NO production caller since BACKLOG-3234 deleted the pdf path through it. A brand-new deal has never been exported.",
   },
   detection_source: {
     insert: "writable",
@@ -1138,6 +1138,13 @@ export async function updateTransaction(
  *
  * Does NOT go through `updateTransaction` on purpose — that path builds a
  * generic `WHERE id = ?` update, which cannot express the write-once guard.
+ *
+ * BACKLOG-3234 — NO PRODUCTION CALLER. The pdf path was the last one, and it
+ * now uses `recordExportCompletion` like the other two. This is retained as
+ * the standalone write-once primitive and as the fault-injection seam that
+ * `transactionExportHandlers.exportFreezeAtomic-2549.test.ts` spies on for
+ * cases A, B and SECONDARY. Deleting it would remove those three cases, so
+ * any removal must re-point them at `recordExportCompletion` FIRST.
  */
 export function stampFirstExportedAt(
   transactionId: string,
@@ -1179,8 +1186,9 @@ export interface ExportCompletionParams {
  * freeze marker as two separate awaited statements. Between them the row is
  * `export_status = 'exported'` with `first_exported_at` NULL: an exported
  * artifact on disk while the deal's identity anchors are still editable. A
- * crash is not required to reach it — `markFirstExport` is non-throwing, so a
- * stamp FAILURE produced the same row and returned success to the user.
+ * crash was not required to reach it — `markFirstExport` (the non-throwing
+ * helper, deleted by BACKLOG-3234) swallowed its error, so a stamp FAILURE
+ * produced the same row and returned success to the user.
  *
  * The write-once rule moves from a `WHERE` predicate into the `SET`:
  * `COALESCE(first_exported_at, ?)` keeps the boundary immutable in SQL, exactly

@@ -16,9 +16,10 @@
  * Two DIFFERENT routes produce that same row, and a test that models only the
  * first misses the one that actually ships:
  *
- *   A. THE STAMP FAILS AND NOTHING SAYS SO. `markFirstExport` is deliberately
- *      non-throwing — it catches and logs. So the export returns SUCCESS to the
- *      user and leaves the deal unfrozen. No crash is required.
+ *   A. THE STAMP FAILED AND NOTHING SAID SO. `markFirstExport` — the helper
+ *      that wrapped the separate stamp, deleted by BACKLOG-3234 — was
+ *      deliberately non-throwing: it caught and logged. So the export returned
+ *      SUCCESS to the user and left the deal unfrozen. No crash was required.
  *   B. CONTROL IS LOST BETWEEN THE TWO WRITES. The first statement is committed
  *      and the second never reaches SQLite.
  *
@@ -32,14 +33,30 @@
  * `electron/__tests__/transactionNullClear-2759.test.ts`.
  *
  * ===========================================================================
- * WHY THE FAULT IS INJECTED AT `stampFirstExportedAt`
+ * WHERE THE FAULTS ARE INJECTED, AND WHAT EACH SEAM ACTUALLY PROVES
  * ===========================================================================
- * This file must COMPILE AND RUN UNCHANGED before the fix, after it, and after
+ * This file must COMPILE AND RUN UNCHANGED before a fix, after it, and after
  * the revert control — otherwise the "before" and "after" are two different
- * tests. ts-jest runs with diagnostics on (`jest.config.js:20-26`), so a single
- * reference to the post-fix writer would fail to compile against unfixed code
- * and the reachability control could not run at all. `stampFirstExportedAt`
- * exists on BOTH sides (the PDF path keeps it), so it is the one stable seam.
+ * tests. ts-jest runs with diagnostics on (`jest.config.js:20-26`), so at
+ * BACKLOG-2549 a single reference to the then-new writer would have failed to
+ * compile against unfixed code, and `stampFirstExportedAt` was the only seam
+ * that existed on both sides.
+ *
+ * BACKLOG-3234 CHANGED THAT, and the sentence that used to stand here — that
+ * the PDF path keeps `stampFirstExportedAt` — is now false. No production
+ * caller reaches it on any channel. So, on the `pdf` channel specifically:
+ *
+ *   - A, B and SECONDARY are REVERT and REACHABILITY controls. Each is red
+ *     against the pre-3234 pdf path, which is what earns it a place here. They
+ *     are NOT fault injection into the live writer: the seam they spy on is
+ *     unreachable once the fix is in, so post-fix they can only ever confirm
+ *     that a dead seam is dead.
+ *   - G is the ONLY case that injects a fault into the LIVE writer. It spies on
+ *     `recordExportCompletion`, which exists on both sides of the 3234 revert
+ *     (BACKLOG-2549 shipped it), so it compiles and runs unchanged either way.
+ *     G proves the handler's FAILURE SEMANTICS: `{success:false}`, the row
+ *     untouched, and the export-completed funnel NOT fired. It does not prove
+ *     statement-level atomicity — that is SQLite's, for a single statement.
  *
  * STATED LIMIT: case B models the crash IN-PROCESS — the spy records the call
  * and never reaches SQLite, which is the state a process death between the two
@@ -53,7 +70,11 @@
  * ===========================================================================
  * CONTROLS — RUN, NOT ASSUMED (results in the BACKLOG-2549 pm_comments record)
  * ===========================================================================
- * MEASURED, not predicted — each line is what the run actually produced:
+ * MEASURED, not predicted — each line is what the run actually produced.
+ *
+ * MEASURED AT BACKLOG-2549, TWO CHANNELS, BEFORE THE `pdf` CHANNEL EXISTED.
+ * These numbers are a record of that run and are deliberately NOT restated to
+ * match the three-channel totals below:
  *
  *   - against unfixed code    -> A, B, SECONDARY RED on both channels
  *                                (6 failed / 8 passed); C, D, E, F green
@@ -70,6 +91,37 @@
  * C, D, E and F are green before the fix by design: they are regression fences
  * for the fold, not reproductions of the defect. Their controls are the
  * mutations above, not the pre-fix state.
+ *
+ * ===========================================================================
+ * MEASURED AT BACKLOG-3234, THREE CHANNELS (results in its pm_comments record)
+ * ===========================================================================
+ * BACKLOG-3234 added the `pdf` channel to CHANNELS and cases G, H, I and J on
+ * pdf only. The revert control reverts the 3234 PRODUCTION change alone and
+ * keeps every test change, so enhanced and folder stay green throughout:
+ *
+ *   - revert the pdf fold      -> 9 failed / 16 passed / 25 total.
+ *                                 RED: A, B, D, E, SECONDARY, G, H, I, J — all
+ *                                 on pdf. GREEN: enhanced 7, folder 7, and pdf
+ *                                 C and F (the two fences).
+ *   - drop `exportFormat:"pdf"` -> H alone RED.
+ *   - displace the exportCount / exportedAt bindings
+ *                              -> 8 failed / 17 passed / 25 total. D and E
+ *                                 RED on ALL THREE channels, PLUS I and J.
+ *                                 HIGHER than the registered prediction,
+ *                                 which said "D and E" — that named only
+ *                                 the shape BACKLOG-2549 measured, on two
+ *                                 channels. I and J assert the same values
+ *                                 through different producers (I reads
+ *                                 `last_exported_on` through the real badge
+ *                                 formatter, J reads the count across two
+ *                                 exports), so they catch it too. The
+ *                                 prediction stands as registered; this
+ *                                 line is the measurement, and the two are
+ *                                 deliberately not reconciled by editing
+ *                                 the prediction.
+ *
+ * That table was pre-registered before any code was written, and it is not
+ * restated afterwards to match a run.
  *
  * Run with:
  *   ELECTRON_RUN_AS_NODE=1 npx electron node_modules/.bin/jest \
@@ -163,6 +215,15 @@ const Database = require(
 
 import { setDb } from "../../services/db/core/dbConnection";
 import { FROZEN_IDENTITY_FIELDS } from "../../services/transactionFreezePolicy";
+// BACKLOG-3234 case I — the REAL list-view producer. Asserting a hand-written
+// `SELECT ... WHERE export_status='exported'` would only echo the fix's own SET
+// clause back at it. `formatLastExported` has no imports of its own, so it is
+// safe under `@jest-environment node`.
+import { formatLastExported } from "../../../src/utils/formatUtils";
+// BACKLOG-3234 case G (RC6) — the funnel whose ordering the placement change is
+// about. Mocked above; imported here so a throwing write can be observed NOT to
+// have reached it.
+import { emitExportCompleted } from "../../services/exportGate";
 import transactionService from "../../services/transactionService";
 import { registerTransactionExportHandlers } from "../transactionExportHandlers";
 
@@ -193,8 +254,32 @@ const SEEDED_EXPORT_COUNT = 3;
 
 let db: DatabaseType;
 /** The real facade instance the handler holds — the fault-injection seam. */
+/**
+ * The real facade instance the handler holds. BACKLOG-3234 (RC2) widened this:
+ * ts-jest diagnostics are ON (`jest.config.js:20-26`), so a member missing here
+ * fails the WHOLE suite to compile — including the revert control, which is the
+ * one thing this file's header exists to keep runnable on both sides.
+ */
 let databaseService: {
   stampFirstExportedAt: (transactionId: string, timestamp: string) => boolean;
+  recordExportCompletion: (
+    transactionId: string,
+    params: {
+      exportFormat?: string | null;
+      exportedAt: string;
+      exportCount: number;
+      firstExportedAt: string;
+    },
+  ) => void;
+  getTransactions: (filters: {
+    user_id?: string;
+    export_status?: string;
+  }) => Promise<Array<{ id: string }>>;
+  assignContactToTransaction: (
+    transactionId: string,
+    data: { contact_id: string; role?: string; specific_role?: string },
+  ) => Promise<string>;
+  getTransactionContacts: (transactionId: string) => Promise<Array<{ id: string }>>;
 };
 let stampSpy: jest.SpyInstance;
 
@@ -255,6 +340,24 @@ const CHANNELS: Array<{ channel: string; options: unknown; label: string }> = [
     channel: "transactions:export-folder",
     label: "folder",
     options: { contentType: "both", attachmentType: "none" },
+  },
+  {
+    // BACKLOG-3234. READ THIS BEFORE TRUSTING A CASE NAME ON THIS CHANNEL.
+    //
+    // A ("a freeze-stamp FAILURE...") and B ("losing control between the
+    // writes...") are named for the pre-3234 pdf path. On this channel they are
+    // REVERT and REACHABILITY controls — red against that path, green after —
+    // and NOT fault coverage: the seam they spy on, `stampFirstExportedAt`, is
+    // unreachable from any production caller once the fix is in. SECONDARY is
+    // the same shape. The only live-writer fault case is G, below.
+    //
+    // `options` is `undefined` on purpose: this channel's third argument is
+    // `outputPath?: string`, not an options object, and an object would fail
+    // `validateFilePath`. With it undefined the handler falls back to
+    // `folderExportService.getDefaultExportPath`, which is mocked above.
+    channel: "transactions:export-pdf",
+    label: "pdf",
+    options: undefined,
   },
 ];
 
@@ -421,6 +524,173 @@ describe("BACKLOG-2549 — export status and the freeze stamp flip together", ()
       await invoke(channel, options);
 
       expect(stampSpy).not.toHaveBeenCalled();
+    });
+  });
+});
+
+// ===========================================================================
+// BACKLOG-3234 — CASES THAT RUN ON THE `pdf` CHANNEL ONLY
+// ===========================================================================
+// G is pdf-only deliberately: on enhanced and folder it is green on BOTH sides
+// of this item's revert, so shipping it there would add a case nobody has ever
+// seen go red. Extending it to those two channels is filed separately against
+// the BACKLOG-2549 review's report-only #2.
+
+const PDF_CHANNEL = "transactions:export-pdf";
+
+// pii-allow-uuid: invented, not from any live row — repeating-digit v4 pattern
+const CONTACT = "55555555-5555-4555-8555-555555555555";
+
+/**
+ * The contact case J assigns. `getTransactionContacts` LEFT JOINs `contacts`,
+ * so the row must exist for the real reader to return anything meaningful.
+ */
+function seedContact(): void {
+  db.prepare(
+    "INSERT OR REPLACE INTO contacts (id, user_id, display_name) VALUES (?, ?, ?)",
+  ).run(CONTACT, USER, "Fixture Agent");
+}
+
+/** The list-view badge, read through the real renderer producer. */
+function badge(): string | null {
+  const raw = row().last_exported_on;
+  return formatLastExported(typeof raw === "string" ? { last_exported_on: raw } : {});
+}
+
+describe("BACKLOG-3234 — a PDF export IS an export (pdf channel only)", () => {
+  it("G: a FAILING export-completion write splits no state and fires no funnel", async () => {
+    seed({ frozen: false });
+    // The LIVE writer, not the dead stamp seam. This is the only fault
+    // injection on this channel that reaches code the fix actually runs.
+    const recordSpy = jest
+      .spyOn(databaseService, "recordExportCompletion")
+      .mockImplementation(() => {
+        throw new Error("SIMULATED export-completion write failure");
+      });
+
+    try {
+      const res = await invoke(PDF_CHANNEL, undefined);
+
+      const r = row();
+      expect({
+        success: res.success,
+        exported: r.export_status === "exported",
+        frozen: r.first_exported_at !== null,
+        // The placement of the write is a control, not a preference: it runs
+        // BEFORE the BACKLOG-2006a funnel, so a write that throws must not have
+        // told the paywall/usage layer that an export happened.
+        funnelFired: (emitExportCompleted as jest.Mock).mock.calls.length > 0,
+      }).toEqual({
+        success: false,
+        exported: false,
+        frozen: false,
+        funnelFired: false,
+      });
+    } finally {
+      recordSpy.mockRestore();
+    }
+  });
+
+  it("H: the PDF path records the format it actually produced", async () => {
+    seed({ frozen: false });
+    // The shared fixture seeds `export_format = 'pdf'`, which cannot separate
+    // "wrote pdf" from "omitted the column". Seeding a different value HERE
+    // makes the choice observable without altering `seed()` — the fixture
+    // BACKLOG-2549's controls were measured against.
+    db.prepare("UPDATE transactions SET export_format = 'excel' WHERE id = ?").run(TXN);
+
+    await invoke(PDF_CHANNEL, undefined);
+
+    expect(row().export_format).toBe("pdf");
+  });
+
+  it("I: the deal then reads Exported through both real readers", async () => {
+    seed({ frozen: false });
+    // A genuinely never-exported deal: the shared fixture seeds
+    // `last_exported_on`, which would make the badge read "Exported" before
+    // this test does anything at all.
+    db.prepare("UPDATE transactions SET last_exported_on = NULL WHERE id = ?").run(TXN);
+
+    // ANTI-VACUITY. The exclusion assertion below is satisfied by a reader that
+    // returns nothing, so the reader is first proven to EXECUTE against this
+    // fixture and to return this deal.
+    const before = await databaseService.getTransactions({
+      user_id: USER,
+      export_status: "not_exported",
+    });
+    expect(before.map((t) => t.id)).toContain(TXN);
+    expect(badge()).toBeNull();
+
+    await invoke(PDF_CHANNEL, undefined);
+
+    // Two real readers, and they read DIFFERENT columns: the filter (and the
+    // `idx_transactions_export_status` index) reads `export_status`, the card
+    // badge reads `last_exported_on`. The pdf path used to move neither.
+    const exported = await databaseService.getTransactions({
+      user_id: USER,
+      export_status: "exported",
+    });
+    const notExported = await databaseService.getTransactions({
+      user_id: USER,
+      export_status: "not_exported",
+    });
+    expect({
+      inExportedSet: exported.map((t) => t.id).includes(TXN),
+      inNotExportedSet: notExported.map((t) => t.id).includes(TXN),
+      badge: badge(),
+    }).toEqual({
+      inExportedSet: true,
+      inNotExportedSet: false,
+      badge: expect.stringMatching(/^Exported /),
+    });
+  });
+
+  it("J: a contact can be added after a PDF export, and the deal re-exported", async () => {
+    db.exec("DELETE FROM transaction_contacts");
+    seed({ frozen: false });
+    seedContact();
+
+    const first = await invoke(PDF_CHANNEL, undefined);
+    const afterFirst = row();
+    const firstMarker = afterFirst.first_exported_at;
+    expect({
+      success: first.success,
+      export_status: afterFirst.export_status,
+      frozen: typeof firstMarker === "string" && firstMarker.length > 0,
+      export_count: afterFirst.export_count,
+    }).toEqual({
+      success: true,
+      export_status: "exported",
+      frozen: true,
+      export_count: SEEDED_EXPORT_COUNT + 1,
+    });
+
+    // The REAL contact writer. Its own comment calls it the choke point:
+    // "every write to transaction_contacts funnels through this function".
+    await databaseService.assignContactToTransaction(TXN, {
+      contact_id: CONTACT,
+      specific_role: "agent",
+    });
+    const assigned = await databaseService.getTransactionContacts(TXN);
+    expect(assigned.map((c) => c.id)).toContain(CONTACT);
+
+    // ...and the same real handler runs again against the frozen row.
+    const second = await invoke(PDF_CHANNEL, undefined);
+    const afterSecond = row();
+    expect({
+      success: second.success,
+      export_count: afterSecond.export_count,
+      // Two exports can land in the same millisecond, so this half is `>=`.
+      // The strict half of the claim is the count and the marker equality.
+      last_exported_on_advanced:
+        typeof afterSecond.last_exported_on === "string" &&
+        afterSecond.last_exported_on >= (afterFirst.last_exported_on as string),
+      first_exported_at_unmoved: afterSecond.first_exported_at === firstMarker,
+    }).toEqual({
+      success: true,
+      export_count: SEEDED_EXPORT_COUNT + 2,
+      last_exported_on_advanced: true,
+      first_exported_at_unmoved: true,
     });
   });
 });

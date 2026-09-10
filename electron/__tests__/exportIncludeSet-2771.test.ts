@@ -87,6 +87,11 @@ jest.mock("../services/databaseService", () => ({
   default: {
     updateTransaction: jest.fn().mockResolvedValue(undefined),
     stampFirstExportedAt: jest.fn().mockReturnValue(true),
+    // BACKLOG-3234. Without this the handlers call an undefined method,
+    // `wrapHandler` swallows the TypeError and every export test here runs
+    // against a handler that returned `{success:false}`. Measured: absent, the
+    // enhanced and pdf channels both returned false; present, both return true.
+    recordExportCompletion: jest.fn(),
   },
 }));
 
@@ -218,11 +223,17 @@ describe("BACKLOG-2771: every export entry point resolves its include set once",
 
   describe("the BACKLOG-2343 closing-day boundary, asserted at every entry point", () => {
     it("folder export keeps the closing-day text and drops the post-closing email", async () => {
-      await handlers.get("transactions:export-folder")(event, TX_ID, {
+      const result = await handlers.get("transactions:export-folder")(event, TX_ID, {
         contentType: "both",
         attachmentType: "all",
       });
 
+      // BACKLOG-3234: the handler must COMPLETE, not merely reach the export
+      // service — same reason as the pdf tests below. Measured at the base
+      // commit, this channel returned `{success:false}` and no test in this
+      // file could see it, because every other assertion here reads arguments
+      // captured BEFORE the completion write.
+      expect(result.success).toBe(true);
       expect(mockExportToFolder).toHaveBeenCalledTimes(1);
       expect(ids(folderPlan().communications)).toEqual([
         IN_WINDOW_EMAIL.id as string,
@@ -231,11 +242,13 @@ describe("BACKLOG-2771: every export entry point resolves its include set once",
     });
 
     it("enhanced export keeps the closing-day text and drops the post-closing email", async () => {
-      await handlers.get("transactions:export-enhanced")(event, TX_ID, {
+      const result = await handlers.get("transactions:export-enhanced")(event, TX_ID, {
         exportFormat: "json",
         contentType: "both",
       });
 
+      // BACKLOG-3234: completion asserted here too (see the folder test above).
+      expect(result.success).toBe(true);
       expect(mockEnhancedExport).toHaveBeenCalledTimes(1);
       expect(ids(enhancedPlan().communications)).toEqual([
         IN_WINDOW_EMAIL.id as string,
@@ -270,8 +283,14 @@ describe("BACKLOG-2771: every export entry point resolves its include set once",
       // `window.api.transactions.exportPDF` has no caller in src/ and the channel
       // takes no options, so it states an empty request rather than inheriting
       // one. Behavior is unchanged from when it had no filtering at all.
-      await handlers.get("transactions:export-pdf")(event, TX_ID, "/tmp/out.pdf");
+      const result = await handlers.get("transactions:export-pdf")(event, TX_ID, "/tmp/out.pdf");
 
+      // BACKLOG-3234: the handler must COMPLETE, not merely reach the export
+      // service. Every other assertion in this suite fires before the
+      // completion write, so a handler that throws afterwards is invisible here
+      // — which is how this file stayed green while the `databaseService` mock
+      // was missing a method the handler calls.
+      expect(result.success).toBe(true);
       expect(mockExportToCombinedPDF).toHaveBeenCalledTimes(1);
       expect(ids(mockExportToCombinedPDF.mock.calls[0][1] as Communication[])).toEqual(
         ids(ALL_COMMS),
@@ -437,9 +456,11 @@ describe("BACKLOG-2771: every export entry point resolves its include set once",
     });
 
     it("the orphan export-pdf channel", async () => {
-      await handlers.get("transactions:export-pdf")(event, TX_ID, "/tmp/out.pdf");
+      const result = await handlers.get("transactions:export-pdf")(event, TX_ID, "/tmp/out.pdf");
       // This channel has no attachment phase at all; it renders the combined PDF
       // only. Its plan says so rather than leaving it implicit.
+      // BACKLOG-3234: and the handler completes (see the note above).
+      expect(result.success).toBe(true);
       expect(mockExportToCombinedPDF).toHaveBeenCalledTimes(1);
     });
 
