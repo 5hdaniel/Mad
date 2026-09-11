@@ -81,8 +81,19 @@ const mockStartBackup = jest.fn();
 const mockCancelBackup = jest.fn();
 const mockCheckBackupStatus = jest.fn();
 const mockDeleteBackup = jest.fn();
+const mockDeleteDeviceBackup = jest.fn();
 const mockDecryptionCleanup = jest.fn();
 const mockGetDeviceStorageInfo = jest.fn();
+
+// 2026-09-11: the disk reserve is 1.2 x host RAM (resolveSyncDiskReserveBytes).
+// The original BACKLOG-2899 cases pin RAM to 1 GB so the reserve rests on its
+// 2304 MB floor and their free-space fixtures keep the meaning they were written
+// with; the RAM-reserve cases below raise it to a real machine's figure.
+let mockTotalMemBytes = 1024 * 1024 * 1024;
+jest.mock("os", () => ({
+  ...jest.requireActual("os"),
+  totalmem: () => mockTotalMemBytes,
+}));
 
 jest.mock("electron", () => ({
   app: {
@@ -134,6 +145,7 @@ jest.mock("../backupService", () => ({
     startBackup: (...args: unknown[]) => mockStartBackup(...args),
     cancelBackup: (...args: unknown[]) => mockCancelBackup(...args),
     deleteBackup: (...args: unknown[]) => mockDeleteBackup(...args),
+    deleteDeviceBackup: (...args: unknown[]) => mockDeleteDeviceBackup(...args),
   })),
 }));
 
@@ -194,6 +206,12 @@ import {
   DeviceSyncOrchestrator,
   SYNC_DISK_POLL_INTERVAL_MS,
   SYNC_DISK_LOG_DELTA_BYTES,
+  SYNC_DISK_RESERVE_FLOOR_BYTES,
+  SYNC_DISK_RESERVE_RAM_MULTIPLIER,
+  DELETE_BACKUP_ON_DISK_GUARD_ENV,
+  DISK_GUARD_BACKUP_DELETED_NOTE,
+  resolveSyncDiskReserveBytes,
+  isDeleteBackupOnDiskGuardEnabled,
 } from "../deviceSyncOrchestrator";
 
 const TEST_UDID = "a1b2c3d4e5f6789012345678901234567890abcd";
@@ -334,6 +352,8 @@ describe("BACKLOG-2899 — sync disk guard", () => {
     mockLogInfo.mockClear();
     mockLogWarn.mockClear();
     mockLogError.mockClear();
+    mockTotalMemBytes = 1 * GB;
+    delete process.env[DELETE_BACKUP_ON_DISK_GUARD_ENV];
     jest.useFakeTimers();
 
     // BACKLOG-2917: `absent` is a PROVEN first sync. This mock used to be `null`,
@@ -599,6 +619,208 @@ describe("BACKLOG-2899 — sync disk guard", () => {
 
       expect(mockCancelBackup).not.toHaveBeenCalled();
       expect(result.success).toBe(true);
+    });
+  });
+
+  // -------------------------------------------------------------------------
+  // 2026-09-11: the reserve follows the host's RAM.
+  // -------------------------------------------------------------------------
+
+  describe("resolveSyncDiskReserveBytes — 1.2 x RAM, floored", () => {
+    it("is 1.2 x RAM on an ordinary machine", () => {
+      expect(resolveSyncDiskReserveBytes(16 * GB)).toBe(
+        Math.ceil(16 * GB * SYNC_DISK_RESERVE_RAM_MULTIPLIER),
+      );
+      expect(SYNC_DISK_RESERVE_RAM_MULTIPLIER).toBe(1.2);
+    });
+
+    it("never drops below the BACKLOG-2899 floor", () => {
+      expect(resolveSyncDiskReserveBytes(1 * GB)).toBe(SYNC_DISK_RESERVE_FLOOR_BYTES);
+      // Sweep the boundary: one byte either side of RAM x 1.2 == floor.
+      const ramAtFloor = SYNC_DISK_RESERVE_FLOOR_BYTES / SYNC_DISK_RESERVE_RAM_MULTIPLIER;
+      expect(resolveSyncDiskReserveBytes(Math.floor(ramAtFloor) - 1)).toBe(
+        SYNC_DISK_RESERVE_FLOOR_BYTES,
+      );
+      expect(resolveSyncDiskReserveBytes(Math.ceil(ramAtFloor) + 1)).toBeGreaterThan(
+        SYNC_DISK_RESERVE_FLOOR_BYTES,
+      );
+    });
+
+    it("falls back to the floor, never to zero, on a reading that is not a size", () => {
+      for (const bad of [0, -1, NaN, Infinity, -Infinity]) {
+        expect(resolveSyncDiskReserveBytes(bad)).toBe(SYNC_DISK_RESERVE_FLOOR_BYTES);
+      }
+    });
+  });
+
+  describe("the guard defends 1.2 x RAM on a 16 GB machine", () => {
+    const RAM = 16 * GB;
+    const RAM_RESERVE = Math.ceil(RAM * SYNC_DISK_RESERVE_RAM_MULTIPLIER);
+
+    beforeEach(() => {
+      mockTotalMemBytes = RAM;
+    });
+
+    it("refuses up front at one byte under 1.2 x RAM, where the old 2304 MB reserve would have started", async () => {
+      installDisk({ initialFree: RAM_RESERVE - 1, drainBytesPerSec: 0 });
+      installBackup({ markBackupStarted: () => {}, succeedAfterMs: 1000 });
+
+      const result = await runSync(orchestrator, 700_000);
+
+      expect(RAM_RESERVE - 1).toBeGreaterThan(RESERVE_BYTES); // the old reserve would have passed
+      expect(mockStartBackup).not.toHaveBeenCalled();
+      expect(result.success).toBe(false);
+      expect(result.error).toMatch(/space/i);
+      // The reserve the user is told about is the RAM-derived one.
+      expect(result.error).toMatch(/19\.2\s?GB/);
+    });
+
+    it("starts at exactly 1.2 x RAM free", async () => {
+      installDisk({ initialFree: RAM_RESERVE, drainBytesPerSec: 0 });
+      installBackup({ markBackupStarted: () => {}, succeedAfterMs: 1000 });
+
+      await runSync(orchestrator, 700_000);
+
+      expect(mockStartBackup).toHaveBeenCalled();
+    });
+
+    it("aborts mid-transfer as soon as free space crosses under 1.2 x RAM", async () => {
+      const disk = installDisk({
+        initialFree: RAM_RESERVE + 1,
+        drainBytesPerSec: 1,
+      });
+      installBackup({
+        markBackupStarted: disk.markBackupStarted,
+        succeedAfterMs: 600_000,
+      });
+
+      const result = await runSync(orchestrator, 700_000);
+
+      expect(mockCancelBackup).toHaveBeenCalled();
+      expect(result.success).toBe(false);
+      expect(result.error).toMatch(/19\.2 GB this sync keeps in reserve/);
+      // Well before the old reserve would have noticed — the disk never got near 2304 MB.
+      expect(mockCheckDiskSpace).toHaveBeenCalled();
+    });
+
+    it("logs the resolved reserve once per sync, with its RAM basis", async () => {
+      installDisk({ initialFree: 500 * GB, drainBytesPerSec: 0 });
+      installBackup({ markBackupStarted: () => {}, succeedAfterMs: 1000 });
+
+      await runSync(orchestrator, 700_000);
+
+      const lines = mockLogInfo.mock.calls
+        .map((c) => String(c[0]))
+        .filter((l) => l.includes("Disk reserve for this sync"));
+      expect(lines).toHaveLength(1);
+      expect(lines[0]).toMatch(/19\.2 GB \(1\.2 x 16\.0 GB RAM, floor 2304 MB\)/);
+    });
+  });
+
+  // -------------------------------------------------------------------------
+  // 2026-09-11: opt-in delete when the guard stops a sync.
+  // -------------------------------------------------------------------------
+
+  describe("isDeleteBackupOnDiskGuardEnabled", () => {
+    it("is on only for the literal \"1\"", () => {
+      expect(isDeleteBackupOnDiskGuardEnabled({})).toBe(false);
+      expect(isDeleteBackupOnDiskGuardEnabled({ [DELETE_BACKUP_ON_DISK_GUARD_ENV]: "0" })).toBe(false);
+      expect(isDeleteBackupOnDiskGuardEnabled({ [DELETE_BACKUP_ON_DISK_GUARD_ENV]: "true" })).toBe(false);
+      expect(isDeleteBackupOnDiskGuardEnabled({ [DELETE_BACKUP_ON_DISK_GUARD_ENV]: "1" })).toBe(true);
+    });
+  });
+
+  describe("KEEPR_DELETE_BACKUP_ON_DISK_GUARD", () => {
+    it("OFF (default): a mid-transfer abort keeps the partial and never calls the device delete", async () => {
+      const disk = installDisk({
+        initialFree: 10 * GB,
+        drainBytesPerSec: FIXTURE_DRAIN_BYTES_PER_SEC,
+      });
+      installBackup({
+        markBackupStarted: disk.markBackupStarted,
+        succeedAfterMs: BACKUP_DURATION_MS,
+      });
+
+      const result = await runSync(orchestrator, 1_600_000);
+
+      expect(mockCancelBackup).toHaveBeenCalled();
+      expect(mockDeleteDeviceBackup).not.toHaveBeenCalled();
+      expect(mockDeleteBackup).not.toHaveBeenCalled();
+      expect(result.error).toMatch(/partial backup was kept/);
+      expect(result.error).not.toContain(DISK_GUARD_BACKUP_DELETED_NOTE);
+    });
+
+    it("ON: a mid-transfer abort deletes Backups/<udid> after the backup has been cancelled, and says so", async () => {
+      process.env[DELETE_BACKUP_ON_DISK_GUARD_ENV] = "1";
+      const order: string[] = [];
+      mockCancelBackup.mockImplementationOnce(() => {
+        order.push("cancel");
+      });
+      mockDeleteDeviceBackup.mockImplementation(async () => {
+        order.push("delete");
+      });
+      const disk = installDisk({
+        initialFree: 10 * GB,
+        drainBytesPerSec: FIXTURE_DRAIN_BYTES_PER_SEC,
+      });
+      installBackup({
+        markBackupStarted: disk.markBackupStarted,
+        succeedAfterMs: BACKUP_DURATION_MS,
+      });
+      // The Once above swallowed the harness's cancel; re-arm it so the backup
+      // promise still settles, then record the order.
+      mockCancelBackup.mockImplementation(() => {
+        order.push("cancel");
+      });
+
+      const result = await runSync(orchestrator, 1_600_000);
+
+      expect(mockDeleteDeviceBackup).toHaveBeenCalledWith(TEST_UDID);
+      expect(result.success).toBe(false);
+      expect(result.error).toContain(DISK_GUARD_BACKUP_DELETED_NOTE);
+      expect(result.error).not.toMatch(/partial backup was kept/);
+      // Deleted only after the cancel, never while idevicebackup2 could still write.
+      expect(order.indexOf("cancel")).toBeGreaterThanOrEqual(0);
+      expect(order.indexOf("delete")).toBeGreaterThan(order.indexOf("cancel"));
+    });
+
+    it("ON: an up-front refusal deletes the device backup too, and the message says so", async () => {
+      process.env[DELETE_BACKUP_ON_DISK_GUARD_ENV] = "1";
+      installDisk({ initialFree: RESERVE_BYTES - 1, drainBytesPerSec: 0 });
+      installBackup({ markBackupStarted: () => {}, succeedAfterMs: 1000 });
+
+      const result = await runSync(orchestrator, 700_000);
+
+      expect(mockStartBackup).not.toHaveBeenCalled();
+      expect(mockDeleteDeviceBackup).toHaveBeenCalledWith(TEST_UDID);
+      expect(result.error).toContain(DISK_GUARD_BACKUP_DELETED_NOTE);
+    });
+
+    it("OFF: an up-front refusal deletes nothing", async () => {
+      installDisk({ initialFree: RESERVE_BYTES - 1, drainBytesPerSec: 0 });
+      installBackup({ markBackupStarted: () => {}, succeedAfterMs: 1000 });
+
+      const result = await runSync(orchestrator, 700_000);
+
+      expect(mockDeleteDeviceBackup).not.toHaveBeenCalled();
+      expect(result.error).not.toContain(DISK_GUARD_BACKUP_DELETED_NOTE);
+    });
+
+    it("ON but the delete fails: the sync still stops and the message does not claim space was freed", async () => {
+      process.env[DELETE_BACKUP_ON_DISK_GUARD_ENV] = "1";
+      mockDeleteDeviceBackup.mockRejectedValue(new Error("EACCES"));
+      installDisk({ initialFree: RESERVE_BYTES - 1, drainBytesPerSec: 0 });
+      installBackup({ markBackupStarted: () => {}, succeedAfterMs: 1000 });
+
+      const result = await runSync(orchestrator, 700_000);
+
+      expect(mockStartBackup).not.toHaveBeenCalled();
+      expect(result.success).toBe(false);
+      expect(result.error).not.toContain(DISK_GUARD_BACKUP_DELETED_NOTE);
+      expect(mockLogError).toHaveBeenCalledWith(
+        expect.stringContaining("could not delete the device backup"),
+        expect.anything(),
+      );
     });
   });
 });

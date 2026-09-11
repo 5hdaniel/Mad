@@ -2519,6 +2519,19 @@ export class BackupService extends EventEmitter {
   }
 
   /**
+   * Delete the backup directory of ONE device, `Backups/<udid>`, by its UDID.
+   *
+   * The UDID is validated (BACKLOG-1123) before it becomes a path segment, and the
+   * result goes through `deleteBackup`, whose own guard refuses anything outside
+   * the backup root. Used by the disk guard's opt-in delete
+   * (KEEPR_DELETE_BACKUP_ON_DISK_GUARD=1) — see deviceSyncOrchestrator.
+   */
+  async deleteDeviceBackup(udid: string): Promise<void> {
+    const validatedUdid = validateDeviceUdid(udid);
+    await this.deleteBackup(path.join(this.getDefaultBackupPath(), validatedUdid));
+  }
+
+  /**
    * Clean up old backups, keeping only the most recent
    * @param keepCount Number of backups to keep per device (default: 1)
    */

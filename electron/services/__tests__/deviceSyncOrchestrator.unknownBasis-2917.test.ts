@@ -55,6 +55,14 @@ const mockStartBackup = jest.fn();
 const mockCheckBackupStatus = jest.fn();
 const logLines: string[] = [];
 
+// 2026-09-11: the disk reserve is 1.2 x host RAM (resolveSyncDiskReserveBytes).
+// Pin RAM to 1 GB so the reserve rests on its 2304 MB floor and this suite's
+// free-space fixtures keep the meaning they were written with.
+jest.mock("os", () => ({
+  ...jest.requireActual("os"),
+  totalmem: () => 1024 * 1024 * 1024,
+}));
+
 jest.mock("electron", () => ({
   app: { isPackaged: false, getPath: jest.fn().mockReturnValue("/tmp") },
 }));
