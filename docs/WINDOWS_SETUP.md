@@ -122,7 +122,13 @@ in both directions before any content moves.
 ### Sync Fails Partway Through
 
 1. **Don't Disconnect** - Keep your iPhone connected and unlocked
-2. **Check Storage** - Ensure you have at least 60 GB free on your Windows PC
+2. **Check Storage** - Ensure your PC has room for a full iPhone backup (a measured
+   run produced 58.8 GB) **plus** the reserve the sync keeps free: 1.2 x the PC's RAM,
+   never less than 2304 MB. The sync refuses to start below that reserve and stops
+   if free space falls under it mid-transfer, keeping the partial backup on disk.
+   Set `KEEPR_DELETE_BACKUP_ON_DISK_GUARD=1` in the environment if a guard stop
+   should also delete the backup to give the space back (the next sync then starts
+   a full backup from scratch).
 3. **Try Again** - Click "Sync" again; incremental backup will resume from where it left off
 
 ### Wrong Password for Encrypted Backup
