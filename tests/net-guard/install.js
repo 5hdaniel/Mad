@@ -9,6 +9,12 @@
  * verified by execution, not by reasoning. DNS runs INSIDE `Socket.connect`, so a
  * blocked host is never even resolved.
  *
+ * What re-runs on every CI run is narrower than what was measured: the shipped
+ * controls cover `http.request` and the `net.connect` array form. The per-client
+ * matrix (tls, https, axios under jsdom, undici fetch under @jest-environment node)
+ * was measured once during design with probes that are NOT shipped — so treat this
+ * paragraph as a record of that measurement, not as something the suite re-proves.
+ *
  * THREE PARTS, all three load-bearing:
  *
  *   setupFiles           this file — patches, records, throws.
