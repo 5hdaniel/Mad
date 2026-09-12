@@ -157,10 +157,10 @@ A plan that says "control C proves X, and reverting Y turns it red" is making a 
 
 **Worked example — six controls, 11–12 September 2026 (BACKLOG-3229, BACKLOG-3213).**
 
-| Control | Claimed | What running the mutation showed |
+| Control | Claimed | What checking the claim showed |
 |---|---|---|
 | health-banner prune (3229) — **the contrast** | five controls cover the fix | a stale-closure build wiping every dismissal every two minutes **passed four of six** — caught at PR review against a built implementation, the later and more expensive gate |
-| C22 (3213) | "revert `:638` → C22 red" | a mount effect resolves the state first, so it reports **green** |
+| C22 (3213) | "revert `:638` → C22 red" | a mount effect resolves the state first, so it reports **green** — found by reading that effect and an existing passing test, not by running a mutation |
 | SR's `>=2` replacement (3213) | fixes C22's vacuity | measured 2 calls with **zero** re-asks — vacuous too |
 | Engineer's delta replacement (3213) | fixes SR's vacuity | **times out against correct code** — a false red, worse than a vacuous green |
 | C13 (3213) | the control the whole set rests on for the likely wrong fix | breaking its line reds a **different** test; the estimate disjunct holds the gate, so the wrong fix **would have shipped green** |
