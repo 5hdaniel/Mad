@@ -160,8 +160,13 @@ interface MacOSMessagesImportSettingsProps {
  * "Could not find the iMessages database…" on a different channel, and a
  * fragment that matched both would classify a future producer's string by
  * accident.
+ *
+ * EXPORTED for the drift guard only. A guard that re-typed this literal would
+ * tie the FIXTURE to the producer and leave THIS constant free to drift away
+ * from both — which is the one direction its name promises to cover.
  */
-const MESSAGES_ABSENT_REASON_FRAGMENT = "couldn't find a messages database";
+export const MESSAGES_ABSENT_REASON_FRAGMENT =
+  "couldn't find a messages database";
 
 /**
  * Messages import settings for macOS users.

@@ -48,7 +48,10 @@
 import React from "react";
 import { render, screen, waitFor, fireEvent, act } from "@testing-library/react";
 import "@testing-library/jest-dom";
-import { MacOSMessagesImportSettings } from "../MacOSMessagesImportSettings";
+import {
+  MacOSMessagesImportSettings,
+  MESSAGES_ABSENT_REASON_FRAGMENT,
+} from "../MacOSMessagesImportSettings";
 import { MESSAGES_STORE_NOT_FOUND_PERMISSION_RESULT } from "../../../../tests/fixtures/fdaDeniedIssue-3219";
 
 jest.mock("../../../contexts/PlatformContext", () => ({
@@ -188,11 +191,16 @@ describe("BACKLOG-3213 — the panel tells an absent database from a refused one
    * side alone and the panel silently stops recognising the refusal — no
    * error, no red, just the disk-space copy back on a Mac with no database.
    * This ties the two together.
+   *
+   * THE CONSTANT IS IMPORTED, NEVER RE-TYPED. A re-typed literal would tie the
+   * fixture to the producer and leave the panel's own constant free to drift
+   * away from both — so the test would pass while the panel stopped
+   * recognising the refusal, which is the one direction this guard exists for.
    */
   it("main's real absent sentence still contains the fragment the panel matches on", () => {
     expect(
       MESSAGES_STORE_NOT_FOUND_PERMISSION_RESULT.userMessage.toLowerCase()
-    ).toContain("couldn't find a messages database");
+    ).toContain(MESSAGES_ABSENT_REASON_FRAGMENT);
     // And it names no permission, which is the point of the whole item.
     expect(
       MESSAGES_STORE_NOT_FOUND_PERMISSION_RESULT.userMessage
