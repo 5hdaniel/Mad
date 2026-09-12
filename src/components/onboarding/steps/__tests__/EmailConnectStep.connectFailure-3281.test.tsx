@@ -191,14 +191,30 @@ describe("EmailConnectStep connect failure (BACKLOG-3281)", () => {
   // C2 — the success path is not shadowed by the new listener.
   // =========================================================================
   describe("C2 — success still clears the spinner", () => {
-    it("a successful connection clears Connecting... via the emailConnected effect", () => {
+    /**
+     * The effect has to be exercised on the card that does NOT become
+     * connected. Pressing Connect on the provider that then succeeds proves
+     * nothing about it: that card swaps to a Continue button on the context
+     * change alone, so the effect could be deleted and the assertion would
+     * still pass. (It was written that way first, and the mutation below stayed
+     * green — the fixture was wrong, not the control.)
+     *
+     * Here the user presses Connect on the SECONDARY provider and the PRIMARY
+     * one connects. The secondary card still renders its Connect button, so
+     * `connectingProvider` is the only thing deciding whether it reads
+     * "Connecting...", and only the effect clears it.
+     */
+    it("a success clears Connecting... on the OTHER provider's card", () => {
       const { rerender } = render(
         <Content
           context={createMockContext({ authProvider: "google" })}
           onAction={jest.fn()}
         />,
       );
-      startConnecting();
+      const secondary = screen.getByTestId("onboarding-email-connect-secondary");
+      fireEvent.click(secondary);
+      expect(secondary).toHaveTextContent("Connecting...");
+      expect(secondary).toBeDisabled();
 
       rerender(
         <Content
@@ -212,10 +228,16 @@ describe("EmailConnectStep connect failure (BACKLOG-3281)", () => {
         />,
       );
 
-      expect(screen.queryByTestId(PRIMARY)).not.toBeInTheDocument();
+      // The primary card is now the connected one...
       expect(
         screen.getByTestId("onboarding-email-continue-primary"),
       ).toBeInTheDocument();
+      // ...and the secondary card stopped spinning instead of hanging.
+      const stillSecondary = screen.getByTestId(
+        "onboarding-email-connect-secondary",
+      );
+      expect(stillSecondary).toHaveTextContent("Connect Outlook");
+      expect(stillSecondary).toBeEnabled();
     });
 
     it("a later success retires an earlier provider's failure line", () => {
