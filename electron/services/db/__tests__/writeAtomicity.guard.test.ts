@@ -330,7 +330,13 @@ const KNOWN_UNWRAPPED: Record<string, string> = {
 
   // --- Filed by BACKLOG-2584 itself, before being listed here -------------
   "electron/handlers/contactHandlers.ts::ipc:contacts:import":
-    "BACKLOG-3220 @0dca6beb1 (:1858, markContactAsImported + linkImportedContact across three for loops, no wrapper in the 522-line handler): some contacts marked imported with their crosswalk link written and others marked imported with no link, so those source rows are never suppressed and re-offer on the next pass",
+    "BACKLOG-3220 @1cd39acd0 (:1954, markContactAsImported + linkImportedContact across three for loops, PLUS backfillContactEmails + backfillContactPhones on the same path — 4 counted writes became 6 when BACKLOG-3235 restored the two twin facades to the writer set; zero dbTransaction anywhere in the handler): some contacts marked imported with their crosswalk link written and others marked imported with no link, so those source rows are never suppressed and re-offer on the next pass — and now also a contact whose emails were backfilled while its phones were not",
+
+  // --- BACKLOG-3259 (open): surfaced BY BACKLOG-3235's own fix ------------
+  // Listed, never fixed: the widening PR must list what it surfaces or CI is
+  // red and it cannot land; fixing a surfaced defect belongs to its own item.
+  "electron/handlers/contactHandlers.ts::ipc:contacts:create":
+    "BACKLOG-3259 @1cd39acd0 (:2547, createContact :2717 + backfillContactEmails :2774 + backfillContactPhones :2778, zero dbTransaction in the handler): reachable WITHOUT a crash — the catch arm at :2801-2815 returns { success: false } with no compensating delete, so an ordinary throw from either backfill (a malformed email or phone is enough) leaves the contact row committed and visible in Clients & Contacts holding the name and only some of the addresses the user typed, while the UI tells them it was not created; the user retries and gets a SECOND contact",
   "electron/handlers/emailLinkingHandlers.ts::ipc:transactions:link-emails":
     "BACKLOG-3221 @0dca6beb1 (:169, createCommunication + createEmail unwrapped): a communications junction row whose email_id points at an emails row that was never written, so the email is invisible to every reader that joins through it — or the inverse, an email row with no link, absent from the transaction it was just attached to",
   "electron/handlers/messageImportHandlers.ts::ipc:messages:import-macos":
@@ -512,17 +518,143 @@ function captureHandlerUnit(
  * as two. That is why every reported offender is dispositioned by reading the
  * function, never by trusting this set.
  */
-function dbLayerWriters(): Set<string> {
-  const writers = new Set<string>();
-  for (const file of sourceFiles(DB_DIR)) {
-    const lines = fs.readFileSync(file, "utf8").split("\n");
-    for (let i = 0; i < lines.length; i++) {
-      const m = /^export\s+(?:async\s+)?function\s+([A-Za-z0-9_]+)/.exec(lines[i]);
-      if (!m) continue;
-      if (writeCount(captureBody(lines, i)) >= 1) writers.add(m[1]);
-    }
+/**
+ * The exported `db/` function declarations of ONE file, as name + captured body.
+ *
+ * Split out of `dbLayerWriters` by BACKLOG-3235 so `writersFrom` below is a PURE
+ * function over declarations and a fixture can run the real derivation over a
+ * transcribed source string. Before the split there was no way to test the
+ * writer-set rule at all: `dbLayerWriters` read the disk, so every fixture in
+ * this file could only ever exercise what happens AFTER the set is built.
+ */
+function dbWriterDeclsIn(lines: string[]): { name: string; body: string }[] {
+  const decls: { name: string; body: string }[] = [];
+  for (let i = 0; i < lines.length; i++) {
+    const m = /^export\s+(?:async\s+)?function\s+([A-Za-z0-9_]+)/.exec(lines[i]);
+    if (!m) continue;
+    decls.push({ name: m[1], body: captureBody(lines, i) });
+  }
+  return decls;
+}
+
+/**
+ * ===========================================================================
+ * BACKLOG-3235 — A WRITER THAT MOVED INTO A SYNCTWIN IS STILL A WRITER
+ * ===========================================================================
+ * Pass 1 is the raw-SQL rule, unchanged. Pass 2 is the one heuristic change
+ * this PR carries.
+ *
+ * THE DEFECT. The syncTwin recipe (`electron/__tests__/syncTwin.guard.test.ts`)
+ * moves a writer's body into `<name>Sync` and leaves `<name>` a one-line
+ * delegate holding NO SQL. Under pass 1 alone the promise-returning name drops
+ * out of this set, and because call sites are resolved by BARE NAME, every
+ * caller outside `db/` silently stops counting that write. The guard's coverage
+ * shrank as the epic that depends on it advanced.
+ *
+ * THE RULE. A `db/` export whose own body holds no SQL, whose `<name>Sync`
+ * sibling IS a pass-1 writer, and whose body REFERENCES that sibling, is a
+ * writer. Two passes over the pass-1 set — no fixpoint, so the result does not
+ * depend on declaration order.
+ *
+ * This is a RESTORATION, not a wider predicate. Measured at `1cd39acd0`:
+ * `writersFrom(decls) minus pass-1-only` is set-equal, element for element, to
+ * the seven names BACKLOG-3238 enumerates. It makes writer-set membership
+ * INVARIANT under the syncTwin refactor and changes nothing else.
+ *
+ * POPULATION, measured at `1cd39acd0`: EIGHT `db/` wrappers hold no SQL and
+ * delegate to a writing twin; SEVEN of them are de-detected. The eighth,
+ * `macosForceSetSql.ts:284 deleteLiveForceSet`, is masked — the UNRELATED
+ * `emailForceSetSql.ts:201 deleteLiveForceSet` runs a `DELETE FROM emails` and
+ * keeps the bare name in the pass-1 set, so pass 2 skips it at the first
+ * `continue`. Its callers count a write for the wrong reason. The seven is
+ * therefore conditional on that function: give IT a twin and the eighth name
+ * de-detects too, and pass 2 restores it. Stated with its condition so a later
+ * count of eight reads as the condition being met, not as drift.
+ *
+ * WHY THE BODY CHECK IS HERE THOUGH IT CHANGES NOTHING TODAY. Measured: with
+ * and without it the writer set is 122 and the offender set identical, at this
+ * SHA. It is not decoration. `base` is a set of BARE NAMES over 434 unique
+ * names with SIX measured duplicates (`columnList`, `createStagingTable`,
+ * `deleteLiveForceSet`, `dropStagingTable`, `mirrorStagingIndexes`,
+ * `selectExistingExternalIds`). Without the body check, a `foo` in one file
+ * pairs with a writing `fooSync` in ANOTHER by naming coincidence alone, with no
+ * evidence that `foo` delegates to anything. This guard has been burned by
+ * bare-name matching twice already — EXEMPT's re-key to `file::function`, and
+ * `deleteLiveForceSet` again in the measurement above. The check is pinned by
+ * `a db/ export that does not reference its twin is not admitted`; delete the
+ * check and that test goes red.
+ *
+ * IT MUST NOT BE KEYED ON `Promise.resolve`. Measured: only THREE of the seven
+ * use `return Promise.resolve(xSync(...))`. The other four are
+ * `export async function x(...) { return xSync(...); }` with no `Promise.resolve`
+ * at all. A shape check on the ruled wrapper text would miss four of seven.
+ *
+ * IT PROTECTS A FIXTURE. BACKLOG-3238 records that 2546's `updateUser` twin
+ * flips the `THREE_HANDLERS_ONE_WRITE_EACH` fixture below from [1,1,1] to
+ * [0,1,1]. Pass 2 keeps `updateUser` in the set once that twin lands, so the
+ * fixture stays green rather than needing an edit.
+ *
+ * Cited by NAME, deliberately. This line carried a line number through three
+ * hands — BACKLOG-3238 measured it at `bea54238f`, the plan review repeated it,
+ * and it landed here as `:1324` — while the fixture is at `:1253` at
+ * `1cd39acd0` and moves again with every edit to this file. A number that names
+ * a location INSIDE the file citing it stales itself; a name does not.
+ *
+ * STATED FLOORS — measured sizes, not absences. None of these is fixed here.
+ *
+ *   1. NON-TWIN DELEGATION, seven names at `1cd39acd0`:
+ *      `createTransactionWithContactsSync`, `fullSync`,
+ *      `getContactsSortedByActivity`, `getOrCreateLLMSettings`,
+ *      `syncContactsBySource`, `syncGoogleContacts`, `upsertFromOutlook`.
+ *      A `db/` export holding no SQL that reaches a writer through a call which
+ *      is NOT its `<name>Sync` twin stays out of this set. These are REAL
+ *      exposures under this guard's own rule — a caller invoking one of them
+ *      plus one more write can half-happen — not artefacts. Admitting them is a
+ *      WIDER PREDICATE with its own unfiled population, which is why it is not
+ *      done here. BACKLOG-3238 is narrowed to exactly these seven and stays
+ *      OPEN. Measured consequence today: one unit,
+ *      `contactHandlers.ts ipc:contacts:get-available`.
+ *
+ *   2. BARE-NAME MASKING: `macosForceSetSql.ts:284 deleteLiveForceSet`, above.
+ *      Sibling of BACKLOG-3223's clearing-set floor.
+ *
+ *   3. BACKLOG-3225 TRUNCATION hides FIVE `db/` writers from pass 1, so pass 2
+ *      cannot pair with them either: `batchInsertMessages`,
+ *      `createContactsBatch`, `syncContactEmails`, `syncContactPhones`,
+ *      `updateCachedBounds`. (3225's body names four on a ">= 2 writes" test;
+ *      writer-set membership needs only one, so the number here is five.)
+ *      Measured at `1cd39acd0`: 12 `db/` exports truncate, and ZERO of the ten
+ *      same-file twin pairs do — on either side — so 3225 does not blind pass 2
+ *      at this SHA.
+ *
+ * `followTwins` exists ONLY so a fixture can derive both sets from one
+ * declaration list and assert the DIFFERENCE. No production caller passes it;
+ * `dbLayerWriters()` takes the default.
+ */
+function writersFrom(
+  decls: { name: string; body: string }[],
+  followTwins = true
+): Set<string> {
+  const base = new Set<string>();
+  for (const d of decls) if (writeCount(d.body) >= 1) base.add(d.name);
+  if (!followTwins) return base;
+
+  const writers = new Set(base);
+  for (const d of decls) {
+    if (base.has(d.name)) continue;
+    if (!base.has(d.name + "Sync")) continue;
+    if (!new RegExp("\\b" + d.name + "Sync\\s*\\(").test(stripComments(d.body))) continue;
+    writers.add(d.name);
   }
   return writers;
+}
+
+function dbLayerWriters(): Set<string> {
+  const decls: { name: string; body: string }[] = [];
+  for (const file of sourceFiles(DB_DIR)) {
+    decls.push(...dbWriterDeclsIn(fs.readFileSync(file, "utf8").split("\n")));
+  }
+  return writersFrom(decls);
 }
 
 /**
@@ -1363,6 +1495,314 @@ async function handleCompletePendingLogin(_event, userId) {
       .filter((u) => !wrapsItself(u.body))
       .filter((u) => !writesAreBranchExclusive(u.body, u.isDbWriterCall, u.name));
     expect(offenders.map((u) => u.name)).toEqual(["ipc:auth:dev:expire-and-reset"]);
+  });
+});
+
+/**
+ * ===========================================================================
+ * BACKLOG-3235 — THE WRITER SET FOLLOWS THE SYNCTWIN, TESTED DIRECTLY
+ * ===========================================================================
+ * The scan cannot prove this rule, for the same reason BACKLOG-2569 gave: a
+ * green scan is compatible with the rule being wrong. These fixtures run the
+ * REAL derivation (`dbWriterDeclsIn` + `writersFrom`) and the REAL enumeration
+ * (`unitsInFile`) over transcribed source strings.
+ *
+ * TRANSCRIBED, NOT INVENTED. `DB_LAYER_WITH_TWINS` is
+ * `electron/services/db/contactDbService.ts` @ `1cd39acd0`: the
+ * `backfillContactEmails` wrapper VERBATIM from `:959-965`, its twin reduced to
+ * its real SELECT (`:998`) and its real INSERT (`:1015-1019`), the
+ * `backfillContactPhones` wrapper VERBATIM from `:1041-1047` with its twin's
+ * INSERT (`:1081-1085`), and `createContact` reduced to its declaration
+ * (`:358-361`) and its write (`:366-370`). Reductions are stated because a
+ * reduction is a claim about what does not matter.
+ *
+ * The wrapper deliberately transcribed here is a `return xSync(...)` one, NOT a
+ * `Promise.resolve` one: four of the seven real wrappers have this shape, and a
+ * fixture using only the ruled `Promise.resolve` text would let a rule that
+ * keyed on it pass.
+ *
+ * THE TWO NEGATIVE FIXTURES ARE ONE-LINE MUTATIONS OF THAT TRANSCRIPTION, not
+ * separate inventions — so a failure points at the clause under test rather than
+ * at a fixture nobody has read.
+ */
+describe("the writer set follows a syncTwin (BACKLOG-3235)", () => {
+  const DB_LAYER_WITH_TWINS = `
+export async function createContact(
+  contactData: NewContact,
+  origin: ContactOrigin,
+): Promise<Contact> {
+  const statement = sql\`
+      INSERT INTO contacts (
+        id, user_id, display_name, company, title, source, is_imported
+      ) VALUES (?, ?, ?, ?, ?, ?, ?)
+    \`;
+  return dbRun(statement, values);
+}
+
+export async function backfillContactEmails(
+  contactId: string,
+  emails: string[],
+  source: ContactInfoSource = "import",
+): Promise<number> {
+  return backfillContactEmailsSync(contactId, emails, source);
+}
+
+export function backfillContactEmailsSync(
+  contactId: string,
+  emails: string[],
+  source: ContactInfoSource = "import",
+): number {
+  const existingSql = sql\`SELECT LOWER(email) as email FROM contact_emails WHERE contact_id = ?\`;
+  const existingRows = dbAll<{ email: string }>(existingSql, [contactId]);
+  const emailSql = sql\`
+      INSERT OR IGNORE INTO contact_emails (
+        id, contact_id, email, is_primary, source, created_at
+      ) VALUES (?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+    \`;
+  return dbRun(emailSql, [emailId, contactId, normalizedEmail, isPrimary, source]).changes;
+}
+
+export async function backfillContactPhones(
+  contactId: string,
+  phones: string[],
+  source: ContactInfoSource = "import",
+): Promise<number> {
+  return backfillContactPhonesSync(contactId, phones, source);
+}
+
+export function backfillContactPhonesSync(
+  contactId: string,
+  phones: string[],
+  source: ContactInfoSource = "import",
+): number {
+  const phoneSql = sql\`
+      INSERT OR IGNORE INTO contact_phones (
+        id, contact_id, phone_e164, phone_display, phone_normalized, is_primary, source, created_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+    \`;
+  return dbRun(phoneSql, [phoneId, contactId, phoneE164, phone, toLookupKey(phoneE164), isPrimary, source]).changes;
+}
+`;
+
+  // The SAME pair, with exactly ONE thing changed: the wrapper no longer
+  // mentions its twin. Pins the body check — delete that line and this reddens.
+  const WRAPPER_WITHOUT_DELEGATION = `
+export async function backfillContactEmails(
+  contactId: string,
+  emails: string[],
+  source: ContactInfoSource = "import",
+): Promise<number> {
+  return Promise.resolve(0);
+}
+
+export function backfillContactEmailsSync(
+  contactId: string,
+  emails: string[],
+  source: ContactInfoSource = "import",
+): number {
+  const emailSql = sql\`
+      INSERT OR IGNORE INTO contact_emails (
+        id, contact_id, email, is_primary, source, created_at
+      ) VALUES (?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+    \`;
+  return dbRun(emailSql, [emailId, contactId, normalizedEmail, isPrimary, source]).changes;
+}
+`;
+
+  // The SAME pair, with exactly ONE thing changed: the twin's INSERT is gone and
+  // only its real SELECT remains. Pins `base.has(name + "Sync")` against a bare
+  // declaration-existence check — which the fixture above CANNOT catch, because
+  // its twin writes.
+  const TWIN_THAT_ONLY_READS = `
+export async function backfillContactEmails(
+  contactId: string,
+  emails: string[],
+  source: ContactInfoSource = "import",
+): Promise<number> {
+  return backfillContactEmailsSync(contactId, emails, source);
+}
+
+export function backfillContactEmailsSync(
+  contactId: string,
+  emails: string[],
+  source: ContactInfoSource = "import",
+): number {
+  const existingSql = sql\`SELECT LOWER(email) as email FROM contact_emails WHERE contact_id = ?\`;
+  const existingRows = dbAll<{ email: string }>(existingSql, [contactId]);
+  return existingRows.length;
+}
+`;
+
+  // `contactHandlers.ts:2717-2780` @ `1cd39acd0`, CONTIGUOUS AND VERBATIM —
+  // every line of the span, comments included. It is wrapped in an
+  // `ipcMain.handle` registration because `unitsInFile` enumerates units, not
+  // fragments; the shell is scaffolding, the span is not touched.
+  //
+  // Reducing it would be unsafe rather than merely lossy: the span contains NO
+  // `return` and NO `} else`, which is exactly why `writesAreBranchExclusive`
+  // declines to clear it. Dropping or introducing either while trimming would
+  // silently reclassify the fixture.
+  //
+  // This is also the ONLY place in this file pinning TWO CONSECUTIVE `if` BLOCKS
+  // WITH NO `else` — `IF_ELSE_ONE_WRITE_PER_BRANCH` pins if/else and
+  // `SIBLING_ELSE_BETWEEN_SEQUENTIAL_WRITES` pins a sibling `} else`. Neither
+  // covers the shape this fix actually surfaces.
+  const CALLER_COMPOSING_THE_TWINS = `
+  ipcMain.handle(
+    "contacts:create",
+    async (
+      event: IpcMainInvokeEvent,
+      userId: string,
+      contactData: unknown,
+    ): Promise<ContactResponse> => {
+        const contact = await databaseService.createContact(
+          {
+            user_id: validatedUserId,
+            // BACKLOG-2707 — \`?? ""\`, not \`|| "Unknown"\`. Same reason as the
+            // import loop above; one substitution site left behind is how this
+            // recurs.
+            display_name: validatedData.name ?? "",
+            email: validatedData.email ?? undefined,
+            phone: validatedData.phone ?? undefined,
+            company: validatedData.company ?? undefined,
+            title: validatedData.title ?? undefined,
+            source,
+            is_imported: true,
+          },
+          // BACKLOG-2496 — "derived": this contact was typed into the Add
+          // Contact form (or arrived from a message thread), so there is no
+          // address-book record to point at and its origin row is synthetic,
+          // keyed on its own id. The row is now written INSIDE the create
+          // transaction, so the separate \`recordContactOrigin\` call that used
+          // to sit below is gone: it could not fail to happen any more.
+          { kind: "derived" },
+        );
+
+        /**
+         * WHERE THIS CONTACT CAME FROM IS NO LONGER WRITTEN HERE (BACKLOG-2496).
+         *
+         * It used to be a \`recordContactOrigin(...)\` call on this line, AFTER
+         * the contact had already been committed. That is the defect this item
+         * closes: two separate writes, with nothing forcing the second, so a
+         * crash or a throw between them left a contact with no origin —
+         * indistinguishable afterwards from one a path never wrote.
+         *
+         * The origin is now a REQUIRED ARGUMENT to \`createContact\` above and is
+         * written inside the same transaction as the contact. A create path that
+         * does not state an origin does not compile, and one that does cannot
+         * half-succeed.
+         *
+         * The four-way case analysis that used to sit here — listing which
+         * create paths were covered and naming the import batch and the Android
+         * promote as KNOWN GAPS — is obsolete: all of them now go through a
+         * signature that requires it.
+         */
+
+        // BACKLOG-1270: Store ALL emails/phones (not just the primary)
+        //
+        // BACKLOG-2427: with the SAME provenance the contact itself was given.
+        // These two calls stamped every value 'import' regardless — and the
+        // manual Add Contact form arrives here with no \`source\` at all, so
+        // \`source\` above resolves to "manual" while the addresses the user had
+        // just typed were recorded as imported. The unlink is then entitled to
+        // delete them: a stranger's address-book card sharing the contact's
+        // office line was enough to take a client's own phone number off their
+        // record.
+        const valueSource = contactInfoSourceFor(source);
+        const inputAllEmails = (contactData as { allEmails?: string[] })?.allEmails || [];
+        const inputAllPhones = (contactData as { allPhones?: string[] })?.allPhones || [];
+        if (inputAllEmails.length > 0) {
+          await databaseService.backfillContactEmails(contact.id, inputAllEmails, valueSource);
+          logService.info(\`[Contacts] Stored \${inputAllEmails.length} emails for new contact \${contact.id}\`, "Contacts");
+        }
+        if (inputAllPhones.length > 0) {
+          await databaseService.backfillContactPhones(contact.id, inputAllPhones, valueSource);
+          logService.info(\`[Contacts] Stored \${inputAllPhones.length} phones for new contact \${contact.id}\`, "Contacts");
+        }
+    },
+  );
+`;
+
+  const declsOf = (src: string): { name: string; body: string }[] =>
+    dbWriterDeclsIn(src.split("\n"));
+
+  it("admits a wrapper that delegates to a writing twin — and did NOT before", () => {
+    const decls = declsOf(DB_LAYER_WITH_TWINS);
+    const before = writersFrom(decls, false);
+    const after = writersFrom(decls);
+
+    // The twin holds the SQL, so it is a writer under BOTH derivations.
+    expect(before.has("backfillContactEmailsSync")).toBe(true);
+    expect(after.has("backfillContactEmailsSync")).toBe(true);
+
+    // The wrapper holds none. This is the defect, and then the fix.
+    expect(before.has("backfillContactEmails")).toBe(false);
+    expect(after.has("backfillContactEmails")).toBe(true);
+    expect(before.has("backfillContactPhones")).toBe(false);
+    expect(after.has("backfillContactPhones")).toBe(true);
+
+    // Exact delta, not a size: pass 2 restores the delegating wrappers and
+    // NOTHING else. A count would pass just as well if it swapped a name.
+    expect([...after].filter((n) => !before.has(n)).sort()).toEqual([
+      "backfillContactEmails",
+      "backfillContactPhones",
+    ]);
+  });
+
+  it("a db/ export that does NOT reference its twin is not admitted", () => {
+    const writers = writersFrom(declsOf(WRAPPER_WITHOUT_DELEGATION));
+    expect(writers.has("backfillContactEmailsSync")).toBe(true);
+    // Naming coincidence is not delegation. `base` is BARE NAMES over 434 unique
+    // names with six measured duplicates, so without the body check a `foo` in
+    // one file pairs with a writing `fooSync` in another on the name alone.
+    expect(writers.has("backfillContactEmails")).toBe(false);
+  });
+
+  it("a wrapper whose twin only READS is not admitted", () => {
+    const writers = writersFrom(declsOf(TWIN_THAT_ONLY_READS));
+    // The twin exists and is delegated to — but it issues no write, so neither
+    // name is a writer. Pins the rule against "a twin declaration exists".
+    expect(writers.has("backfillContactEmailsSync")).toBe(false);
+    expect(writers.has("backfillContactEmails")).toBe(false);
+  });
+
+  it("reports a handler composing twin wrappers as an offender — and did NOT before", () => {
+    const decls = declsOf(DB_LAYER_WITH_TWINS);
+    const before = writersFrom(decls, false);
+    const after = writersFrom(decls);
+
+    // NOT `electron/services/db/...`: inside `db/` the raw-SQL rule stands and
+    // call tokens are OFF, which would make every assertion below vacuous.
+    const rel = "electron/handlers/contactHandlers.ts";
+    const lines = CALLER_COMPOSING_THE_TWINS.split("\n");
+    const unitsBefore = unitsInFile(rel, lines, before);
+    const unitsAfter = unitsInFile(rel, lines, after);
+
+    // The db/ pair and the caller are SEPARATE strings on purpose. In one
+    // combined string `unitsInFile`'s `localWriters` rule would admit a
+    // non-exported `backfillContactEmails` declaration at depth 1, and this test
+    // would pass with the twin clause deleted.
+    expect(unitsBefore.map((u) => u.name)).toEqual(["ipc:contacts:create"]);
+    expect(unitsAfter.map((u) => u.name)).toEqual(["ipc:contacts:create"]);
+
+    // Counts DERIVED FROM THIS FIXTURE'S CONTENTS: `createContact` is a raw-SQL
+    // writer in both derivations, the two backfills only in the second.
+    expect(unitWrites(unitsBefore[0]).length).toBe(1);
+    expect(unitWrites(unitsAfter[0]).length).toBe(3);
+
+    // THE ASSERTION THAT MATTERS. A write COUNT cannot separate a violation from
+    // a non-violation — `length === 2` is equally true of a correctly
+    // branch-exclusive upsert. Run the offender predicate itself and assert the
+    // unit's NAME.
+    const offenders = (units: Fn[]): string[] =>
+      units
+        .filter((u) => unitWrites(u).length >= 2)
+        .filter((u) => !wrapsItself(u.body))
+        .filter((u) => !writesAreBranchExclusive(u.body, u.isDbWriterCall, u.name))
+        .map((u) => u.name);
+
+    expect(offenders(unitsBefore)).toEqual([]);
+    expect(offenders(unitsAfter)).toEqual(["ipc:contacts:create"]);
   });
 });
 
