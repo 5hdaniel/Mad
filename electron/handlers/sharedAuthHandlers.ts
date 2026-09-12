@@ -248,8 +248,22 @@ export async function handleCompletePendingLogin(
       }
     }
 
-    // Save session to file for persistence across app restarts
-    await sessionService.saveSession({
+    // Save session to file for persistence across app restarts.
+    //
+    // BACKLOG-3299: `saveSession` REPORTS failure, it does not throw — a session
+    // that cannot be encrypted or cannot be written resolves `false`. Discarding
+    // that boolean returned `success: true` with no session file, and the user
+    // landed on a dashboard that was signed out again on the next launch.
+    //
+    // The database commit STANDS. There is no compensating delete: the rows are a
+    // complete, usable account, `provisionLogin` is idempotent, and the next
+    // attempt takes the update branch and writes a fresh session. Deleting them
+    // would recreate the ghost account this whole item exists to remove.
+    //
+    // Device registration, the login audit entry and `setSyncUserId` are all
+    // deliberately skipped below — this login did not succeed, so nothing may
+    // record that it did.
+    const sessionSaved = await sessionService.saveSession({
       user: localUser,
       sessionToken,
       provider,
@@ -257,6 +271,27 @@ export async function handleCompletePendingLogin(
       expiresAt: Date.now() + sessionService.getSessionExpirationMs(),
       createdAt: Date.now(),
     });
+
+    if (!sessionSaved) {
+      await logService.error(
+        "Pending login completed in the database but the session could not be saved",
+        "AuthHandlers",
+        { userId: localUser.id, provider }
+      );
+      await auditService.log({
+        userId: localUser.id,
+        action: "LOGIN_FAILED",
+        resourceType: "SESSION",
+        resourceId: sessionToken,
+        metadata: { provider, pendingLogin: true, reason: "session-not-saved" },
+        success: false,
+        errorMessage: "Session could not be saved",
+      });
+      return {
+        success: false,
+        error: "Could not save your session. Please try signing in again.",
+      };
+    }
 
     const deviceInfo = {
       device_id: crypto.randomUUID(),

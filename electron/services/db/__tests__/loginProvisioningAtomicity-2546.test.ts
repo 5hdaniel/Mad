@@ -269,6 +269,9 @@ afterAll(() => {
 beforeEach(() => {
   jest.clearAllMocks();
   (sessionService.getSessionExpirationMs as jest.Mock).mockReturnValue(24 * 60 * 60 * 1000);
+  // The success value the real `saveSession` returns. A bare `jest.fn()` resolves
+  // `undefined`, which is a value that producer never emits.
+  (sessionService.saveSession as jest.Mock).mockResolvedValue(true);
 });
 
 // ===========================================================================
@@ -336,7 +339,13 @@ describe("BACKLOG-2546 · a crash after the commit but before session.json", () 
     const real = seedDb(path);
     setDb(real);
 
-    (sessionService.saveSession as jest.Mock).mockRejectedValueOnce(new Error("disk full"));
+    // The real producer CANNOT reject. `saveSession` (sessionService.ts:287) returns
+    // `runSerialized(() => this._writeSession(...))`; `_writeSession` wraps its whole body
+    // in one try/catch that returns `false`, and `runSerialized` chains off a `writeLock`
+    // that is reset through `.then(() => undefined, () => undefined)` and is therefore
+    // always resolved. A disk-full session write RESOLVES FALSE. Transcribed from that
+    // producer, not invented — BACKLOG-3299.
+    (sessionService.saveSession as jest.Mock).mockResolvedValueOnce(false);
 
     const failed = await handleCompletePendingLogin(NO_EVENT, pendingPayload());
 
@@ -346,7 +355,7 @@ describe("BACKLOG-2546 · a crash after the commit but before session.json", () 
 
     // And this is what separates "recoverable" from "ghost": the account is
     // fully provisioned, so the next attempt completes normally.
-    (sessionService.saveSession as jest.Mock).mockResolvedValueOnce(undefined);
+    (sessionService.saveSession as jest.Mock).mockResolvedValueOnce(true);
     const retried = await handleCompletePendingLogin(NO_EVENT, pendingPayload());
 
     expect(retried.success).toBe(true);

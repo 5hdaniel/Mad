@@ -88,7 +88,10 @@ jest.mock("../../services/auditService", () => ({
 }));
 
 const mockSessionService = {
-  saveSession: jest.fn().mockResolvedValue(undefined),
+  // `saveSession` resolves a BOOLEAN — true on success, false when the session
+  // could not be encrypted or written (sessionService.ts:287). It never resolves
+  // `undefined` and never rejects. BACKLOG-3299.
+  saveSession: jest.fn().mockResolvedValue(true),
   getSessionExpirationMs: jest.fn().mockReturnValue(86400000),
 };
 
