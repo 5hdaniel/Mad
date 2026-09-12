@@ -160,7 +160,6 @@ A plan that says "control C proves X, and reverting Y turns it red" is making a 
 | Control | Claimed | What running the mutation showed |
 |---|---|---|
 | health-banner prune (3229) — **the contrast** | five controls cover the fix | a stale-closure build wiping every dismissal every two minutes **passed four of six** — caught at PR review against a built implementation, the later and more expensive gate |
-| `TOKEN_EXPIRED` fixtures (3229) | two controls assert on this value | **no producer in the repo emits it** |
 | C22 (3213) | "revert `:638` → C22 red" | a mount effect resolves the state first, so it reports **green** |
 | SR's `>=2` replacement (3213) | fixes C22's vacuity | measured 2 calls with **zero** re-asks — vacuous too |
 | Engineer's delta replacement (3213) | fixes SR's vacuity | **times out against correct code** — a false red, worse than a vacuous green |
@@ -173,6 +172,8 @@ A plan that says "control C proves X, and reverting Y turns it red" is making a 
 3. **Ask what the most likely WRONG implementation looks like, and check the set catches that** — not merely that it catches the fix being absent. The stale-closure prune and a screen-blank permission state were both plausible, both looked shipped, and both were invisible to the entire control set.
 
 Proximity to the precedent is no protection: the repo had already recorded this identical trap twice in the very file the engineer was copying fixtures from. And the rule pays immediately — applying it surfaced a gate term with no guard at all, and neutering that term left all 21 tests green.
+
+**Know its limit.** A mutation tells you whether a control *can* fail, not whether the value it asserts on is one the code can produce: two controls in BACKLOG-3229 asserted on a `TOKEN_EXPIRED` that **no producer in the repo emits**, and mutating the code that handles it reddens them exactly as advertised. Enumerating the writers is what finds that one.
 
 ### Sequencing PR trains
 
