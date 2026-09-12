@@ -21,6 +21,7 @@
 
 import { appStateReducer } from "./reducer";
 import { fdaFromProbe, isFdaGranted } from "./fdaState";
+import { selectSetupIncomplete } from "./selectors";
 import type { AppState, LoadingState, PlatformInfo, ReadyState, User, UserData } from "./types";
 
 const mockUser: User = {
@@ -109,10 +110,16 @@ describe("BACKLOG-3212 — a persisted FDA skip survives a relaunch", () => {
     expect(result.status).toBe("onboarding");
   });
 
-  it("does NOT release a user who declined FDA and has no mailbox — the data-source floor still applies", () => {
-    // hasCompletedEmailOnboarding is true for a user who SKIPPED email, so
-    // releasing on fdaSkipped alone would drop someone onto the dashboard with
-    // zero data sources and the BACKLOG-1821 floor would never fire again.
+  it("BACKLOG-3277: DOES release a user who declined FDA and has no mailbox — the gate now asks the floor", () => {
+    // INVERTED BY BACKLOG-3277, deliberately. This test previously asserted
+    // `onboarding`, on the stated ground that "the BACKLOG-1821 floor would
+    // never fire again". That ground was false as written: the floor does not
+    // fire for this user either way — on macOS `driverSetupComplete` reads
+    // true (the fail-open paragraph on `hasMinimumDataSourceForUser`,
+    // userDataSelectors.ts:318-322, documents why), so
+    // `getSatisfyingSource` returns "texts-iphone-driver" and the floor is
+    // satisfied. The old gate was STRICTER than the floor it claimed to
+    // protect, and that gap is what held the user forever.
     const noSourceAtAll: UserData = {
       ...declinedFdaWithMailbox,
       hasEmailConnected: false, // skipped email
@@ -121,16 +128,52 @@ describe("BACKLOG-3212 — a persisted FDA skip survives a relaunch", () => {
 
     const result = loadUserData(noSourceAtAll);
 
-    expect(result.status).toBe("onboarding");
+    expect(result.status).toBe("ready");
   });
 
-  it("still seeds `permissions` as answered when such a user does enter onboarding", () => {
-    // They are held for the floor, not re-asked for Full Disk Access. The
-    // queue reads this via OnboardingState.fdaSkipped; completedSteps carries
-    // the same fact for the legacy step-derivation path.
+  it("BACKLOG-3277 HONESTY: the released user is NOT shown the Resume-setup banner", () => {
+    // Stated so it cannot be mistaken for a passing bar. `selectSetupIncomplete`
+    // is `!hasMinimumDataSource` over the same projection the gate now consults,
+    // so every user BACKLOG-3277 releases is definitionally one the banner
+    // cannot show. Verification bar #1 is structurally unreachable from this
+    // change; it needs the observed-source banner, filed separately.
     const noSourceAtAll: UserData = {
       ...declinedFdaWithMailbox,
       hasEmailConnected: false,
+      hasCompletedEmailOnboarding: true,
+    };
+
+    const result = loadUserData(noSourceAtAll);
+    expect(result.status).toBe("ready");
+    expect(selectSetupIncomplete(result)).toBe(false);
+  });
+
+  it("BACKLOG-3277 CONTROL: a user who was never ASKED is still held and still asked", () => {
+    // The discriminating half. A fix that simply stopped holding anyone would
+    // pass the release test above and fail this one.
+    const neverAsked: UserData = {
+      ...declinedFdaWithMailbox,
+      hasEmailConnected: false,
+      hasCompletedEmailOnboarding: true,
+      fda: "not-asked",
+    };
+
+    expect(loadUserData(neverAsked).status).toBe("onboarding");
+  });
+
+  it("still seeds `permissions` as answered when such a user does enter onboarding", () => {
+    // They are not re-asked for Full Disk Access. The queue reads this via
+    // OnboardingState.fdaSkipped; completedSteps carries the same fact for the
+    // legacy step-derivation path.
+    //
+    // BACKLOG-3277 re-anchor: `hasCompletedEmailOnboarding: false` is what now
+    // holds this user (reducer.ts:132), since the Full Disk Access gate no
+    // longer does. Without it the user reaches `ready` and this whole body
+    // stops running while staying green.
+    const noSourceAtAll: UserData = {
+      ...declinedFdaWithMailbox,
+      hasEmailConnected: false,
+      hasCompletedEmailOnboarding: false,
     };
 
     const result = loadUserData(noSourceAtAll);
