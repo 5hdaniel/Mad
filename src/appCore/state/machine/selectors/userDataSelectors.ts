@@ -8,6 +8,7 @@
  * @module appCore/state/machine/selectors/userDataSelectors
  */
 
+import { isFdaGranted } from "../fdaState";
 import type { AppState, OnboardingStep } from "../types";
 import logger from '../../../../utils/logger';
 import type { OnboardingContext, Platform } from "../../../../components/onboarding/types";
@@ -199,12 +200,14 @@ export function selectHasEmailConnected(state: AppState): boolean {
  */
 export function selectHasPermissions(state: AppState): boolean {
   if (state.status === "ready") {
-    return state.userData.hasPermissions;
+    return isFdaGranted(state.userData.fda);
   }
   if (state.status === "onboarding") {
-    // Check if permissions were loaded during initialization
-    // This fixes the bug where returning users with FDA granted were stuck
-    return state.hasPermissions ?? false;
+    // Check if permissions were loaded during initialization.
+    // This fixes the bug where returning users with FDA granted were stuck.
+    // BACKLOG-3275: `fda === undefined` means "not established yet"; this
+    // selector's contract is a plain boolean, so unknown reads as not granted.
+    return state.fda === undefined ? false : isFdaGranted(state.fda);
   }
   return false;
 }
@@ -260,10 +263,15 @@ export function selectHasPermissionsNullable(
   state: AppState
 ): boolean | undefined {
   if (state.status === "ready") {
-    return state.userData.hasPermissions;
+    return isFdaGranted(state.userData.fda);
   }
   if (state.status === "onboarding") {
-    return state.hasPermissions ?? undefined;
+    // BACKLOG-3275: `undefined` must survive. It is the load-bearing third
+    // value this selector exists for — `PermissionsStep.tsx:680` (`!== true`)
+    // and `dataSourceFloor.ts:67` both depend on unknown reading as neither
+    // granted nor explicitly false, so a half-loaded state never satisfies the
+    // BACKLOG-1821 floor. Mapping it through `isFdaGranted` would collapse it.
+    return state.fda === undefined ? undefined : isFdaGranted(state.fda);
   }
   // Loading/unauthenticated/error: state is unknown
   return undefined;
@@ -334,7 +342,7 @@ export function selectSetupIncomplete(state: AppState): boolean {
     // In `ready`, driver setup is resolved (needsDriverSetup === false),
     // so treat the driver capability as present for an iPhone user (fail-open).
     driverSetupComplete: userData.needsDriverSetup === false,
-    permissionsGranted: userData.hasPermissions,
+    permissionsGranted: isFdaGranted(userData.fda),
     termsAccepted: true,
     emailProvider: null,
     authProvider: "google",

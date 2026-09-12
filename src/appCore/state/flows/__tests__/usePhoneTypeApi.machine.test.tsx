@@ -81,7 +81,7 @@ const readyStateIPhone: ReadyState = {
     hasCompletedEmailOnboarding: true,
     hasEmailConnected: true,
     needsDriverSetup: false,
-    hasPermissions: true,
+    fda: "granted",
   },
 };
 
@@ -94,7 +94,7 @@ const readyStateAndroid: ReadyState = {
     hasCompletedEmailOnboarding: true,
     hasEmailConnected: true,
     needsDriverSetup: false,
-    hasPermissions: true,
+    fda: "granted",
   },
 };
 
@@ -108,7 +108,7 @@ const readyStateWindowsIPhoneNeedsDriver: ReadyState = {
     hasCompletedEmailOnboarding: true,
     hasEmailConnected: true,
     needsDriverSetup: true,
-    hasPermissions: true,
+    fda: "granted",
   },
 };
 
