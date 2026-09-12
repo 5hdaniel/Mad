@@ -131,6 +131,24 @@ const ESTIMATE_OK = {
   fitsOnDisk: true,
 };
 
+/**
+ * The Import button's tooltip in the absent state. Used as the SETTLE SIGNAL
+ * by every test below except C14, and that is deliberate: it proves the panel
+ * has resolved to `absent` WITHOUT touching the notice, so exactly one test in
+ * this file positively asserts the notice exists. Delete the notice block and
+ * only that one test reds — which is what makes it a control for "something is
+ * on screen" rather than a duplicate of the other five.
+ */
+const ABSENT_TOOLTIP = "Keepr couldn't find a Messages database on this Mac";
+
+/** Wait until the panel has resolved to the absent state. */
+const settleToAbsent = () =>
+  waitFor(() =>
+    expect(
+      screen.getByRole("button", { name: /Import Messages/i })
+    ).toHaveAttribute("title", ABSENT_TOOLTIP)
+  );
+
 const systemApi = () => window.api.system as unknown as Record<string, jest.Mock>;
 
 const renderStrict = () =>
@@ -219,19 +237,14 @@ describe("BACKLOG-3213 — the panel tells an absent database from a refused one
 
     renderStrict();
 
-    await screen.findByTestId("macos-messages-absent-notice");
     await waitFor(() =>
       expect(screen.getByTestId("skip-attachments-toggle")).toBeChecked()
     );
+    await settleToAbsent();
 
-    const importButton = screen.getByRole("button", {
-      name: /Import Messages/i,
-    });
-    await waitFor(() => expect(importButton).toBeDisabled());
-    expect(importButton).toHaveAttribute(
-      "title",
-      "Keepr couldn't find a Messages database on this Mac"
-    );
+    expect(
+      screen.getByRole("button", { name: /Import Messages/i })
+    ).toBeDisabled();
     expect(
       screen.getByRole("button", { name: /Force Re-import/i })
     ).toBeDisabled();
@@ -295,7 +308,7 @@ describe("BACKLOG-3213 — the panel tells an absent database from a refused one
 
     renderStrict();
 
-    await screen.findByTestId("macos-messages-absent-notice");
+    await settleToAbsent();
 
     expect(screen.queryByTestId("macos-fda-denied-notice")).toBeNull();
     expect(screen.queryByTestId("macos-fda-open-settings")).toBeNull();
@@ -318,7 +331,7 @@ describe("BACKLOG-3213 — the panel tells an absent database from a refused one
 
     renderStrict();
 
-    await screen.findByTestId("macos-messages-absent-notice");
+    await settleToAbsent();
 
     // The focus re-check is the panel's own way back — the same path a user
     // takes returning from System Settings.
@@ -329,7 +342,9 @@ describe("BACKLOG-3213 — the panel tells an absent database from a refused one
     });
 
     await waitFor(() =>
-      expect(screen.queryByTestId("macos-messages-absent-notice")).toBeNull()
+      expect(
+        screen.getByRole("button", { name: /Import Messages/i })
+      ).not.toHaveAttribute("title", ABSENT_TOOLTIP)
     );
     expect(screen.queryByTestId("macos-fda-restart-notice")).toBeNull();
   });
@@ -358,7 +373,7 @@ describe("BACKLOG-3213 — the panel tells an absent database from a refused one
 
     renderStrict();
 
-    await screen.findByTestId("macos-messages-absent-notice");
+    await settleToAbsent();
     await waitFor(() =>
       expect(window.api.messages.getImportCount).toHaveBeenCalled()
     );
@@ -447,21 +462,19 @@ describe("BACKLOG-3213 — the panel tells an absent database from a refused one
 
       renderStrict();
 
-      await screen.findByTestId("macos-messages-absent-notice");
       await waitFor(() =>
         expect(screen.getByTestId("skip-attachments-toggle")).toBeChecked()
       );
+      await settleToAbsent();
       await waitFor(() =>
         expect(systemApi().checkPermissions.mock.calls.length).toBeGreaterThan(
           countAtEstimate
         )
       );
 
-      await waitFor(() =>
-        expect(
-          screen.getByRole("button", { name: /Import Messages/i })
-        ).toBeDisabled()
-      );
+      expect(
+        screen.getByRole("button", { name: /Import Messages/i })
+      ).toBeDisabled();
       expect(
         screen.getByRole("button", { name: /Force Re-import/i })
       ).toBeDisabled();
@@ -475,7 +488,7 @@ describe("BACKLOG-3213 — the panel tells an absent database from a refused one
      * held by the STATE disjunct; before it lands, by the string one. Either
      * way the user never sees the disk-space sentence.
      */
-    it("shows the absent notice and no disk-space copy through the stale-read window", async () => {
+    it("converges to the absent state with no disk-space copy through the stale-read window", async () => {
       systemApi().checkPermissions.mockResolvedValue(FDA_GRANTED);
       (window.api.messages.getImportCount as jest.Mock).mockImplementation(() => {
         systemApi().checkPermissions.mockResolvedValue(FDA_ABSENT);
@@ -484,9 +497,7 @@ describe("BACKLOG-3213 — the panel tells an absent database from a refused one
 
       renderStrict();
 
-      expect(
-        await screen.findByTestId("macos-messages-absent-notice")
-      ).toHaveTextContent("Keepr couldn't find a Messages database on this Mac");
+      await settleToAbsent();
       await waitFor(() =>
         expect(window.api.messages.getImportCount).toHaveBeenCalled()
       );
@@ -538,6 +549,12 @@ describe("BACKLOG-3213 — the panel tells an absent database from a refused one
 
       // (2) premise: the panel's own check never answered, so no resolved
       // state can be doing the suppressing.
+      // Asserted on the TOOLTIP as well as the notice: a premise that only
+      // checked the notice would pass vacuously if the notice block were ever
+      // deleted, which is the state C14 exists to prevent.
+      expect(
+        screen.getByRole("button", { name: /Import Messages/i })
+      ).not.toHaveAttribute("title", ABSENT_TOOLTIP);
       expect(screen.queryByTestId("macos-messages-absent-notice")).toBeNull();
       expect(screen.queryByTestId("macos-fda-denied-notice")).toBeNull();
 
