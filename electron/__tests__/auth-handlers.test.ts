@@ -1316,6 +1316,22 @@ describe("Auth Handlers", () => {
       expect(result.error).toBeDefined();
     });
 
+    /**
+     * BACKLOG-3206 — THIS ALSO GUARDS THE `finally`. Do not delete it as a
+     * duplicate of the sibling error tests.
+     *
+     * The disconnect handler deletes the token row in a `finally`, so the row
+     * goes whatever the revoke does. That makes this test load-bearing in a way
+     * its name does not say: rejecting `deleteOAuthToken` is now a rejection
+     * raised INSIDE a `finally`, and what this asserts is that it still
+     * propagates out of the handler as `success: false` with the message
+     * intact.
+     *
+     * The mutation that reds it is the "let's be safe" refactor a future author
+     * will reach for: wrap the `finally`'s delete in its own try/catch. Run
+     * 2026-09-12 against the real implementation — 2 failed, this test and its
+     * Microsoft twin below.
+     */
     it("should handle database error during disconnect", async () => {
       mockDatabaseService.deleteOAuthToken.mockRejectedValueOnce(
         new Error("Database error"),
@@ -1395,6 +1411,22 @@ describe("Auth Handlers", () => {
       expect(result.error).toBeDefined();
     });
 
+    /**
+     * BACKLOG-3206 — THIS ALSO GUARDS THE `finally`. Do not delete it as a
+     * duplicate of the sibling error tests.
+     *
+     * The disconnect handler deletes the token row in a `finally`, so the row
+     * goes whatever the revoke does. That makes this test load-bearing in a way
+     * its name does not say: rejecting `deleteOAuthToken` is now a rejection
+     * raised INSIDE a `finally`, and what this asserts is that it still
+     * propagates out of the handler as `success: false` with the message
+     * intact.
+     *
+     * The mutation that reds it is the "let's be safe" refactor a future author
+     * will reach for: wrap the `finally`'s delete in its own try/catch. Run
+     * 2026-09-12 against the real implementation — 2 failed, this test and its
+     * Google twin above.
+     */
     it("should handle database error during disconnect", async () => {
       mockDatabaseService.deleteOAuthToken.mockRejectedValueOnce(
         new Error("Database error"),
