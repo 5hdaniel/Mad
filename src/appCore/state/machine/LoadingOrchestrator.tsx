@@ -24,6 +24,7 @@ import {
 } from "./utils/platformInit";
 import { waitForApi } from "./utils/waitForApi";
 import { useAuth } from "../../../contexts";
+import { fdaFromProbe, unknownFdaFor } from "./fdaState";
 import type { PlatformInfo, User, UserData } from "./types";
 import logger from "../../../utils/logger";
 
@@ -685,10 +686,9 @@ export function LoadingOrchestrator({
         hasEmailConnected;
 
       // Determine permissions status (macOS only)
-      const hasPermissions = platform.isMacOS
-        ? permissionsResult.hasPermission === true ||
-          permissionsResult.fullDiskAccess === true
-        : true; // Windows doesn't require permissions
+      const probeGranted =
+        permissionsResult.hasPermission === true ||
+        permissionsResult.fullDiskAccess === true;
 
       // BACKLOG-3212: whether the user has already declined Full Disk Access.
       // Read from the preferences bag written by PermissionsStep's "Skip for
@@ -698,7 +698,13 @@ export function LoadingOrchestrator({
       const onboardingPrefs = (
         onboardingPrefsResult as { preferences?: { onboarding?: { fdaSkipped?: unknown } } } | undefined
       )?.preferences?.onboarding;
-      const fdaSkipped = onboardingPrefs?.fdaSkipped === true;
+      const recordedDecline = onboardingPrefs?.fdaSkipped === true;
+
+      // BACKLOG-3275: the ONE place the Full Disk Access union is derived, from
+      // the two inputs that already existed. Neither contract changes — the
+      // probe is still the `check-permissions` IPC call, the decline is still
+      // the `onboarding.fdaSkipped` key in the preferences bag.
+      const fda = fdaFromProbe({ isMacOS: platform.isMacOS, probeGranted, recordedDecline });
 
       // Determine if driver setup is needed (Windows + iPhone only)
       let needsDriverSetup = false;
@@ -725,8 +731,7 @@ export function LoadingOrchestrator({
         hasCompletedEmailOnboarding,
         hasEmailConnected,
         needsDriverSetup,
-        hasPermissions,
-        fdaSkipped,
+        fda,
       };
     };
 
@@ -759,11 +764,10 @@ export function LoadingOrchestrator({
             hasCompletedEmailOnboarding: false,
             hasEmailConnected: false,
             needsDriverSetup: platform.isWindows,
-            hasPermissions: !platform.isMacOS,
-            // BACKLOG-3212: the fallback deliberately claims no recorded skip.
-            // We could not read preferences, so we do not know — and "ask
-            // again" is the safe direction to be wrong in.
-            fdaSkipped: false,
+            // BACKLOG-3212 / BACKLOG-3275: the fallback deliberately claims no
+            // recorded decline. We could not read preferences, so we do not
+            // know — and "ask again" is the safe direction to be wrong in.
+            fda: unknownFdaFor(platform),
           };
 
           dispatch({
