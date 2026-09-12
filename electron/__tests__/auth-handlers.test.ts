@@ -667,16 +667,17 @@ describe("Auth Handlers", () => {
 
     // BACKLOG-3293. The rule this handler implements is an OR:
     //     completed := onboardingCompleted || hasValidMailboxToken
-    // The test below owns the FLAG half. It CANNOT own the token half: its
-    // fixture is flag=true / token=null, which returns true under `||` and
-    // equally under a bare `onboardingCompleted`, so no assertion here can
-    // separate those two. The token half is owned by "should return
-    // completed=true and auto-correct flag when token exists but flag is false
-    // (TASK-1039)" further down — that is the test that goes red if the handler
-    // ever degrades to trusting the flag alone. Do not delete it, and do not
-    // turn `onboardingCompleted` in sessionHandlers.ts into a `let`: TASK-1039
-    // catches the bare-flag regression only because that local is read before
-    // the auto-correct block writes, and stays stale.
+    // The four tests in this describe pin the COMPLETE flag x token truth
+    // table, so any handler that passes all four implements exactly that
+    // expression — not merely something compatible with it:
+    //     flag=true,  token=present -> true   "…onboarding done and mailbox token exists"
+    //     flag=true,  token=null    -> true   the test below
+    //     flag=false, token=present -> true   "…(TASK-1039)", which also pins the auto-correct
+    //     flag=false, token=null    -> false  "…onboarding not done and no token"
+    // So the test below cannot be read on its own: its fixture returns true
+    // under the OR AND under a bare `onboardingCompleted`, because every
+    // observable on flag=true/token=null is identical between the two. It is
+    // the TASK-1039 row that separates them. Do not delete any of the four.
     it("returns completed=true when the user answered the email step but holds no mailbox token — do not re-run onboarding (BACKLOG-3293)", async () => {
       // A deliberate skip and a session-only token that was never persisted
       // are indistinguishable to THIS handler — both are flag=true, no token —

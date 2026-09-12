@@ -269,10 +269,17 @@ describe("LoadingOrchestrator Phase 4 — the handler's answer reaches the route
   it("CONTROL: the pre-fix handler answer (completed=false) sends the same user to onboarding", async () => {
     // This is what the founder hit, twice. It proves the seam actually carries
     // the handler's answer rather than the connection OR: with the mailbox
-    // disconnected, `completed` is the only operand left at :684.
+    // disconnected, `completed` is the only operand left.
+    //
+    // `success: true` is deliberate and transcribed from the handler, not
+    // invented: the pre-fix handler RETURNED successfully and answered
+    // completed=false (`return { success: true, completed }`). `success: false`
+    // is the failure path — a different cause, covered by the case below — and
+    // using it here would flip two variables against the positive case instead
+    // of isolating `completed`, which is the one this control is about.
     founderState();
     mockApi.auth.checkEmailOnboarding.mockResolvedValue({
-      success: false,
+      success: true,
       completed: false,
     });
 
@@ -283,14 +290,15 @@ describe("LoadingOrchestrator Phase 4 — the handler's answer reaches the route
 
   it("a connected mailbox still rescues the user when the handler call itself fails", async () => {
     // After BACKLOG-3293 a live token makes `completed` true on its own
-    // (connectionStatusService.ts:114-137 reads the same oauth_tokens row the
-    // handler does), so `|| hasEmailConnected` at :684 is redundant on a normal
-    // launch. Its ONLY remaining job is the handler's failure paths — the
-    // .catch at LoadingOrchestrator.tsx:626-629 and the transient DB-not-ready
-    // return at sessionHandlers.ts:568-578, both of which answer
-    // completed=false for a user who DOES have a mailbox. Nothing else pins
-    // that operand, and it is the last thing between a transient main-process
-    // hiccup and a mailbox-having user dropped into onboarding.
+    // (`checkGoogleConnection` in connectionStatusService.ts reads the same
+    // oauth_tokens row the handler does), so the `|| hasEmailConnected` operand
+    // of `hasCompletedEmailOnboarding` is redundant on a normal launch. Its
+    // ONLY remaining job is the handler's failure paths — the `.catch` on the
+    // checkEmailOnboarding call in LoadingOrchestrator, and the transient
+    // DB-not-ready return in `handleCheckEmailOnboarding` — both of which
+    // answer completed=false for a user who DOES have a mailbox. Nothing else
+    // pins that operand, and it is the last thing between a transient
+    // main-process hiccup and a mailbox-having user dropped into onboarding.
     mockApi.preferences.get.mockResolvedValue({
       success: true,
       preferences: {
