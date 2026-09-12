@@ -8,12 +8,7 @@
  * @module appCore/state/machine/reducer
  */
 
-import {
-  fdaBlocksOnboarding,
-  isFdaGranted,
-  unknownFdaFor,
-  wasFdaAnswered,
-} from "./fdaState";
+import { fdaBlocksOnboarding, unknownFdaFor, wasFdaAnswered } from "./fdaState";
 import type {
   AppState,
   AppAction,
@@ -580,15 +575,18 @@ export function appStateReducer(
           state.platform.isWindows &&
           selectedPhoneType === "iphone" &&
           !completedSteps.includes("apple-driver"),
-        // BACKLOG-3275 COMMIT 1 — behaviour preserved deliberately, bug included.
-        // This is the defect: navigation state (`completedSteps`) deciding
-        // capability state. Expressed in union form here so the refactor commit
-        // changes nothing; the fix lands in the next commit.
-        fda: !state.platform.isMacOS
-          ? "not-applicable"
-          : isFdaGranted(state.fda ?? "not-asked") || completedSteps.includes("permissions")
-            ? "granted"
-            : "not-asked",
+        // BACKLOG-3275: carried through, never derived from `completedSteps`.
+        //
+        // This line used to read `completedSteps.includes("permissions")`. A
+        // user who DECLINED Full Disk Access has that entry — correctly, it
+        // means "asked and answered" — so completing any other step reported
+        // the capability as granted, and dropped the record of the decline in
+        // the same transition.
+        //
+        // Navigation does not decide capability. Only the permission probe and
+        // the user's own recorded answer do, and both reach this state before
+        // the transition.
+        fda: state.fda ?? unknownFdaFor(state.platform),
       };
 
       const nextStep = getNextOnboardingStep(
@@ -614,6 +612,19 @@ export function appStateReducer(
         completedSteps,
         selectedPhoneType,
       };
+    }
+
+    case "FDA_GRANTED": {
+      // BACKLOG-3275: the only writer of `"granted"` outside the probe
+      // derivation. Valid from onboarding (the grant happened during the
+      // permissions step) and from ready (the BACKLOG-3208 Settings path).
+      if (state.status === "onboarding") {
+        return { ...state, fda: "granted" };
+      }
+      if (state.status === "ready") {
+        return { ...state, userData: { ...state.userData, fda: "granted" } };
+      }
+      return state;
     }
 
     case "PHONE_TYPE_RESET": {

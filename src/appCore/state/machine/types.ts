@@ -290,6 +290,7 @@ export type AppAction =
   | OnboardingStepCompleteAction
   | OnboardingSkipAction
   | OnboardingQueueDoneAction
+  | FdaGrantedAction
   | PhoneTypeResetAction
   | ResumeMarkerAppliedAction
   | EmailConnectedAction
@@ -300,6 +301,30 @@ export type AppAction =
   | ErrorAction
   | RetryAction
   | InitStageReceivedAction;
+
+/**
+ * BACKLOG-3275: the Full Disk Access capability was OBSERVED to be present.
+ *
+ * This is the ONLY action that may set the state to `"granted"`, and it exists
+ * so that no navigation action can. Before it, completing the permissions step
+ * was what made the app believe the capability was held — which meant a user
+ * who DECLINED, and a user who was never asked, both ended up reported as
+ * having granted it.
+ *
+ * Dispatched from `usePermissionsFlow.handlePermissionsGranted`, which fires
+ * only after the permission check reports the capability is present.
+ *
+ * Deliberately separate from `ONBOARDING_STEP_COMPLETE{step:"permissions"}`:
+ * that action says where the user is, this one says what the app can do. The
+ * two are dispatched together today, but `ONBOARDING_SKIP` re-dispatches as a
+ * step completion (see its case in the reducer), so a step completion can
+ * arrive from a path that granted nothing. Exhaustiveness checking cannot see
+ * that — the coupling is semantic, not typed — so the separation is structural
+ * rather than conventional.
+ */
+export interface FdaGrantedAction {
+  type: "FDA_GRANTED";
+}
 
 /**
  * Storage check completed - determined if key store exists.

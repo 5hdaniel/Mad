@@ -864,10 +864,14 @@ describe("appStateReducer - Onboarding Transitions", () => {
       if (result.status === "ready") {
         expect(result.user).toEqual(mockUser);
         expect(result.platform).toEqual(mockMacOSPlatform);
-        // BACKLOG-3275 commit 1: behaviour preserved exactly. Today this is
-        // true only because `completedSteps` contains "permissions" — the
-        // defect. Commit 2 changes this assertion deliberately (SR OQ-4).
-        expect(result.userData.fda).toBe("granted");
+        // BACKLOG-3275, deliberate behaviour change. This used to assert
+        // `hasPermissions === true`, which held only because `completedSteps`
+        // contained "permissions" — navigation deciding capability, the defect
+        // this item removes. A step completion now carries the Full Disk Access
+        // state through untouched; only FDA_GRANTED may report a grant, and the
+        // single production dispatcher sends it alongside this action.
+        // See reducer.fdaInversion.test.ts for the paired assertion.
+        expect(result.userData.fda).toBe("not-asked");
       }
     });
 
