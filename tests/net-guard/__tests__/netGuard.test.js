@@ -62,3 +62,7 @@ describe('net guard — installed and intercepting', () => {
     expect(consume()).toEqual([]);
   });
 });
+
+// Explicit CommonJS module: keeps top-level names out of the global TypeScript
+// declaration space (tsconfig.test.json includes tests/**). See ../install.js.
+module.exports = {};

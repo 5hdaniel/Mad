@@ -20,3 +20,7 @@ test('RED-BY-DESIGN: swallowing handler returns success', async () => {
   const result = await handlerThatSwallows();
   expect(result.success).toBe(true);
 });
+
+// Explicit CommonJS module: keeps top-level names out of the global TypeScript
+// declaration space (tsconfig.test.json includes tests/**). See ../install.js.
+module.exports = {};

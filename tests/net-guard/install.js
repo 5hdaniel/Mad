@@ -188,3 +188,10 @@ function normalizeArgs(args) {
   guardedConnect.__keeprOriginal = original;
   net.Socket.prototype.connect = guardedConnect;
 }
+
+// tsconfig.test.json includes tests/** — a .js file with no `module.exports` is a
+// SCRIPT to TypeScript, and its top-level names land in the global declaration
+// space. `function drain()` here collided with one in an unrelated electron test
+// and took `npm run type-check:tests` red. Every file in this directory is an
+// explicit CommonJS module for that reason; keep it that way.
+module.exports = {};

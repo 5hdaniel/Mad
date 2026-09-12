@@ -23,3 +23,7 @@ test("consuming this file's own record leaves a sibling file's record alone", ()
   const consumed = global.__KEEPR_NET_CONSUME__() || [];
   expect(consumed.map((r) => `${r.host}:${r.port}`)).toEqual(['example.invalid:80']);
 });
+
+// Explicit CommonJS module: keeps top-level names out of the global TypeScript
+// declaration space (tsconfig.test.json includes tests/**). See ../install.js.
+module.exports = {};

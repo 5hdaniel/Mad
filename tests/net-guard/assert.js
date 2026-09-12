@@ -44,3 +44,7 @@ afterAll(() => {
   const blocked = drain();
   if (blocked) fail(blocked, "outside any test body (import time / afterAll) in this suite");
 });
+
+// Explicit CommonJS module: keeps top-level names out of the global TypeScript
+// declaration space (tsconfig.test.json includes tests/**). See ../install.js.
+module.exports = {};

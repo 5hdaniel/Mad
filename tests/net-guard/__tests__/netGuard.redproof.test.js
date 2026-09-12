@@ -117,3 +117,7 @@ test("RED-PROOF: a consuming file does not delete a sibling file's unreported re
   // case would be vacuous.
   expect(tail).toBeLessThan(sibling);
 });
+
+// Explicit CommonJS module: keeps top-level names out of the global TypeScript
+// declaration space (tsconfig.test.json includes tests/**). See ../install.js.
+module.exports = {};
