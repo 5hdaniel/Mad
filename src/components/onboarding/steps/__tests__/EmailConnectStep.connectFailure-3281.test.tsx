@@ -261,7 +261,7 @@ describe("EmailConnectStep connect failure (BACKLOG-3281)", () => {
             authProvider: "google",
             emailConnected: true,
             emailProvider: "microsoft",
-            connectedEmail: "user@outlook.com",
+            connectedEmail: "outlook-user@example.com",
           })}
           onAction={jest.fn()}
         />,
