@@ -151,15 +151,15 @@ Three ways a green signal carries no information. All three occurred on 2026-08-
 
 ### Run the mutation before you write the control down (MANDATORY)
 
-**A control is not specified until its mutation has been run.** The rule above runs *after* implementation. Every failure below happened at specification time, in plans that were written, reviewed and approved before any code existed.
+**A control is not specified until its mutation has been run.** The rule above runs *after* implementation. Most of the cases below happened earlier — at specification time, in plans that were written, reviewed and approved before any code existed.
 
-A plan that says "control C proves X, and reverting Y turns it red" is making a claim about code nobody has executed — and because it sits in an approved document, it is trusted more and checked less. The part the rule above does not cover: **a control's mutation can be run before the control exists**, against the code it will sit beside. That is what produced every correct fix below.
+A plan that says "control C proves X, and reverting Y turns it red" is making a claim about code nobody has executed — and because it sits in an approved document, it is trusted more and checked less. The part the rule above does not cover: **a control's mutation can be run before the control exists**, against the code it will sit beside. That is how the last three rows below were caught; two of them were proposed replacements that did not exist yet, measured against the code they would have sat beside.
 
 **Worked example — six controls, 11–12 September 2026 (BACKLOG-3229, BACKLOG-3213).**
 
 | Control | Claimed | What running the mutation showed |
 |---|---|---|
-| health-banner prune (3229) | five controls cover the fix | a stale-closure build wiping every dismissal every two minutes **passed four of six** |
+| health-banner prune (3229) — **the contrast** | five controls cover the fix | a stale-closure build wiping every dismissal every two minutes **passed four of six** — caught at PR review against a built implementation, the later and more expensive gate |
 | `TOKEN_EXPIRED` fixtures (3229) | two controls assert on this value | **no producer in the repo emits it** |
 | C22 (3213) | "revert `:638` → C22 red" | a mount effect resolves the state first, so it reports **green** |
 | SR's `>=2` replacement (3213) | fixes C22's vacuity | measured 2 calls with **zero** re-asks — vacuous too |
