@@ -149,6 +149,31 @@ Three ways a green signal carries no information. All three occurred on 2026-08-
 4. **Sweep boundaries, don't sample them.** One input per branch cannot catch an off-by-one.
 5. **A PR that moves a module across the main/renderer boundary MUST run `npm run build`** (CI also runs it — job "Build Application", `ci.yml`, in a step labelled "Build Vite app" which reads as renderer-only and has caused three separate documents to claim CI never builds; run it locally anyway so you find out in minutes, not after a push)**.** `electron/` cannot import from `src/` (`rootDir`), and the renderer cannot *value*-import from `electron/` (Vite parses it as JavaScript). Neither direction works; a shared module needs `src/` with a mirror, plus a parity test whose corpus covers every boundary.
 
+### Run the mutation before you write the control down (MANDATORY)
+
+**A control is not specified until its mutation has been run.** The rule above runs *after* implementation. Every failure below happened at specification time, in plans that were written, reviewed and approved before any code existed.
+
+A plan that says "control C proves X, and reverting Y turns it red" is making a claim about code nobody has executed — and because it sits in an approved document, it is trusted more and checked less. The part the rule above does not cover: **a control's mutation can be run before the control exists**, against the code it will sit beside. That is what produced every correct fix below.
+
+**Worked example — six controls, 11–12 September 2026 (BACKLOG-3229, BACKLOG-3213).**
+
+| Control | Claimed | What running the mutation showed |
+|---|---|---|
+| health-banner prune (3229) | five controls cover the fix | a stale-closure build wiping every dismissal every two minutes **passed four of six** |
+| `TOKEN_EXPIRED` fixtures (3229) | two controls assert on this value | **no producer in the repo emits it** |
+| C22 (3213) | "revert `:638` → C22 red" | a mount effect resolves the state first, so it reports **green** |
+| SR's `>=2` replacement (3213) | fixes C22's vacuity | measured 2 calls with **zero** re-asks — vacuous too |
+| Engineer's delta replacement (3213) | fixes the SR's vacuity | **times out against correct code** — a false red, worse than a vacuous green |
+| C13 (3213) | the control the whole set rests on for the likely wrong fix | breaking its line reds a **different** test; the estimate disjunct holds the gate, so the wrong fix **would have shipped green** |
+
+**Rules that follow:**
+
+1. **Run the mutation before you write the control down** — against the code it will sit beside, if the control does not exist yet.
+2. **A correction carries the same burden as the original.** Three rows above are one chain: a control caught vacuous, then two fixes for it, each itself broken — in opposite directions. Reviewer and engineer each caught the other.
+3. **Ask what the most likely WRONG implementation looks like, and check the set catches that** — not merely that it catches the fix being absent. The stale-closure prune and a screen-blank permission state were both plausible, both looked shipped, and both were invisible to the entire control set.
+
+Proximity to the precedent is no protection: the repo had already recorded this identical trap twice in the very file the engineer was copying fixtures from. And the rule pays immediately — applying it surfaced a gate term with no guard at all, and neutering that term left all 21 tests green.
+
 ### Sequencing PR trains
 
 **Run them one at a time.** Worktrees isolate files, not facts — a review of PR A is only valid while PR B holds still, and a published branch is shared by definition.
