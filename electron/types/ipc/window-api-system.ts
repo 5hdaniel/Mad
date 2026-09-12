@@ -6,6 +6,7 @@
 import type { OAuthProvider } from "../models";
 import type { InitStageEvent } from "../../services/initializationBroadcaster";
 import type { ConnectionErrorType } from "../../services/connectionStatusService";
+import type { HealthIssue } from "./healthIssue";
 
 /**
  * System methods on window.api
@@ -122,7 +123,9 @@ export interface WindowApiSystem {
   ) => Promise<{
     healthy: boolean;
     provider?: OAuthProvider;
-    issues?: string[];
+    // BACKLOG-3230: objects, not strings. This is the declaration the live path
+    // reads — `systemService.healthCheck` calls through it.
+    issues?: HealthIssue[];
   }>;
   // Secure storage / keychain methods
   getSecureStorageStatus: () => Promise<{

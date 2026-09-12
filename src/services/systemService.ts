@@ -8,6 +8,7 @@
 
 import type { OAuthProvider } from "@/types";
 import type { ConnectionErrorType } from "../../electron/services/connectionStatusService";
+import type { HealthIssue } from "../../electron/types/ipc/healthIssue";
 import { type ApiResult, getErrorMessage } from "./index";
 
 /**
@@ -83,8 +84,11 @@ export interface AllConnections {
 export interface HealthCheck {
   healthy: boolean;
   provider?: OAuthProvider;
-  issues?: string[];
+  /** BACKLOG-3230: objects, not strings. See electron/types/ipc/healthIssue.ts. */
+  issues?: HealthIssue[];
 }
+
+export type { HealthIssue };
 
 /**
  * Secure storage status
