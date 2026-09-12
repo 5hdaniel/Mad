@@ -298,29 +298,32 @@ function platformInfoToOnboardingPlatform(info: {
 }
 
 /**
- * Whether a user who has reached the main app (`ready`) is still genuinely
- * BELOW the onboarding data-source floor (BACKLOG-1821) — i.e. they have NO
- * connected data source at all (no mailbox AND no texts capability).
+ * Whether a user SATISFIES the onboarding data-source floor (BACKLOG-1821) —
+ * i.e. they have at least one source this app can audit (a mailbox, or a texts
+ * capability).
  *
- * This is the single signal behind the "Resume setup" affordance
- * (BACKLOG-1709 / BACKLOG-1711). It deliberately reuses the floor's
- * {@link hasMinimumDataSource} predicate so the definition of "complete enough"
- * stays single-sourced with onboarding — a texts-only user (macOS Full Disk
- * Access, or an iPhone/Android selection) has satisfied the floor and MUST NOT
- * be surfaced as incomplete (no shaming of texts-only completion).
+ * It deliberately reuses the floor's own {@link hasMinimumDataSource} predicate
+ * so the definition of "complete enough" stays single-sourced with onboarding —
+ * a texts-only user (macOS Full Disk Access, or an iPhone/Android selection)
+ * has satisfied the floor and MUST NOT be treated as incomplete (no shaming of
+ * texts-only completion).
  *
- * Returns `false` for every non-`ready` state:
- *   - onboarding renders its own flow/floor UI,
- *   - loading/login/error/unauthenticated show no main-app chrome.
+ * Two callers read it with OPPOSITE polarity, which is why it is extracted:
+ *   - {@link selectSetupIncomplete} negates it to drive the "Resume setup"
+ *     affordance (BACKLOG-1709 / BACKLOG-1711).
+ *   - the onboarding routing gate calls it directly (BACKLOG-3277,
+ *     `reducer.ts:167-172`) rather than re-deriving a stricter answer of its
+ *     own, which is what held a declined-permission user in onboarding forever.
  *
  * Fail-open, exactly like the floor: because the `ready` state records
  * `needsDriverSetup: false` (so `driverSetupComplete` reads true) and any phone
- * selection satisfies the floor, an iPhone/Android user never trips this. The
- * banner therefore appears ONLY for the true zero-source dead-end
- * (no email, not macOS-with-FDA, and no phone selected).
+ * selection satisfies the floor, an iPhone/Android user always satisfies this.
+ * The only population it reports as unsatisfied is the true zero-source
+ * dead-end — no email, not macOS-with-FDA, and no phone selected.
  *
- * @param state - Current application state
- * @returns true only when in `ready` AND the data-source floor is unmet
+ * @param userData - The user's persisted source and permission facts
+ * @param platform - The desktop platform they are running on
+ * @returns true when the floor IS satisfied
  */
 export function hasMinimumDataSourceForUser(
   userData: Pick<UserData, "phoneType" | "hasEmailConnected" | "needsDriverSetup" | "fda">,
@@ -353,6 +356,27 @@ export function hasMinimumDataSourceForUser(
   return hasMinimumDataSource(context);
 }
 
+/**
+ * Whether a user who has reached the main app (`ready`) is still genuinely
+ * BELOW the onboarding data-source floor (BACKLOG-1821) — i.e. they have NO
+ * connected data source at all (no mailbox AND no texts capability).
+ *
+ * This is the single signal behind the "Resume setup" affordance
+ * (BACKLOG-1709 / BACKLOG-1711). It is the exact negation of
+ * {@link hasMinimumDataSourceForUser} over the same projection, so the banner
+ * and the onboarding routing gate cannot drift apart.
+ *
+ * Returns `false` for every non-`ready` state:
+ *   - onboarding renders its own flow/floor UI,
+ *   - loading/login/error/unauthenticated show no main-app chrome.
+ *
+ * Because the predicate fails open (see above), the banner appears ONLY for the
+ * true zero-source dead-end: no email, not macOS-with-FDA, and no phone
+ * selected.
+ *
+ * @param state - Current application state
+ * @returns true only when in `ready` AND the data-source floor is unmet
+ */
 export function selectSetupIncomplete(state: AppState): boolean {
   if (state.status !== "ready") {
     return false;

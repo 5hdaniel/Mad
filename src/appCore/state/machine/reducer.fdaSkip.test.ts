@@ -115,7 +115,8 @@ describe("BACKLOG-3212 — a persisted FDA skip survives a relaunch", () => {
     // `onboarding`, on the stated ground that "the BACKLOG-1821 floor would
     // never fire again". That ground was false as written: the floor does not
     // fire for this user either way — on macOS `driverSetupComplete` reads
-    // true (userDataSelectors.ts:316-321 documents the fail-open), so
+    // true (the fail-open paragraph on `hasMinimumDataSourceForUser`,
+    // userDataSelectors.ts:318-322, documents why), so
     // `getSatisfyingSource` returns "texts-iphone-driver" and the floor is
     // satisfied. The old gate was STRICTER than the floor it claimed to
     // protect, and that gap is what held the user forever.
