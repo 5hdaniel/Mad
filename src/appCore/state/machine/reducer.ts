@@ -8,6 +8,8 @@
  * @module appCore/state/machine/reducer
  */
 
+import { fdaBlocksOnboarding, unknownFdaFor, wasFdaAnswered } from "./fdaState";
+import { hasMinimumDataSourceForUser } from "./selectors/userDataSelectors";
 import type {
   AppState,
   AppAction,
@@ -86,7 +88,10 @@ export function getNextOnboardingStep(
   steps.push("email-connect");
 
   // 4. macOS permissions (if not already granted)
-  if (platform.isMacOS && !userData.hasPermissions) {
+  // BACKLOG-3275: the `platform.isMacOS` guard is now carried by the union —
+  // `fdaBlocksOnboarding("not-applicable")` is false, which is exactly what the
+  // guard short-circuited to on Windows.
+  if (fdaBlocksOnboarding(userData.fda)) {
     steps.push("permissions");
   }
 
@@ -154,9 +159,15 @@ function isOnboardingComplete(userData: UserData, platform: PlatformInfo, _isNew
   // only source is Android or an iPhone driver still enter onboarding, but the
   // queue now seeds `permissions` as answered, the floor passes, and the queue
   // completes without re-asking.
-  if (platform.isMacOS && !userData.hasPermissions) {
+  //
+  // BACKLOG-3275: `fdaBlocksOnboarding` carries the platform check (it is false
+  // for "not-applicable"). The `hasEmailConnected` conjunct deliberately stays
+  // HERE rather than moving into that helper: it reads a second field, so it is
+  // not a projection of the Full Disk Access union and cannot be exhaustively
+  // checked on it.
+  if (fdaBlocksOnboarding(userData.fda)) {
     const declinedWithAnotherSource =
-      userData.fdaSkipped === true && userData.hasEmailConnected === true;
+      userData.fda === "declined" && hasMinimumDataSourceForUser(userData, platform);
     if (!declinedWithAnotherSource) {
       return false;
     }
@@ -336,7 +347,7 @@ export function appStateReducer(
           hasCompletedEmailOnboarding: false,
           hasEmailConnected: false,
           needsDriverSetup: true, // Assume needed until checked
-          hasPermissions: false,
+          fda: unknownFdaFor(action.platform),
         });
 
         return {
@@ -378,7 +389,7 @@ export function appStateReducer(
           hasCompletedEmailOnboarding: false,
           hasEmailConnected: false,
           needsDriverSetup: true, // Assume needed until checked
-          hasPermissions: false,
+          fda: unknownFdaFor(action.platform),
         });
 
         return {
@@ -464,7 +475,16 @@ export function appStateReducer(
       // secure-storage is identical in both cases — secure-storage sits before
       // permissions in the macOS flow, so reaching permissions at all (to
       // grant OR to skip) means secure-storage already ran.
-      if (platform.isMacOS && (data.hasPermissions || data.fdaSkipped === true)) {
+      //
+      // BACKLOG-3275: `wasFdaAnswered` is the ONLY thing that decides whether
+      // "permissions" belongs in completedSteps. The arrow now points one way —
+      // completedSteps is derived from the union, never the reverse.
+      //
+      // The `platform.isMacOS` guard is KEPT rather than folded into the helper:
+      // `wasFdaAnswered("not-applicable")` is true, and a Windows user must not
+      // acquire completedSteps entries they do not have today. completedSteps is
+      // read outside this reducer at derivation/stepDerivation.ts:189.
+      if (platform.isMacOS && wasFdaAnswered(data.fda)) {
         completedSteps.push("permissions");
         completedSteps.push("secure-storage"); // Implied complete if they got past it
       }
@@ -486,14 +506,15 @@ export function appStateReducer(
         user,
         platform,
         completedSteps,
-        // Preserve hasPermissions from loaded data so selector can access it
-        // Fixes bug where users with FDA granted were stuck on permissions step
-        hasPermissions: data.hasPermissions,
-        // BACKLOG-3212: carry the persisted "Skip for now" choice onto
-        // onboarding state. A user can legitimately re-enter onboarding for
-        // another reason (no mailbox yet); when they do, the queue reads this
-        // to seed `permissions` as already answered instead of asking again.
-        fdaSkipped: data.fdaSkipped,
+        // Preserve the Full Disk Access state from loaded data so selectors can
+        // access it. Fixes the bug where users with FDA granted were stuck on
+        // the permissions step.
+        //
+        // BACKLOG-3212: this also carries the persisted "Skip for now" choice.
+        // A user can legitimately re-enter onboarding for another reason (no
+        // mailbox yet); when they do, the queue reads `"declined"` here to seed
+        // `permissions` as already answered instead of asking again.
+        fda: data.fda,
         // Preserve hasEmailConnected so returning users with email already
         // connected don't get shown the email-connect step unnecessarily.
         // Without this, OnboardingState.hasEmailConnected defaults to undefined,
@@ -555,8 +576,18 @@ export function appStateReducer(
           state.platform.isWindows &&
           selectedPhoneType === "iphone" &&
           !completedSteps.includes("apple-driver"),
-        hasPermissions:
-          !state.platform.isMacOS || state.hasPermissions || completedSteps.includes("permissions"),
+        // BACKLOG-3275: carried through, never derived from `completedSteps`.
+        //
+        // This line used to read `completedSteps.includes("permissions")`. A
+        // user who DECLINED Full Disk Access has that entry — correctly, it
+        // means "asked and answered" — so completing any other step reported
+        // the capability as granted, and dropped the record of the decline in
+        // the same transition.
+        //
+        // Navigation does not decide capability. Only the permission probe and
+        // the user's own recorded answer do, and both reach this state before
+        // the transition.
+        fda: state.fda ?? unknownFdaFor(state.platform),
       };
 
       const nextStep = getNextOnboardingStep(
@@ -582,6 +613,19 @@ export function appStateReducer(
         completedSteps,
         selectedPhoneType,
       };
+    }
+
+    case "FDA_GRANTED": {
+      // BACKLOG-3275: the only writer of `"granted"` outside the probe
+      // derivation. Valid from onboarding (the grant happened during the
+      // permissions step) and from ready (the BACKLOG-3208 Settings path).
+      if (state.status === "onboarding") {
+        return { ...state, fda: "granted" };
+      }
+      if (state.status === "ready") {
+        return { ...state, userData: { ...state.userData, fda: "granted" } };
+      }
+      return state;
     }
 
     case "PHONE_TYPE_RESET": {
@@ -647,7 +691,7 @@ export function appStateReducer(
         hasCompletedEmailOnboarding: true,
         hasEmailConnected: state.hasEmailConnected ?? false,
         needsDriverSetup: false,
-        hasPermissions: state.hasPermissions ?? !state.platform.isMacOS,
+        fda: state.fda ?? unknownFdaFor(state.platform),
       };
 
       return {
@@ -741,11 +785,11 @@ export function appStateReducer(
         completedSteps: ["phone-type", ...(state.platform.isMacOS ? ["secure-storage" as const] : [])],
         // Preserve email connected state if they already have it (shouldn't happen, but be safe)
         hasEmailConnected: state.userData.hasEmailConnected,
-        hasPermissions: state.userData.hasPermissions,
-        // BACKLOG-3212: preserved for the same reason hasPermissions is — a
-        // ready user who opens email setup must not be re-asked for Full Disk
-        // Access they already declined.
-        fdaSkipped: state.userData.fdaSkipped,
+        // BACKLOG-3212 / BACKLOG-3275: a ready user who opens email setup must
+        // not be re-asked for Full Disk Access they already declined. One field
+        // now carries both the capability and the recorded answer, so neither
+        // can be dropped while the other survives.
+        fda: state.userData.fda,
       };
     }
 

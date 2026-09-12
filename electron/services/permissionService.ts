@@ -136,14 +136,71 @@ class PermissionService {
       this.permissionCache.fullDiskAccess = false;
       this.permissionCache.cachedAt = Date.now();
 
+      // ---------------------------------------------------------------------
+      // BACKLOG-3213 — WHICH errno, not merely "it threw".
+      // ---------------------------------------------------------------------
+      // Mirrors `checkContactsPermission` below, which BACKLOG-3210 gave this
+      // exact split for the address book. macOS TCC refuses a protected path
+      // with EPERM; a `chat.db` that is simply not on this Mac fails with
+      // ENOENT. Collapsing the two told a Mac that has never run Messages to
+      // grant Full Disk Access — and granting it changed nothing, because the
+      // permission was never the problem.
+      //
+      // THE DEFAULT IS DENIED, DELIBERATELY. Only the errnos that positively
+      // mean "nothing is there" are carved out; an unknown errno, or a
+      // rejection carrying no `code` at all, stays FULL_DISK_ACCESS_DENIED.
+      // Defaulting the other way would tell a denied Mac it has no messages.
+      //
+      // MECHANISM UNTRACED — the denied-AND-absent intersection. A `chat.db`
+      // that does not exist inside a TCC-protected `~/Library/Messages`, on a
+      // Mac WITHOUT Full Disk Access, has not been measured: the two hand
+      // measurements this split rests on (2026-09-07, macOS 15, a process
+      // without FDA) covered a `chat.db` that EXISTS -> EPERM, and the
+      // AddressBook path. Neither covers the intersection, and it is not
+      // measurable on a development machine, whose `chat.db` exists and whose
+      // process inherits Full Disk Access from its parent. Both fail
+      // directions are acceptable: EPERM -> denied is today's behaviour;
+      // ENOENT -> absent still REFUSES the import and still offers no false
+      // permission instruction. The worst case is an under-informative
+      // sentence, never a wrong instruction.
+      //
+      // An EMPTY `chat.db` is out of scope by construction: it passes
+      // `fs.access`, so it never reaches this catch and is reported granted.
+      const code = (error as NodeJS.ErrnoException).code;
+      const storeIsAbsent = code === "ENOENT" || code === "ENOTDIR";
+
       return {
+        // UNCHANGED on BOTH paths. This is the only field crossing
+        // `window.api` that `checkAllPermissions`, the import preflight and
+        // the support-ticket diagnostics branch on. This change moves the
+        // diagnosis, never the verdict.
         hasPermission: false,
         error: (error as Error).message,
-        errorCode: "FULL_DISK_ACCESS_DENIED",
-        userMessage:
-          "Full Disk Access permission is required to read iMessages.",
-        action:
-          "Please grant Full Disk Access in System Settings > Privacy & Security > Full Disk Access",
+        errorCode: storeIsAbsent
+          ? "MESSAGES_STORE_NOT_FOUND"
+          : "FULL_DISK_ACCESS_DENIED",
+        // The absent copy names the missing DATABASE, never "no history":
+        // ENOENT proves the file is not there and says nothing about whether
+        // Messages was ever used. It mentions no permission and no System
+        // Settings, because neither is the fix.
+        userMessage: storeIsAbsent
+          ? "Keepr couldn't find a Messages database on this Mac."
+          : "Full Disk Access permission is required to read iMessages.",
+        // `action` is OMITTED on the absent path, and that omission is the
+        // whole of the banner change: `SystemHealthMonitor` renders its button
+        // as `{issue.action && (<button …>)}`, so keeping the denial's action
+        // here would put the wrong instruction back as a live button.
+        //
+        // This DIVERGES from `checkContactsPermission`, which keeps its action
+        // on both paths on purpose (see its comment). There, rewording was out
+        // of scope. Here the wrong sentence IS the item. BACKLOG-3233
+        // reconciles the two.
+        ...(storeIsAbsent
+          ? {}
+          : {
+              action:
+                "Please grant Full Disk Access in System Settings > Privacy & Security > Full Disk Access",
+            }),
       };
     }
   }
