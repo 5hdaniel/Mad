@@ -163,7 +163,7 @@ A plan that says "control C proves X, and reverting Y turns it red" is making a 
 | `TOKEN_EXPIRED` fixtures (3229) | two controls assert on this value | **no producer in the repo emits it** |
 | C22 (3213) | "revert `:638` → C22 red" | a mount effect resolves the state first, so it reports **green** |
 | SR's `>=2` replacement (3213) | fixes C22's vacuity | measured 2 calls with **zero** re-asks — vacuous too |
-| Engineer's delta replacement (3213) | fixes the SR's vacuity | **times out against correct code** — a false red, worse than a vacuous green |
+| Engineer's delta replacement (3213) | fixes SR's vacuity | **times out against correct code** — a false red, worse than a vacuous green |
 | C13 (3213) | the control the whole set rests on for the likely wrong fix | breaking its line reds a **different** test; the estimate disjunct holds the gate, so the wrong fix **would have shipped green** |
 
 **Rules that follow:**
