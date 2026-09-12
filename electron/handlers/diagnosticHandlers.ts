@@ -464,6 +464,12 @@ export function registerDiagnosticHandlers(): void {
         const contactsResult = contactsLoading as { canLoadContacts: boolean; error?: unknown };
         if (!contactsResult.canLoadContacts && contactsResult.error) {
           if (!(fdaDenied && isDownstreamOfFdaDenial(contactsResult.error))) {
+            // BACKLOG-3230 seam, the second of two: `checkContactsLoading` reaches
+            // this handler through the `require()` at the top of the file, so its
+            // result arrives as `any` and the shape has to be asserted here. The
+            // producer types it `ContactsIssue` (`permissionService.ts:22-30`),
+            // which is the contacts variant of `HealthIssue` field for field.
+            // BACKLOG-3289 (require -> ES import) is what would delete this cast.
             issues.push(contactsResult.error as HealthIssue);
           }
         }

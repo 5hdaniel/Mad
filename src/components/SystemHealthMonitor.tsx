@@ -4,7 +4,10 @@ import type { OAuthProvider } from "../../electron/types/models";
 // BACKLOG-3230: the real wire shape, replacing a local all-optional interface
 // that was mutually comparable with `string` — which is why `string[] as
 // SystemIssue[]` compiled with zero diagnostics and the contract could not fail.
-import type { HealthIssue } from "../../electron/types/ipc/healthIssue";
+import type {
+  HealthIssue,
+  HealthIssueSeverity,
+} from "../../electron/types/ipc/healthIssue";
 import { systemService, authService } from '../services';
 import { identityOf } from '../utils/healthIssueIdentity';
 import logger from '../utils/logger';
@@ -21,21 +24,26 @@ interface SystemHealthMonitorProps {
 
 /**
  * The severity this banner PAINTS a row in, which is not the severity the wire
- * carries.
+ * carries — a reconnectable mailbox is painted amber even though the health
+ * summary counts it as an error.
  *
- * A function rather than an inline expression, because the declared return type
- * must survive to the call site. BACKLOG-3230 surfaced why: the producer emits
- * only "error" and "warning" (`permissionService` writes those two;
- * `connectionStatusService` rows are always "error"), so an inline `const` is
- * control-flow narrowed to `"error" | "warning"` and the `=== "info"` render
- * branch below stops compiling.
+ * It is exactly `HealthIssueSeverity` and is declared as an alias of it rather
+ * than restated, so the paint vocabulary cannot drift from the wire vocabulary.
  *
- * "info" is kept as a paintable state rather than deleted: it is reachable the
- * moment any producer emits it, and the styling for it already exists. Nothing
- * emits it TODAY — that branch is currently unreachable, which the type could
- * not tell you before this item.
+ * BACKLOG-3230, and worth the paragraph. An earlier revision of this PR widened
+ * this to `"error" | "warning" | "info"` to keep an `=== "info"` render branch
+ * compiling. That branch is dead — `permissionService` has nine `severity`
+ * writes and every one is "error" or "warning", and the single site that could
+ * emit "info" (`connectionStatusService.formatUserError`) has NO CALLERS and
+ * would only fire it for `NOT_CONNECTED`, which `BROKEN_TOKEN_TYPES` keeps out
+ * of this banner anyway.
+ *
+ * Widening the return type to silence that was the same move as the
+ * `as SystemIssue[]` cast this item deletes: assert a shape the producer cannot
+ * produce so the compiler stops objecting. The whole deliverable of BACKLOG-3230
+ * is a compiler that CAN object here, so the branch went instead.
  */
-type DisplaySeverity = "error" | "warning" | "info";
+type DisplaySeverity = HealthIssueSeverity;
 
 function displaySeverity(
   issue: HealthIssue,
@@ -44,6 +52,7 @@ function displaySeverity(
   // BACKLOG-2127: a broken mailbox token is RECOVERABLE, so it is painted amber
   // even though the health summary still counts it as severity:"error".
   if (isReconnectIssue) return "warning";
+  // An absent severity is amber on purpose: a permission result carries none.
   return issue.severity || "warning";
 }
 
@@ -247,28 +256,24 @@ function SystemHealthMonitor({
   }
 
   // Severity styling - using amber for warnings to match Dashboard setup banner
-  const severityClasses: Record<"error" | "warning" | "info", string> = {
+  const severityClasses: Record<DisplaySeverity, string> = {
     error: "bg-red-50 border-red-200",
     warning: "bg-gradient-to-r from-amber-50 to-orange-50 border-amber-200",
-    info: "bg-blue-50 border-blue-200",
   };
 
-  const iconClasses: Record<"error" | "warning" | "info", string> = {
+  const iconClasses: Record<DisplaySeverity, string> = {
     error: "text-red-600",
     warning: "text-amber-600",
-    info: "text-blue-600",
   };
 
-  const textClasses: Record<"error" | "warning" | "info", string> = {
+  const textClasses: Record<DisplaySeverity, string> = {
     error: "text-red-800",
     warning: "text-amber-900",
-    info: "text-blue-800",
   };
 
-  const buttonClasses: Record<"error" | "warning" | "info", string> = {
+  const buttonClasses: Record<DisplaySeverity, string> = {
     error: "bg-red-200 hover:bg-red-300 text-red-800",
     warning: "bg-amber-500 hover:bg-amber-600 text-white",
-    info: "bg-blue-200 hover:bg-blue-300 text-blue-800",
   };
 
   return (
@@ -336,21 +341,6 @@ function SystemHealthMonitor({
                         strokeLinejoin="round"
                         strokeWidth={2}
                         d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"
-                      />
-                    </svg>
-                  )}
-                  {severity === "info" && (
-                    <svg
-                      className="w-5 h-5"
-                      fill="none"
-                      stroke="currentColor"
-                      viewBox="0 0 24 24"
-                    >
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        strokeWidth={2}
-                        d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
                       />
                     </svg>
                   )}
