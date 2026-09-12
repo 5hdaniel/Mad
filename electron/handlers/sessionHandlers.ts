@@ -532,12 +532,35 @@ async function handleCompleteEmailOnboarding(
 /**
  * Check email onboarding status
  *
- * IMPORTANT: This checks for a valid mailbox token FIRST, regardless of the
- * email_onboarding_completed flag. This fixes a state mismatch bug (TASK-1039)
- * where users could have a valid token but the flag not set (race condition,
- * error, or interrupted flow), causing confusing UI states.
+ * ONE QUESTION: has this user answered the email-onboarding step? It is NOT
+ * "is a mailbox connected right now" — that is `system:check-all-connections`,
+ * which the renderer already asks separately (LoadingOrchestrator.tsx:684).
  *
- * If a token exists but the flag is false, we auto-correct the flag.
+ * TWO PIECES OF EVIDENCE, either of which settles it:
+ *   - a valid mailbox token — they answered by connecting one;
+ *   - the persisted flag — they answered by connecting OR by skipping (both
+ *     paths call completeEmailOnboarding: useEmailHandlers.ts:84 and :122).
+ *
+ * BACKLOG-3293: this handler used to return the token alone and discard the
+ * flag, so a user who answered the step but holds no token (a deliberate skip,
+ * or a session-only token that was never persisted) was routed back into
+ * onboarding on EVERY relaunch, permanently. The product had already settled
+ * that question the other way one layer up — userDataSelectors.ts:300-328
+ * ("MUST NOT be treated as incomplete") and useResumeSetup.ts:9-11
+ * ("texts-only is a valid, non-degraded completion") — so this was a third,
+ * stricter private copy of a rule the data-source floor already owns.
+ *
+ * TASK-1039 still applies and its auto-correct below stays: a token with the
+ * flag unset repairs the flag. Note that `onboardingCompleted` is read ONCE,
+ * at :596, BEFORE that auto-correct writes, and is never re-read — it stays
+ * stale deliberately. That staleness is what makes the TASK-1039 test the
+ * guard on the token half of the OR below: degrade `completed` to the bare
+ * flag and that test goes red. Keep the `const`.
+ *
+ * Connection HEALTH (never connected vs. token expired) is NOT answerable
+ * here and must not be guessed: nothing persists the user's decline today
+ * (`emailSkipped` is process memory, OnboardingFlow.tsx:206). That is
+ * BACKLOG-3244's subject, not this handler's.
  */
 async function handleCheckEmailOnboarding(
   _event: IpcMainInvokeEvent,
@@ -615,9 +638,10 @@ async function handleCheckEmailOnboarding(
       );
     }
 
-    // The completed status is based on having a valid token
-    // (token is the source of truth, not the flag)
-    const completed = hasValidMailboxToken;
+    // BACKLOG-3293: "has this user answered?" — and either fact answers it.
+    // The persisted flag is evidence, not a thing to be overruled by a missing
+    // token. See the docblock for why this is an OR and not a bare flag.
+    const completed = onboardingCompleted || hasValidMailboxToken;
 
     await logService.info("Email onboarding check", "AuthHandlers", {
       userId: validatedUserId.substring(0, 8) + "...",
