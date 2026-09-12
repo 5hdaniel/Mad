@@ -57,6 +57,7 @@
 
 import fs from "fs";
 import path from "path";
+import ts from "typescript";
 
 const REPO_ROOT = path.resolve(__dirname, "..", "..", "..", "..");
 const DB_DIR = path.join(REPO_ROOT, "electron", "services", "db");
@@ -178,6 +179,36 @@ const EXEMPT: Record<string, string> = {
   // same reason nesting would be wrong — and this map still holds two entries.
   "electron/services/db/macosForceSetSql.ts::deleteLiveForceSetSync":
     "atomic via swapStagingIntoLive's db.transaction() body in macOSMessagesImportService/forceStaging.ts, its only call path (body -> forceSwapSteps.deleteLiveForceSet -> this twin); nesting would convert a swap-aborting failure into a savepoint rollback",
+  // ==========================================================================
+  // BACKLOG-3232 — THREE ASYNC ORCHESTRATORS, SURFACED BY THE CLASS WIDENING
+  // ==========================================================================
+  // These three are FALSE POSITIVES OF THE RULE, not of the enumerator: the
+  // enumerator found them correctly and an `export async function` of the same
+  // shape would read identically. They are EXEMPT and not `KNOWN_UNWRAPPED`
+  // because that list admits CONFIRMED REAL VIOLATIONS only — quieting a false
+  // positive there would mean filing a bogus item to cite, which is the
+  // BACKLOG-3053 silencing this epic exists to end.
+  //
+  // WHAT THEY SHARE, and it is structural rather than stylistic: every counted
+  // write is a separate awaited fetch-then-store round trip against a remote
+  // provider, and `dbTransaction` takes a SYNCHRONOUS callback, so no
+  // transaction can span them. This guard's own `localWriters` note already
+  // says so — "an async orchestrator cannot be fixed with a `dbTransaction`
+  // anyway" — which is why the local-helper closure is depth-1 and does not
+  // propagate. The class widening is the first time that shape reached the
+  // OFFENDER list, because these three are methods.
+  //
+  // NOT A BLANKET PASS FOR ASYNC. Each was opened and read, and each is a
+  // resumable checkpoint loop whose partial state is its normal resting state,
+  // not a corrupt one. A method that awaits between two writes belonging to ONE
+  // logical action does not belong here — `_saveCommunications` in
+  // `transactionService.ts` is exactly that and is listed as a real violation.
+  "electron/services/emailSyncService.ts::precacheEmails":
+    "eight awaited fetchStoreAndDedup round trips (inbox/all-folder/gmail/all-label, each with a backfill pass), every one a provider fetch followed by its own store; a crash between batches leaves fewer emails cached, which is the ordinary resumable state of an incremental cache and is healed by the next run's dedup on external_id",
+  "electron/services/emailSyncService.ts::fetchOutlookEmails":
+    "three awaited fetchStoreAndDedup round trips (inbox, sent, all-folder) against Microsoft Graph; same resumable-batch shape as precacheEmails above, and no dbTransaction can span an awaited network call because its callback is synchronous",
+  "electron/services/shadowDeltaSyncService.ts::runOnce":
+    "a per-folder delta loop that persists each folder's cursor only AFTER that folder is fully stored, which its own comment calls crash-safe per folder, plus a terminal recordSyncSuccess/recordSyncFailure pair that is try/catch-exclusive; the writes belong to different logical units by design and are separated by awaited Graph calls",
   "electron/services/db/contactValueProvenanceBackfill.ts::relabelTypedContactValues":
     "called only from a migration — inside migration v60's migrate() at databaseService.ts:3276 — and EVERY migration is run by `const runInTransaction = currentDb.transaction(...)` at databaseService.ts:3513, verified by reading the caller, not inferred (BACKLOG-2569 re-checked these; they had drifted from :3231/:3468)",
 };
@@ -290,6 +321,26 @@ const EXEMPT: Record<string, string> = {
  *     all real (a raw write plus a non-exported local helper that writes), of
  *     which six had no filed item until BACKLOG-3226. Tracked there.
  *
+ *   - A write inside a NESTED PROMISE-RETURNING LITERAL is attributed to the
+ *     unit that encloses it, so the headline can name a function that issues no
+ *     writes. Two of this round's entries — `gmailFetchService::initialize` and
+ *     `googleContactProvider::fetchContacts` — are exactly that: both only
+ *     REGISTER the `oauth2Client.on("tokens", ...)` callback holding the writes.
+ *     Pre-existing (`captureBody` does the same for an `export function`); the
+ *     class widening only put it on more units. Population unmeasured. Tracked
+ *     by BACKLOG-3311, which also names the in-tree fix shape.
+ *
+ *   - A unit can ENUMERATE AND STILL COUNT ZERO, which is worse than not being
+ *     enumerated: `failureLogService.ts::pruneOldEntries` is a unit as of this
+ *     change and counts 0 writes, because both its DELETEs execute HOISTED SQL
+ *     CONSTANTS and `WRITE_PATTERN` reads literal SQL text only. BACKLOG-2554
+ *     already names that site as two unwrapped DELETEs, so this guard now reads
+ *     GREEN over a site an open item says is unsafe. A false green is
+ *     indistinguishable from a verified-safe unit in every count above and in
+ *     the "may only SHRINK" assertion. Tracked by BACKLOG-3312, whose first
+ *     action is to MEASURE the affected population — hoisting SQL into a named
+ *     constant is an established pattern here, so this is not one function.
+ *
  * Add a floor here when one is found; do not let the list's completeness be
  * assumed from its length.
  */
@@ -357,6 +408,57 @@ const KNOWN_UNWRAPPED: Record<string, string> = {
   // `updateContactRole` — mislabelled a false positive, actually real — was
   // deleted as unreachable by BACKLOG-2569.
   //
+  // ==========================================================================
+  // BACKLOG-3232 — SURFACED BY THE CLASS WIDENING, NEWLY FILED
+  // ==========================================================================
+  // Six units that no guard had ever enumerated, each opened and read before
+  // being classified, each filed as its own item, none fixed here. Damage
+  // strings are TRANSCRIBED from the filed items' "Crash leaves" sections, not
+  // paraphrased from the code — a reader following the citation must find the
+  // same sentence. Measured at `abaa1ff20`; line numbers drift, the keys do not.
+  //
+  // TWO SITES SHARE ONE ITEM. BACKLOG-3306 is one duplicated defect at two
+  // call sites, so it takes two entries. Deleting only one of them when 3306
+  // ships leaves the other as `fixedButStillListed` and reddens the shrink
+  // test — which is the intended behaviour, not a trap.
+  //
+  // NEITHER OF THESE TWO UNITS ACTUALLY WRITES. BACKLOG-3311: the reported
+  // function only REGISTERS the callback that holds the writes. The entries are
+  // keyed on what this guard reports, so they will need re-keying when 3311
+  // lands. Written down because an entry pointing at the wrong unit survives
+  // the fix and then blocks the "may only SHRINK" assertion.
+  "electron/services/gmailFetchService.ts::initialize":
+    "BACKLOG-3306 — one token column updated and the other stale: a stored new refresh_token beside an expired access_token. Self-healing, which is why it is low: the next API call 401s, the refresh fires again and both are written.",
+  "electron/services/providers/googleContactProvider.ts::fetchContacts":
+    "BACKLOG-3306 — the same duplicated token-refresh callback as gmailFetchService above, writing the two UPDATEs in the opposite order; a crash leaves one token column updated and the other stale.",
+  "electron/services/localSyncService.ts::storeContacts":
+    "BACKLOG-3307 — every unchanged contact row keeps an older synced_at and reads as 'not present in the latest sync', so the identity crosswalk's reassignment guard is silently disabled for android_sync and a phone number that has moved between two people binds to the WRONG contact and is never flagged. Persists until the next full snapshot.",
+  "electron/services/transactionService/transactionService.ts::_saveCommunications":
+    "BACKLOG-3308 — an emails row with no communications row: the email is stored but not attached to the transaction, so it does not appear on it. Partially self-healing, but only if a scan re-runs and nothing schedules one on this condition.",
+  "electron/services/transactionService/transactionService.ts::unlinkCommunication":
+    "BACKLOG-3309 — the email is simultaneously still linked (the communications row survives) and suppressed (the ignored_communications row exists); the next auto-link scan keeps it linked while it also sits in the ignore set. The email twin of BACKLOG-2547, at a site 2547 does not name.",
+  "electron/services/transactionService/transactionService.ts::restoreRemovedEmailThread":
+    "BACKLOG-3310 — the email is neither ignored nor linked: it disappears from 'Show removed emails' AND does not reappear on the transaction, so the user's route back to it is gone and nothing re-derives it.",
+
+  // ==========================================================================
+  // BACKLOG-3232 — SURFACED BY THE CLASS WIDENING, ALREADY-FILED SITES
+  // ==========================================================================
+  // These three were named in an open item BEFORE this widening and had no
+  // standing red, because the guard enumerated nothing from their files. They
+  // are the item's whole point: the control existed on paper and not in the
+  // build. Each cites the item that already owns the fix; none is fixed here.
+  // Damage strings transcribed from those items, not restated from the code.
+  //
+  // Measured at `abaa1ff20`. The items' own line numbers have drifted (2552
+  // says `:326`, 2550 says `:2069-2107`, 2547 says `:2150-2256`); the
+  // `file::function` key survives that drift, which is why it is the key.
+  "electron/services/iPhoneSyncStorageService.ts::rollbackSession":
+    "BACKLOG-2552 — a half-rolled-back sync session: attachment rows deleted while their parent message rows remain, or messages gone while contacts survive. The rollback that exists to guarantee an atomic cancel is itself non-atomic.",
+  "electron/services/transactionService/transactionService.ts::linkMessages":
+    "BACKLOG-2550 — junction rows written with messages.transaction_id still NULL, so the message is re-offered as unlinked; or the inverse, the pointer set with no junction row, so the message is invisible to every junction reader. Transient, not permanent: INSERT OR IGNORE plus the unique indexes make a re-run idempotent.",
+  "electron/services/transactionService/transactionService.ts::unlinkMessages":
+    "BACKLOG-2547 — the suppression row written but the link DELETE never ran, so the message is simultaneously linked (junction row survives) and suppressed (ignore row exists); the next auto-link scan keeps it linked while it also sits in the ignore set.",
+
   // MERGE NOTE: the incoming side of this conflict was the original nine-entry
   // list. It is deliberately discarded, not merged — every entry in it was
   // either fixed or never a violation, and re-adding one would fail the
@@ -674,6 +776,143 @@ function dbLayerWriters(): Set<string> {
  * transcribed source string. That is what makes the "we do NOT see a
  * non-violation" control possible at all.
  */
+/**
+ * ===========================================================================
+ * BACKLOG-3232 — A CLASS-SHAPED SERVICE ENUMERATED NOTHING AT ALL
+ * ===========================================================================
+ * Until this function existed, a unit was recognised from exactly two shapes:
+ * `/^export\s+(?:async\s+)?function\s+.../` and an `ipcMain.handle(`
+ * registration. A service written as a CLASS matches neither, so the guard
+ * enumerated ZERO units from the entire file and every method in it was
+ * invisible at any scan root. Not "checked and passed" — never looked at.
+ *
+ * Measured at `abaa1ff20` (`electron/`, the guard's own exclusions):
+ * 467 production `.ts` files, 102 declare a class, and 80 of those yielded
+ * ZERO guard-enumerable units. `databaseService.ts` (171 members) and
+ * `transactionService/transactionService.ts` (35) were two of them.
+ *
+ * THE SYMPTOM WAS ALREADY WRITTEN DOWN HERE, UNGENERALISED. The `EXEMPT` block
+ * above says `runMigrations` and `applyMigration` "are METHODS on
+ * electron/services/databaseService.ts ... This guard has never enumerated
+ * them, so those two exemptions were inert for their whole life." That was read
+ * as a keying problem. It was this.
+ *
+ * ---------------------------------------------------------------------------
+ * WHY THIS IS A MIRROR AND NOT A LIFT — deliberate duplication, with a reason
+ * ---------------------------------------------------------------------------
+ * `electron/__tests__/syncTwin.guard.test.ts` scans the same root with a real
+ * `ts.SourceFile` and already sees class methods. The shape below is copied
+ * from it: its `productionSources` walk, its `ts.createSourceFile(..., true)`
+ * call, and the `isFnLike` / `hasModifier` member test.
+ *
+ * It is COPIED, not shared, and that is a choice:
+ *
+ *   - syncTwin's `FnNode` union EXCLUDES `ConstructorDeclaration`. This guard
+ *     needs constructors — a constructor issuing two writes is a real defect.
+ *   - syncTwin's `declaredName` resolves `VariableDeclaration` and
+ *     `PropertyAssignment` parents, not `PropertyDeclaration`, so a class
+ *     property holding an arrow function gets no name there.
+ *
+ * Widening either one to serve THIS guard changes syncTwin's candidate set,
+ * its `calleeNames` boundary walk and its owner resolution. The two guards
+ * protect DIFFERENT invariants, and coupling them means a regression in one
+ * is indistinguishable from a regression in the other. The duplication is
+ * cheaper than that. Unifying them later is a separate item with its own
+ * justification — do not do it as a drive-by.
+ *
+ * ---------------------------------------------------------------------------
+ * WHAT IS A UNIT HERE, AND WHAT IS NOT
+ * ---------------------------------------------------------------------------
+ * Every method, constructor and function-valued property of every class in the
+ * file — INCLUDING `private` ones. Measured at `abaa1ff20`: 751 methods,
+ * 333 private methods, 57 constructors, 2 private constructors, and ZERO
+ * function-valued properties.
+ *
+ * PRIVATE IS DELIBERATE. For a module-level `function`, a non-exported helper
+ * that writes is attributed to its caller by the depth-1 `localWriters` closure
+ * below. That closure is built from the module-level `function` regex and has
+ * NEVER seen a method, so a private method gets NO attribution anywhere.
+ * Excluding it would leave its writes invisible at every root — the exact
+ * defect this change exists to fix. Four of the twelve units this widening
+ * surfaced are private, including `iPhoneSyncStorageService.rollbackSession`,
+ * which is BACKLOG-2552's own named site.
+ *
+ * STATED FLOOR, WITH A MEASURED SIZE — `localWriters` IS NOT WIDENED HERE.
+ * A public method that calls a private writing METHOD counts that call as ZERO
+ * writes. Measured at `abaa1ff20`: 18 private members carry at least one
+ * counted write. SIX carry two or more and are therefore checked as units in
+ * their own right — four are reported offenders, two clear (`emailSyncService.ts`
+ * `fetchGmailEmails` and `emailAttachmentService.ts` `processAttachment`). The
+ * remaining TWELVE carry exactly one write, which is below this guard's
+ * threshold and is contributed to no caller — so those twelve writes are
+ * counted nowhere.
+ * Widening `localWriters` to methods is a wider predicate with its own
+ * unmeasured population; this change already carries one heuristic change, and
+ * BACKLOG-2584 / 3235 set the convention of at most one per PR.
+ *
+ * ---------------------------------------------------------------------------
+ * KEYS: A CONSTRUCTOR IS NAMED `<ClassName>.constructor`
+ * ---------------------------------------------------------------------------
+ * `EXEMPT` and `KNOWN_UNWRAPPED` are keyed `file::name`. Measured across all
+ * 2,546 units with a BARE `constructor` name, that key collided exactly THREE
+ * times — `supportAccessService.ts`, `tokenEncryptionService.ts`, and
+ * `types/database.ts` (five classes) — every one of them a file holding two or
+ * more classes. ONE entry would have silently covered all of them, which is the
+ * bare-name failure this guard has already been burned by three times.
+ *
+ * Methods keep their BARE name on purpose: `name` is matched against the
+ * `namesCalledInsideATransaction` clearing set and is passed as `selfName` to
+ * strip self-recursion, and both of those are bare-name comparisons. A
+ * constructor is never a call token — `new Foo()` does not match
+ * `\bconstructor\s*\(` — so the dotted form is safe there and nowhere else.
+ * Pinned by the unit-key PRECONDITION below, which asserts the collision COUNT
+ * as well as its absence.
+ *
+ * NO DOUBLE COUNTING. Measured at `abaa1ff20`: 113 classes under `electron/`,
+ * ZERO declared inside a function and ZERO anonymous. A class nested in an
+ * enumerated function would have its writes counted twice, once in the method
+ * and once in the enclosing function; none exists, and the unit-key
+ * PRECONDITION would catch the name collision if one appeared.
+ */
+function classMemberUnits(
+  rel: string,
+  lines: string[],
+  isDbWriterCall: ((name: string) => boolean) | null
+): Fn[] {
+  const sf = ts.createSourceFile(rel, lines.join("\n"), ts.ScriptTarget.ES2020, true);
+  const out: Fn[] = [];
+  const visit = (n: ts.Node): void => {
+    if (ts.isClassDeclaration(n) || ts.isClassExpression(n)) {
+      const className = n.name?.text ?? "<anonymous>";
+      for (const member of n.members) {
+        let name: string | null = null;
+        if (ts.isMethodDeclaration(member) && member.body) {
+          name = ts.isIdentifier(member.name) ? member.name.text : null;
+        } else if (ts.isConstructorDeclaration(member) && member.body) {
+          name = `${className}.constructor`;
+        } else if (
+          ts.isPropertyDeclaration(member) &&
+          member.initializer &&
+          (ts.isArrowFunction(member.initializer) || ts.isFunctionExpression(member.initializer))
+        ) {
+          name = ts.isIdentifier(member.name) ? member.name.text : null;
+        }
+        if (!name) continue;
+        out.push({
+          file: rel,
+          name,
+          line: sf.getLineAndCharacterOfPosition(member.getStart(sf)).line + 1,
+          body: member.getText(sf),
+          isDbWriterCall,
+        });
+      }
+    }
+    ts.forEachChild(n, visit);
+  };
+  visit(sf);
+  return out;
+}
+
 function unitsInFile(rel: string, lines: string[], dbWriters: Set<string>): Fn[] {
   const inDbLayer = rel.startsWith("electron/services/db/");
 
@@ -768,6 +1007,11 @@ function unitsInFile(rel: string, lines: string[], dbWriters: Set<string>): Fn[]
       found.push({ file: rel, name: m[1], line: i + 1, body: captureBody(lines, i), isDbWriterCall });
     }
   }
+
+  // BACKLOG-3232. Pushed BEFORE the registrar filter below, so a class method
+  // that registers `ipcMain.handle(...)` is dropped in favour of the handlers
+  // it registers — the same rule a registrar FUNCTION already gets.
+  found.push(...classMemberUnits(rel, lines, isDbWriterCall));
 
   const registrars = new Set(
     found
@@ -1823,6 +2067,126 @@ export function backfillContactEmailsSync(
   });
 });
 
+/**
+ * ===========================================================================
+ * BACKLOG-3232 — THE ENUMERATOR OVER A CLASS, BOTH DIRECTIONS
+ * ===========================================================================
+ * Transcribed from `electron/services/transactionService/transactionService.ts`
+ * @ `abaa1ff20`, never invented — the shapes are `_saveCommunications` (:513,
+ * private, two writes), `removeContactFromTransaction` (:1344, public, one
+ * write) and a constructor. The wrapped method transcribes the generic
+ * `dbTransaction<LinkSourceOutcome>(() => {` form from
+ * `electron/services/contactManualLink.ts:304` @ `abaa1ff20`.
+ *
+ * WHAT EACH ELEMENT IS LOAD-BEARING FOR — none of these is decoration:
+ *
+ *   - `oneWrite` proves the widening does NOT report a non-violation. This
+ *     guard's first version reported nine offenders and SIX were false
+ *     positives; a widening with no negative direction repeats that.
+ *   - `_twoWrites` is PRIVATE, and it is reported. Lane G's real offender
+ *     (`iPhoneSyncStorageService.rollbackSession`) is a private method, so a
+ *     future "only public members" narrowing has to redden this line.
+ *   - `wrapped` proves `wrapsItself` can read a method capture at all.
+ *     `node.getText()` is a DIFFERENT capture from `captureBody` — it starts at
+ *     the member's first token, not at column 0 — and if it were ever truncated
+ *     the way BACKLOG-3225 truncates `captureBody`, this method would read as
+ *     having no transaction and appear as a two-write offender.
+ *   - The constructor pins `<ClassName>.constructor` keying. A bare
+ *     `constructor` name collides with every other constructor in the same
+ *     file, and `EXEMPT` / `KNOWN_UNWRAPPED` are keyed `file::name`.
+ *
+ * The class is NOT exported and holds no `export` keyword anywhere. That is
+ * deliberate: it proves membership does not depend on an export, which is what
+ * makes the 80 files enumerable regardless of which of the six escape shapes
+ * they use (`export default new X()`, `export default x`, `export const x =
+ * new X()`, a named re-export, and combinations).
+ */
+describe("the enumerator sees a class, in both directions (BACKLOG-3232)", () => {
+  const CLASS_SHAPED_SERVICE = `
+class TransactionService {
+  private cache: Map<string, string> | null = null;
+
+  constructor() {
+    this.cache = null;
+  }
+
+  async removeContactFromTransaction(
+    transactionId: string,
+    contactId: string,
+  ): Promise<void> {
+    return await databaseService.unlinkContactFromTransaction(
+      transactionId,
+      contactId,
+    );
+  }
+
+  private async _saveCommunications(
+    userId: string,
+    transactionId: string,
+  ): Promise<void> {
+    let emailRecord = await getEmailByExternalId(userId, externalId);
+
+    if (!emailRecord) {
+      emailRecord = await createEmail({
+        user_id: userId,
+        external_id: externalId,
+      });
+    }
+
+    await databaseService.createCommunication(commData as NewCommunication);
+  }
+
+  async linkSourceToContact(contactId: string): Promise<LinkSourceOutcome> {
+    return dbTransaction<LinkSourceOutcome>(() => {
+      createEmail({ user_id: contactId });
+      databaseService.createCommunication(commData as NewCommunication);
+      return { ok: true } as LinkSourceOutcome;
+    });
+  }
+}
+
+export default new TransactionService();
+`;
+
+  const WRITERS = new Set(["createEmail", "createCommunication", "unlinkContactFromTransaction"]);
+  const REL = "electron/services/transactionService/transactionService.ts";
+
+  it("enumerates every member of a class that declares no `export function` at all", () => {
+    const units = unitsInFile(REL, CLASS_SHAPED_SERVICE.split("\n"), WRITERS);
+
+    // The OLD enumerator returned [] for this entire string. That is the defect.
+    expect(units.map((u) => u.name)).toEqual([
+      "TransactionService.constructor",
+      "removeContactFromTransaction",
+      "_saveCommunications",
+      "linkSourceToContact",
+    ]);
+  });
+
+  it("reports the two-write PRIVATE method and does NOT report the one-write method", () => {
+    const units = unitsInFile(REL, CLASS_SHAPED_SERVICE.split("\n"), WRITERS);
+    const byName = (n: string): Fn => units.find((u) => u.name === n) as Fn;
+
+    // The negative direction first: one write is not a violation.
+    expect(unitWrites(byName("removeContactFromTransaction")).length).toBe(1);
+
+    // The positive direction: two writes, private, unwrapped -> reported.
+    const twoWrites = byName("_saveCommunications");
+    expect(unitWrites(twoWrites).length).toBe(2);
+    expect(wrapsItself(twoWrites.body)).toBe(false);
+    expect(writesAreBranchExclusive(twoWrites.body, twoWrites.isDbWriterCall, twoWrites.name)).toBe(false);
+  });
+
+  it("reads a transaction out of a METHOD capture — `node.getText()` is not `captureBody`", () => {
+    const units = unitsInFile(REL, CLASS_SHAPED_SERVICE.split("\n"), WRITERS);
+    const wrapped = units.find((u) => u.name === "linkSourceToContact") as Fn;
+
+    // Two writes, so it would be an offender if the capture lost the wrapper.
+    expect(unitWrites(wrapped).length).toBe(2);
+    expect(wrapsItself(wrapped.body)).toBe(true);
+  });
+});
+
 describe("a multi-statement write may not ship without a transaction (BACKLOG-2530)", () => {
   const units = scanUnits();
   const insideATransaction = namesCalledInsideATransaction();
@@ -1874,6 +2238,50 @@ describe("a multi-statement write may not ship without a transaction (BACKLOG-25
     // because the guard went blind, not because the code is atomic. Keep the
     // named `ExportCompletionParams` interface.
     expect(dbLayerWriters().has("recordExportCompletion")).toBe(true);
+  });
+
+  it("PRECONDITION: a class-shaped service is enumerated at member granularity (BACKLOG-3232)", () => {
+    // `databaseService.ts` yielded ZERO units for this guard's whole life. It is
+    // named here rather than counted in the aggregate, because an aggregate
+    // cannot tell "the class walk works" from "some other file grew".
+    const dbSvc = units.filter((u) => u.file === "electron/services/databaseService.ts");
+    expect(dbSvc.length).toBeGreaterThan(100);
+
+    // THE method the EXEMPT block above says this guard "has never enumerated".
+    // File-qualified: a bare name would also match a namesake elsewhere in the
+    // tree, and this assertion exists precisely to prove THIS file is read.
+    expect(dbSvc.some((u) => u.name === "runMigrations")).toBe(true);
+
+    // And the other lane file the item names, so a walk that somehow only
+    // reached one class cannot pass.
+    expect(
+      units.some(
+        (u) =>
+          u.file === "electron/services/transactionService/transactionService.ts" &&
+          u.name === "unlinkMessages"
+      )
+    ).toBe(true);
+  });
+
+  it("PRECONDITION: every unit key is unique, and there are enough keys to matter", () => {
+    // `EXEMPT` and `KNOWN_UNWRAPPED` are keyed `file::name`. A collision means
+    // ONE entry silently covers TWO units — the bare-name failure this guard has
+    // already been burned by three times (EXEMPT's re-key, `deleteLiveForceSet`,
+    // and the known-list re-key).
+    const byKey = new Map<string, string[]>();
+    for (const u of units) {
+      const k = exemptKey(u);
+      byKey.set(k, [...(byKey.get(k) ?? []), `${u.file}:${u.line}`]);
+    }
+
+    // ASSERT THE COUNT, NOT ONLY THE ABSENCE. A collision check that silently
+    // matches nothing passes exactly as loudly as one that matches everything.
+    expect(byKey.size).toBeGreaterThan(2000);
+
+    const collisions = [...byKey.entries()]
+      .filter(([, at]) => at.length > 1)
+      .map(([k, at]) => `${k} -> ${at.join(", ")}`);
+    expect(collisions).toEqual([]);
   });
 
   it("PRECONDITION: it can tell a wrapped write from an unwrapped one", () => {
