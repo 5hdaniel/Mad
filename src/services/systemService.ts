@@ -132,7 +132,11 @@ export const systemService = {
    * users who have.
    */
   async checkMessagesPermission(): Promise<
-    ApiResult<{ hasPermission: boolean | undefined; reason?: string }>
+    ApiResult<{
+      hasPermission: boolean | undefined;
+      reason?: string;
+      errorCode?: string;
+    }>
   > {
     try {
       const result = await window.api.system.checkPermissions();
@@ -144,6 +148,11 @@ export const systemService = {
               ? result.hasPermission
               : undefined,
           reason: result?.error,
+          // BACKLOG-3213: WHICH failure, carried through unchanged. A caller
+          // that ignores it sees exactly the previous behaviour; the panel
+          // uses it to tell "Full Disk Access is refused" from "there is no
+          // Messages database on this Mac", which need opposite sentences.
+          errorCode: result?.errorCode,
         },
       };
     } catch (error) {

@@ -16,9 +16,20 @@
  * went on asserting the old one — green for the wrong reason, which is the
  * failure this repo has hit twice.
  *
- * The transcription suite asserts that `DENIED` below equals what the REAL
- * `permissionService.checkFullDiskAccess()` returns. Drift the constant and
- * that suite reds FIRST, then everything fed from it.
+ * BACKLOG-3213 re-pointed which leg of the transcription suite proves which
+ * constant, because `checkFullDiskAccess` now reads the errno:
+ *
+ *   ABSENT (ENOENT/ENOTDIR)  `MESSAGES_STORE_NOT_FOUND_PERMISSION_RESULT`,
+ *                            proved by the REAL filesystem leg — an empty temp
+ *                            HOME produces a real ENOENT.
+ *   DENIED (everything else) `FDA_DENIED_PERMISSION_RESULT`, proved two ways:
+ *                            a real `chmod 000` fixture on POSIX, and an
+ *                            errno-injected EPERM in
+ *                            `permissionService.messagesErrno-3213.test.ts`,
+ *                            which runs on every platform.
+ *
+ * Either way the tie to the real producer is kept, not loosened: drift a
+ * constant and one of those legs reds FIRST, then everything fed from it.
  *
  * These are TEST FIXTURES ONLY. Nothing in `src/` or `electron/` imports this
  * file, so it never crosses the main/renderer boundary at runtime.
@@ -70,6 +81,29 @@ export const CONTACTS_STORE_NOT_FOUND_PERMISSION_RESULT = {
     "Contacts permission is required to match phone numbers to names.",
   action:
     "Full Disk Access in System Settings > Privacy & Security > Full Disk Access will grant access to Contacts",
+} as const;
+
+/**
+ * BACKLOG-3213's third outcome for the MESSAGES probe: `chat.db` is not on
+ * this Mac at all.
+ *
+ * NOTE WHAT IS ABSENT: there is no `action`. `SystemHealthMonitor` renders its
+ * button as `{issue.action && (<button …>)}`, so omitting the field is what
+ * takes the "grant Full Disk Access" instruction off a row where granting it
+ * would change nothing. The key set is asserted directly against the real
+ * producer in `permissionService.fdaDeniedShape-3219.test.ts`, so the absence
+ * is measured rather than described.
+ *
+ * This DIVERGES from `CONTACTS_STORE_NOT_FOUND_PERMISSION_RESULT` above, which
+ * still carries the denial's `action` text with no handler behind it — a dead
+ * button, pinned as today's behaviour by
+ * `diagnosticHandlers.oneRowPerCause-3237.test.ts`. BACKLOG-3233 reconciles
+ * the two; this file states the divergence rather than hiding it.
+ */
+export const MESSAGES_STORE_NOT_FOUND_PERMISSION_RESULT = {
+  hasPermission: false,
+  errorCode: "MESSAGES_STORE_NOT_FOUND",
+  userMessage: "Keepr couldn't find a Messages database on this Mac.",
 } as const;
 
 /** The button label the health banner must show for an FDA denial. */
