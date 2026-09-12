@@ -321,6 +321,26 @@ const EXEMPT: Record<string, string> = {
  *     all real (a raw write plus a non-exported local helper that writes), of
  *     which six had no filed item until BACKLOG-3226. Tracked there.
  *
+ *   - A write inside a NESTED PROMISE-RETURNING LITERAL is attributed to the
+ *     unit that encloses it, so the headline can name a function that issues no
+ *     writes. Two of this round's entries — `gmailFetchService::initialize` and
+ *     `googleContactProvider::fetchContacts` — are exactly that: both only
+ *     REGISTER the `oauth2Client.on("tokens", ...)` callback holding the writes.
+ *     Pre-existing (`captureBody` does the same for an `export function`); the
+ *     class widening only put it on more units. Population unmeasured. Tracked
+ *     by BACKLOG-3311, which also names the in-tree fix shape.
+ *
+ *   - A unit can ENUMERATE AND STILL COUNT ZERO, which is worse than not being
+ *     enumerated: `failureLogService.ts::pruneOldEntries` is a unit as of this
+ *     change and counts 0 writes, because both its DELETEs execute HOISTED SQL
+ *     CONSTANTS and `WRITE_PATTERN` reads literal SQL text only. BACKLOG-2554
+ *     already names that site as two unwrapped DELETEs, so this guard now reads
+ *     GREEN over a site an open item says is unsafe. A false green is
+ *     indistinguishable from a verified-safe unit in every count above and in
+ *     the "may only SHRINK" assertion. Tracked by BACKLOG-3312, whose first
+ *     action is to MEASURE the affected population — hoisting SQL into a named
+ *     constant is an established pattern here, so this is not one function.
+ *
  * Add a floor here when one is found; do not let the list's completeness be
  * assumed from its length.
  */
@@ -388,6 +408,38 @@ const KNOWN_UNWRAPPED: Record<string, string> = {
   // `updateContactRole` — mislabelled a false positive, actually real — was
   // deleted as unreachable by BACKLOG-2569.
   //
+  // ==========================================================================
+  // BACKLOG-3232 — SURFACED BY THE CLASS WIDENING, NEWLY FILED
+  // ==========================================================================
+  // Six units that no guard had ever enumerated, each opened and read before
+  // being classified, each filed as its own item, none fixed here. Damage
+  // strings are TRANSCRIBED from the filed items' "Crash leaves" sections, not
+  // paraphrased from the code — a reader following the citation must find the
+  // same sentence. Measured at `abaa1ff20`; line numbers drift, the keys do not.
+  //
+  // TWO SITES SHARE ONE ITEM. BACKLOG-3306 is one duplicated defect at two
+  // call sites, so it takes two entries. Deleting only one of them when 3306
+  // ships leaves the other as `fixedButStillListed` and reddens the shrink
+  // test — which is the intended behaviour, not a trap.
+  //
+  // NEITHER OF THESE TWO UNITS ACTUALLY WRITES. BACKLOG-3311: the reported
+  // function only REGISTERS the callback that holds the writes. The entries are
+  // keyed on what this guard reports, so they will need re-keying when 3311
+  // lands. Written down because an entry pointing at the wrong unit survives
+  // the fix and then blocks the "may only SHRINK" assertion.
+  "electron/services/gmailFetchService.ts::initialize":
+    "BACKLOG-3306 — one token column updated and the other stale: a stored new refresh_token beside an expired access_token. Self-healing, which is why it is low: the next API call 401s, the refresh fires again and both are written.",
+  "electron/services/providers/googleContactProvider.ts::fetchContacts":
+    "BACKLOG-3306 — the same duplicated token-refresh callback as gmailFetchService above, writing the two UPDATEs in the opposite order; a crash leaves one token column updated and the other stale.",
+  "electron/services/localSyncService.ts::storeContacts":
+    "BACKLOG-3307 — every unchanged contact row keeps an older synced_at and reads as 'not present in the latest sync', so the identity crosswalk's reassignment guard is silently disabled for android_sync and a phone number that has moved between two people binds to the WRONG contact and is never flagged. Persists until the next full snapshot.",
+  "electron/services/transactionService/transactionService.ts::_saveCommunications":
+    "BACKLOG-3308 — an emails row with no communications row: the email is stored but not attached to the transaction, so it does not appear on it. Partially self-healing, but only if a scan re-runs and nothing schedules one on this condition.",
+  "electron/services/transactionService/transactionService.ts::unlinkCommunication":
+    "BACKLOG-3309 — the email is simultaneously still linked (the communications row survives) and suppressed (the ignored_communications row exists); the next auto-link scan keeps it linked while it also sits in the ignore set. The email twin of BACKLOG-2547, at a site 2547 does not name.",
+  "electron/services/transactionService/transactionService.ts::restoreRemovedEmailThread":
+    "BACKLOG-3310 — the email is neither ignored nor linked: it disappears from 'Show removed emails' AND does not reappear on the transaction, so the user's route back to it is gone and nothing re-derives it.",
+
   // ==========================================================================
   // BACKLOG-3232 — SURFACED BY THE CLASS WIDENING, ALREADY-FILED SITES
   // ==========================================================================
