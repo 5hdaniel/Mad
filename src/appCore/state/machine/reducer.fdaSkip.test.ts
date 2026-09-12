@@ -20,6 +20,7 @@
  */
 
 import { appStateReducer } from "./reducer";
+import { fdaFromProbe, isFdaGranted } from "./fdaState";
 import type { AppState, LoadingState, PlatformInfo, ReadyState, User, UserData } from "./types";
 
 const mockUser: User = {
@@ -45,8 +46,9 @@ const declinedFdaWithMailbox: UserData = {
   hasCompletedEmailOnboarding: true,
   hasEmailConnected: true,
   needsDriverSetup: false,
-  hasPermissions: false,
-  fdaSkipped: true,
+  // BACKLOG-3275: `hasPermissions: false` + `fdaSkipped: true` is now ONE state.
+  // The pair could express combinations the domain does not have; this cannot.
+  fda: "declined",
 };
 
 const loadingUserData: LoadingState = { status: "loading", phase: "loading-user-data" };
@@ -66,34 +68,43 @@ describe("BACKLOG-3212 — a persisted FDA skip survives a relaunch", () => {
 
     expect(result.status).toBe("ready");
     if (result.status === "ready") {
-      // hasPermissions must stay FALSE in the state that reaches the app.
-      // Skipping is not granting: anything gating on real Full Disk Access
-      // still has to see that it is absent.
-      expect(result.userData.hasPermissions).toBe(false);
-      expect(result.userData.fdaSkipped).toBe(true);
+      // The capability must stay FALSE in the state that reaches the app.
+      // Declining is not granting: anything gating on real Full Disk Access
+      // still has to see that it is absent — while the fact that the user was
+      // ASKED survives in the same value.
+      expect(result.userData.fda).toBe("declined");
+      expect(isFdaGranted(result.userData.fda)).toBe(false);
     }
   });
 
   it("CONTROL: the same user WITHOUT the flag is still routed into onboarding and still asked", () => {
     // Identical in every respect except the persisted choice. This is the
     // half that fails for a fix which just stops asking.
-    const neverSkipped: UserData = { ...declinedFdaWithMailbox, fdaSkipped: false };
+    const neverSkipped: UserData = { ...declinedFdaWithMailbox, fda: "not-asked" };
 
     const result = loadUserData(neverSkipped);
 
     expect(result.status).toBe("onboarding");
     if (result.status === "onboarding") {
       expect(result.completedSteps).not.toContain("permissions");
-      expect(result.fdaSkipped).not.toBe(true);
+      expect(result.fda).not.toBe("declined");
     }
   });
 
-  it("CONTROL: an absent flag (pre-3212 preference bag) behaves exactly like `false`", () => {
-    // Every user who existed before this change has no `onboarding.fdaSkipped`
+  it("CONTROL: an absent preference key (pre-3212 bag) is `not-asked`, never `declined`", () => {
+    // Every user who existed before BACKLOG-3212 has no `onboarding.fdaSkipped`
     // key at all. Absent must never be read as "already declined".
-    const { fdaSkipped: _omitted, ...withoutTheKey } = declinedFdaWithMailbox;
+    //
+    // BACKLOG-3275: the reducer can no longer represent "the key was absent" —
+    // that distinction now lives at the single derivation point, so it is
+    // pinned there, and the reducer is pinned on the state it produces.
+    expect(
+      fdaFromProbe({ isMacOS: true, probeGranted: false, recordedDecline: false })
+    ).toBe("not-asked");
 
-    const result = loadUserData(withoutTheKey as UserData);
+    const withoutTheKey: UserData = { ...declinedFdaWithMailbox, fda: "not-asked" };
+
+    const result = loadUserData(withoutTheKey);
 
     expect(result.status).toBe("onboarding");
   });
@@ -126,7 +137,7 @@ describe("BACKLOG-3212 — a persisted FDA skip survives a relaunch", () => {
 
     expect(result.status).toBe("onboarding");
     if (result.status === "onboarding") {
-      expect(result.fdaSkipped).toBe(true);
+      expect(result.fda).toBe("declined");
       expect(result.completedSteps).toContain("permissions");
       expect(result.step).not.toBe("permissions");
     }
@@ -138,35 +149,41 @@ describe("BACKLOG-3212 — a persisted FDA skip survives a relaunch", () => {
       hasCompletedEmailOnboarding: true,
       hasEmailConnected: true,
       needsDriverSetup: false,
-      hasPermissions: true,
-      // no fdaSkipped — a user who granted never skipped
+      fda: "granted",
     };
 
     const result = loadUserData(granted);
 
     expect(result.status).toBe("ready");
     if (result.status === "ready") {
-      expect(result.userData.hasPermissions).toBe(true);
+      expect(result.userData.fda).toBe("granted");
     }
   });
 
-  it("a granted user is unaffected even if a stale skip flag is still on record", () => {
+  it("a granted user is unaffected even if a stale decline is still on record", () => {
     // Skip, then grant later (e.g. via the BACKLOG-3208 Settings path). The
-    // stale flag must be inert, never a downgrade.
+    // stale record must be inert, never a downgrade.
+    //
+    // BACKLOG-3275: "granted AND declined" is no longer a representable state,
+    // which is the point — the precedence now has exactly one home, so it is
+    // pinned there rather than re-tested at every consumer.
+    expect(
+      fdaFromProbe({ isMacOS: true, probeGranted: true, recordedDecline: true })
+    ).toBe("granted");
+
     const grantedAfterSkipping: UserData = {
       phoneType: "iphone",
       hasCompletedEmailOnboarding: true,
       hasEmailConnected: true,
       needsDriverSetup: false,
-      hasPermissions: true,
-      fdaSkipped: true,
+      fda: "granted",
     };
 
     const result = loadUserData(grantedAfterSkipping);
 
     expect(result.status).toBe("ready");
     if (result.status === "ready") {
-      expect(result.userData.hasPermissions).toBe(true);
+      expect(result.userData.fda).toBe("granted");
     }
   });
 
@@ -192,8 +209,8 @@ describe("BACKLOG-3212 — a persisted FDA skip survives a relaunch", () => {
 
     expect(result.status).toBe("onboarding");
     if (result.status === "onboarding") {
-      expect(result.fdaSkipped).toBe(true);
-      expect(result.hasPermissions).toBe(false);
+      expect(result.fda).toBe("declined");
+      expect(isFdaGranted(result.fda!)).toBe(false);
     }
   });
 });

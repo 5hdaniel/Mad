@@ -205,7 +205,7 @@ export const testFixtures = {
       hasCompletedEmailOnboarding: false,
       hasEmailConnected: false,
       needsDriverSetup: false,
-      hasPermissions: false,
+      fda: "not-asked",
     } as UserData,
 
     completedMacOS: {
@@ -213,15 +213,16 @@ export const testFixtures = {
       hasCompletedEmailOnboarding: true,
       hasEmailConnected: true,
       needsDriverSetup: false,
-      hasPermissions: true,
+      fda: "granted",
     } as UserData,
 
     completedWindows: {
       phoneType: "iphone" as const,
       hasCompletedEmailOnboarding: true,
       hasEmailConnected: true,
+      // BACKLOG-3275: Full Disk Access is not a concept on Windows.
       needsDriverSetup: false,
-      hasPermissions: false, // Windows doesn't need permissions
+      fda: "not-applicable",
     } as UserData,
 
     needsOnboarding: {
@@ -229,7 +230,7 @@ export const testFixtures = {
       hasCompletedEmailOnboarding: false,
       hasEmailConnected: false,
       needsDriverSetup: true,
-      hasPermissions: false,
+      fda: "not-asked",
     } as UserData,
   },
 };
