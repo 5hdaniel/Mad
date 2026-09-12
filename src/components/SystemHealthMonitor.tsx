@@ -1,6 +1,10 @@
 import React, { useState, useEffect, useCallback, useRef } from "react";
 
 import type { OAuthProvider } from "../../electron/types/models";
+// BACKLOG-3230: the real wire shape, replacing a local all-optional interface
+// that was mutually comparable with `string` — which is why `string[] as
+// SystemIssue[]` compiled with zero diagnostics and the contract could not fail.
+import type { HealthIssue } from "../../electron/types/ipc/healthIssue";
 import { systemService, authService } from '../services';
 import logger from '../utils/logger';
 import { openEmailSettings } from '../utils/openEmailSettings';
@@ -14,14 +18,32 @@ interface SystemHealthMonitorProps {
   onOpenSettings?: (scrollTarget?: string) => void;
 }
 
-interface SystemIssue {
-  severity?: "error" | "warning" | "info";
-  title?: string;
-  message?: string;
-  userMessage?: string;
-  details?: string;
-  action?: string;
-  actionHandler?: string;
+/**
+ * The severity this banner PAINTS a row in, which is not the severity the wire
+ * carries.
+ *
+ * A function rather than an inline expression, because the declared return type
+ * must survive to the call site. BACKLOG-3230 surfaced why: the producer emits
+ * only "error" and "warning" (`permissionService` writes those two;
+ * `connectionStatusService` rows are always "error"), so an inline `const` is
+ * control-flow narrowed to `"error" | "warning"` and the `=== "info"` render
+ * branch below stops compiling.
+ *
+ * "info" is kept as a paintable state rather than deleted: it is reachable the
+ * moment any producer emits it, and the styling for it already exists. Nothing
+ * emits it TODAY — that branch is currently unreachable, which the type could
+ * not tell you before this item.
+ */
+type DisplaySeverity = "error" | "warning" | "info";
+
+function displaySeverity(
+  issue: HealthIssue,
+  isReconnectIssue: boolean,
+): DisplaySeverity {
+  // BACKLOG-2127: a broken mailbox token is RECOVERABLE, so it is painted amber
+  // even though the health summary still counts it as severity:"error".
+  if (isReconnectIssue) return "warning";
+  return issue.severity || "warning";
 }
 
 /**
@@ -41,7 +63,7 @@ function SystemHealthMonitor({
   hidden = false,
   onOpenSettings,
 }: SystemHealthMonitorProps) {
-  const [issues, setIssues] = useState<SystemIssue[]>([]);
+  const [issues, setIssues] = useState<HealthIssue[]>([]);
   const [dismissed, setDismissed] = useState(new Set<number>());
   const checkingRef = useRef(false);
   /**
@@ -80,7 +102,10 @@ function SystemHealthMonitor({
       // banner exactly as it was rather than silently clearing it. An
       // unanswerable check is not a recovery.
       if (result.success && result.data && Array.isArray(result.data.issues)) {
-        const nextIssues = result.data.issues as SystemIssue[];
+        // BACKLOG-3230: the cast that used to sit here is GONE, and its absence
+        // is the point — it was what stopped the compiler seeing that the
+        // declared `string[]` and the emitted objects disagreed.
+        const nextIssues = result.data.issues;
         setIssues(nextIssues);
         // `dismissed` holds INDICES into the issue array. Now that the array
         // can shrink, a stale index would suppress an unrelated future issue
@@ -118,7 +143,7 @@ function SystemHealthMonitor({
     setDismissed((prev) => new Set([...prev, issueIndex]));
   };
 
-  const handleAction = async (issue: SystemIssue, issueIndex: number) => {
+  const handleAction = async (issue: HealthIssue, issueIndex: number) => {
     switch (issue.actionHandler) {
       case "open-system-settings":
         await systemService.openPrivacyPane("fullDiskAccess");
@@ -248,9 +273,7 @@ function SystemHealthMonitor({
         const isReconnectIssue =
           issue.actionHandler === "reconnect-microsoft" ||
           issue.actionHandler === "reconnect-google";
-        const severity: "error" | "warning" | "info" = isReconnectIssue
-          ? "warning"
-          : issue.severity || "warning";
+        const severity = displaySeverity(issue, isReconnectIssue);
 
         return (
           <div
