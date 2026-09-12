@@ -70,7 +70,11 @@ jest.mock("../../services/logService", () => ({
   default: { info: jest.fn(), warn: jest.fn(), error: jest.fn(), debug: jest.fn() },
 }));
 
-import { registerDiagnosticHandlers } from "../diagnosticHandlers";
+import {
+  registerDiagnosticHandlers,
+  isDownstreamOfContactsStoreAbsent,
+  isDownstreamOfFdaDenial,
+} from "../diagnosticHandlers";
 import permissionService from "../../services/permissionService";
 
 const AB = "Library/Application Support/AddressBook";
@@ -266,5 +270,44 @@ describe("C6/C7/C8 — the controls a wrong fix would break (must stay GREEN thr
     expect(ids(res)).toContain("CONTACTS_STORE_NOT_FOUND");
     expect(ids(res)).toContain("CONTACTS_CHECK_FAILED");
     spy.mockRestore();
+  });
+});
+
+/**
+ * C9b — THE SAME CLAIM AS C9, ASSERTED ONE LAYER DOWN.
+ *
+ * C9 catches the reuse-the-denial-set wrong fix by observing what the HANDLER
+ * emits. That is one machine: temp HOME, spies, the registered channel. If it
+ * were the only control, the asymmetry this whole design turns on would be held
+ * by a single test running a single apparatus.
+ *
+ * These two assertions hold it structurally instead — no HOME, no mocks, no
+ * handler, no fixture. They read the predicates directly, so they fail on the
+ * SET CONTENTS where C9 fails on observed output. A change that breaks the
+ * asymmetry cannot satisfy both by accident.
+ *
+ * They also state the asymmetry as an EXECUTABLE claim. Before this it lived in
+ * prose in three comments and in one test — one careless edit from being prose
+ * alone, which is the state the wrong fix exploited:
+ *
+ *     const STORE_ABSENT_DOWNSTREAM_ISSUE_TYPES = FDA_DOWNSTREAM_ISSUE_TYPES;
+ *
+ * Measured: red on that edit, green on correct code.
+ *
+ * WHY THE SETS DIFFER, in one line — a Full Disk Access denial explains both a
+ * read that returned nothing AND a check that threw, because the denial is why
+ * either happened. An absent address book explains only the first: there is no
+ * reason a missing directory should make the check ITSELF throw, so a throw
+ * under an absent store is a second, unexplained fault and must still be shown.
+ */
+describe("C9b — the absent downstream set must stay NARROWER than the denial set", () => {
+  it("an absent store explains a failed READ but never the check THROWING", () => {
+    expect(isDownstreamOfContactsStoreAbsent({ type: "CONTACTS_LOADING_FAILED" })).toBe(true);
+    expect(isDownstreamOfContactsStoreAbsent({ type: "CONTACTS_CHECK_FAILED" })).toBe(false);
+  });
+
+  it("the DENIAL set does include the throw — that asymmetry is the whole point", () => {
+    expect(isDownstreamOfFdaDenial({ type: "CONTACTS_LOADING_FAILED" })).toBe(true);
+    expect(isDownstreamOfFdaDenial({ type: "CONTACTS_CHECK_FAILED" })).toBe(true);
   });
 });
