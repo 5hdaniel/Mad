@@ -9,6 +9,7 @@
  */
 
 import { fdaBlocksOnboarding, unknownFdaFor, wasFdaAnswered } from "./fdaState";
+import { hasMinimumDataSourceForUser } from "./selectors/userDataSelectors";
 import type {
   AppState,
   AppAction,
@@ -166,7 +167,7 @@ function isOnboardingComplete(userData: UserData, platform: PlatformInfo, _isNew
   // checked on it.
   if (fdaBlocksOnboarding(userData.fda)) {
     const declinedWithAnotherSource =
-      userData.fda === "declined" && userData.hasEmailConnected === true;
+      userData.fda === "declined" && hasMinimumDataSourceForUser(userData, platform);
     if (!declinedWithAnotherSource) {
       return false;
     }

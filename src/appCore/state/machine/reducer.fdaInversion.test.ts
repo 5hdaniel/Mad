@@ -42,10 +42,27 @@ const mockUser: User = { id: "user-123", email: "test@example.com", displayName:
 const macOS: PlatformInfo = { isMacOS: true, isWindows: false, hasIPhone: true };
 const windows: PlatformInfo = { isMacOS: false, isWindows: true, hasIPhone: false };
 
-/** A macOS user who DECLINED Full Disk Access and has no mailbox yet. */
-const declinedFdaNoMailbox: UserData = {
+/**
+ * A macOS user who DECLINED Full Disk Access, has no mailbox, and has NOT yet
+ * been through email onboarding.
+ *
+ * FIXTURE PROVENANCE (BACKLOG-3277). `hasCompletedEmailOnboarding: false` is
+ * load-bearing and is the ONLY difference from the BACKLOG-3275 original.
+ * Before 3277 the user was held in onboarding by the Full Disk Access routing
+ * gate; 3277 releases that user, and a fixture that no longer routes to
+ * onboarding cannot dispatch a step completion — every assertion below would
+ * have gone silently vacuous. This user is held one check EARLIER
+ * (`reducer.ts:132`, email onboarding not done), which is independent of the
+ * gate, so these guards no longer depend on routing at all.
+ *
+ * Transcribed, not invented: `USER_DATA_LOADED` with this fixture emits
+ * `completedSteps: ["phone-type", "permissions", "secure-storage"]`,
+ * `fda: "declined"`, `step: "email-connect"` — pinned by the PROVENANCE test
+ * below so the transcription cannot drift away from its producer.
+ */
+const declinedFdaMidOnboarding: UserData = {
   phoneType: "iphone",
-  hasCompletedEmailOnboarding: true,
+  hasCompletedEmailOnboarding: false,
   hasEmailConnected: false,
   needsDriverSetup: false,
   fda: "declined",
@@ -58,8 +75,22 @@ function load(data: UserData, platform: PlatformInfo = macOS): AppState {
 }
 
 describe("BACKLOG-3275 — a declined permission is never reported as granted", () => {
+  it("FIXTURE PROVENANCE (BACKLOG-3277): the producer still emits the state these guards assume", () => {
+    // A transcribed fixture is only as good as its producer. If USER_DATA_LOADED
+    // ever stops emitting this shape, every guard below degenerates silently —
+    // so the transcription is asserted, not trusted.
+    const onboarding = load(declinedFdaMidOnboarding);
+    expect(onboarding.status).toBe("onboarding");
+    if (onboarding.status !== "onboarding") return;
+    expect([...onboarding.completedSteps].sort()).toEqual(
+      ["permissions", "phone-type", "secure-storage"]
+    );
+    expect(onboarding.fda).toBe("declined");
+    expect(onboarding.step).toBe("email-connect");
+  });
+
   it("PRECONDITION: the declined user is routed to onboarding with `permissions` already answered", () => {
-    const onboarding = load(declinedFdaNoMailbox);
+    const onboarding = load(declinedFdaMidOnboarding);
     expect(onboarding.status).toBe("onboarding");
     if (onboarding.status !== "onboarding") return;
     expect(onboarding.completedSteps).toContain("permissions");
@@ -70,9 +101,10 @@ describe("BACKLOG-3275 — a declined permission is never reported as granted", 
   it("FIX 1: completing another step leaves the capability FALSE", () => {
     // Was: `hasPermissions` became true because `completedSteps` contained
     // "permissions". Navigation no longer decides capability.
-    const onboarding = load(declinedFdaNoMailbox);
+    const onboarding = load(declinedFdaMidOnboarding);
     const after = appStateReducer(onboarding, { type: "ONBOARDING_STEP_COMPLETE", step: "email-connect" });
 
+    expect(after).not.toBe(onboarding); // ANTI-VACUITY (BACKLOG-3277)
     expect(after.status).toBe("ready");
     if (after.status !== "ready") return;
     expect(isFdaGranted(after.userData.fda)).toBe(false);
@@ -82,8 +114,9 @@ describe("BACKLOG-3275 — a declined permission is never reported as granted", 
     // Was: `fdaSkipped: true` went in and `undefined` came out. Independent of
     // FIX 1 — deleting only the inversion left this broken, which is why the
     // two were fixed together.
-    const onboarding = load(declinedFdaNoMailbox);
+    const onboarding = load(declinedFdaMidOnboarding);
     const after = appStateReducer(onboarding, { type: "ONBOARDING_STEP_COMPLETE", step: "email-connect" });
+    expect(after).not.toBe(onboarding); // ANTI-VACUITY (BACKLOG-3277)
     if (after.status !== "ready") throw new Error("expected ready");
     expect(after.userData.fda).toBe("declined");
   });
@@ -94,11 +127,13 @@ describe("BACKLOG-3275 — a declined permission is never reported as granted", 
     // gone by this point and the ONLY thing hiding the step was the inverted
     // capability — so fixing the inversion alone would have re-asked every
     // user who declined, which is exactly the bug BACKLOG-3212 removed.
-    const onboarding = load(declinedFdaNoMailbox);
+    const onboarding = load(declinedFdaMidOnboarding);
     const ready = appStateReducer(onboarding, { type: "ONBOARDING_STEP_COMPLETE", step: "email-connect" });
+    expect(ready).not.toBe(onboarding); // ANTI-VACUITY (BACKLOG-3277)
     if (ready.status !== "ready") throw new Error("expected ready");
 
     const back = appStateReducer(ready, { type: "START_EMAIL_SETUP" });
+    expect(back).not.toBe(ready); // ANTI-VACUITY (BACKLOG-3277)
     expect(back.status).toBe("onboarding");
     if (back.status !== "onboarding") return;
     expect(back.fda).toBe("declined");
@@ -119,12 +154,15 @@ describe("BACKLOG-3275 — a declined permission is never reported as granted", 
     // counted Full Disk Access as a live texts source for a user who declined
     // it, so the banner was suppressed. This is a visible change to a shipping
     // surface, not only a correctness cleanup.
-    const onboarding = load(declinedFdaNoMailbox);
+    const onboarding = load(declinedFdaMidOnboarding);
     const ready1 = appStateReducer(onboarding, { type: "ONBOARDING_STEP_COMPLETE", step: "email-connect" });
+    expect(ready1).not.toBe(onboarding); // ANTI-VACUITY (BACKLOG-3277)
     if (ready1.status !== "ready") throw new Error("expected ready");
 
     const back = appStateReducer(ready1, { type: "START_EMAIL_SETUP" });
+    expect(back).not.toBe(ready1); // ANTI-VACUITY (BACKLOG-3277)
     const ready2 = appStateReducer(back, { type: "ONBOARDING_QUEUE_DONE" });
+    expect(ready2).not.toBe(back); // ANTI-VACUITY (BACKLOG-3277)
     expect(ready2.status).toBe("ready");
     if (ready2.status !== "ready") return;
 
@@ -181,10 +219,12 @@ describe("BACKLOG-3275 — only an observed capability may report `granted`", ()
   });
 
   it("FDA_GRANTED upgrades a ready user who granted later (the Settings path)", () => {
-    const ready = appStateReducer(load(declinedFdaNoMailbox), {
+    const onboarding = load(declinedFdaMidOnboarding);
+    const ready = appStateReducer(onboarding, {
       type: "ONBOARDING_STEP_COMPLETE",
       step: "email-connect",
     });
+    expect(ready).not.toBe(onboarding); // ANTI-VACUITY (BACKLOG-3277)
     if (ready.status !== "ready") throw new Error("expected ready");
     expect(ready.userData.fda).toBe("declined");
 
@@ -195,10 +235,10 @@ describe("BACKLOG-3275 — only an observed capability may report `granted`", ()
 });
 
 describe("BACKLOG-3275 — the third state: never-asked stays distinguishable from declined", () => {
-  const neverAsked: UserData = { ...declinedFdaNoMailbox, fda: "not-asked" };
+  const neverAsked: UserData = { ...declinedFdaMidOnboarding, fda: "not-asked" };
 
   it("the two states differ in `completedSteps` — declined is answered, never-asked is not", () => {
-    const declined = load(declinedFdaNoMailbox);
+    const declined = load(declinedFdaMidOnboarding);
     const never = load(neverAsked);
 
     expect(declined.status).toBe("onboarding");
@@ -213,14 +253,20 @@ describe("BACKLOG-3275 — the third state: never-asked stays distinguishable fr
     // This is the assertion that closes the item. Before the fix both ended up
     // reporting granted with no recorded answer — byte-identical, the two
     // states the union exists to separate collapsed into one.
-    const fromDeclined = appStateReducer(load(declinedFdaNoMailbox), {
+    const declinedBefore = load(declinedFdaMidOnboarding);
+    const neverBefore = load(neverAsked);
+    const fromDeclined = appStateReducer(declinedBefore, {
       type: "ONBOARDING_STEP_COMPLETE",
       step: "email-connect",
     });
-    const fromNeverAsked = appStateReducer(load(neverAsked), {
+    const fromNeverAsked = appStateReducer(neverBefore, {
       type: "ONBOARDING_STEP_COMPLETE",
       step: "email-connect",
     });
+    // ANTI-VACUITY (BACKLOG-3277): BOTH legs of the pair must run the
+    // transition. Half a discriminating pair discriminates nothing.
+    expect(fromDeclined).not.toBe(declinedBefore);
+    expect(fromNeverAsked).not.toBe(neverBefore);
 
     if (fromDeclined.status !== "ready") throw new Error("expected ready");
     expect(fromDeclined.userData.fda).toBe("declined");

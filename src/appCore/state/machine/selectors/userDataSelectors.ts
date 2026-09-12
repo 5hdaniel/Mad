@@ -9,7 +9,7 @@
  */
 
 import { isFdaGranted } from "../fdaState";
-import type { AppState, OnboardingStep } from "../types";
+import type { AppState, OnboardingStep, PlatformInfo, UserData } from "../types";
 import logger from '../../../../utils/logger';
 import type { OnboardingContext, Platform } from "../../../../components/onboarding/types";
 import { hasMinimumDataSource } from "../../../../components/onboarding/queue/dataSourceFloor";
@@ -322,13 +322,10 @@ function platformInfoToOnboardingPlatform(info: {
  * @param state - Current application state
  * @returns true only when in `ready` AND the data-source floor is unmet
  */
-export function selectSetupIncomplete(state: AppState): boolean {
-  if (state.status !== "ready") {
-    return false;
-  }
-
-  const { userData, platform } = state;
-
+export function hasMinimumDataSourceForUser(
+  userData: Pick<UserData, "phoneType" | "hasEmailConnected" | "needsDriverSetup" | "fda">,
+  platform: Pick<PlatformInfo, "isMacOS" | "isWindows">
+): boolean {
   // Reconstruct the minimal OnboardingContext the floor reads. Fields the floor
   // ignores are given inert defaults; only platform/email/permissions/phone/
   // driver actually drive hasMinimumDataSource.
@@ -353,5 +350,13 @@ export function selectSetupIncomplete(state: AppState): boolean {
     isResumedFromFdaRelaunch: false,
   };
 
-  return !hasMinimumDataSource(context);
+  return hasMinimumDataSource(context);
+}
+
+export function selectSetupIncomplete(state: AppState): boolean {
+  if (state.status !== "ready") {
+    return false;
+  }
+  const { userData, platform } = state;
+  return !hasMinimumDataSourceForUser(userData, platform);
 }
