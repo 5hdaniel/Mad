@@ -149,6 +149,32 @@ Three ways a green signal carries no information. All three occurred on 2026-08-
 4. **Sweep boundaries, don't sample them.** One input per branch cannot catch an off-by-one.
 5. **A PR that moves a module across the main/renderer boundary MUST run `npm run build`** (CI also runs it — job "Build Application", `ci.yml`, in a step labelled "Build Vite app" which reads as renderer-only and has caused three separate documents to claim CI never builds; run it locally anyway so you find out in minutes, not after a push)**.** `electron/` cannot import from `src/` (`rootDir`), and the renderer cannot *value*-import from `electron/` (Vite parses it as JavaScript). Neither direction works; a shared module needs `src/` with a mirror, plus a parity test whose corpus covers every boundary.
 
+### Run the mutation before you write the control down (MANDATORY)
+
+**A control is not specified until its mutation has been run.** The rule above runs *after* implementation. Most of the cases below happened earlier — at specification time, in plans that were written, reviewed and approved before any code existed.
+
+A plan that says "control C proves X, and reverting Y turns it red" is making a claim about code nobody has executed — and because it sits in an approved document, it is trusted more and checked less. The part the rule above does not cover: **a control's mutation can be run before the control exists**, against the code it will sit beside. That is how the last three rows below were caught; two of them were proposed replacements that did not exist yet, measured against the code they would have sat beside.
+
+**Worked example — five cases, 11–12 September 2026 (BACKLOG-3229, BACKLOG-3213).**
+
+| Case | Claimed | What checking the claim showed |
+|---|---|---|
+| health-banner prune (3229) — **the contrast** | five controls cover the fix | a stale-closure build wiping every dismissal every two minutes **passed four of six** — caught at PR review against a built implementation, the later and more expensive gate |
+| C22 (3213) | "revert `:638` → C22 red" | a mount effect resolves the state first, so it reports **green** — found by reading that effect and an existing passing test, not by running a mutation |
+| SR's `>=2` replacement (3213) | fixes C22's vacuity | measured 2 calls with **zero** re-asks — vacuous too |
+| Engineer's delta replacement (3213) | fixes SR's vacuity | **times out against correct code** — a false red, worse than a vacuous green |
+| C13 (3213) | the control the whole set rests on for the likely wrong fix | breaking its line reds a **different** test; the estimate disjunct holds the gate, so the wrong fix **would have shipped green** |
+
+**Rules that follow:**
+
+1. **Run the mutation before you write the control down** — against the code it will sit beside, if the control does not exist yet. Record which existing tests red — **none** is the answer that tells you the control is load-bearing.
+2. **A correction carries the same burden as the original.** C22, SR's `>=2` replacement and Engineer's delta replacement above are one chain: a control caught vacuous, then two fixes for it, each itself broken — in opposite directions. Reviewer and engineer each caught the other.
+3. **Ask what the most likely WRONG implementation looks like, and check the set catches that** — not merely that it catches the fix being absent. The stale-closure prune and a screen-blank permission state were both plausible, both looked shipped, and both were invisible to the entire control set.
+
+Proximity to the precedent is no protection: the repo had already recorded this identical trap twice in the very file the engineer was copying fixtures from. And the rule pays immediately — applying it surfaced a gate term with no guard at all, and neutering that term left all 21 tests green.
+
+**Know its limit.** A mutation tells you whether a control *can* fail, not whether the value it asserts on is one the code can produce: two controls in BACKLOG-3229 asserted on a `TOKEN_EXPIRED` that **no producer in the repo emits**, and mutating the code that handles it reddens them exactly as advertised. Enumerating the writers is what finds that one.
+
 ### Sequencing PR trains
 
 **Run them one at a time.** Worktrees isolate files, not facts — a review of PR A is only valid while PR B holds still, and a published branch is shared by definition.
@@ -168,6 +194,30 @@ On 2026-08-04, nine PRs on one integration branch produced **four** merge-order 
 3. **Commit the fix BEFORE running any control that reverts with `git checkout --`.** On 2026-08-11 an agent discarded its own uncommitted fix that way and nearly shipped the bug it had just proven.
 
 Three occurrences in one night, 10–11 Aug 2026 (BACKLOG-2645). Worked example: `.claude/docs/PR-SOP.md` → §4.4.
+
+### Read the guard before filing a gap (MANDATORY)
+
+**An item claiming "X is not verified" must first enumerate what IS verified — by opening the guard and reading it.** One failing probe is not a gap; it is one input to a question the guard's own source already answers.
+
+A gap filed without that reading costs far more than it looks. It arrives with a real measurement attached, so it reads as established. It survives review for the same reason. And it consumes the founder's attention until somebody finally opens the file.
+
+**Worked example — BACKLOG-3241, filed and closed 2026-09-10, three corrections deep, ~a dozen founder messages, net change zero.**
+
+*Filed as:* `spctl -a -t install` on the published DMG returned `rejected / Unnotarized Developer ID`, therefore "the release gate verifies the .app and never the .dmg." `release.yml` was never opened.
+
+| Correction | What was actually true |
+|---|---|
+| DMG stapling is not failing silently | It is **absent and always was** — electron-builder runs `afterSign` before the DMG exists, and app-builder-lib 26 exposes no DMG-notarize option. Nothing regressed. |
+| "The gate verifies a different copy of the app than the one that ships" | **False, and relayed untested.** The app in the update zip and the app installed from the DMG share the identical `CDHash`; electron-builder builds one app and wraps it in both containers. |
+| The gate is deficient | `release.yml:222-250` already runs **four** checks per architecture: `codesign --verify --deep --strict`, an assertion that `Notarization Ticket=stapled` is present, `xcrun stapler validate`, and `spctl -a -t exec`. |
+
+**Rules that follow:**
+
+1. **Open the guard and paste what it checks into the item.** If it already covers the claim, there is no item.
+2. **A failing probe on ONE artifact is not a gap.** Establish whether the guard's target and your probe's target are the same object. For macOS bundles, `codesign -dvvv --verbose=4 <app> | grep CDHash` settles it in one command.
+3. **Never relay a subagent's structural claim as fact.** It is trusted more than an original claim and therefore checked less. This item's central error was a plausible, specific, wrong sentence repeated without measurement.
+4. **Check the standard before proposing a practice.** Notarizing and stapling the `.app` is universal. Verifying container *contents* in CI is not — proposing it would have been inventing a practice and calling it a standard.
+5. **"Are you 100% sure?" almost always means no.** Say so and go measure, rather than defending the claim.
 
 ### Derive sets by execution, not by grep (MANDATORY)
 
