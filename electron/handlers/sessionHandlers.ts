@@ -552,10 +552,10 @@ async function handleCompleteEmailOnboarding(
  *
  * TASK-1039 still applies and its auto-correct below stays: a token with the
  * flag unset repairs the flag. Note that `onboardingCompleted` is read ONCE,
- * at :596, BEFORE that auto-correct writes, and is never re-read — it stays
- * stale deliberately. That staleness is what makes the TASK-1039 test the
- * guard on the token half of the OR below: degrade `completed` to the bare
- * flag and that test goes red. Keep the `const`.
+ * BEFORE that auto-correct block writes, and is never re-read — it stays stale
+ * deliberately. That staleness is what makes the TASK-1039 test the guard on
+ * the token half of the OR below: degrade `completed` to the bare flag and
+ * that test goes red. Keep the `const`.
  *
  * Connection HEALTH (never connected vs. token expired) is NOT answerable
  * here and must not be guessed: nothing persists the user's decline today

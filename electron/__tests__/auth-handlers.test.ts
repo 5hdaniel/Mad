@@ -674,9 +674,9 @@ describe("Auth Handlers", () => {
     // completed=true and auto-correct flag when token exists but flag is false
     // (TASK-1039)" further down — that is the test that goes red if the handler
     // ever degrades to trusting the flag alone. Do not delete it, and do not
-    // turn `onboardingCompleted` (sessionHandlers.ts:596) into a `let`:
-    // TASK-1039 catches the bare-flag regression only because that local is
-    // read before the auto-correct writes and stays stale.
+    // turn `onboardingCompleted` in sessionHandlers.ts into a `let`: TASK-1039
+    // catches the bare-flag regression only because that local is read before
+    // the auto-correct block writes, and stays stale.
     it("returns completed=true when the user answered the email step but holds no mailbox token — do not re-run onboarding (BACKLOG-3293)", async () => {
       // A deliberate skip and a session-only token that was never persisted
       // are indistinguishable to THIS handler — both are flag=true, no token —
