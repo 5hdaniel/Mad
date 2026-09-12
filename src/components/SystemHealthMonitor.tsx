@@ -6,6 +6,7 @@ import type { OAuthProvider } from "../../electron/types/models";
 // SystemIssue[]` compiled with zero diagnostics and the contract could not fail.
 import type { HealthIssue } from "../../electron/types/ipc/healthIssue";
 import { systemService, authService } from '../services';
+import { identityOf } from '../utils/healthIssueIdentity';
 import logger from '../utils/logger';
 import { openEmailSettings } from '../utils/openEmailSettings';
 import { FdaHelpSheet } from './permissions/FdaHelpSheet';
@@ -64,7 +65,8 @@ function SystemHealthMonitor({
   onOpenSettings,
 }: SystemHealthMonitorProps) {
   const [issues, setIssues] = useState<HealthIssue[]>([]);
-  const [dismissed, setDismissed] = useState(new Set<number>());
+  // BACKLOG-3229: identities, NOT array indices. See utils/healthIssueIdentity.
+  const [dismissed, setDismissed] = useState(new Set<string>());
   const checkingRef = useRef(false);
   /**
    * BACKLOG-3210 (part 2): the Full Disk Access explainer, opened from this
@@ -107,14 +109,28 @@ function SystemHealthMonitor({
         // declared `string[]` and the emitted objects disagreed.
         const nextIssues = result.data.issues;
         setIssues(nextIssues);
-        // `dismissed` holds INDICES into the issue array. Now that the array
-        // can shrink, a stale index would suppress an unrelated future issue
-        // that happened to land in the same slot. Clearing the set when there
-        // is nothing left to dismiss keeps the two in step; a non-empty update
-        // is left alone, which is the pre-existing behaviour.
-        if (nextIssues.length === 0) {
-          setDismissed(new Set<number>());
-        }
+        // BACKLOG-3229: PRUNE the dismissed set to the identities still
+        // present. This replaces the old "clear it when the list is empty"
+        // mitigation, which could only fire on a list that reached zero — and
+        // the damaging case (one issue replaced by a different one) never does.
+        //
+        // Pruning also gives recurrence the right behaviour for free: an issue
+        // that is resolved and later comes back has had its identity dropped in
+        // between, so it reappears rather than staying dismissed forever.
+        //
+        // The functional updater is REQUIRED, not stylistic. `checkSystemHealth`
+        // is a `useCallback` keyed on [userId, provider], and `setInterval`
+        // holds ONE closure for the life of the effect — so reading `dismissed`
+        // from scope here would read the empty set captured on first render and
+        // wipe every dismissal on each 2-minute poll. Adding `dismissed` to the
+        // deps is the wrong fix: it would tear down and rebuild the interval on
+        // every dismissal.
+        const liveIdentities = new Set(
+          nextIssues.map(identityOf).filter((id): id is string => id !== null),
+        );
+        setDismissed(
+          (prev) => new Set([...prev].filter((id) => liveIdentities.has(id))),
+        );
       }
     } catch (error) {
       logger.error("[SystemHealthMonitor] System health check failed:", error);
@@ -139,11 +155,13 @@ function SystemHealthMonitor({
     };
   }, [checkSystemHealth]);
 
-  const handleDismiss = (issueIndex: number) => {
-    setDismissed((prev) => new Set([...prev, issueIndex]));
+  const handleDismiss = (issueIdentity: string | null) => {
+    // A row with no derivable identity is not dismissable — see identityOf.
+    if (issueIdentity === null) return;
+    setDismissed((prev) => new Set([...prev, issueIdentity]));
   };
 
-  const handleAction = async (issue: HealthIssue, issueIndex: number) => {
+  const handleAction = async (issue: HealthIssue, issueIdentity: string | null) => {
     switch (issue.actionHandler) {
       case "open-system-settings":
         await systemService.openPrivacyPane("fullDiskAccess");
@@ -172,7 +190,7 @@ function SystemHealthMonitor({
           // Navigate to Settings + highlight email connections (shared with the
           // SyncStatusIndicator reconnect CTA so both land in the same place).
           openEmailSettings(onOpenSettings);
-          handleDismiss(issueIndex);
+          handleDismiss(issueIdentity);
         } else {
           // Fallback: Try OAuth directly if Settings callback not available
           try {
@@ -187,7 +205,7 @@ function SystemHealthMonitor({
                   if (connectionResult.success) {
                     await checkSystemHealth();
                     if (!isGoogle) {
-                      handleDismiss(issueIndex);
+                      handleDismiss(issueIdentity);
                     }
                   }
                   cleanup();
@@ -205,7 +223,7 @@ function SystemHealthMonitor({
 
       case "retry":
         await checkSystemHealth();
-        handleDismiss(issueIndex);
+        handleDismiss(issueIdentity);
         break;
 
       default:
@@ -216,7 +234,12 @@ function SystemHealthMonitor({
     }
   };
 
-  const visibleIssues = issues.filter((_, index) => !dismissed.has(index));
+  // BACKLOG-3229: filtered by IDENTITY, not by position. A row with no
+  // identity is never filtered out — it cannot have been dismissed.
+  const visibleIssues = issues.filter((issue) => {
+    const identity = identityOf(issue);
+    return identity === null || !dismissed.has(identity);
+  });
 
   // Hide during onboarding tour or when no issues
   if (hidden || visibleIssues.length === 0) {
@@ -261,10 +284,8 @@ function SystemHealthMonitor({
           onPermissionGranted={checkSystemHealth}
         />
       )}
-      {visibleIssues.map((issue, _index) => {
-        const originalIndex = issues.findIndex(
-          (i, idx) => i === issue && !dismissed.has(idx),
-        );
+      {visibleIssues.map((issue, index) => {
+        const issueIdentity = identityOf(issue);
         // BACKLOG-2127: a broken mailbox token is RECOVERABLE — the user just
         // needs to reconnect. Render it in the amber (warning) family so the
         // same fact has one visual voice across the sync card and this banner,
@@ -277,7 +298,11 @@ function SystemHealthMonitor({
 
         return (
           <div
-            key={originalIndex}
+            // BACKLOG-3229: the identity is the key, so React keeps a row bound
+            // to its issue across a reorder. The index is the fallback ONLY for
+            // a row with no identity, and ONLY for React's key — never for
+            // dismissal, which is what this item removed positions from.
+            key={issueIdentity ?? `no-identity:${index}`}
             className={`flex-shrink-0 ${severityClasses[severity]} border-b px-4 py-3`}
           >
             <div className="flex items-center justify-between max-w-4xl mx-auto">
@@ -352,18 +377,23 @@ function SystemHealthMonitor({
               <div className="flex items-center gap-2">
                 {issue.action && (
                   <button
-                    onClick={() => handleAction(issue, originalIndex)}
+                    onClick={() => handleAction(issue, issueIdentity)}
                     className={`px-3 py-1.5 text-xs font-medium rounded-md transition-colors ${buttonClasses[severity]}`}
                   >
                     {issue.action}
                   </button>
                 )}
-                <button
-                  onClick={() => handleDismiss(originalIndex)}
-                  className={`px-3 py-1.5 text-xs font-medium ${severity === 'warning' ? 'text-amber-700 hover:text-amber-900' : textClasses[severity]} hover:opacity-80 transition-colors`}
-                >
-                  Dismiss
-                </button>
+                {/* BACKLOG-3229: no identity, no Dismiss button. Such a row cannot
+                    be remembered across a poll, so offering the control would
+                    produce a button that silently does nothing. */}
+                {issueIdentity !== null && (
+                  <button
+                    onClick={() => handleDismiss(issueIdentity)}
+                    className={`px-3 py-1.5 text-xs font-medium ${severity === 'warning' ? 'text-amber-700 hover:text-amber-900' : textClasses[severity]} hover:opacity-80 transition-colors`}
+                  >
+                    Dismiss
+                  </button>
+                )}
               </div>
             </div>
           </div>
