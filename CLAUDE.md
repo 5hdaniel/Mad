@@ -168,7 +168,7 @@ A plan that says "control C proves X, and reverting Y turns it red" is making a 
 **Rules that follow:**
 
 1. **Run the mutation before you write the control down** — against the code it will sit beside, if the control does not exist yet. Record which existing tests red — **none** is the answer that tells you the control is load-bearing.
-2. **A correction carries the same burden as the original.** Three rows above are one chain: a control caught vacuous, then two fixes for it, each itself broken — in opposite directions. Reviewer and engineer each caught the other.
+2. **A correction carries the same burden as the original.** C22, SR's `>=2` replacement and Engineer's delta replacement above are one chain: a control caught vacuous, then two fixes for it, each itself broken — in opposite directions. Reviewer and engineer each caught the other.
 3. **Ask what the most likely WRONG implementation looks like, and check the set catches that** — not merely that it catches the fix being absent. The stale-closure prune and a screen-blank permission state were both plausible, both looked shipped, and both were invisible to the entire control set.
 
 Proximity to the precedent is no protection: the repo had already recorded this identical trap twice in the very file the engineer was copying fixtures from. And the rule pays immediately — applying it surfaced a gate term with no guard at all, and neutering that term left all 21 tests green.
