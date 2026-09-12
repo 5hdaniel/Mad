@@ -451,8 +451,12 @@ export function registerDiagnosticHandlers(): void {
             // no new renderer plumbing is needed (SystemHealthMonitor renders
             // `issue.message` as the subtitle). Omitted cleanly when null.
             const sinceMessage = formatSinceMessage(status?.lastSyncAt);
+            // BACKLOG-3230: `type` is NOT set here. It arrives from the spread
+            // below — `:447` has already required `connError.type` to be a
+            // member of `brokenTokenTypes`, so the spread always supplies it.
+            // A literal `type` written above the spread would be silently
+            // overwritten by it, which is what used to happen here.
             issues.push({
-              type: "OAUTH_CONNECTION" as string,
               provider: providerName,
               severity: "error",
               ...(connError as unknown as Record<string, unknown>),
