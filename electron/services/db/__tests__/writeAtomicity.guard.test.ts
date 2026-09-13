@@ -1536,13 +1536,30 @@ function wrapsItself(body: string): boolean {
  *      catch.
  * `} finally` never separates anything; it always runs.
  *
- * THE GAP NO VERSION OF THAT RULE CAN CLOSE with this machinery: a writer CALL
- * counts as one write. A two-statement writer that commits its first statement
- * and throws on its second still sends control to the catch, so W2 runs beside
- * a half-done W1. `recordSyncSuccess` (`emailSyncStateService.ts:163-164`) is
- * exactly that. Adding the rule means accepting a hole in the CLEARING
- * direction; leaving it out costs a false positive, which this guard reports
- * rather than hides.
+ * THREE GAPS THAT RULE STILL HAS. Each of these passes all four conditions,
+ * and each lets W1 commit and W2 run. Verified two ways at `1463e12d4`: the
+ * four conditions were sketched on this file's own `braceDepths` / `writeStream`
+ * / `elseArmRange`, and each shape was run in node to watch both writes happen.
+ * The same sketch still rejected condition 2's braced loop, condition 3's
+ * trailing `mayThrow()` and condition 4's `W0 … return` shape, so it
+ * discriminates.
+ *   (i)  A LOOP WITHOUT BRACES. `try { for (…) W1(…); } catch { W2 }`, and
+ *        `xs.forEach((x) => W1(x));`. A braceless body opens no brace, so
+ *        condition 2's depth test reads W1 as top level. It commits on one pass
+ *        and throws on the next.
+ *   (ii) A THROW LATER IN W1'S OWN STATEMENT. `await W1(…).then((r) => f(r));`,
+ *        or `W1(…).id.toString()`. Condition 3 ends at the statement's `;`, but
+ *        the rest of that statement runs after W1 has committed. W1's OWN
+ *        ARGUMENTS are not this gap: they are evaluated before the call, so a
+ *        throw there means W1 never ran (run in node, W2 alone).
+ *   (iii) A WRITER CALL COUNTS AS ONE WRITE. A two-statement writer that commits
+ *        its first statement and throws on its second still sends control to
+ *        the catch, so W2 runs beside a half-done W1. `recordSyncSuccess`
+ *        (`emailSyncStateService.ts:163-164`) is exactly that.
+ * (i) and (ii) need a statement-level parse this offset machinery does not
+ * have. (iii) cannot be seen from the caller at all. Any rule built from the
+ * four conditions opens holes in the CLEARING direction. Leaving it out costs a
+ * false positive, which this guard reports rather than hides.
  *
  * ===========================================================================
  * BACKLOG-2569 — WHY THIS READS THE JOINED BODY AND NOT LINES
