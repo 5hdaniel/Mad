@@ -109,7 +109,7 @@ if (event === 'push') {
   }
 
   console.error(
-    `::error title=Portal Branch Name::${branch} carries ${hits.length} change(s) under ${PORTAL_PATH_TEXT} ` +
+    `::error title=Portal Branch Name::${branch} carries ${hits.length} change(s) under ${PORTAL_PATH_TEXT}. ` +
     `Plain ${cls.kind}/ branches get no Vercel deployment (BACKLOG-3205). ` +
     `Create ${cls.optIn} from this branch, move its open PRs to it, and keep ${branch}.`
   );
@@ -117,6 +117,8 @@ if (event === 'push') {
   console.error(`  git push origin origin/${branch}:refs/heads/${cls.optIn}`);
   console.error(`  gh pr edit <number> --base ${cls.optIn}     # for each open PR into ${branch}`);
   console.error(`Do not delete ${branch}.`);
+  console.error(`\nPushing this same commit to ${cls.optIn} creates no deployment, and an empty commit is skipped as`);
+  console.error(`"Not affected". The next push to ${cls.optIn} that changes portal code builds it.`);
   console.error(`\nPortal files on ${branch} (first ${Math.min(MAX_LISTED, hits.length)} of ${hits.length}):`);
   for (const f of hits.slice(0, MAX_LISTED)) console.error(`  ${f}`);
   process.exit(1);
@@ -166,6 +168,7 @@ if (event === 'pull_request') {
   console.error(`  git push origin origin/${baseRef}:refs/heads/${cls.optIn}`);
   console.error(`  gh pr edit <number> --base ${cls.optIn}`);
   console.error(`Do not delete ${baseRef}.`);
+  console.error(`\nMove this PR before it merges: its merge into ${cls.optIn} is then a push that changes portal code, which builds.`);
   console.error(`\nPortal files in this PR (first ${Math.min(MAX_LISTED, hits.length)} of ${hits.length}):`);
   for (const f of hits.slice(0, MAX_LISTED)) console.error(`  ${f}`);
   process.exit(1);

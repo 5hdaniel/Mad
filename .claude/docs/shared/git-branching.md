@@ -70,7 +70,8 @@ that the Ignored Build Step cancels still counts against that cap.
 
 **To get a preview, add `-portal` to the type segment of your branch name:** `fix-portal/…`,
 `docs-portal/…`, `chore-portal/…`, `feat-portal/…`. The type keeps its meaning; `-portal` is
-a modifier on it, not a new type. (`portal/…` also works, as a spare spelling.)
+a modifier on it, not a new type. (`portal/…` also works, as a spare spelling.) Integration and
+hotfix branches use the same key: `int-portal/…` and `hotfix-portal/…`.
 
 | Branch | Previews? |
 |---|---|
@@ -79,6 +80,7 @@ a modifier on it, not a new type. (`portal/…` also works, as a spare spelling.
 | `release/*` | yes |
 | `int/*`, `hotfix/*` | **no** (BACKLOG-3205). The `Portal Branch Name` check fails when one of these carries portal changes — see *Does this sprint or hotfix touch a portal?* below |
 | `fix-portal/…`, `docs-portal/…`, any `<type>-portal/…` | **yes — this is the opt-in** |
+| `int-portal/…`, `hotfix-portal/…` | **yes** — the opt-in for integration and hotfix branches. Measured for `int-portal/` on 2026-09-13 (BACKLOG-3205); `hotfix-portal/` matches the same `*-portal/**` key and was not pushed separately |
 | everything else (`fix/`, `feat/`, `chore/`, `docs/`, …) | no |
 
 **If your preview never appears, check the branch name first.** A branch the config denies
@@ -153,6 +155,25 @@ develop sync does not count: only changes that are on neither `develop` nor `mai
 git push origin origin/int/<name>:refs/heads/int-portal/<name>
 gh pr edit <number> --base int-portal/<name>     # each open PR into int/<name>
 ```
+
+**When the deployment builds.** A created deployment still runs the Ignored Build Step
+(`scripts/vercel-ignore-build.sh`), which builds only when the push changes that portal's paths.
+On a branch's first deployment it compares against the previous commit (`HEAD~1`). Measured on
+2026-09-13 (BACKLOG-3205):
+
+| What you push to the `-portal` branch | Result |
+|---|---|
+| the same commit the plain branch already has | no deployment at all |
+| an empty commit | a deployment per portal, each skipped as "Not affected" — no build |
+| a commit whose only change is outside the portal paths | a deployment, cancelled by the Ignored Build Step |
+
+So **move the branch before the first portal PR merges**: that merge is then a push that changes
+portal code, and it builds. If portal work is already merged, the next push that changes portal
+code builds; for a preview sooner, use `vercel deploy` (above).
+
+**The old red stays on that commit.** Moving a branch or a PR to the `-portal` name runs the check
+again and it passes, but the earlier failed run remains in that commit's check rollup until a new
+commit is pushed.
 
 **Do not delete the plain branch.** The Message Hygiene gate treats a commit reachable from
 another `origin` branch as already published (`scripts/ci/check-message-hygiene.mjs`).
