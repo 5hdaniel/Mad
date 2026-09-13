@@ -34,7 +34,7 @@ name: PR Metrics Validation
 
 on:
   pull_request:
-    branches: [main, develop, 'int/**', 'int-portal/**']
+    branches: [main, develop, 'int/**']
     types: [opened, edited, synchronize, reopened]
 
 permissions:
