@@ -482,7 +482,7 @@ const KNOWN_UNWRAPPED: Record<string, string> = {
   "electron/services/failureLogService.ts::pruneOldEntries":
     "BACKLOG-3319 — the age DELETE commits and the cap DELETE does not, so the failure log keeps rows above the 500-row cap until the next startup prunes again. Diagnostics only — no user-visible record is lost. That is why this is low despite inheriting from a critical batch.",
   "electron/services/reviewStateService.ts::restoreRejectedToQueue":
-    "BACKLOG-3320 — the review item is left in neither state: not rejected any more, and not back in the queue. The user's route to it is gone: the rejected list no longer shows it and the queue does not yet. Same shape as BACKLOG-3310, and nothing re-derives it.",
+    "BACKLOG-3320 — a crash after the INSERT and before the DELETE leaves the item queued for review AND still listed as rejected: it appears twice, in two places that contradict each other. It loops per sibling, so a multi-email thread can end up part-restored. The MIRROR of BACKLOG-3310, not the same failure — that one writes in the opposite order and leaves NEITHER.",
 
   // MERGE NOTE: the incoming side of this conflict was the original nine-entry
   // list. It is deliberately discarded, not merged — every entry in it was
