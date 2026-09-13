@@ -503,7 +503,7 @@ const KNOWN_UNWRAPPED: Record<string, string> = {
   //
   // NOT FIXED HERE. Damage transcribed from BACKLOG-3322, which owns the path.
   "electron/handlers/systemHandlers.ts::ipc:system:initialize-secure-storage":
-    "BACKLOG-3322 — the macOS deep-link login provisions the user, token and session as separate writes, so a crash between them leaves a local users row with no durable session: no session.json on disk, and the relaunch that grants Full Disk Access lands the founder back on a failed-login screen while `ensureUserInLocalDb` reports 'already exists -> success' over it. The counted pair is `createUser` at systemHandlers.ts:562 and `createLocalUserFromCloud` at :651. Sequenced BEHIND BACKLOG-3253, which deletes the DB-init deferral this catch-up path exists to compensate for, and it carries that item's open Fork D question.",
+    "BACKLOG-3322 — the macOS deep-link login provisions the user, token and session as separate writes, so a crash between them leaves a local users row with no durable session: no session.json on disk, and the relaunch that grants Full Disk Access lands the founder back on a failed-login screen while `ensureUserInLocalDb` reports 'already exists -> success' over it. The counted pair is `createUser` at systemHandlers.ts:562 and `createLocalUserFromCloud` at :651. BACKLOG-3253 removes the DB-init deferral this catch-up path exists to compensate for, and BACKLOG-3322 carries the open Fork D question of what this path should do when tokens are absent.",
 
   // MERGE NOTE: the incoming side of this conflict was the original nine-entry
   // list. It is deliberately discarded, not merged — every entry in it was
