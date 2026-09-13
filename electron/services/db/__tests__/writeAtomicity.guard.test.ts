@@ -1614,9 +1614,14 @@ function unitWrites(unit: Fn): { at: number; label: string }[] {
  *
  * That is a false POSITIVE — red where the code may be exclusive — which is the
  * safe direction for this guard, and it surfaces as a listed offender someone
- * reads rather than as silence. ZERO live sites have the shape at
- * `73d3e3fbe`. Adding a second arm-finding path for it is a change with no
- * measured need.
+ * reads rather than as silence. ZERO live sites have the shape at `73d3e3fbe`,
+ * swept rather than sampled:
+ *
+ *   git grep -nE '^[[:space:]]*\}[[:space:]]*else[[:space:]]*$|^[[:space:]]*\}[[:space:]]*else[[:space:]]+[^{]' \
+ *     -- electron | grep -vE 'else[[:space:]]+if'
+ *
+ * returns ONE line, and it is the fixture in this file that pins the floor.
+ * Adding a second arm-finding path for it is a change with no measured need.
  *
  * STATED FLOOR 2 — the EARLIER write is still checked by DEPTH ALONE, the rule
  * BACKLOG-2584 set (`e.depth < lastWriteDepth`). It is not checked by offset,
@@ -1626,9 +1631,13 @@ function unitWrites(unit: Fn): { at: number; label: string }[] {
  *   if (b) { } else { W2 }    // `else` shallower than W1; W2 inside its arm
  *
  * The machinery below could verify the earlier write by offset too. ZERO live
- * offenders have the shape at `73d3e3fbe`, so it is filed as a sibling item
- * rather than widened here — the same measured-need bar BACKLOG-3312 was held
- * to.
+ * offenders have the shape at `73d3e3fbe` — the fix's whole surfaced population
+ * is the ONE unit listed in `KNOWN_UNWRAPPED` above, and it is not this shape.
+ * Widening it here was ruled out of scope for that reason, the same
+ * measured-need bar BACKLOG-3312 was held to; it goes to a sibling item, and
+ * this docblock is where that item's engineer starts. NOT YET FILED at the time
+ * this was written — do not read the absence of an id as the absence of the
+ * floor.
  */
 function elseArmRange(
   src: string,
@@ -2099,8 +2108,10 @@ describe("the write heuristics themselves (BACKLOG-2569)", () => {
     // `elseArmRange` returns null for an `else` governing no block, so such an
     // `else` clears nothing and the pair is REPORTED. That is a false positive
     // and it is the direction this guard chooses on purpose — a listed offender
-    // someone opens and reads, never silence. ZERO live sites have the shape at
-    // `73d3e3fbe`; this test states the floor rather than leaving it to prose.
+    // someone opens and reads, never silence. Swept across `electron/` at
+    // `73d3e3fbe`, the only line of this shape is the fixture below; this test
+    // states the floor rather than leaving it to prose. The sweep command is in
+    // the `elseArmRange` docblock.
     const BRACELESS = `
   if (a) {
     dbRun(\`UPDATE contacts SET a = ? WHERE id = ?\`, [a, id]);
