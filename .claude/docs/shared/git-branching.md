@@ -1,7 +1,7 @@
 # Git Branching Strategy
 
 **Status:** Canonical reference for branching and merge policies
-**Last Updated:** 2024-12-24
+**Last Updated:** 2026-09-13
 
 ---
 
@@ -34,12 +34,14 @@ feature/*, fix/*, claude/* (feature branches)
 | `hotfix/*` | Urgent production fixes | `main` | `main` AND `develop` | No |
 | `claude/*` | AI-assisted development | `develop` | `develop` | No |
 | `int/*` | Integration branches (multi-feature) | `develop` | `develop` | No |
+| `int-portal/*` | Integration branch for a sprint that changes portal code (see Branch Naming) | `develop` | `develop` | No |
 | `project/*` | Multi-sprint project branches | `develop` | `develop` | No |
+| `hotfix-portal/*` | Hotfix that changes portal code (see Branch Naming) | same as `hotfix/*` | `main` AND `develop` | No |
 | `<type>-portal/*` | Opt in to a Vercel portal preview | `develop` | `develop` | No |
 
 ---
 
-## Branch Naming Convention
+## Branch Naming
 
 | Prefix | Purpose | Example |
 |--------|---------|---------|
@@ -48,6 +50,8 @@ feature/*, fix/*, claude/* (feature branches)
 | `hotfix/` | Urgent production fixes | `hotfix/security-patch` |
 | `claude/` | AI-assisted development | `claude/refactor-auth` |
 | `int/` | Integration branches | `int/ai-polish` |
+| `int-portal/` | Integration branch for a sprint that changes portal code; creates portal deployments | `int-portal/contacts-ui` |
+| `hotfix-portal/` | Hotfix that changes portal code; creates portal deployments | `hotfix-portal/login-redirect` |
 | `project/` | Multi-sprint projects | `project/ai-integration` |
 | `refactor/` | Code refactoring | `refactor/docs-consolidation` |
 | `<type>-portal/` | Opt in to a Vercel portal preview (a modifier on the type, not a new type) | `fix-portal/broker-login` |
@@ -70,9 +74,10 @@ a modifier on it, not a new type. (`portal/…` also works, as a spare spelling.
 
 | Branch | Previews? |
 |---|---|
-| `main`, `develop`, `int/*` | yes — `int/*` is where founder testing happens |
+| `main`, `develop` | yes |
 | `dependabot/*` | yes — dependency bumps are real portal changes |
-| `hotfix/*`, `release/*` | yes |
+| `release/*` | yes |
+| `int/*`, `hotfix/*` | **no** (BACKLOG-3205). The `Portal Branch Name` check fails when one of these carries portal changes — see *Does this sprint or hotfix touch a portal?* below |
 | `fix-portal/…`, `docs-portal/…`, any `<type>-portal/…` | **yes — this is the opt-in** |
 | everything else (`fix/`, `feat/`, `chore/`, `docs/`, …) | no |
 
@@ -106,6 +111,8 @@ matches were denied on both portals; written last, they deployed. JSON cannot ca
 comment saying so, so `scripts/ci/check-vercel-deploy-map.mjs` (workflow **Vercel Deploy
 Map**) asserts it and fails the build if the order changes. Without that check a reordering
 would silently deny every branch — `main` and `develop` included — with no red anywhere.
+The same guard requires `"*-portal/**": true` and rejects `"int/**": true` or
+`"hotfix/**": true` (BACKLOG-3205).
 
 **Already on a non-portal branch and need a preview now?**
 
@@ -119,6 +126,38 @@ changes and corresponds to no commit. It also produces no PR comment.
 
 A `<type>-portal/…` PR still needs the Engineer Metrics section and a BACKLOG id like any
 other branch; `[skip-metrics]` in the PR title is the escape for a quick hand-pushed fix.
+
+### Does this sprint or hotfix touch a portal?
+
+Answer this **before creating the branch** (BACKLOG-3205). Portal code means any path under
+`broker-portal/`, `admin-portal/`, `packages/design-system/` or `packages/ui/`.
+
+| Answer | Integration branch | Hotfix branch |
+|---|---|---|
+| yes | `int-portal/<sprint-name>` | `hotfix-portal/<name>` |
+| no | `int/<sprint-name>` | `hotfix/<name>` |
+
+Plain `int/` and `hotfix/` branches get no Vercel deployment. The `-portal` names create one.
+`packages/shared/` and the root `package.json` / `package-lock.json` are not portal code for
+this question: the desktop type-check compiles against `@keepr/shared`, and dependency bumps
+touch the root manifests.
+
+**The check.** Workflow **Portal Branch Name** (`scripts/ci/check-portal-branch-name.mjs`) runs
+on pushes to, and pull requests into, `int/`, `hotfix/`, `int-portal/` and `hotfix-portal/`
+branches. It fails when a plain `int/` or `hotfix/` branch's own changes touch portal code. A
+develop sync does not count: only changes that are on neither `develop` nor `main` do.
+
+**When it fails,** create the opt-in branch from the plain one and move its open PRs to it:
+
+```bash
+git push origin origin/int/<name>:refs/heads/int-portal/<name>
+gh pr edit <number> --base int-portal/<name>     # each open PR into int/<name>
+```
+
+**Do not delete the plain branch.** The Message Hygiene gate treats a commit reachable from
+another `origin` branch as already published (`scripts/ci/check-message-hygiene.mjs`).
+Deleting `int/<name>` puts every one of its commits back into range on the
+`int-portal/<name> -> develop` PR.
 
 ---
 
@@ -143,8 +182,8 @@ gh pr merge <PR-NUMBER> --squash  # DO NOT USE
 | Branch Type | When to Delete | How |
 |-------------|----------------|-----|
 | `feature/*`, `fix/*` | After merge confirmed AND no dependent work | Manual: `git branch -d branch-name` |
-| `int/*` | NEVER auto-delete | May be needed for reference |
-| `hotfix/*` | After merged to BOTH main and develop | Manual |
+| `int/*`, `int-portal/*` | NEVER auto-delete | May be needed for reference |
+| `hotfix/*`, `hotfix-portal/*` | After merged to BOTH main and develop | Manual |
 | `project/*` | After project milestone complete | Manual, with team confirmation |
 
 **PR merge command (no auto-delete):**
@@ -221,6 +260,9 @@ gh pr create --base main --head develop --title "release: v1.2.3"
 
 Integration branches (`int/*`) collect all sprint work before merging to develop.
 
+`int-portal/<sprint-name>` is an integration branch too, and every rule in this section applies
+to it. Pick the name with *Does this sprint or hotfix touch a portal?* under Branch Naming.
+
 ### Sprint Integration Branch Workflow
 
 ```bash
@@ -258,7 +300,7 @@ With `strict: true` on develop, each merge invalidates all other open PRs becaus
 
 **Before starting any new sprint:**
 ```bash
-git branch -a | grep "int/"
+git branch -a | grep -E '(^|[ /])int(-portal)?/'
 ```
 
 **If integration branches exist with unmerged work:**
