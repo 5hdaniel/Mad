@@ -1595,11 +1595,11 @@ function unitWrites(unit: Fn): { at: number; label: string }[] {
  * floor. `systemHandlers.ts::ipc:system:initialize-secure-storage` (declared
  * `:469`) counts two writes, opens no transaction, and was cleared here:
  *
- *   :561  if (!localUser) {
+ *   :560  if (!localUser) {
  *   :562    await databaseService.createUser({ … })   <- write 1, depth 5
  *   :580  } else {                                    <- exit, depth 4 < 5
  *   :586  }                                           <- the arm ENDS here
- *   :632  try {
+ *   :630  try {
  *   :651        await createLocalUserFromCloud(…)     <- write 2, 65 lines past
  *
  * Measured at `73d3e3fbe`: `writes=2 wraps=false branchExcl=TRUE inTx=false`.
@@ -1987,7 +1987,7 @@ describe("the write heuristics themselves (BACKLOG-2569)", () => {
   // BACKLOG-3239 — the LATER write was never checked
   // ==========================================================================
   // Control flow transcribed from `ipc:system:initialize-secure-storage`,
-  // electron/handlers/systemHandlers.ts:561-586 and :632-651 @ `73d3e3fbe`.
+  // electron/handlers/systemHandlers.ts:560-586 and :630-651 @ `73d3e3fbe`.
   // The two regions are joined as they appear; the span between them holds no
   // write and no exit shallower than write 1, verified by dumping the handler's
   // own stripped body with `braceDepths` before this fixture was written.
