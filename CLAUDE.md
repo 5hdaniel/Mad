@@ -739,8 +739,9 @@ NET_GUARD: 1 outbound network connection(s) attempted by this test:   <- a jest 
 NET_GUARD BACKSTOP: 1 blocked connection(s) were never reported ...   <- end of run, see below
 ```
 
-If you catch the error instead of letting it red the test, branch on
-`err.code === "KEEPR_NET_GUARD_BLOCKED"` — never on the message, which jsdom rewrites to
+A `try/catch` does not rescue the test: a handler that swallows the error still fails in
+`afterEach`, and a shipped fixture proves that on every run. If code must recognise the error, use
+`err.code === "KEEPR_NET_GUARD_BLOCKED"` — never the message, which jsdom rewrites to
 "Network Error" and undici to "fetch failed".
 
 **The remedy is to mock the client, not to exempt the call.** There is deliberately **no opt-in
