@@ -563,9 +563,14 @@ export function appStateReducer(
       }
 
       // Determine user data state based on completed steps
-      // Use selectedPhoneType from action/state, fallback to platform detection only if no explicit selection
+      //
+      // BACKLOG-3276: only a recorded selection counts. This used to fall back
+      // to `platform.hasIPhone ? "iphone" : "android"`, but every production
+      // producer of PlatformInfo sets hasIPhone to false, so the fallback wrote
+      // "android" for any user without a recorded selection, including iPhone
+      // users. An unanswered phone type stays null.
       const phoneTypeForUserData: "iphone" | "android" | null = completedSteps.includes("phone-type")
-        ? (selectedPhoneType ?? (state.platform.hasIPhone ? "iphone" : "android"))
+        ? (selectedPhoneType ?? null)
         : null;
 
       const userData: UserData = {

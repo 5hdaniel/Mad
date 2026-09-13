@@ -201,3 +201,20 @@ describe("BACKLOG-3276 — case 3: never answered stays unanswered, and is route
     });
   });
 });
+
+describe("[SR-C] never answered: completing permissions does not invent a phone type", () => {
+  // Reducer-emitted, not UI-reachable: the queue shows phone-type before
+  // permissions, so no user completes permissions without an answer. It guards
+  // reducer.ts ONBOARDING_STEP_COMPLETE, which must record null, never a
+  // platform default.
+  it("macOS new user -> FDA_GRANTED -> ONBOARDING_STEP_COMPLETE(permissions) -> phoneType null", () => {
+    let s: AppState = appStateReducer({ status: "unauthenticated" }, {
+      type: "LOGIN_SUCCESS", user, platform: macOS, isNewUser: true,
+    });
+    s = appStateReducer(s, { type: "FDA_GRANTED" });
+    const out = appStateReducer(s, { type: "ONBOARDING_STEP_COMPLETE", step: "permissions" });
+    expect(out.status).toBe("ready");
+    if (out.status !== "ready") return;
+    expect(out.userData.phoneType).toBeNull();
+  });
+});
