@@ -5,8 +5,9 @@ name: Portal Branch Name
 # broker-portal and admin-portal are not deployed for plain int/** or hotfix/**
 # branches (git.deploymentEnabled in both vercel.json files). Portal work on an
 # integration or hotfix branch opts in by name: int-portal/<name>,
-# hotfix-portal/<name>. A denied branch gets no deployment and no commit status,
-# so this check is what makes a mis-named branch visible.
+# hotfix-portal/<name>. A denied branch gets no deployment and no commit status
+# for the portal it changes, so this check is what makes a mis-named branch
+# visible.
 #
 # ## Triggers
 #

@@ -6,8 +6,9 @@
 // broker-portal/vercel.json and admin-portal/vercel.json no longer deploy plain
 // int/** or hotfix/** branches. Portal work on an integration or hotfix branch
 // opts in by name: int-portal/<name>, hotfix-portal/<name>. A branch the config
-// denies gets no Vercel deployment AND no commit status, so without this check
-// the only symptom of a mis-named branch is silence.
+// denies gets no Vercel deployment AND no commit status for the portal it
+// changes, so without this check the only symptom of a mis-named branch is
+// silence.
 //
 // WHAT COUNTS AS A PORTAL CHANGE
 //
@@ -24,8 +25,9 @@
 //                 origin/develop, INTERSECTED with the files changed since its
 //                 merge-base with origin/main. That is the branch's own work
 //                 whichever trunk it was cut from: a develop sync brings in no
-//                 file of its own, and a hotfix cut from develop is not charged
-//                 with develop's lead over main.
+//                 file of its own, a hotfix cut from develop is not charged
+//                 with develop's lead over main, and a branch cut from main is
+//                 not charged with main's lead over develop.
 //   pull_request  files changed on the head since its merge-base with the base
 //                 (base.sha...head.sha, from the event, not refs/pull/N/merge).
 //                 A PR whose head is develop or main is a trunk sync and is not
@@ -110,7 +112,7 @@ if (event === 'push') {
 
   console.error(
     `::error title=Portal Branch Name::${branch} carries ${hits.length} change(s) under ${PORTAL_PATH_TEXT}. ` +
-    `Plain ${cls.kind}/ branches get no Vercel deployment (BACKLOG-3205). ` +
+    `Plain ${cls.kind}/ branches get no Vercel deployment for the portal they change (BACKLOG-3205). ` +
     `Create ${cls.optIn} from this branch, move its open PRs to it, and keep ${branch}.`
   );
   console.error('\nCommands:');
@@ -118,7 +120,7 @@ if (event === 'push') {
   console.error(`  gh pr edit <number> --base ${cls.optIn}     # for each open PR into ${branch}`);
   console.error(`Do not delete ${branch}.`);
   console.error(`\nPushing this same commit to ${cls.optIn} creates no deployment, and an empty commit is skipped as`);
-  console.error(`"Not affected". The next push to ${cls.optIn} that changes portal code builds it.`);
+  console.error(`"Not affected". The next push to ${cls.optIn} whose newest commit changes portal code builds it.`);
   console.error(`\nPortal files on ${branch} (first ${Math.min(MAX_LISTED, hits.length)} of ${hits.length}):`);
   for (const f of hits.slice(0, MAX_LISTED)) console.error(`  ${f}`);
   process.exit(1);
@@ -161,7 +163,7 @@ if (event === 'pull_request') {
 
   console.error(
     `::error title=Portal Branch Name::This PR brings ${hits.length} change(s) under ${PORTAL_PATH_TEXT} into ${baseRef}. ` +
-    `Plain ${cls.kind}/ branches get no Vercel deployment (BACKLOG-3205). ` +
+    `Plain ${cls.kind}/ branches get no Vercel deployment for the portal they change (BACKLOG-3205). ` +
     `The base branch needs the opt-in name: ask the PM to create ${cls.optIn} from ${baseRef} and move this PR to it.`
   );
   console.error('\nCommands:');

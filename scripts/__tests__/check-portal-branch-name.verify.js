@@ -23,6 +23,8 @@
  *        (the merge brings d2's portal file)                                0
  *   H3   push int/c: forked at d1, own desktop commit, develop moved on      0
  *   H4   push hotfix/d: cut from develop, own desktop commit               0
+ *   H4b  push hotfix/k: cut from main while main is one portal commit
+ *        ahead of develop; own desktop commit (separate origin)          0
  *   H5   push hotfix/e: cut from main, own portal commit                   1
  *   H6   push int/f: cut from develop, own desktop commit                  0
  *   H7   PR feature/f7 -> int/p7: base gained a portal commit after the
@@ -44,6 +46,7 @@
  *   push range two-dot vs develop   H3
  *   trunk inferred from prefix      H4 (hotfix -> main)
  *   main-only trunk                 H4, H6
+ *   develop-only trunk              H4b (main's merge-base computed, result unused)
  *   PR range two-dot                H7
  *   trunk-sync exemption removed    H9
  *   prefix match without the slash  H10a, H10c
@@ -165,6 +168,29 @@ function build() {
   return { clone, cloneNoMain, cloneUnrelated, f7, f8, p7, unrelated };
 }
 
+// H4b: its own origin, so its merge-bases do not move the other cases'.
+// main = m0 - h1(portal); develop = m0 - d1(desktop); hotfix/k = h1 - k1(desktop).
+function buildMainAhead() {
+  const work = path.join(tmp, "build-main-ahead");
+  fs.mkdirSync(work);
+  git(work, "init", "-q");
+  commitFile(work, "README.md", "m0 readme");
+  commitFile(work, "broker-portal/page.txt", "m0 portal");
+  commitFile(work, "src/app.txt", "m0 desktop");
+  git(work, "checkout", "-q", "-b", "develop");
+  commitFile(work, "src/app.txt", "d1 desktop");
+  git(work, "checkout", "-q", "main");
+  commitFile(work, "broker-portal/h.txt", "h1 hotfix portal, on main, not yet on develop");
+  git(work, "checkout", "-q", "-b", "hotfix/k");
+  commitFile(work, "src/k.txt", "k own desktop");
+  git(work, "checkout", "-q", "develop");
+  const origin = path.join(tmp, "origin-main-ahead.git");
+  git(tmp, "clone", "-q", "--bare", work, origin);
+  const clone = path.join(tmp, "clone-main-ahead");
+  git(tmp, "clone", "-q", "--branch", "develop", origin, clone);
+  return clone;
+}
+
 function runCheck(cwd, env, detachAt) {
   if (detachAt) git(cwd, "checkout", "-q", "--detach", detachAt);
   const r = spawnSync(process.execPath, [CHECK], {
@@ -201,6 +227,9 @@ try {
   expectCase("H2", "push int/b, develop merge brings a portal file", push("int/b", sha("int/b")), 0);
   expectCase("H3", "push int/c, develop moved on with a portal commit", push("int/c", sha("int/c")), 0);
   expectCase("H4", "push hotfix/d, cut from develop, desktop only", push("hotfix/d", sha("hotfix/d")), 0);
+  const mainAhead = buildMainAhead();
+  const k = git(mainAhead, "rev-parse", "origin/hotfix/k");
+  expectCase("H4b", "push hotfix/k, cut from main while main leads develop by a portal commit", runCheck(mainAhead, { EVENT_NAME: "push", REF_NAME: "hotfix/k" }, k), 0);
   expectCase("H5", "push hotfix/e, cut from main, own portal", push("hotfix/e", sha("hotfix/e")), 1, "hotfix-portal/e");
   expectCase("H6", "push int/f, cut from develop, desktop only", push("int/f", sha("int/f")), 0);
   expectCase("H7", "PR f7 -> int/p7, base gained a portal commit", pr("int/p7", "feature/f7", fx.p7, fx.f7), 0);

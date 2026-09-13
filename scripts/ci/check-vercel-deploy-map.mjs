@@ -64,7 +64,8 @@ const REQUIRED_TRUE = ['main', 'develop', '*-portal/**'];
 // deployment for every push to every integration or hotfix branch, and it
 // would also make scripts/ci/check-portal-branch-name.mjs wrong: that check
 // tells a plain int/ or hotfix/ branch carrying portal changes to rename,
-// because such a branch gets no deployment. Exact keys only.
+// because such a branch gets no deployment for the portal it changes. Exact
+// keys only.
 const FORBIDDEN_TRUE = ['int/**', 'hotfix/**'];
 
 // What stops working when each goes missing, for the error message.

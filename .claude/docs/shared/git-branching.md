@@ -139,7 +139,8 @@ Answer this **before creating the branch** (BACKLOG-3205). Portal code means any
 | yes | `int-portal/<sprint-name>` | `hotfix-portal/<name>` |
 | no | `int/<sprint-name>` | `hotfix/<name>` |
 
-Plain `int/` and `hotfix/` branches get no Vercel deployment. The `-portal` names create one.
+Plain `int/` and `hotfix/` branches get no Vercel deployment for the portal they change. The
+`-portal` names create one.
 `packages/shared/` and the root `package.json` / `package-lock.json` are not portal code for
 this question: the desktop type-check compiles against `@keepr/shared`, and dependency bumps
 touch the root manifests.
@@ -167,9 +168,12 @@ On a branch's first deployment it compares against the previous commit (`HEAD~1`
 | an empty commit | a deployment per portal, each skipped as "Not affected" — no build |
 | a commit whose only change is outside the portal paths | a deployment, cancelled by the Ignored Build Step |
 
-So **move the branch before the first portal PR merges**: that merge is then a push that changes
-portal code, and it builds. If portal work is already merged, the next push that changes portal
-code builds; for a preview sooner, use `vercel deploy` (above).
+Not measured as a build, but traced from the `HEAD~1` build log and the Ignored Build Step: a
+`-portal` branch builds when a push's **newest commit** changes portal code. A PR merge commit
+counts; a multi-commit push whose last commit is desktop-only is cancelled. So **move the branch
+before the first portal PR merges**: that merge commit then changes portal code, and it builds.
+If portal work is already merged, the next push whose newest commit changes portal code builds;
+for a preview sooner, use `vercel deploy` (above).
 
 **The old red stays on that commit.** Moving a branch or a PR to the `-portal` name runs the check
 again and it passes, but the earlier failed run remains in that commit's check rollup until a new
