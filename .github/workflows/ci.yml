@@ -14,7 +14,7 @@ on:
     # (BACKLOG-3205).
     branches: [main, develop, 'feature/**', 'fix/**', 'claude/**', 'docs/**', 'portal/**', '*-portal/**', '!int-portal/**', '!hotfix-portal/**']
   pull_request:
-    branches: [main, develop, 'int/**', 'int-portal/**']
+    branches: [main, develop, 'int/**']
 
 jobs:
   # Fast check to determine if we can skip heavy CI jobs
