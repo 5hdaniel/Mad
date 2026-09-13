@@ -168,9 +168,11 @@ On a branch's first deployment it compares against the previous commit (`HEAD~1`
 | an empty commit | a deployment per portal, each skipped as "Not affected" — no build |
 | a commit whose only change is outside the portal paths | a deployment, cancelled by the Ignored Build Step |
 
-Not measured as a build, but traced from the `HEAD~1` build log and the Ignored Build Step: a
-`-portal` branch builds when a push's **newest commit** changes portal code. A PR merge commit
-counts; a multi-commit push whose last commit is desktop-only is cancelled. So **move the branch
+Not measured as a build, but traced from the build logs and the Ignored Build Step: a `-portal`
+branch builds when a push's **newest commit** changes portal code, and a PR merge commit counts.
+Until the branch has had one successful build, the step compares against `HEAD~1`, so a
+multi-commit push whose last commit is desktop-only is cancelled. After that it compares against
+the last successful build's commit, so any portal change since then builds. So **move the branch
 before the first portal PR merges**: that merge commit then changes portal code, and it builds.
 If portal work is already merged, the next push whose newest commit changes portal code builds;
 for a preview sooner, use `vercel deploy` (above).
