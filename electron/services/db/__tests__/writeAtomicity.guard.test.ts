@@ -1634,10 +1634,13 @@ function unitWrites(unit: Fn): { at: number; label: string }[] {
  * offenders have the shape at `73d3e3fbe` — the fix's whole surfaced population
  * is the ONE unit listed in `KNOWN_UNWRAPPED` above, and it is not this shape.
  * Widening it here was ruled out of scope for that reason, the same
- * measured-need bar BACKLOG-3312 was held to; it goes to a sibling item, and
- * this docblock is where that item's engineer starts. NOT YET FILED at the time
- * this was written — do not read the absence of an id as the absence of the
- * floor.
+ * measured-need bar BACKLOG-3312 was held to.
+ *
+ * FILED AS BACKLOG-3323, which carries the shape above and the measurement
+ * behind it: of the nine units cleared only by this predicate at `73d3e3fbe`,
+ * none has it. Take it AFTER BACKLOG-3314 — try/catch exclusivity extends this
+ * same predicate, and two widenings of one rule in flight at once is how a
+ * classification change gets attributed to the wrong one.
  */
 function elseArmRange(
   src: string,
