@@ -18,13 +18,27 @@ import type { AppState } from "../types";
  * first-run-macOS deferral, so the branches below that read it are inert.
  *
  * KNOWN LIMIT, recorded rather than fixed here: for `status: "onboarding"` this
- * returns `true` on machine POSITION, not on a database fact. Every producer of
- * `onboarding` bar one arrives via DB_INIT_COMPLETE(success); the exception is
- * LOGIN_SUCCESS from an `unauthenticated` state produced by
- * AUTH_PRE_VALIDATED(valid:false), which never opened the database.
- * (LOGOUT is a second, structural producer of `unauthenticated` that also drops
- * every flag; it is only dispatched from a user action today.) BACKLOG-3321
- * replaces the inference with a recorded fact.
+ * returns `true` on machine POSITION, not on a database fact. BACKLOG-3321
+ * replaces the inference with a recorded fact. Four things its engineer should
+ * not have to rediscover:
+ *
+ * 1. Every producer of `onboarding` bar one arrives via DB_INIT_COMPLETE(success).
+ *    The exception is LOGIN_SUCCESS from an `unauthenticated` state produced by
+ *    AUTH_PRE_VALIDATED(valid:false), which never opened the database.
+ * 2. LOGOUT is a second, STRUCTURAL producer of `unauthenticated` that also drops
+ *    every flag. It is only dispatched from a user action today, so it is not
+ *    reachable pre-DB -- but it is one programmatic sign-out away from being so.
+ * 3. The apparent second guard on this selector is inert. `OnboardingFlow.tsx`
+ *    ANDs it with `(!waitingForDbInit || dbInitConfirmed)`; `waitingForDbInit`
+ *    has exactly one setter, the SECURE_STORAGE_SETUP action, i.e. a Continue
+ *    click on a screen that no reachable route renders since BACKLOG-3253. The
+ *    conjunct is permanently true and this selector stands alone. It READS like
+ *    a guard and guards nothing.
+ * 4. The fact is derived in TWO independent places. `useAppStateMachine.ts`
+ *    negates `deferredDbInit` across three statuses and so now returns an
+ *    unconditional `true` for every state; it feeds `useAuthFlow`, NOT the
+ *    ~10 components, which reach the answer through this selector. A fix applied
+ *    only here leaves that one inferring exactly as before.
  *
  * @param state - Current application state
  * @returns true if database is initialized
