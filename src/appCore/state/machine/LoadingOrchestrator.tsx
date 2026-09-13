@@ -227,8 +227,10 @@ export function LoadingOrchestrator({
 
     // console.log("[LoadingOrchestrator] PHASE 2: Starting database initialization...");
 
-    // Guard: respect deferredDbInit flag - let onboarding SecureStorageStep handle DB init
-    // This prevents the Keychain prompt from appearing before the login screen on fresh macOS installs
+    // Guard: respect deferredDbInit flag - let onboarding SecureStorageStep handle DB init.
+    // BACKLOG-3253 deleted the only producer of this flag, so this branch is
+    // now unreachable. Kept inert rather than deleted, to keep that PR to one
+    // hunk on a contended file; removal is a tracked follow-up.
     const loadingState = state as import("./types").LoadingState;
     if (loadingState.deferredDbInit) {
       return;
@@ -795,15 +797,18 @@ export function LoadingOrchestrator({
     // init still falls through to the reads below, which have their own
     // `.catch()` fallbacks.
     //
-    // BACKLOG-2171: a returning user on a fresh macOS profile routes here with
-    // DB init intentionally DEFERRED to onboarding's secure-storage step
-    // (deferredDbInit) — init hasn't been kicked off and won't be until the
-    // user reaches that step, which is BEHIND this loading screen. Polling
-    // for db-ready in that state burns the full MAX_WAIT_MS for nothing, which
-    // was the launch-blocking "frozen Loading your data" regression. `idle`/
-    // any non-in-progress stage now returns immediately; only a stage that
-    // indicates init is genuinely underway keeps polling (preserves the
-    // BACKLOG-2149 memory-pressure protection).
+    // BACKLOG-2171: this was written for a fresh macOS profile that routed here
+    // with DB init intentionally DEFERRED to onboarding's secure-storage step —
+    // init hadn't been kicked off and wouldn't be until the user reached that
+    // step, which is BEHIND this loading screen. Polling for db-ready in that
+    // state burned the full MAX_WAIT_MS for nothing: the launch-blocking
+    // "frozen Loading your data" regression.
+    //
+    // BACKLOG-3253 removed that deferral, so the stated cause is gone. The
+    // logic stays: `idle`/any non-in-progress stage returns immediately and
+    // only a stage indicating init is genuinely underway keeps polling, which
+    // still bounds a STUCK init and still preserves the BACKLOG-2149
+    // memory-pressure protection.
     const waitForDbReadyBounded = async (): Promise<void> => {
       const getInitStage = window.api?.system?.getInitStage;
       if (!getInitStage) return;

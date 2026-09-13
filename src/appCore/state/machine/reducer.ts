@@ -214,23 +214,16 @@ export function appStateReducer(
         return state; // Invalid transition
       }
 
-      // Check if this is a first-time macOS user (no key store = new installation)
-      const isFirstTimeMacOS = !action.hasKeyStore && action.isMacOS;
-
-      if (isFirstTimeMacOS) {
-        // Skip DB init for first-time macOS users to avoid showing Keychain prompt
-        // before the login screen. DB will be initialized during onboarding
-        // secure-storage step after user has been properly informed.
-        return {
-          status: "loading",
-          phase: "loading-auth",
-          deferredDbInit: true,
-        };
-      }
-
+      // BACKLOG-3253: first-run macOS used to branch off here and defer the
+      // database open to onboarding's secure-storage step, to stay ahead of a
+      // Keychain prompt. That prompt does not happen -- macOS prompts when an
+      // app READS an item written under a different code signature, and a
+      // first run is always a WRITE. Measured on two Macs, 2026-09-08.
+      //
+      // Every platform now takes the same route, first run and returning.
+      //
       // TASK-2086: Proceed to pre-DB auth validation (SOC 2 CC6.1)
-      // Auth must be validated BEFORE database decryption
-      // (returning macOS users with key store, or Windows users)
+      // Auth must be validated BEFORE database decryption.
       return {
         status: "loading",
         phase: "validating-auth",
