@@ -484,6 +484,27 @@ const KNOWN_UNWRAPPED: Record<string, string> = {
   "electron/services/reviewStateService.ts::restoreRejectedToQueue":
     "BACKLOG-3320 — a crash after the INSERT and before the DELETE leaves the item queued for review AND still listed as rejected: it appears twice, in two places that contradict each other. It loops per sibling, so a multi-email thread can end up part-restored. The MIRROR of BACKLOG-3310, not the same failure — that one writes in the opposite order and leaves NEITHER.",
 
+  // ==========================================================================
+  // BACKLOG-3239 — SURFACED BY THE BRANCH-EXCLUSIVITY FIX
+  // ==========================================================================
+  // The branch rule cleared a pair whenever a `} else` closed the arm holding
+  // the EARLIER write, without ever checking where the LATER write was. This
+  // handler is the one live site that rode on it, and it is the deep-link login
+  // the founder actually uses.
+  //
+  // Measured at `73d3e3fbe`: of the nine units cleared only by this predicate,
+  // four were cleared by a `} else` and five by a `return` (BACKLOG-3224's arm,
+  // untouched). Of those four, THREE are genuinely exclusive and stay cleared —
+  // each was opened and read, not inferred: `contactHandlers::ipc:contacts:get-available`
+  // (a `} else if` arm), `contactDbService::markContactAsImported` and
+  // `emailAttachmentService::processAttachment` (both one write per arm). This
+  // entry is the ENTIRE surfaced population, and it is not empty, which is the
+  // bar BACKLOG-3248 sets for a widening.
+  //
+  // NOT FIXED HERE. Damage transcribed from BACKLOG-3322, which owns the path.
+  "electron/handlers/systemHandlers.ts::ipc:system:initialize-secure-storage":
+    "BACKLOG-3322 — the macOS deep-link login provisions the user, token and session as separate writes, so a crash between them leaves a local users row with no durable session: no session.json on disk, and the relaunch that grants Full Disk Access lands the founder back on a failed-login screen while `ensureUserInLocalDb` reports 'already exists -> success' over it. The counted pair is `createUser` at systemHandlers.ts:562 and `createLocalUserFromCloud` at :651. BACKLOG-3253 removes the DB-init deferral this catch-up path exists to compensate for, and BACKLOG-3322 carries the open Fork D question of what this path should do when tokens are absent.",
+
   // MERGE NOTE: the incoming side of this conflict was the original nine-entry
   // list. It is deliberately discarded, not merged — every entry in it was
   // either fixed or never a violation, and re-adding one would fail the
@@ -1557,6 +1578,109 @@ function unitWrites(unit: Fn): { at: number; label: string }[] {
   return writeStream(stripComments(unit.body), unit.isDbWriterCall, unit.name, unit.file);
 }
 
+/**
+ * The offset span of the block an `else` opens — `{` exclusive to matching `}`
+ * exclusive — or `null` when that `else` governs no block.
+ *
+ * ===========================================================================
+ * BACKLOG-3239 — THE RULE NEVER CHECKED THE LATER WRITE
+ * ===========================================================================
+ * `writesAreBranchExclusive` verified that the EARLIER write sat inside the
+ * branch a `} else` closes, and then cleared the pair without ever asking where
+ * the LATER write was. Its own comment claimed an intent the code did not
+ * enforce, so a write in the `if` arm and a write DOWNSTREAM OF THE WHOLE
+ * if/else — in neither arm, able to run in the same pass — read as exclusive.
+ *
+ * A LIVE OFFENDER rode on it, which is what makes this a defect rather than a
+ * floor. `systemHandlers.ts::ipc:system:initialize-secure-storage` (declared
+ * `:469`) counts two writes, opens no transaction, and was cleared here:
+ *
+ *   :560  if (!localUser) {
+ *   :562    await databaseService.createUser({ … })   <- write 1, depth 5
+ *   :580  } else {                                    <- exit, depth 4 < 5
+ *   :586  }                                           <- the arm ENDS here
+ *   :630  try {
+ *   :651        await createLocalUserFromCloud(…)     <- write 2, 65 lines past
+ *
+ * Measured at `73d3e3fbe`: `writes=2 wraps=false branchExcl=TRUE inTx=false`.
+ * Of the NINE units cleared only by this predicate at that SHA, four were
+ * cleared by a `} else` and five by a `return` — the `return` arm is
+ * BACKLOG-3224 and is deliberately untouched here.
+ *
+ * STATED FLOOR 1 — a braceless `else` governs no block, so this returns `null`
+ * and such an `else` never clears anything:
+ *
+ *   if (a) { W1 } else doSomething();
+ *
+ * That is a false POSITIVE — red where the code may be exclusive — which is the
+ * safe direction for this guard, and it surfaces as a listed offender someone
+ * reads rather than as silence. ZERO live sites have the shape at `73d3e3fbe`,
+ * swept rather than sampled:
+ *
+ *   git grep -nE '^[[:space:]]*\}[[:space:]]*else[[:space:]]*$|^[[:space:]]*\}[[:space:]]*else[[:space:]]+[^{]' \
+ *     -- electron | grep -vE 'else[[:space:]]+if'
+ *
+ * returns ONE line, and it is the fixture in this file that pins the floor.
+ * Adding a second arm-finding path for it is a change with no measured need.
+ *
+ * STATED FLOOR 2 — the EARLIER write is still checked by DEPTH ALONE, the rule
+ * BACKLOG-2584 set (`e.depth < lastWriteDepth`). It is not checked by offset,
+ * so this shape is still cleared although both writes run:
+ *
+ *   for (…) { W1 }            // W1 one deeper than the `else` below
+ *   if (b) { } else { W2 }    // `else` shallower than W1; W2 inside its arm
+ *
+ * The machinery below could verify the earlier write by offset too. ZERO live
+ * offenders have the shape at `73d3e3fbe` — the fix's whole surfaced population
+ * is the ONE unit listed in `KNOWN_UNWRAPPED` above, and it is not this shape.
+ * Widening it here was ruled out of scope for that reason, the same
+ * measured-need bar BACKLOG-3312 was held to.
+ *
+ * FILED AS BACKLOG-3323, which carries the shape above and the measurement
+ * behind it: of the nine units cleared only by this predicate at `73d3e3fbe`,
+ * none has it. Take it AFTER BACKLOG-3314 — try/catch exclusivity extends this
+ * same predicate, and two widenings of one rule in flight at once is how a
+ * classification change gets attributed to the wrong one.
+ */
+function elseArmRange(
+  src: string,
+  depths: number[],
+  afterElse: number
+): { start: number; end: number } | null {
+  let i = afterElse;
+  const skipSpace = (): void => {
+    while (i < src.length && /\s/.test(src[i])) i++;
+  };
+  skipSpace();
+  // `else if (cond) {` — the arm IS the nested `if`, so step over its head and
+  // take the block that follows. Chained arms each register their own `} else`.
+  if (src.startsWith("if", i) && !/[A-Za-z0-9_$]/.test(src[i + 2] ?? "")) {
+    i += 2;
+    skipSpace();
+    if (src[i] !== "(") return null;
+    let parens = 0;
+    for (; i < src.length; i++) {
+      if (src[i] === "(") parens++;
+      else if (src[i] === ")") {
+        parens--;
+        if (parens === 0) {
+          i++;
+          break;
+        }
+      }
+    }
+    skipSpace();
+  }
+  if (src[i] !== "{") return null; // STATED FLOOR 1 — braceless else
+  const opened = depths[i] ?? 0; // the depth this `{` OPENS
+  for (let j = i + 1; j < src.length; j++) {
+    // `braceDepths` reports, for a `}`, the depth it CLOSES. The first `}`
+    // closing `opened` is this block's own — anything nested closes deeper.
+    if (src[j] === "}" && depths[j] === opened) return { start: i, end: j };
+  }
+  return { start: i, end: src.length }; // unbalanced source; arm runs to the end
+}
+
 function writesAreBranchExclusive(
   body: string,
   isDbWriterCall: ((name: string) => boolean) | null = null,
@@ -1572,9 +1696,17 @@ function writesAreBranchExclusive(
   // Writes and exits as one offset-ordered stream. A write at the same offset
   // as an exit sorts first, preserving the old `else if` precedence where a
   // line containing a write was never also read as an exit.
-  const tokens: { at: number; isWrite: boolean; depth: number; isReturn: boolean }[] = [];
+  const tokens: {
+    at: number;
+    isWrite: boolean;
+    depth: number;
+    isReturn: boolean;
+    // BACKLOG-3239: the span of the arm a `} else` opens. `null` for a `return`
+    // and for an `else` that governs no block.
+    arm: { start: number; end: number } | null;
+  }[] = [];
   for (const w of writeStream(src, isDbWriterCall, selfName, file)) {
-    tokens.push({ at: w.at, isWrite: true, depth: depths[w.at] ?? 0, isReturn: false });
+    tokens.push({ at: w.at, isWrite: true, depth: depths[w.at] ?? 0, isReturn: false, arm: null });
   }
   // Anchored per line via /m. `[ \t]*` NOT `\s*`, and `\}[ \t]*else` NOT
   // `\}\s*else`: under /m, `\s` spans newlines, which would let a `}` and an
@@ -1586,26 +1718,44 @@ function writesAreBranchExclusive(
     // the depth AFTER the `}` closed — the depth of the `if` this `else` pairs
     // with. For `return` the depth is where it stands.
     const depthAt = at + m[0].length - 1;
+    const isReturn = /return/.test(m[1]);
     tokens.push({
       at,
       isWrite: false,
       depth: depths[depthAt] ?? 0,
-      isReturn: /return/.test(m[1]),
+      isReturn,
+      // BACKLOG-3239: `depthAt + 1` is the first character after `else`.
+      arm: isReturn ? null : elseArmRange(src, depths, depthAt + 1),
     });
   }
   tokens.sort((a, b) => a.at - b.at || (a.isWrite ? -1 : 1));
 
   let seenWrite = false;
   let lastWriteDepth = 0;
-  let exitsSinceWrite: { depth: number; isReturn: boolean }[] = [];
+  let exitsSinceWrite: {
+    depth: number;
+    isReturn: boolean;
+    arm: { start: number; end: number } | null;
+  }[] = [];
   for (const t of tokens) {
     if (t.isWrite) {
       if (seenWrite) {
-        // (a) a `return` leaves the function from any depth; (b) a `} else`
-        // only separates the two writes if the earlier one was INSIDE the
-        // branch it closes — strictly deeper than the `else` itself.
+        // (a) a `return` leaves the function from any depth — BACKLOG-3224 owns
+        // that arm and it is unchanged here.
+        //
+        // (b) a `} else` separates the two writes only when BOTH ends hold:
+        // the EARLIER write was inside the branch the `else` closes (strictly
+        // deeper than the `else` itself — BACKLOG-2584), AND the LATER write is
+        // inside the `else` arm. BACKLOG-3239: the second half did not exist,
+        // so a write downstream of the whole if/else — in neither arm, reached
+        // on the same pass — was cleared as exclusive.
         const separated = exitsSinceWrite.some(
-          (e) => e.isReturn || e.depth < lastWriteDepth
+          (e) =>
+            e.isReturn ||
+            (e.depth < lastWriteDepth &&
+              e.arm !== null &&
+              t.at > e.arm.start &&
+              t.at < e.arm.end)
         );
         if (!separated) return false; // two writes, nothing exclusive between
       }
@@ -1613,7 +1763,7 @@ function writesAreBranchExclusive(
       lastWriteDepth = t.depth;
       exitsSinceWrite = [];
     } else if (seenWrite) {
-      exitsSinceWrite.push({ depth: t.depth, isReturn: t.isReturn });
+      exitsSinceWrite.push({ depth: t.depth, isReturn: t.isReturn, arm: t.arm });
     }
   }
   return seenWrite;
@@ -1831,6 +1981,165 @@ describe("the write heuristics themselves (BACKLOG-2569)", () => {
     expect(writesAreBranchExclusive(IF_ELSE_ONE_WRITE_PER_BRANCH)).toBe(true);
     // And a `return` still clears from inside a deeper branch — the upsert.
     expect(writesAreBranchExclusive(UPSERT_SHAPE)).toBe(true);
+  });
+
+  // ==========================================================================
+  // BACKLOG-3239 — the LATER write was never checked
+  // ==========================================================================
+  // Control flow transcribed from `ipc:system:initialize-secure-storage`,
+  // electron/handlers/systemHandlers.ts:560-586 and :630-651 @ `73d3e3fbe`.
+  // The two regions are joined as they appear; the span between them holds no
+  // write and no exit shallower than write 1, verified by dumping the handler's
+  // own stripped body with `braceDepths` before this fixture was written.
+  //
+  // THE SHAPE, and it is not the sibling-else of BACKLOG-2584: the `} else`
+  // here DOES close the arm holding write 1, so 2584's depth test fires
+  // correctly. Write 2 is the problem — it sits 65 lines past the end of that
+  // arm, inside a SECOND `try` block, in neither arm. Both writes run on one
+  // pass and the pair was cleared anyway.
+  const DOWNSTREAM_WRITE_AFTER_AN_ELSE = `
+  try {
+    let localUser = await databaseService.getUserByEmail(pendingUser.email);
+
+    if (!localUser) {
+      await databaseService.createUser({
+        id: pendingUser.supabaseId,
+        email: pendingUser.email,
+        is_active: true,
+      });
+      localUser = await databaseService.getUserById(pendingUser.supabaseId);
+    } else {
+      logService.info(
+        "Local user already exists for pending deep link",
+        "System",
+        { email: pendingUser.email },
+      );
+    }
+  } catch (userError) {
+    logService.error("Failed to create pending deep link user", "System");
+  }
+
+  try {
+    const authSession = await supabaseService.getAuthSession();
+    if (authSession?.userId) {
+      const userId = authSession.userId;
+      let localUser = await databaseService.getUserById(userId);
+
+      if (!localUser) {
+        const cloudUser = await supabaseService.getUserById(userId);
+
+        if (cloudUser) {
+          await createLocalUserFromCloud(cloudUser);
+        }
+      }
+    }
+  } catch (error) {
+    logService.error("Fallback user verification failed", "System");
+  }
+`;
+
+  // The SAME fixture with write 2 moved INTO the else arm — the only edit is
+  // which arm holds it. This is the over-correction control: a rule that has
+  // started refusing every `if`/`else` fails HERE and passes the one above.
+  const SECOND_WRITE_INSIDE_THE_ELSE_ARM = `
+  try {
+    let localUser = await databaseService.getUserByEmail(pendingUser.email);
+
+    if (!localUser) {
+      await databaseService.createUser({
+        id: pendingUser.supabaseId,
+        email: pendingUser.email,
+        is_active: true,
+      });
+      localUser = await databaseService.getUserById(pendingUser.supabaseId);
+    } else {
+      await createLocalUserFromCloud(cloudUser);
+      logService.info(
+        "Local user already exists for pending deep link",
+        "System",
+        { email: pendingUser.email },
+      );
+    }
+  } catch (userError) {
+    logService.error("Failed to create pending deep link user", "System");
+  }
+`;
+
+  const DEEPLINK_WRITERS = (n: string): boolean =>
+    n === "createUser" || n === "createLocalUserFromCloud";
+
+  it("a write DOWNSTREAM of the whole if/else is NOT cleared by its `} else` (BACKLOG-3239)", () => {
+    // ANTI-VACUITY. The predicate only ever sees writes it is given, and a
+    // fixture that counts ZERO writes returns `true` from the `seenWrite`
+    // guard at the bottom — i.e. it would read as "exclusive" for the wrong
+    // reason and this test would pass having proved nothing.
+    const writes = writeStream(
+      stripComments(DOWNSTREAM_WRITE_AFTER_AN_ELSE),
+      DEEPLINK_WRITERS,
+      null,
+      null
+    );
+    expect(writes.map((w) => w.label)).toEqual(["createUser", "createLocalUserFromCloud"]);
+
+    // THE DEFECT, pinned. Measured `true` at `73d3e3fbe` before the fix: the
+    // `} else` closing write 1's arm cleared the pair without the rule ever
+    // asking where write 2 was. Delete the `e.arm !== null && t.at > …` half of
+    // the separation predicate and THIS TEST GOES RED.
+    expect(
+      writesAreBranchExclusive(DOWNSTREAM_WRITE_AFTER_AN_ELSE, DEEPLINK_WRITERS, null)
+    ).toBe(false);
+  });
+
+  it("moving that same write INTO the else arm clears it again (BACKLOG-3239)", () => {
+    const writes = writeStream(
+      stripComments(SECOND_WRITE_INSIDE_THE_ELSE_ARM),
+      DEEPLINK_WRITERS,
+      null,
+      null
+    );
+    expect(writes.map((w) => w.label)).toEqual(["createUser", "createLocalUserFromCloud"]);
+
+    // The other direction. One edit separates this fixture from the one above —
+    // which arm write 2 sits in — so a fix that over-corrects into refusing
+    // every `if`/`else` cannot pass both.
+    expect(
+      writesAreBranchExclusive(SECOND_WRITE_INSIDE_THE_ELSE_ARM, DEEPLINK_WRITERS, null)
+    ).toBe(true);
+  });
+
+  it("the arm of a braceless `else` is a STATED FLOOR, not a claim (BACKLOG-3239)", () => {
+    // `elseArmRange` returns null for an `else` governing no block, so such an
+    // `else` clears nothing and the pair is REPORTED. That is a false positive
+    // and it is the direction this guard chooses on purpose — a listed offender
+    // someone opens and reads, never silence. Swept across `electron/` at
+    // `73d3e3fbe`, the only line of this shape is the fixture below; this test
+    // states the floor rather than leaving it to prose. The sweep command is in
+    // the `elseArmRange` docblock.
+    const BRACELESS = `
+  if (a) {
+    dbRun(\`UPDATE contacts SET a = ? WHERE id = ?\`, [a, id]);
+  } else dbRun(\`UPDATE contacts SET b = ? WHERE id = ?\`, [b, id]);
+`;
+    expect(writeCount(BRACELESS)).toBe(2);
+    expect(writesAreBranchExclusive(BRACELESS)).toBe(false);
+  });
+
+  it("an `else if` arm is found through its condition (BACKLOG-3239)", () => {
+    // `ipc:contacts:get-available` is a LIVE site of this shape — its two
+    // `backfillImportedContactsFromExternal` calls sit either side of a
+    // `} else if (externalContactDb.isStale(…))` at contactHandlers.ts:1602.
+    // If the arm scan stopped at the first `{` after `else` it would find the
+    // CONDITION's brace or none at all, and that correctly-exclusive handler
+    // would become a false offender the moment this fix landed.
+    const ELSE_IF_ARM = `
+  if (needsFullSync) {
+    dbRun(\`UPDATE contacts SET synced_at = ? WHERE user_id = ?\`, [now, userId]);
+  } else if (isStale(userId, 24)) {
+    dbRun(\`UPDATE contacts SET synced_at = ? WHERE user_id = ? AND stale = 1\`, [now, userId]);
+  }
+`;
+    expect(writeCount(ELSE_IF_ARM)).toBe(2);
+    expect(writesAreBranchExclusive(ELSE_IF_ARM)).toBe(true);
   });
 
   // ==========================================================================
